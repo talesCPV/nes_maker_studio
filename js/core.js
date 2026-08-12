@@ -49,7 +49,7 @@ const Project = {
     CHR.loadBuffer(chrU8, this.data.palettes);
     if(this.data.metatiles) CHR.loadMetatiles(this.data.metatiles);
     if(this.data.backgrounds && typeof BG!=='undefined'){ try{ BG.loadBackgrounds(this.data.backgrounds); }catch(e){} }
-    if(this.data.splashScreens && typeof SPLASH!=='undefined'){ try{ SPLASH.loadSplashScreens(this.data.splashScreens); }catch(e){} }
+    if(this.data.splashScreens && typeof BG!=='undefined'){ try{ BG.loadSplashScreens(this.data.splashScreens); }catch(e){} }
     if(this.data.phases && typeof DASHBOARD!=='undefined'){ try{ DASHBOARD.loadPhases(this.data.phases); }catch(e){} }
     if(this.data.sounds && typeof SOUND!=='undefined'){ try{ SOUND.loadData(this.data.sounds); }catch(e){} }
     document.getElementById('projNameLabel').textContent = this.data.name;
@@ -81,21 +81,7 @@ const Project = {
     if(typeof BG!=='undefined'){
       try{
         if(BG.getBackgrounds){ const bgs = BG.getBackgrounds(); if(bgs) this.data.backgrounds = bgs; }
-        if((!this.data.backgrounds || this.data.backgrounds.length===0) && BG.getNametable){
-          const nt=BG.getNametable(); if(nt && nt.filter(t=>t!==0).length>0){
-            this.data.backgrounds = [{ id:'bg_auto', name:'bg_auto', nametable:nt, attributes:BG.getAttributes(), created:Date.now() }];
-          }
-        }
-      }catch(e){}
-    }
-    if(typeof SPLASH!=='undefined'){
-      try{
-        if(SPLASH.getSplashScreens){ const spl = SPLASH.getSplashScreens(); if(spl && spl.length>0) this.data.splashScreens = spl; }
-        if((!this.data.splashScreens || this.data.splashScreens.length===0) && SPLASH.getNametable){
-          const nt=SPLASH.getNametable(); if(nt && nt.filter(t=>t!==0).length>0){
-            this.data.splashScreens = [{ id:'splash_auto', name:'title', nametable:nt, attributes:SPLASH.getAttributes(), textLayers:[], created:Date.now() }];
-          }
-        }
+        if(BG.getSplashScreens){ const spl = BG.getSplashScreens(); if(spl) this.data.splashScreens = spl; }
       }catch(e){}
     }
     if(typeof DASHBOARD!=='undefined' && DASHBOARD.getPhases){ try{ this.data.phases = DASHBOARD.getPhases(); }catch(e){} }
@@ -120,7 +106,7 @@ const Project = {
       if(!json.cheats) json.cheats=[];
       if(!json.gameConfig) json.gameConfig={ lives:3, continues:3, energy:16 };
       this.data = json; this.fileName = file.name; this.loadIntoEditors(); this.updateUI(); this.status(`carregado v${json.version||'0.4'} - ${json.splashScreens.length} splash`);
-      setTimeout(()=>{ try{ DASHBOARD.init(); }catch(e){} try{ SPLASH.loadSplashScreens(json.splashScreens); }catch(e){} },300);
+      setTimeout(()=>{ try{ DASHBOARD.init(); }catch(e){} try{ BG.loadSplashScreens(json.splashScreens); }catch(e){} },300);
     }catch(e){ alert("Erro ao abrir .nms: "+e); }
   }
 };

@@ -4,6 +4,8 @@ const BG = (() => {
   let attributes = new Array(64).fill(0);
   let collisionMap = new Array(32 * 30).fill(0);
   let currentBGIndex = 0;
+  let currentEntryType = 'bg';
+  let currentSplashIndex = 0;
   let selectedMetatile = null;
   let activePalette = 0;
   let selectedCollisionType = 1;
@@ -43,9 +45,10 @@ const BG = (() => {
           <div style="display:flex;gap:6px;align-items:center;margin-left:12px">
             <span style="font-size:11px;color:#888">BG:</span>
             <select id="bgSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 6px;font-size:11px;min-width:140px"></select>
-            <button class="btn-tool" onclick="BG.newBackground()" style="padding:4px 8px">✨ Novo</button>
-            <button class="btn-tool" onclick="BG.saveAsNew()" style="background:#2980b9;color:#fff">💾 Save As</button>
+            <button class="btn-tool" onclick="BG.newCanvas()" style="padding:4px 8px">✨ Novo</button>
             <button class="btn-tool" onclick="BG.saveToProject()" style="background:#27ae60;color:#fff">💾 Salvar</button>
+            <button class="btn-tool" onclick="BG.saveAsNew()" style="background:#2980b9;color:#fff">💾 Save Background</button>
+            <button class="btn-tool" onclick="BG.saveSplashToProject()" style="background:#8e44ad;color:#fff">🎬 Save Splash</button>
           </div>
           <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
             <span id="bgModeLabel" style="font-size:10px;color:#4ec9b0;background:#111;border:1px solid #333;border-radius:3px;padding:2px 6px">Modo: Pintura</span>
@@ -924,27 +927,54 @@ const BG = (() => {
   function updateBGSelect(){
     const sel = document.getElementById('bgSelect'); if(!sel) return; sel.innerHTML = '';
     const bgs = Project.data?.backgrounds || [];
-    bgs.forEach((s, i) => { const o = document.createElement('option'); o.value = i; o.textContent = s.name || `BG ${i + 1}`; sel.appendChild(o); });
-    const oNew = document.createElement('option'); oNew.value = 'new'; oNew.textContent = '— Novo BG —'; sel.appendChild(oNew);
-    if(bgs.length > 0 && (currentBGIndex < 0 || currentBGIndex >= bgs.length)) currentBGIndex = 0;
-    sel.value = bgs.length > 0 ? currentBGIndex : 'new';
-    sel.onchange = e => { if(e.target.value === 'new') newBackground(); else loadBackground(parseInt(e.target.value)); };
+    const splashes = Project.data?.splashScreens || [];
+    bgs.forEach((s, i) => { const o = document.createElement('option'); o.value = `bg:${i}`; o.textContent = `bg-${s.name || ('bg_'+(i+1))}`; sel.appendChild(o); });
+    splashes.forEach((s, i) => { const o = document.createElement('option'); o.value = `sp:${i}`; o.textContent = `sp-${s.name || ('splash_'+(i+1))}`; sel.appendChild(o); });
+    if(currentEntryType === 'bg' && bgs.length > 0 && (currentBGIndex < 0 || currentBGIndex >= bgs.length)) currentBGIndex = 0;
+    if(currentEntryType === 'splash' && splashes.length > 0 && (currentSplashIndex < 0 || currentSplashIndex >= splashes.length)) currentSplashIndex = 0;
+    if(currentEntryType === 'bg' && bgs.length > 0) sel.value = `bg:${currentBGIndex}`;
+    else if(currentEntryType === 'splash' && splashes.length > 0) sel.value = `sp:${currentSplashIndex}`;
+    sel.onchange = e => {
+      const v = e.target.value; if(!v) return;
+      const [type, idxStr] = v.split(':'); const idx = parseInt(idxStr);
+      if(type === 'bg') loadBackground(idx); else loadSplashEntry(idx);
+    };
   }
 
-  function newBackground(){
-    const name = prompt("Nome do Background:", `bg_${(Project.data?.backgrounds?.length||0)+1}`);
-    if(!name) return;
-    if(!Project.data.backgrounds) Project.data.backgrounds = [];
-    Project.data.backgrounds.push({ id:'bg_'+Date.now(), name, nametable:new Array(960).fill(0), attributes:new Array(64).fill(0), collisionMap:new Array(960).fill(0), textLayers:[], created:Date.now() });
-    currentBGIndex = Project.data.backgrounds.length - 1; loadBackground(currentBGIndex);
+  function isEntryEmpty(e){
+    const nt = e?.nametable || [];
+    const hasTiles = nt.some(t => t !== 0);
+    const hasText = e?.textLayers && e.textLayers.length > 0;
+    return !hasTiles && !hasText;
+  }
+
+  function pruneEmptyEntries(){
+    if(!Project.data) return;
+    const keepBgId = currentEntryType === 'bg' ? Project.data.backgrounds?.[currentBGIndex]?.id : null;
+    const keepSpId = currentEntryType === 'splash' ? Project.data.splashScreens?.[currentSplashIndex]?.id : null;
+    if(Array.isArray(Project.data.backgrounds)){
+      Project.data.backgrounds = Project.data.backgrounds.filter(b => b.id === keepBgId || !isEntryEmpty(b));
+      if(currentEntryType === 'bg'){ const ni = Project.data.backgrounds.findIndex(b => b.id === keepBgId); currentBGIndex = ni >= 0 ? ni : 0; }
+    }
+    if(Array.isArray(Project.data.splashScreens)){
+      Project.data.splashScreens = Project.data.splashScreens.filter(s => s.id === keepSpId || !isEntryEmpty(s));
+      if(currentEntryType === 'splash'){ const ni = Project.data.splashScreens.findIndex(s => s.id === keepSpId); currentSplashIndex = ni >= 0 ? ni : 0; }
+    }
+  }
+
+  function newCanvas(){
+    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0);
+    textLayers = []; selectedTextIdx = null; currentEntryType = null;
+    updateTextLayersUI(); render(); Project.status('Nova tela');
   }
 
   function saveAsNew(){
-    const name = prompt("Salvar como:", `bg_${(Project.data?.backgrounds?.length||0)+1}_v2`);
+    const name = prompt("Nome do Background:", `bg_${(Project.data?.backgrounds?.length||0)+1}`);
     if(!name) return;
     if(!Project.data.backgrounds) Project.data.backgrounds = [];
     Project.data.backgrounds.push({ id:'bg_'+Date.now(), name, nametable:[...nametable], attributes:[...attributes], collisionMap:[...collisionMap], textLayers:[...textLayers], created:Date.now() });
-    currentBGIndex = Project.data.backgrounds.length - 1; updateBGSelect(); Project.status(`Salvo como ${name}`);
+    currentEntryType = 'bg'; currentBGIndex = Project.data.backgrounds.length - 1;
+    pruneEmptyEntries(); updateBGSelect(); Project.status(`Salvo como ${name}`);
   }
 
   function clearBackground(){
@@ -957,20 +987,46 @@ const BG = (() => {
     attributes = b.attributes ? [...b.attributes] : new Array(64).fill(0);
     collisionMap = b.collisionMap ? [...b.collisionMap] : new Array(960).fill(0);
     textLayers = b.textLayers ? [...b.textLayers] : [];
-    selectedTextIdx = null; currentBGIndex = idx; updateBGSelect(); updateTextLayersUI(); render();
+    selectedTextIdx = null; currentEntryType = 'bg'; currentBGIndex = idx; updateBGSelect(); updateTextLayersUI(); render();
+  }
+
+  function loadSplashEntry(idx){
+    const b = Project.data?.splashScreens?.[idx]; if(!b) return;
+    nametable = b.nametable ? [...b.nametable] : new Array(960).fill(0);
+    attributes = b.attributes ? [...b.attributes] : new Array(64).fill(0);
+    collisionMap = new Array(960).fill(0);
+    textLayers = b.textLayers ? [...b.textLayers] : [];
+    selectedTextIdx = null; currentEntryType = 'splash'; currentSplashIndex = idx; updateBGSelect(); updateTextLayersUI(); render();
   }
 
   function saveToProject(){
     if(!Project.data) return;
     if(!Project.data.backgrounds) Project.data.backgrounds = [];
-    if(Project.data.backgrounds.length === 0){
-      Project.data.backgrounds.push({ id:'bg_'+Date.now(), name:'bg_1', nametable:[...nametable], attributes:[...attributes], collisionMap:[...collisionMap], textLayers:[...textLayers], created:Date.now() });
-      currentBGIndex = 0;
-    } else {
+    if(!Project.data.splashScreens) Project.data.splashScreens = [];
+    if(currentEntryType === 'splash' && Project.data.splashScreens[currentSplashIndex]){
+      const b = Project.data.splashScreens[currentSplashIndex];
+      b.nametable = [...nametable]; b.attributes = [...attributes]; b.textLayers = [...textLayers];
+      Project.status(`Splash Screen salva com sucesso.`);
+    } else if(currentEntryType === 'bg' && Project.data.backgrounds[currentBGIndex]){
       const b = Project.data.backgrounds[currentBGIndex];
-      if(b){ b.nametable = [...nametable]; b.attributes = [...attributes]; b.collisionMap = [...collisionMap]; b.textLayers = [...textLayers]; }
+      b.nametable = [...nametable]; b.attributes = [...attributes]; b.collisionMap = [...collisionMap]; b.textLayers = [...textLayers];
+      Project.status(`Background salvo`);
+    } else {
+      Project.data.backgrounds.push({ id:'bg_'+Date.now(), name:`bg_${Project.data.backgrounds.length+1}`, nametable:[...nametable], attributes:[...attributes], collisionMap:[...collisionMap], textLayers:[...textLayers], created:Date.now() });
+      currentEntryType = 'bg'; currentBGIndex = Project.data.backgrounds.length - 1;
+      Project.status(`Background salvo`);
     }
-    updateBGSelect(); Project.status(`Background salvo`);
+    pruneEmptyEntries(); updateBGSelect();
+  }
+
+  function saveSplashToProject(){
+    const name = prompt("Nome da Splash Screen:", `splash_${(Project.data?.splashScreens?.length||0)+1}`);
+    if(!name) return;
+    if(!Project.data) return;
+    if(!Project.data.splashScreens) Project.data.splashScreens = [];
+    Project.data.splashScreens.push({ id:'splash_'+Date.now(), name, nametable:[...nametable], attributes:[...attributes], textLayers:[...textLayers], created:Date.now() });
+    currentEntryType = 'splash'; currentSplashIndex = Project.data.splashScreens.length - 1;
+    pruneEmptyEntries(); updateBGSelect(); Project.status(`Splash Screen salva com sucesso.`);
   }
 
   function exportASM(){
@@ -985,10 +1041,12 @@ const BG = (() => {
   return {
     init: buildHTML, setTool, setCollisionType, setAllSubTilesCollision, applyMetatileHitboxToCanvas, 
     insertText, exportASM, fillAllEmpty, fillEntireScreen, applyAttrToAll,
-    newBackground, saveAsNew, clearBackground, saveToProject,
+    newCanvas, saveAsNew, clearBackground, saveToProject, saveSplashToProject, loadBackground, loadSplashEntry,
     editTextLayer, deleteTextLayer, toggleMoveMode, nudgeTextLayer, duplicateTextLayer, clearTextSelection,
     loadBackgrounds: (arr)=>{ if(Project.data) Project.data.backgrounds=arr; updateBGSelect(); },
+    loadSplashScreens: (arr)=>{ if(Project.data) Project.data.splashScreens=arr; updateBGSelect(); },
     getBackgrounds: ()=> Project.data?.backgrounds||[],
+    getSplashScreens: ()=> Project.data?.splashScreens||[],
     getNametable: ()=> [...nametable], getAttributes: ()=> [...attributes], getCollisionMap: ()=> [...collisionMap]
   };
 })();
