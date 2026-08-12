@@ -6,7 +6,7 @@ const Project = {
   status(msg){ const el=document.getElementById('projStatus'); if(el){ el.textContent="● "+msg; setTimeout(()=>el.textContent="● pronto",2000) } },
   defaultData(){
     return {
-      version: "0.6.5 FINAL",
+      version: "0.7.0",
       name: "Meu Jogo",
       author: "",
       description: "",
@@ -52,6 +52,7 @@ const Project = {
     if(this.data.splashScreens && typeof BG!=='undefined'){ try{ BG.loadSplashScreens(this.data.splashScreens); }catch(e){} }
     if(this.data.phases && typeof DASHBOARD!=='undefined'){ try{ DASHBOARD.loadPhases(this.data.phases); }catch(e){} }
     if(this.data.sounds && typeof SOUND!=='undefined'){ try{ SOUND.loadData(this.data.sounds); }catch(e){} }
+    if(typeof CHAR!=='undefined'){ try{ CHAR.loadData(); }catch(e){} }
     document.getElementById('projNameLabel').textContent = this.data.name;
     document.getElementById('projFileLabel').textContent = this.fileName;
     document.getElementById('infoCHR').textContent = (chrU8.length/1024)+"KB";
@@ -78,6 +79,7 @@ const Project = {
     this.data.palettes = CHR.getPalettes();
     this.data.chr = Array.from(CHR.getBuffer());
     this.data.metatiles = CHR.getMetatiles ? CHR.getMetatiles() : (this.data.metatiles||[]);
+    this.data.characters = typeof CHAR!=='undefined' ? (this.data.characters||[]) : (this.data.characters||[]);
     if(typeof BG!=='undefined'){
       try{
         if(BG.getBackgrounds){ const bgs = BG.getBackgrounds(); if(bgs) this.data.backgrounds = bgs; }
@@ -87,7 +89,7 @@ const Project = {
     if(typeof DASHBOARD!=='undefined' && DASHBOARD.getPhases){ try{ this.data.phases = DASHBOARD.getPhases(); }catch(e){} }
     try{ if(typeof SOUND!=='undefined' && SOUND.getData){ const sData=SOUND.getData(); if(sData && sData.song) this.data.sounds = { ...sData, asm: document.getElementById('asm-output')?.value || '' }; } }catch(e){}
     this.data.savedAt = Date.now();
-    this.data.version = "0.6.5 FINAL";
+    this.data.version = "0.7.0";
     const blob = new Blob([JSON.stringify(this.data, null, 2)], {type:"application/json"});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = this.fileName.endsWith('.nms') ? this.fileName : this.fileName.replace('.json','') + ".nms";
@@ -104,6 +106,7 @@ const Project = {
       if(!json.phases) json.phases=[{ id:'phase_1', name:'Fase 1', gravity:'down', mapper:0, bank:0, scroll:'static', background:'', splash:'' }];
       if(!json.sounds) json.sounds={ song: [], baseFrames: 30, loop: true, asm: '' };
       if(!json.cheats) json.cheats=[];
+      if(!json.characters) json.characters=[];
       if(!json.gameConfig) json.gameConfig={ lives:3, continues:3, energy:16 };
       this.data = json; this.fileName = file.name; this.loadIntoEditors(); this.updateUI(); this.status(`carregado v${json.version||'0.4'} - ${json.splashScreens.length} splash`);
       setTimeout(()=>{ try{ DASHBOARD.init(); }catch(e){} try{ BG.loadSplashScreens(json.splashScreens); }catch(e){} },300);

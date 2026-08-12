@@ -44,7 +44,7 @@
     <div class="module active" id="mod-dashboard"></div>
     <div class="module" id="mod-chr"><div class="chr-wrap" id="chrModuleRoot"></div></div>
     <div class="module" id="mod-bg"></div>
-    <div class="module" id="mod-char"><div class="placeholder"><div class="big">🦸</div><h2>Personagens — Em construção</h2></div></div>
+    <div class="module" id="mod-char"></div>
     <div class="module" id="mod-sound"></div>
     <div class="module" id="mod-world"><div class="placeholder"><div class="big">🌍</div><h2>Mundo & Transições — Em construção</h2></div></div>
     <div class="module" id="mod-build"></div>
@@ -53,7 +53,9 @@
 <script src="js/core.js"></script>
 <script src="js/modules/dashboard.js"></script>
 <script src="js/modules/chr-editor.js"></script>
+<script src="js/modules/char-editor.js"></script>
 <script src="js/modules/backgrounds.js"></script>
+<script src="js/build.js"></script>
 <script src="js/modules/build-rom.js"></script>
 <script src="js/modules/sound-editor.js"></script>
 <script>
@@ -65,6 +67,7 @@ const UI = {
     document.getElementById('mod-'+name)?.classList.add('active');
     if(name==='dashboard'){ try{ DASHBOARD.init(); }catch(e){} }
     if(name==='chr'){ try{ CHR.renderAll(); }catch(e){} }
+    if(name==='char'){ try{ CHAR.init(); }catch(e){} }
     if(name==='bg'){ try{ BG.init(); BG.refreshMetatileList(); }catch(e){} }
     if(name==='build'){ try{ BUILD.init(); }catch(e){} }
     if(name==='sound'){ try{ SOUND.init(); }catch(e){} }
