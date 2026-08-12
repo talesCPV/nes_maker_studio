@@ -49,6 +49,7 @@ const BG = (() => {
             <button class="btn-tool" onclick="BG.saveToProject()" style="background:#27ae60;color:#fff">💾 Salvar</button>
             <button class="btn-tool" onclick="BG.saveAsNew()" style="background:#2980b9;color:#fff">💾 Save Background</button>
             <button class="btn-tool" onclick="BG.saveSplashToProject()" style="background:#8e44ad;color:#fff">🎬 Save Splash</button>
+            <button class="btn-tool" onclick="BG.deleteCurrentEntry()" style="background:#c0392b;color:#fff">🗑 Deletar</button>
           </div>
           <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
             <span id="bgModeLabel" style="font-size:10px;color:#4ec9b0;background:#111;border:1px solid #333;border-radius:3px;padding:2px 6px">Modo: Pintura</span>
@@ -1019,6 +1020,40 @@ const BG = (() => {
     pruneEmptyEntries(); updateBGSelect();
   }
 
+  function loadAdjacentAfterDelete(type, removedIdx){
+    const bgs = Project.data?.backgrounds || [];
+    const splashes = Project.data?.splashScreens || [];
+    if(type === 'bg'){
+      if(bgs.length > 0){ loadBackground(Math.min(removedIdx, bgs.length - 1)); return; }
+      if(splashes.length > 0){ loadSplashEntry(0); return; }
+    } else {
+      if(splashes.length > 0){ loadSplashEntry(Math.min(removedIdx, splashes.length - 1)); return; }
+      if(bgs.length > 0){ loadBackground(0); return; }
+    }
+    currentEntryType = null; newCanvas(); updateBGSelect();
+  }
+
+  function deleteCurrentEntry(){
+    if(!Project.data) return;
+    if(currentEntryType === 'bg' && Project.data.backgrounds?.[currentBGIndex]){
+      const nome = Project.data.backgrounds[currentBGIndex].name || `bg_${currentBGIndex+1}`;
+      if(!confirm(`Remover o background "${nome}"? Esta ação não pode ser desfeita.`)) return;
+      const removedIdx = currentBGIndex;
+      Project.data.backgrounds.splice(currentBGIndex, 1);
+      loadAdjacentAfterDelete('bg', removedIdx);
+    } else if(currentEntryType === 'splash' && Project.data.splashScreens?.[currentSplashIndex]){
+      const nome = Project.data.splashScreens[currentSplashIndex].name || `splash_${currentSplashIndex+1}`;
+      if(!confirm(`Remover a splash "${nome}"? Esta ação não pode ser desfeita.`)) return;
+      const removedIdx = currentSplashIndex;
+      Project.data.splashScreens.splice(currentSplashIndex, 1);
+      loadAdjacentAfterDelete('splash', removedIdx);
+    } else {
+      alert("Nenhuma tela selecionada para deletar.");
+      return;
+    }
+    Project.status(`Removido com sucesso`);
+  }
+
   function saveSplashToProject(){
     const name = prompt("Nome da Splash Screen:", `splash_${(Project.data?.splashScreens?.length||0)+1}`);
     if(!name) return;
@@ -1041,7 +1076,7 @@ const BG = (() => {
   return {
     init: buildHTML, setTool, setCollisionType, setAllSubTilesCollision, applyMetatileHitboxToCanvas, 
     insertText, exportASM, fillAllEmpty, fillEntireScreen, applyAttrToAll,
-    newCanvas, saveAsNew, clearBackground, saveToProject, saveSplashToProject, loadBackground, loadSplashEntry,
+    newCanvas, saveAsNew, clearBackground, saveToProject, saveSplashToProject, deleteCurrentEntry, loadBackground, loadSplashEntry,
     editTextLayer, deleteTextLayer, toggleMoveMode, nudgeTextLayer, duplicateTextLayer, clearTextSelection,
     loadBackgrounds: (arr)=>{ if(Project.data) Project.data.backgrounds=arr; updateBGSelect(); },
     loadSplashScreens: (arr)=>{ if(Project.data) Project.data.splashScreens=arr; updateBGSelect(); },
