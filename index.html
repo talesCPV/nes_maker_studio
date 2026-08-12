@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NES Maker Studio v0.6.5 FINAL</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="topbar">
+  <div class="top-logo"><span>▶</span> NES MAKER STUDIO v0.6.5 FINAL EXATO</div>
+  <div class="divider"></div>
+  <button class="icon-btn primary" title="Novo Projeto (Ctrl+N)" onclick="Project.newProject()">📄</button>
+  <label class="icon-btn" title="Abrir Projeto .NMS (Ctrl+O)" style="cursor:pointer">📂<input type="file" id="openNMS" accept=".nms,.json" style="display:none"></label>
+  <button class="icon-btn" title="Salvar Projeto .NMS (Ctrl+S)" onclick="Project.save()">💾</button>
+  <div class="divider"></div>
+  <span style="font-size:11px;color:#00ff00">v0.6.5 FINAL - Scroll Fix Exato + CHR Page - FUNCIONANDO</span>
+  <button class="icon-btn" title="Sobre" onclick="alert('NES Maker Studio v0.6.5 FINAL\nScroll fix exato do usuário\nCHR Page Selector\nOAM DMA removido conforme exemplo\nFUNCIONANDO PERFEITAMENTE')" style="margin-left:auto">❓</button>
+  <div class="proj-info">
+    <span id="projNameLabel">Sem projeto</span>
+    <b id="projFileLabel">—</b>
+    <span id="projStatus" style="color:#27ae60">● pronto</span>
+  </div>
+</div>
+<div id="main">
+  <div id="sidebar">
+    <div class="side-title">Módulos</div>
+    <div class="side-item active" data-mod="dashboard" onclick="UI.switchModule('dashboard')">📊 Dashboard</div>
+    <div class="side-item" data-mod="chr" onclick="UI.switchModule('chr')">🎨 CHR Editor</div>
+    <div class="side-item" data-mod="bg" onclick="UI.switchModule('bg')">🗺 Backgrounds</div>
+    <div class="side-item" data-mod="splash" onclick="UI.switchModule('splash')">🎬 Splash Screen</div>
+    <div class="side-item" data-mod="char" onclick="UI.switchModule('char')">🦸 Personagens</div>
+    <div class="side-item" data-mod="sound" onclick="UI.switchModule('sound')">🎵 Sons APU</div>
+    <div class="side-item" data-mod="world" onclick="UI.switchModule('world')">🌍 Mundo / Transições</div>
+    <div class="side-item" data-mod="build" onclick="UI.switchModule('build')">🔨 Build ROM</div>
+    <div style="margin-top:auto;padding:12px;border-top:1px solid #222;font-size:11px;color:#666;line-height:1.4">
+      <div>CHR: <span id="infoCHR">8KB</span></div>
+      <div>Banks: <span id="infoBanks">2</span></div>
+      <div>Fases: <span id="infoPhases">0</span></div>
+      <div>Splash: <span id="infoSplash">0</span></div>
+      <div>Formato: <b style="color:#00ff00">.nms v0.6.5 FINAL</b></div>
+    </div>
+  </div>
+  <div id="content">
+    <div class="module active" id="mod-dashboard"></div>
+    <div class="module" id="mod-chr"><div class="chr-wrap" id="chrModuleRoot"></div></div>
+    <div class="module" id="mod-bg"></div>
+    <div class="module" id="mod-splash"></div>
+    <div class="module" id="mod-char"><div class="placeholder"><div class="big">🦸</div><h2>Personagens — Em construção</h2></div></div>
+    <div class="module" id="mod-sound"></div>
+    <div class="module" id="mod-world"><div class="placeholder"><div class="big">🌍</div><h2>Mundo & Transições — Em construção</h2></div></div>
+    <div class="module" id="mod-build"></div>
+  </div>
+</div>
+<script src="js/core.js"></script>
+<script src="js/modules/dashboard.js"></script>
+<script src="js/modules/chr-editor.js"></script>
+<script src="js/modules/backgrounds.js"></script>
+<script src="js/modules/splash.js"></script>
+<script src="js/modules/build-rom.js"></script>
+<script src="js/modules/sound-editor.js"></script>
+<script>
+const UI = {
+  switchModule(name){
+    document.querySelectorAll('.side-item').forEach(e=>e.classList.remove('active'));
+    document.querySelector(`[data-mod="${name}"]`)?.classList.add('active');
+    document.querySelectorAll('.module').forEach(m=>m.classList.remove('active'));
+    document.getElementById('mod-'+name)?.classList.add('active');
+    if(name==='dashboard'){ try{ DASHBOARD.init(); }catch(e){} }
+    if(name==='chr'){ try{ CHR.renderAll(); }catch(e){} }
+    if(name==='bg'){ try{ BG.init(); BG.refreshMetatileList(); }catch(e){} }
+    if(name==='splash'){ try{ SPLASH.init(); SPLASH.refreshMetatileList(); }catch(e){} }
+    if(name==='build'){ try{ BUILD.init(); }catch(e){} }
+    if(name==='sound'){ try{ SOUND.init(); }catch(e){} }
+  }
+}
+window.addEventListener('keydown', e=>{
+  if(e.ctrlKey && e.key.toLowerCase()==='n'){ e.preventDefault(); Project.newProject(); }
+  if(e.ctrlKey && e.key.toLowerCase()==='s'){ e.preventDefault(); Project.save(); }
+  if(e.ctrlKey && e.key.toLowerCase()==='o'){ e.preventDefault(); document.getElementById('openNMS').click(); }
+  if(e.ctrlKey && e.key.toLowerCase()==='z'){ e.preventDefault(); CHR.undo(); }
+});
+window.addEventListener('DOMContentLoaded', ()=>{ Project.newProject(true); setTimeout(()=>UI.switchModule('dashboard'), 100); });
+</script>
+</body>
+</html>

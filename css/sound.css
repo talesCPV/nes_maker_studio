@@ -1,0 +1,50 @@
+
+/* SOUND MODULE - scoped to #mod-sound */
+#mod-sound { --bg:#121218; --panel:#1e1e2a; --accent:#00e5ff; --accent-hover:#00b8d4; --text:#e2e8f0; --border:#334155; --rest-color:#ffb703; --timeline-bg:#1a1a2e; --timeline-progress:#10b981; }
+#mod-sound .sound-card { background:var(--panel); padding:16px; border-radius:8px; border:1px solid var(--border); margin-bottom:16px }
+#mod-sound .controls { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:12px }
+#mod-sound .tempo-box { display:flex; align-items:center; gap:8px; background:#0f172a; padding:6px 12px; border-radius:6px; border:1px solid var(--border) }
+#mod-sound .tempo-box input { width:60px; text-align:center; padding:4px; font-weight:bold; color:var(--accent); background:#0f172a; border:1px solid var(--border); border-radius:4px }
+#mod-sound button { background:var(--accent); color:#0f172a; border:none; padding:6px 12px; border-radius:6px; font-weight:700; cursor:pointer; font-size:12px }
+#mod-sound button:hover { background:var(--accent-hover) }
+#mod-sound button.secondary { background:#334155; color:#fff }
+#mod-sound button.btn-clone { background:#10b981; color:#0f172a }
+#mod-sound button.btn-del { background:#ef4444; color:#fff }
+#mod-sound button.btn-load { background:#2d7927; color:#fff }
+#mod-sound .timeline-wrapper { width:100%; overflow-x:auto; padding-bottom:12px }
+#mod-sound .timeline-content { display:flex; flex-direction:column; gap:4px; min-width:max-content }
+#mod-sound .timeline-grid { display:flex; gap:10px; align-items:flex-end; min-width:max-content; min-height:270px; padding:20px 10px 6px }
+#mod-sound .cell-container { display:flex; flex-direction:column; align-items:center; gap:0; position:relative }
+#mod-sound .grid-cell { position:relative; background:linear-gradient(to bottom, transparent 0%, transparent 49.5%, rgba(255,255,255,0.12) 50%, transparent 50.5%, transparent 100%), #0f172a; border:2px solid var(--border); border-radius:6px; width:25px; height:240px; padding:6px 4px; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; cursor:grab; user-select:none; box-sizing:border-box; overflow:hidden }
+#mod-sound .grid-cell::before { content:""; position:absolute; top:12px; bottom:12px; left:50%; width:5px; transform:translateX(-50%); background:#fff; border-radius:4px; opacity:.95; pointer-events:none }
+#mod-sound .grid-cell.active { border-color:var(--accent); background:#1e293b; box-shadow:0 0 10px rgba(0,229,255,.45) }
+#mod-sound .grid-cell.playing { border-color:#10b981!important; background:#1a2e1a!important; box-shadow:0 0 15px rgba(16,185,129,.6)!important }
+#mod-sound .grid-cell.selected { border-color:#10b981!important; background:rgba(16,185,129,.15)!important }
+#mod-sound .grid-cell.dragging { opacity:.4; border:2px dashed var(--accent) }
+#mod-sound .grid-cell.drag-over { border-color:#10b981; background:rgba(16,185,129,.15) }
+#mod-sound .cell-note { position:absolute; left:50%; z-index:5; transform:translate(-50%,50%); font-size:.6rem; line-height:1; font-weight:bold; color:#07111f; background:#fff; border:2px solid #fff; border-radius:50%; padding:5px 4px; min-width:18px; text-align:center; box-shadow:0 1px 4px rgba(0,0,0,.45); pointer-events:none }
+#mod-sound .cell-note.is-rest { background:var(--rest-color); border-color:var(--rest-color) }
+#mod-sound .cell-duration-mark { position:absolute; left:50%; z-index:4; transform:translateX(-50%); width:24px; height:4px; background:var(--accent); border-radius:3px; box-shadow:0 0 5px rgba(0,229,255,.8); pointer-events:none }
+#mod-sound .cell-add-btn { min-width:44px; width:44px; height:240px; border:2px dashed var(--border); border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:1.5rem; color:#64748b; cursor:pointer }
+#mod-sound .cell-add-btn:hover { border-color:var(--accent); color:var(--accent) }
+#mod-sound .timeline-bar-container { position:relative; height:32px; margin:0 10px; cursor:pointer; user-select:none; min-width:max-content }
+#mod-sound .timeline-bar { position:absolute; top:50%; left:0; right:0; height:8px; transform:translateY(-50%); background:var(--timeline-bg); border-radius:4px; overflow:visible }
+#mod-sound .timeline-bar-fill { position:absolute; top:0; left:0; height:100%; background:var(--timeline-progress); border-radius:4px; transition:width .1s linear; pointer-events:none }
+#mod-sound .timeline-selection-range { position:absolute; top:-4px; height:calc(100% + 8px); background:rgba(16,185,129,.3); border:2px solid rgba(16,185,129,.6); border-radius:4px; pointer-events:none; z-index:2 }
+#mod-sound .timeline-cursor { position:absolute; top:-6px; width:4px; height:calc(100% + 12px); background:var(--accent); border-radius:2px; pointer-events:none; z-index:3; box-shadow:0 0 8px rgba(0,229,255,.6) }
+#mod-sound .selection-actions { display:flex; gap:8px; margin-top:4px; padding:0 10px; min-width:max-content; align-items:center }
+#mod-sound .inspector-panel { background:#0f172a; border:1px solid var(--border); border-radius:8px; padding:16px; margin-top:10px; display:flex; flex-direction:column; gap:15px }
+#mod-sound .inspector-header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px }
+#mod-sound .inspector-title { font-weight:bold; color:var(--accent); font-size:1rem }
+#mod-sound .piano-container { display:flex; flex-direction:column; gap:10px; background:#181824; padding:12px; border-radius:8px; border:1px solid var(--border); width:100%; box-sizing:border-box }
+#mod-sound .piano-scroll-wrapper { width:100%; overflow-x:auto; padding-bottom:8px }
+#mod-sound .piano-keyboard { position:relative; display:inline-flex; height:100px; user-select:none }
+#mod-sound .piano-key { cursor:pointer; display:flex; align-items:flex-end; justify-content:center; padding-bottom:6px; font-size:.65rem; font-weight:bold; box-sizing:border-box; border-radius:0 0 4px 4px }
+#mod-sound .piano-key.white { width:28px; height:100%; background:#f8fafc; color:#0f172a; border:1px solid #cbd5e1; z-index:1; flex-shrink:0 }
+#mod-sound .piano-key.white.active { background:var(--accent)!important }
+#mod-sound .piano-key.black { width:18px; height:58%; background:#0f172a; color:#fff; position:absolute; top:0; z-index:2; border-radius:0 0 3px 3px; border:1px solid #334155; font-size:.55rem; padding-bottom:4px }
+#mod-sound .piano-key.black.active { background:var(--accent)!important; color:#0f172a }
+#mod-sound .rest-btn { background:var(--rest-color); color:#0f172a; padding:6px 14px; font-size:.85rem; border-radius:4px; border:none; font-weight:bold; cursor:pointer; align-self:flex-start }
+#mod-sound .rest-btn.active { outline:2px solid #fff; box-shadow:0 0 8px var(--rest-color) }
+#mod-sound textarea { width:100%; height:200px; background:#090d16; color:#38edf8; font-family:Consolas,monospace; padding:12px; border:1px solid var(--border); border-radius:6px; box-sizing:border-box; font-size:.85rem }
+#mod-sound select { background:#1e1e2a; color:var(--text); border:1px solid var(--border); padding:6px 10px; border-radius:6px; font-size:.85rem }
