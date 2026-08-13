@@ -116,6 +116,14 @@ load_attrs:
   CPX #64
   BNE load_attrs
 
+  ; Reset do scroll ($2005) - OBRIGATORIO apos usar $2006/$2007 pra carregar VRAM,
+  ; senao o PPU comeca a renderizar com o endereco/scroll "sujo" da ultima escrita,
+  ; causando uma linha/coluna de lixo no topo ou lateral da tela.
+  BIT $2002
+  LDA #$00
+  STA $2005
+  STA $2005
+
   ; Enable Rendering (pg0/$0000 = sprites, pg1/$1000 = background reempacotado)
   LDA #%10010000
   STA $2000
@@ -125,8 +133,9 @@ load_attrs:
 Forever:
   JMP Forever
 
+; OBS: cor 0 de cada paleta = sempre a cor universal de fundo ($3F00), por limitacao do PPU.
 PaletteData:
-  .byte $0f, $00, $10, $30, $0f, $20, $26, $06, $0f, $0a, $1a, $2a, $1c, $0d, $07, $2c
+  .byte $0f, $00, $10, $30, $0f, $20, $26, $06, $0f, $0a, $1a, $2a, $0f, $0d, $07, $2c
   .byte $0f, $16, $30, $0f, $0f, $19, $29, $39, $0f, $03, $13, $23, $0f, $20, $07, $2c
 
 NametableData:

@@ -181,10 +181,16 @@ const BUILD = (() => {
     const data=getSelectedBuildData(); const nt=data.nametable; const at=data.attributes;
     const chrBuf=CHR.getBuffer?CHR.getBuffer():new Uint8Array(8192);
     const pals=CHR.getPalettes?CHR.getPalettes():[[15,0,16,48]];
+    const universalBackdrop = (pals[0]&&pals[0][0]!=null) ? pals[0][0] : 15;
     for(let ty=0;ty<30;ty++) for(let tx=0;tx<32;tx++){
       const tileIdx=nt[ty*32+tx]||0; const off=tileIdx*16; if(off+16>chrBuf.length) continue;
       const attrX=Math.floor(tx/2), attrY=Math.floor(ty/2); const blockX=Math.floor(attrX/2), blockY=Math.floor(attrY/2); const attrIdx=blockY*8+blockX; const attrByte=at[attrIdx]||0; const subX=attrX%2, subY=attrY%2; const shift=(subY*2+subX)*2; const palIdx=(attrByte>>shift)&0x03; const pal=pals[palIdx]||pals[0];
-      for(let py=0;py<8;py++){ const p0=chrBuf[off+py], p1=chrBuf[off+py+8]; for(let px=0;px<8;px++){ const sh=7-px, b0=(p0>>sh)&1, b1=(p1>>sh)&1, ci=(b1<<1)|b0; ctx.fillStyle=NES_PALETTE[pal[ci]]; ctx.fillRect(tx*8+px, ty*8+py, 1,1); } }
+      for(let py=0;py<8;py++){ const p0=chrBuf[off+py], p1=chrBuf[off+py+8]; for(let px=0;px<8;px++){ const sh=7-px, b0=(p0>>sh)&1, b1=(p1>>sh)&1, ci=(b1<<1)|b0;
+        // No hardware do NES, o índice de cor 0 de QUALQUER paleta de BG sempre mostra a
+        // cor universal de fundo ($3F00 / paleta 0, cor 0) - não a cor 0 da paleta escolhida
+        // pelo atributo. Reproduzimos isso aqui pra bater exatamente com a ROM compilada.
+        const nesColor = ci===0 ? universalBackdrop : pal[ci];
+        ctx.fillStyle=NES_PALETTE[nesColor]; ctx.fillRect(tx*8+px, ty*8+py, 1,1); } }
     }
   }
   function log(m){ const el=document.getElementById('buildLog'); if(el){ el.textContent+="\n"+m; el.scrollTop=el.scrollHeight; } }
@@ -221,6 +227,11 @@ const BUILD = (() => {
     const pals=CHR.getPalettes?CHR.getPalettes():[[15,0,16,48],[15,6,22,38],[15,10,26,42],[15,2,18,34],[15,22,48,15],[15,25,41,57],[15,3,19,35],[15,9,25,41]];
     const data=getSelectedBuildData(); const nt=data.nametable; const at=data.attributes;
     const paletteBytes=[]; for(let p=0;p<8;p++){ const pal=pals[p]||[15,0,16,48]; for(let c=0;c<4;c++) paletteBytes.push(pal[c]||0); }
+    // Espelhamento de hardware do PPU: o índice de cor 0 de TODAS as paletas (BG e sprite)
+    // é fisicamente o mesmo endereço $3F00 - não dá pra ter cores 0 diferentes por paleta.
+    // Forçamos os bytes aqui pra refletir a realidade da ROM (evita confusão ao inspecionar).
+    const universalBackdrop = paletteBytes[0];
+    [4,8,12,16,20,24,28].forEach(i => { paletteBytes[i] = universalBackdrop; });
 
     // Reempacota os tiles usados (de qualquer página original) num único banco de 256 tiles.
     const packed = packBackgroundCHR(chrBuf, nt);
@@ -346,6 +357,14 @@ const BUILD = (() => {
     L.push('  CPX #64');
     L.push('  BNE load_attrs');
     L.push('');
+    L.push('  ; Reset do scroll ($2005) - OBRIGATORIO apos usar $2006/$2007 pra carregar VRAM,');
+    L.push('  ; senao o PPU comeca a renderizar com o endereco/scroll "sujo" da ultima escrita,');
+    L.push('  ; causando uma linha/coluna de lixo no topo ou lateral da tela.');
+    L.push('  BIT $2002');
+    L.push('  LDA #$00');
+    L.push('  STA $2005');
+    L.push('  STA $2005');
+    L.push('');
     L.push(`  ; Enable Rendering (pg0/$0000 = sprites, pg1/$1000 = background reempacotado)`);
     L.push(`  LDA #%10010000`);
     L.push('  STA $2000');
@@ -355,6 +374,7 @@ const BUILD = (() => {
     L.push('Forever:');
     L.push('  JMP Forever');
     L.push('');
+    L.push('; OBS: cor 0 de cada paleta = sempre a cor universal de fundo ($3F00), por limitacao do PPU.');
     L.push('PaletteData:');
     for (let i = 0; i < paletteBytes.length; i += 16) {
       const chunk = paletteBytes.slice(i, i + 16).map(b => '$' + b.toString(16).padStart(2, '0')).join(', ');
