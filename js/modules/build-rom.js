@@ -169,11 +169,10 @@ const BUILD = (() => {
     const chrBuf=CHR.getBuffer?CHR.getBuffer():new Uint8Array(8192);
     const data=getSelectedBuildData();
     const typeLabel = data.type==='background' ? 'Background' : 'Splash';
-    let count0=0, count1=0; for(const t of data.nametable){ if(t>=256) count1++; else if(t>0) count0++; }
-    const pageLabel = count1>count0 ? 'pg-1 ($1000)' : 'pg-0 ($0000)';
-    let pageWarn = '';
-    if(count0>0 && count1>0) pageWarn = `<br><span style="color:#ff5555">⚠ mistura pg-0/pg-1: só ${count1>count0?'pg-1':'pg-0'} será usada no hardware</span>`;
-    info.innerHTML=`<b style="color:#ffcc00">[${typeLabel}] ${data.sourceName||data.name}</b><br>CHR: ${chrBuf.length} bytes<br>Tiles: ${data.filled}/960<br>Página de padrões: ${pageLabel}${pageWarn}`;
+    const packed=packBackgroundCHR(chrBuf, data.nametable);
+    let overflowWarn = '';
+    if(packed.overflowCount>0) overflowWarn = `<br><span style="color:#ff5555">⚠ ${packed.overflowCount} tile(s) a mais não cabem em 256 e virarão vazio</span>`;
+    info.innerHTML=`<b style="color:#ffcc00">[${typeLabel}] ${data.sourceName||data.name}</b><br>CHR: ${chrBuf.length} bytes<br>Tiles na tela: ${data.filled}/960<br>Tiles únicos usados: ${packed.usedCount}/256${overflowWarn}`;
     if(details && data.phase) details.innerHTML=`Fase: ${data.phase.name}<br>Gravity: ${data.phase.gravity}<br>Mapper: ${data.phase.mapper}`;
   }
   function renderPreview(){
@@ -190,20 +189,48 @@ const BUILD = (() => {
   }
   function log(m){ const el=document.getElementById('buildLog'); if(el){ el.textContent+="\n"+m; el.scrollTop=el.scrollHeight; } }
 
+  // Reempacota os tiles REALMENTE usados pela imagem (nametable) num banco de padrões
+  // dedicado de até 256 tiles, não importa se no editor eles vieram da pg-0 ou da pg-1
+  // (índices 0-255 ou 256-511 do CHR original). Isso resolve a limitação de hardware do
+  // NES, que só permite UMA página de 256 tiles ativa por vez para o background: em vez
+  // de descartar metade do desenho, colocamos só os tiles usados (deduplicados) nessa
+  // única página, e remapeamos a nametable para apontar pros novos índices 0-255.
+  function packBackgroundCHR(chrBuf, nt){
+    const mapping = new Map();
+    const usedTiles = [];
+    mapping.set(0, 0); usedTiles.push(0); // índice 0 sempre reservado (tile "vazio")
+    const overflow = new Set();
+    for (const raw of nt) {
+      const orig = raw || 0;
+      if (mapping.has(orig)) continue;
+      if (usedTiles.length >= 256) { overflow.add(orig); continue; }
+      mapping.set(orig, usedTiles.length);
+      usedTiles.push(orig);
+    }
+    const bgChr = new Uint8Array(4096);
+    usedTiles.forEach((origIdx, newIdx) => {
+      const srcOff = origIdx * 16;
+      if (srcOff + 16 <= chrBuf.length) bgChr.set(chrBuf.subarray(srcOff, srcOff + 16), newIdx * 16);
+    });
+    const remappedNt = nt.map(t => mapping.get(t || 0) ?? 0);
+    return { bgChr, remappedNt, usedCount: usedTiles.length, overflowCount: overflow.size };
+  }
+
   function generateASM(){
     const chrBuf=CHR.getBuffer?CHR.getBuffer():new Uint8Array(8192);
     const pals=CHR.getPalettes?CHR.getPalettes():[[15,0,16,48],[15,6,22,38],[15,10,26,42],[15,2,18,34],[15,22,48,15],[15,25,41,57],[15,3,19,35],[15,9,25,41]];
     const data=getSelectedBuildData(); const nt=data.nametable; const at=data.attributes;
     const paletteBytes=[]; for(let p=0;p<8;p++){ const pal=pals[p]||[15,0,16,48]; for(let c=0;c<4;c++) paletteBytes.push(pal[c]||0); }
 
-    // ESTRATÉGIA FIXA: Background sempre usa Pg-1 ($1000).
-    // O bit 4 do PPUCTRL ($2000) controla isso: 1 = $1000, 0 = $0000.
-    // %10010000 -> Bit 7 (NMI) ligado, Bit 4 (BG pattern table) ligado.
-    const ppuCtrlValue = '%10010000'; 
+    // Reempacota os tiles usados (de qualquer página original) num único banco de 256 tiles.
+    const packed = packBackgroundCHR(chrBuf, nt);
+    const packedNt = packed.remappedNt;
 
     const L=[];
-    L.push('; NES Game Maker - Gerado com Background fixo na Pg-1 ($1000)');
+    L.push('; NES Game Maker - Gerado por BUILD ROM v0.7.0');
     L.push(`; Imagem selecionada: [${data.type==='background'?'Background':'Splash'}] ${data.sourceName||data.name}`);
+    L.push(`; CHR do background reempacotado: ${packed.usedCount}/256 tiles usados (pg-0 e pg-1 originais combinados em uma unica pagina)`);
+    if(packed.overflowCount>0) L.push(`; AVISO: ${packed.overflowCount} tile(s) distinto(s) a mais nao couberam nos 256 slots e foram substituidos por tile vazio (0).`);
     L.push('.segment "HEADER"');
     L.push('  .byte $4E,$45,$53,$1A,1,1,0,0,0,0,0,0,0,0,0,0');
     L.push('');
@@ -265,7 +292,7 @@ const BUILD = (() => {
     L.push('  CPX #32');
     L.push('  BNE load_palettes');
     L.push('');
-    L.push('  ; Load Nametable ($2000)');
+    L.push(`  ; Load Nametable ($2000) - Imagem selecionada: ${data.type==='background'?'Background':'Splash'} "${data.name}" - 960 bytes em 4 blocos`);
     L.push('  BIT $2002');
     L.push('  LDA #$20');
     L.push('  STA $2006');
@@ -305,7 +332,7 @@ const BUILD = (() => {
     L.push('  CPX #192');
     L.push('  BNE nb4');
     L.push('');
-    L.push('  ; Load Attributes ($23C0)');
+    L.push('  ; Load Attributes ($23C0) - 64 bytes');
     L.push('  BIT $2002');
     L.push('  LDA #$23');
     L.push('  STA $2006');
@@ -319,8 +346,8 @@ const BUILD = (() => {
     L.push('  CPX #64');
     L.push('  BNE load_attrs');
     L.push('');
-    L.push(`  ; Enable Rendering (PPUCTRL = ${ppuCtrlValue})`);
-    L.push(`  LDA #${ppuCtrlValue}`);
+    L.push(`  ; Enable Rendering (pg0/$0000 = sprites, pg1/$1000 = background reempacotado)`);
+    L.push(`  LDA #%10010000`);
     L.push('  STA $2000');
     L.push('  LDA #%00011110');
     L.push('  STA $2001');
@@ -335,13 +362,8 @@ const BUILD = (() => {
     }
     L.push('');
     L.push('NametableData:');
-    for (let i = 0; i < nt.length; i += 32) {
-      // Normalização para a Página 1: subtraímos 256 dos IDs (256-511 -> 0-255).
-      const row = nt.slice(i, i + 32).map(b => {
-        let val = b;
-        if (val >= 256) val -= 256;
-        return '$' + val.toString(16).padStart(2, '0');
-      }).join(', ');
+    for (let i = 0; i < packedNt.length; i += 32) {
+      const row = packedNt.slice(i, i + 32).map(b => '$' + (b % 256).toString(16).padStart(2, '0')).join(', ');
       L.push(`  .byte ${row}`);
     }
     L.push('');
@@ -357,8 +379,13 @@ const BUILD = (() => {
     L.push('  .word IRQ');
     L.push('');
     L.push('.segment "CHARS"');
-    for (let i = 0; i < chrBuf.length; i += 16) {
-      const chunk = Array.from(chrBuf.slice(i, i + 16)).map(b => '$' + b.toString(16).padStart(2, '0')).join(', ');
+    L.push('  ; Primeiros 4KB ($0000-$0FFF / pg-0): CHR original, sem alterações (sprites)');
+    const chrFinal = new Uint8Array(8192);
+    chrFinal.set(chrBuf.slice(0, 4096), 0); // mantém pg-0 original (sprites) intacta
+    chrFinal.set(packed.bgChr, 4096); // banco reempacotado com os tiles usados por esta imagem
+    for (let i = 0; i < chrFinal.length; i += 16) {
+      if (i === 4096) L.push('  ; Últimos 4KB ($1000-$1FFF / pg-1): banco reempacotado com os tiles usados por esta imagem (background)');
+      const chunk = Array.from(chrFinal.slice(i, i + 16)).map(b => '$' + b.toString(16).padStart(2, '0')).join(', ');
       L.push(`  .byte ${chunk}`);
     }
     return L.join('\n');
@@ -367,9 +394,12 @@ const BUILD = (() => {
   function buildROM(){
     const logEl=document.getElementById('buildLog'); if(logEl) logEl.textContent='Iniciando build v0.7.0...\n';
     try{
-      const chrBuf=CHR.getBuffer?CHR.getBuffer():new Uint8Array(8192); const chr8k=new Uint8Array(8192); chr8k.set(chrBuf.slice(0,Math.min(chrBuf.length,8192)));
+      const chrBuf=CHR.getBuffer?CHR.getBuffer():new Uint8Array(8192);
       const data=getSelectedBuildData();
-      log(`Tipo: ${data.type==='background'?'Background':'Splash'} | Fonte: ${data.sourceName} - ${data.filled} tiles`);
+      const packed=packBackgroundCHR(chrBuf, data.nametable);
+      const chr8k=new Uint8Array(8192); chr8k.set(chrBuf.slice(0,4096),0); chr8k.set(packed.bgChr,4096);
+      log(`Tipo: ${data.type==='background'?'Background':'Splash'} | Fonte: ${data.sourceName} - ${data.filled} tiles na tela`);
+      log(`CHR reempacotado: ${packed.usedCount}/256 tiles únicos${packed.overflowCount>0?` (⚠ ${packed.overflowCount} não couberam e viraram vazio)`:''}`);
       const asm=generateASM(); lastASM=asm;
 
       // Simulação rápida interna de binário para download direto do .nes se necessário
@@ -385,7 +415,7 @@ const BUILD = (() => {
       document.getElementById('btnDownload').style.display='inline-block';
       document.getElementById('btnDownloadASM').style.display='inline-block';
       document.getElementById('btnDownloadCFG').style.display='inline-block';
-      document.getElementById('buildStats').innerHTML=`ROM: ${rom.length}<br>[${data.type==='background'?'Background':'Splash'}] ${data.name}<br>${data.filled}/960<br><span style="color:#0f0">● OK v0.7.0</span>`;
+      document.getElementById('buildStats').innerHTML=`ROM: ${rom.length}<br>[${data.type==='background'?'Background':'Splash'}] ${data.name}<br>${data.filled}/960 tiles • ${packed.usedCount}/256 únicos<br><span style="color:#0f0">● OK v0.7.0</span>`;
       renderPreview();
     }catch(e){ log(`❌ ${e.message}`); }
   }

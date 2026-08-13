@@ -17,8 +17,8 @@ const CHR = (() => {
           <button class="btn-tool" style="background:#c0392b;color:#fff" onclick="CHR.addBank()">+ BANK</button>
           <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer"><input type="checkbox" id="chkShowGrid"> grid</label>
           <div style="display:flex;gap:6px;align-items:center;margin-left:8px;border-left:1px solid #333;padding-left:8px">
-            <button class="btn-tool" onclick="CHR.importCHR()">🧱 Import .CHR</button>
-            <button class="btn-tool" onclick="Project.exportCHR()">⬇️ Export .CHR</button>
+            <button class="btn-tool" onclick="CHR.importCHR()">🧱 Import</button>
+            <button class="btn-tool" onclick="Project.exportCHR()">⬇️ Export</button>
             <input type="file" id="importCHR_internal" accept=".chr,.bin,.nes" style="display:none">
           </div>
           <div style="margin-left:auto;display:flex;gap:6px;align-items:center;font-size:12px">
@@ -113,7 +113,7 @@ const CHR = (() => {
     sheetCanvas=document.getElementById('sheetCanvas'); sheetCtx=sheetCanvas.getContext('2d');
     zoomCanvas=document.getElementById('zoomCanvas'); zoomCtx=zoomCanvas.getContext('2d');
     previewCanvas=document.getElementById('previewCanvas'); previewCtx=previewCanvas.getContext('2d');
-    attachEvents(); populateSelects(); updateBankSelect(); initPalUI(); setGrid(gridW,gridH); updateMetatileSelect(); tool='pen'; renderAll();
+    attachEvents(); populateSelects(); updateBankSelect(); ensurePaletteMatchesBank(); initPalUI(); setGrid(gridW,gridH); updateMetatileSelect(); tool='pen'; renderAll();
   }
 
   function parseNES(buffer) {
@@ -139,9 +139,17 @@ const CHR = (() => {
   }
 
   function populateSelects(){ const cSel=document.getElementById('tileColsSelect'), rSel=document.getElementById('tileRowsSelect'); if(!cSel||!rSel) return; cSel.innerHTML=""; rSel.innerHTML=""; for(let i=1;i<=8;i++){ let o=document.createElement('option'); o.value=i; o.textContent=i+` col`; cSel.appendChild(o); let o2=document.createElement('option'); o2.value=i; o2.textContent=i+` lin`; rSel.appendChild(o2); } cSel.value=gridW; rSel.value=gridH; cSel.onchange=()=>setGrid(parseInt(cSel.value),gridH); rSel.onchange=()=>setGrid(gridW,parseInt(rSel.value)); }
-  function updateBankSelect(){ const sel=document.getElementById('bankSelect'); if(!sel) return; sel.innerHTML=""; const total=Math.max(2,Math.ceil(chrBuffer.length/4096)); for(let i=0;i<total;i++){ let o=document.createElement('option'); o.value=i; o.textContent=`${i===0?'PT0 $0000':'PT1 $1000'} (${i*256}-${i*256+255})`; sel.appendChild(o); } sel.value=currentBank; sel.onchange=e=>{ currentBank=parseInt(e.target.value); renderAll(); updateLabels(); }; }
+  function isSpriteBank(bankIdx){ return bankIdx%2===0; } // pg0 (par) = sprites, pg1 (ímpar) = backgrounds/splash
+  function updateBankSelect(){ const sel=document.getElementById('bankSelect'); if(!sel) return; sel.innerHTML=""; const total=Math.max(2,Math.ceil(chrBuffer.length/4096)); for(let i=0;i<total;i++){ let o=document.createElement('option'); o.value=i; o.textContent=`${i%2===0?'PT0 $0000':'PT1 $1000'} (${isSpriteBank(i)?'sprites':'backgrounds'})`; sel.appendChild(o); } sel.value=currentBank; sel.onchange=e=>{ currentBank=parseInt(e.target.value); ensurePaletteMatchesBank(); renderAll(); updateLabels(); initPalUI(); }; }
+  function ensurePaletteMatchesBank(){
+    const wantsSprite=isSpriteBank(currentBank);
+    const activeIsSprite=activePal>=4;
+    if(wantsSprite && !activeIsSprite) activePal=4;
+    else if(!wantsSprite && activeIsSprite) activePal=0;
+  }
   function initPalUI(){
-    const cont=document.getElementById('subpalettesContainer'); if(!cont) return; cont.innerHTML=""; createRow("BG",[0,1,2,3]); createRow("SPR",[4,5,6,7]);
+    const cont=document.getElementById('subpalettesContainer'); if(!cont) return; cont.innerHTML="";
+    if(isSpriteBank(currentBank)) createRow("SPR",[4,5,6,7]); else createRow("BG",[0,1,2,3]);
     const grid=document.getElementById('masterPaletteGrid'); grid.innerHTML=""; let line=null;
     NES_PALETTE.forEach((col,idx)=>{ if(idx%16===0){ line=document.createElement('div'); line.style.display='flex'; line.style.gap='2px'; grid.appendChild(line); } const b=document.createElement('div'); b.style.cssText=`width:18px;height:18px;background:${col};border:1px solid #333;border-radius:2px;cursor:pointer`; b.title=`NES $${idx.toString(16).padStart(2,'0').toUpperCase()}`; b.onclick=()=>{ palettes[activePal][activeSlot]=idx; initPalUI(); renderAll(); }; line.appendChild(b); });
     const qc=document.getElementById('quickColors'); if(qc){ qc.innerHTML=''; for(let c=0;c<4;c++){ const isActive=c===activeSlot; const btn=document.createElement('div'); btn.style.cssText=`width:32px;height:24px;background:${NES_PALETTE[palettes[activePal][c]]};border:${isActive?'2px solid #ffcc00':'1px solid #555'};border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:#000;font-weight:bold`; btn.textContent=c+1; btn.onclick=()=>{ activeSlot=c; initPalUI(); renderAll(); updateLabels(); }; qc.appendChild(btn); } }
@@ -238,6 +246,7 @@ const CHR = (() => {
             activeSlotIdx = 0;
             pushUndo();
             updateBankSelect();
+            ensurePaletteMatchesBank();
             initPalUI();
             renderAll();
             updateLabels();
@@ -257,6 +266,7 @@ const CHR = (() => {
     if(importInput){
       importInput.onchange = handleCHRImport;
     }
+    document.getElementById('chkShowGrid')?.addEventListener('change', ()=> renderSheet());
     sheetCanvas?.addEventListener('click', e=>{ const r=sheetCanvas.getBoundingClientRect(); const x=Math.floor((e.clientX-r.left)/32), y=Math.floor((e.clientY-r.top)/32); const g=currentBank*256+y*16+x; selectedTiles[activeSlotIdx]=g; activeSlotIdx=(activeSlotIdx+1)%selectedTiles.length; renderAll(); updateLabels(); });
     zoomCanvas?.addEventListener('mousedown', e=>{
       const rect=zoomCanvas.getBoundingClientRect(); const px=Math.floor(((e.clientX-rect.left)/rect.width)*zoomCanvas.width/16), py=Math.floor(((e.clientY-rect.top)/rect.height)*zoomCanvas.height/16);
@@ -303,6 +313,7 @@ const CHR = (() => {
       selectedTiles = [0,1,16,17];
       activeSlotIdx = 0;
       updateBankSelect();
+      ensurePaletteMatchesBank();
       initPalUI();
       renderAll();
       updateLabels();
@@ -314,7 +325,7 @@ const CHR = (() => {
 
   return {
     init(){ buildHTML(); setTimeout(()=>tryLoadDefaultCHR(), 100); },
-    loadBuffer(buf, pals){ let newBuf = buf.length>=8192?buf:(()=>{let n=new Uint8Array(8192); n.set(buf); return n;})(); const hasData = newBuf.some(b=>b!==0); if(!hasData){ console.log('Buffer vazio recebido, mantendo atual e tentando carregar novo.chr'); tryLoadDefaultCHR(); } else { chrBuffer = newBuf; } if(pals) palettes=pals.map(p=>[...p]); if(!document.getElementById('sheetCanvas')) buildHTML(); else { updateBankSelect(); initPalUI(); updateMetatileSelect(); renderAll(); } },
+    loadBuffer(buf, pals){ let newBuf = buf.length>=8192?buf:(()=>{let n=new Uint8Array(8192); n.set(buf); return n;})(); const hasData = newBuf.some(b=>b!==0); if(!hasData){ console.log('Buffer vazio recebido, mantendo atual e tentando carregar novo.chr'); tryLoadDefaultCHR(); } else { chrBuffer = newBuf; } if(pals) palettes=pals.map(p=>[...p]); if(!document.getElementById('sheetCanvas')) buildHTML(); else { updateBankSelect(); ensurePaletteMatchesBank(); initPalUI(); updateMetatileSelect(); renderAll(); } },
     getBuffer(){ return chrBuffer; }, getPalettes(){ return palettes; }, getMetatiles(){ return [...metatiles]; }, loadMetatiles(arr){ metatiles = Array.isArray(arr)?[...arr]:[]; updateMetatileSelect(); renderAll(); },
     renderAll(){ renderSheet(); renderZoom(); renderQuickTileSelector(); renderMetatilePreview(); }, setGrid(w,h){ gridW=w; gridH=h; const first=selectedTiles[0]||currentBank*256; selectedTiles=[]; for(let i=0;i<w*h;i++) selectedTiles.push(first+i); activeSlotIdx=0; if(zoomCanvas){ zoomCanvas.width=w*8*16; zoomCanvas.height=h*8*16; } renderAll(); updateLabels(); },
     addBank(){ const nb=new Uint8Array(chrBuffer.length+8192); nb.set(chrBuffer); chrBuffer=nb; updateBankSelect(); renderAll(); },
