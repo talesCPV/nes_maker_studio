@@ -17,6 +17,7 @@ then
     git add commit.sh
     git add index.html
     git add hello.nms
+    git add smb.nms
 
     git commit -m "by_script"
 

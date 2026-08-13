@@ -19,7 +19,7 @@ const CHR = (() => {
           <div style="display:flex;gap:6px;align-items:center;margin-left:8px;border-left:1px solid #333;padding-left:8px">
             <button class="btn-tool" onclick="CHR.importCHR()">🧱 Import .CHR</button>
             <button class="btn-tool" onclick="Project.exportCHR()">⬇️ Export .CHR</button>
-            <input type="file" id="importCHR_internal" accept=".chr,.bin" style="display:none">
+            <input type="file" id="importCHR_internal" accept=".chr,.bin,.nes" style="display:none">
           </div>
           <div style="margin-left:auto;display:flex;gap:6px;align-items:center;font-size:12px">
             <b>Tamanho:</b>
@@ -116,6 +116,28 @@ const CHR = (() => {
     attachEvents(); populateSelects(); updateBankSelect(); initPalUI(); setGrid(gridW,gridH); updateMetatileSelect(); tool='pen'; renderAll();
   }
 
+  function parseNES(buffer) {
+      // Valida assinatura 'NES' + 0x1A
+      if (buffer[0] !== 0x4E || buffer[1] !== 0x45 || buffer[2] !== 0x53 || buffer[3] !== 0x1A) {
+          return null; // Não é um arquivo NES válido
+      }
+      
+      const prgBlocks = buffer[4]; // 16KB cada
+      const chrBlocks = buffer[5]; // 8KB cada
+      
+      if (chrBlocks === 0) {
+          alert("Esta ROM usa CHR-RAM, não possui dados CHR estáticos.");
+          return null;
+      }
+      
+      const headerSize = 16;
+      const trainerSize = (buffer[6] & 0x04) ? 512 : 0; // Check se existe trainer
+      const prgSize = prgBlocks * 16384;
+      const chrStart = headerSize + trainerSize + prgSize;
+      
+      return buffer.slice(chrStart, chrStart + (chrBlocks * 8192));
+  }
+
   function populateSelects(){ const cSel=document.getElementById('tileColsSelect'), rSel=document.getElementById('tileRowsSelect'); if(!cSel||!rSel) return; cSel.innerHTML=""; rSel.innerHTML=""; for(let i=1;i<=8;i++){ let o=document.createElement('option'); o.value=i; o.textContent=i+` col`; cSel.appendChild(o); let o2=document.createElement('option'); o2.value=i; o2.textContent=i+` lin`; rSel.appendChild(o2); } cSel.value=gridW; rSel.value=gridH; cSel.onchange=()=>setGrid(parseInt(cSel.value),gridH); rSel.onchange=()=>setGrid(gridW,parseInt(rSel.value)); }
   function updateBankSelect(){ const sel=document.getElementById('bankSelect'); if(!sel) return; sel.innerHTML=""; const total=Math.max(2,Math.ceil(chrBuffer.length/4096)); for(let i=0;i<total;i++){ let o=document.createElement('option'); o.value=i; o.textContent=`${i===0?'PT0 $0000':'PT1 $1000'} (${i*256}-${i*256+255})`; sel.appendChild(o); } sel.value=currentBank; sel.onchange=e=>{ currentBank=parseInt(e.target.value); renderAll(); updateLabels(); }; }
   function initPalUI(){
@@ -185,44 +207,47 @@ const CHR = (() => {
     if(!file) return;
     const reader = new FileReader();
     reader.onload = (ev)=>{
-      try{
-        const buf = new Uint8Array(ev.target.result);
-        if(buf.length < 16){ alert('Arquivo .CHR muito pequeno'); return; }
-        // Aceita 4KB, 8KB, 16KB, etc - pega até 8KB ou expande
-        let newBuf;
-        if(buf.length >= 8192){
-          newBuf = buf.slice(0, 8192);
-        } else if(buf.length >= 4096){
-          // Se for 4KB, duplica ou coloca em PT0
-          newBuf = new Uint8Array(8192);
-          newBuf.set(buf);
-          // Se for 4KB, copia para segunda metade também pra facilitar
-          if(buf.length === 4096){
-            newBuf.set(buf, 4096);
-          }
-        } else {
-          // Menor que 4KB - coloca no início
-          newBuf = new Uint8Array(8192);
-          newBuf.set(buf);
+        try{
+            const buf = new Uint8Array(ev.target.result);
+            let finalData;
+
+            // Detecta se é .nes pela extensão ou pela assinatura
+            if (file.name.toLowerCase().endsWith('.nes') || (buf[0] === 0x4E && buf[1] === 0x45)) {
+                finalData = parseNES(buf);
+                if (!finalData) return; // Erro já tratado no parseNES
+            } else {
+                finalData = buf;
+            }
+
+            // ... (Continue com o código existente de verificação de tamanho/set no buffer)
+            if(finalData.length < 16){ alert('Dados muito pequenos'); return; }
+            
+            // Lógica de expansão/cópia que você já tinha:
+            let newBuf;
+            if(finalData.length >= 8192) newBuf = finalData.slice(0, 8192);
+            else {
+                newBuf = new Uint8Array(8192);
+                newBuf.set(finalData);
+            }
+            
+            chrBuffer = newBuf;
+            // ... (restante do seu código original de reset de estados e render)
+            currentBank = 0;
+            gridW = 2; gridH = 2;
+            selectedTiles = [0,1,16,17];
+            activeSlotIdx = 0;
+            pushUndo();
+            updateBankSelect();
+            initPalUI();
+            renderAll();
+            updateLabels();
+            
+            if(typeof Project !== 'undefined' && Project.status) Project.status(`Arquivo carregado: ${file.name}`);
+        } catch(err){
+            alert('Erro ao processar arquivo: ' + err.message);
         }
-        chrBuffer = newBuf;
-        currentBank = 0;
-        gridW = 2; gridH = 2;
-        selectedTiles = [0,1,16,17];
-        activeSlotIdx = 0;
-        pushUndo();
-        updateBankSelect();
-        initPalUI();
-        renderAll();
-        updateLabels();
-        if(typeof Project !== 'undefined' && Project.status) Project.status(`CHR carregado: ${file.name} ${buf.length} bytes`);
-        console.log(`CHR importado: ${file.name} ${buf.length} bytes`);
-      }catch(err){
-        alert('Erro ao carregar .CHR: ' + err.message);
-      }
     };
     reader.readAsArrayBuffer(file);
-    // Limpa input pra poder carregar mesmo arquivo de novo
     e.target.value = '';
   }
 
