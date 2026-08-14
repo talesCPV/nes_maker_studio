@@ -20,6 +20,11 @@ const BG = (() => {
   let movingTextMode = false;
   let textLayers = [];
   let currentChrPage = 1; // pg ímpar: pg0 de cada banco é reservada para sprites, background só usa pg1, pg3...
+  // Rascunho em memória por página do CHR: evita misturar metatiles de páginas diferentes na
+  // mesma tela quando o usuário troca de página no meio do desenho. Cada página guarda seu
+  // próprio nametable/atributos/colisão/textos em progresso; trocar de página salva o estado
+  // atual na página de origem e restaura (ou cria em branco) o estado da página de destino.
+  let pageDrafts = {};
   let dragStart = null;
   let globalEventsAttached = false;
 
@@ -90,6 +95,7 @@ const BG = (() => {
                 <div style="display:flex;gap:4px;flex-wrap:wrap">
                   <button class="btn-tool collision-btn" data-col-type="0" onclick="BG.setCollisionType(0)" style="font-size:10px">⬜ 0: Livre</button>
                   <button class="btn-tool collision-btn active" data-col-type="1" onclick="BG.setCollisionType(1)" style="font-size:10px;background:#c0392b;color:#fff">🟥 1: Sólido</button>
+                  <button class="btn-tool collision-btn" data-col-type="2" onclick="BG.setCollisionType(2)" style="font-size:10px;background:#27ae60;color:#fff">🟩 2: Plataforma</button>
                   <button class="btn-tool collision-btn" data-col-type="3" onclick="BG.setCollisionType(3)" style="font-size:10px;background:#8e44ad;color:#fff">🟪 3: Dano</button>
                 </div>
               </div>
@@ -136,7 +142,7 @@ const BG = (() => {
 
             <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:8px">
               <div style="display:flex;gap:12px;align-items:center"><div><h4 style="font-size:10px;color:#888;margin-bottom:6px">PALETA (0-3)</h4><div id="attrPaletteSelect" style="display:flex;gap:6px;flex-direction:column"></div></div><div style="flex:1;display:flex;flex-direction:column;align-items:center"><div id="selectedInfo" style="font-size:10px;color:#aaa;text-align:center;margin-bottom:4px">Nenhum</div><div style="position:relative"><canvas id="selectedPreview" width="80" height="80" style="border:1px solid #ffcc00;background:#000;image-rendering:pixelated;display:block;cursor:pointer" title="Clique no sub-tile para alternar colisão!"></canvas></div></div></div>
-              <div style="border-top:1px solid #222;padding-top:6px;display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:10px;color:#ffcc00">🛡 Hitbox por Tile:</label><button class="btn-tool" onclick="BG.setAllSubTilesCollision()" style="font-size:9px;padding:1px 4px">Setar Todos</button></div><div style="display:flex;gap:4px"><select id="mtSubTileColSelect" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:10px"><option value="0">⬜ 0: Ar/Livre</option><option value="1">🟥 1: Sólido</option><option value="3">🟪 3: Dano/Espinho</option></select><button class="btn-tool" onclick="BG.applyMetatileHitboxToCanvas()" style="font-size:10px;background:#27ae60;color:#fff">⚡ Recalcular</button></div></div>
+              <div style="border-top:1px solid #222;padding-top:6px;display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:10px;color:#ffcc00">🛡 Hitbox por Tile:</label><button class="btn-tool" onclick="BG.setAllSubTilesCollision()" style="font-size:9px;padding:1px 4px">Setar Todos</button></div><div style="display:flex;gap:4px"><select id="mtSubTileColSelect" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:10px"><option value="0">⬜ 0: Ar/Livre</option><option value="1">🟥 1: Sólido</option><option value="2">🟩 2: Plataforma</option><option value="3">🟪 3: Dano/Espinho</option></select><button class="btn-tool" onclick="BG.applyMetatileHitboxToCanvas()" style="font-size:10px;background:#27ae60;color:#fff">⚡ Recalcular</button></div></div>
             </div>
           </div>
 
@@ -196,7 +202,7 @@ const BG = (() => {
     if(t === 'flood') { label.textContent = 'Modo: Flood Fill'; help.textContent = 'Preenche área contígua com o metatile selecionado.'; }
     else if(t === 'attr') { label.textContent = 'Modo: Pincel de Atributo'; help.textContent = 'Pinta a paleta mantendo as estampas.'; }
     else if(t === 'hitbox') { label.textContent = 'Modo: Hitbox Manual'; help.textContent = 'Pinta colisão individualmente. Shift+clique apaga.'; }
-    else if(t === 'warp') { label.textContent = 'Modo: Ferramenta Warp'; help.textContent = 'Clique em um tile para marcar/remover um warp (hitbox 2).'; }
+    else if(t === 'warp') { label.textContent = 'Modo: Ferramenta Warp'; help.textContent = 'Clique em um tile para marcar/remover um ponto de warp (hitbox 4).'; }
     else if(t === 'fill') { label.textContent = 'Modo: Auto-Fill'; help.textContent = 'Preenchimento em massa.'; }
     else if(t === 'erase') { label.textContent = 'Modo: Borracha'; help.textContent = 'Clique (ou arraste) num tile para apagá-lo, tile por tile.'; }
     else if(t === 'text') { 
@@ -238,9 +244,8 @@ const BG = (() => {
     if(subX < 0 || subX >= w || subY < 0 || subY >= h) return;
     const subIdx = subY * w + subX;
     const curr = selectedMetatile.collisions[subIdx] || 0;
-    // Alterna entre 0, 1 e 3 (pulando o valor 2 que agora é exclusivo da ferramenta warp de tela)
+    // Alterna entre 0, 1, 2 e 3 (o valor 4 é reservado à ferramenta dedicada de Warp de tela)
     let nextCol = (curr + 1) % 4;
-    if(nextCol === 2) nextCol = 3;
     selectedMetatile.collisions[subIdx] = nextCol;
     updateSelectedInfo();
   }
@@ -276,8 +281,9 @@ const BG = (() => {
         }
         if(match) {
           const subX = x - snapX, subY = y - snapY;
-          // Se o tile já possuir Warp (2), podemos preservar ou atualizar de acordo com o metatile
-          collisionMap[y * 32 + x] = mt.collisions[subY * mt.w + subX] || 0;
+          // Aplica a colisão configurada no metatile (0=Livre, 1=Sólido, 2=Plataforma, 3=Dano).
+          // Preserva warps (4) já marcados manualmente - não fazem parte da definição do metatile.
+          if(collisionMap[y * 32 + x] !== 4) collisionMap[y * 32 + x] = mt.collisions[subY * mt.w + subX] || 0;
           count++;
         }
       }
@@ -415,11 +421,11 @@ const BG = (() => {
 
     if(isAlt) { if(isInitialClick) pickMetatileAt(tx, ty); return; }
 
-    // Ferramenta Warp Dedicada: Clicar adiciona warp (2), se já tiver, remove (0)
+    // Ferramenta Warp Dedicada: Clicar adiciona warp (4), se já tiver, remove (0)
     if(currentTool === 'warp') {
       if(isInitialClick) {
         const currCol = collisionMap[ty * 32 + tx];
-        collisionMap[ty * 32 + tx] = (currCol === 2) ? 0 : 2;
+        collisionMap[ty * 32 + tx] = (currCol === 4) ? 0 : 4;
         render();
       }
       return;
@@ -587,7 +593,30 @@ const BG = (() => {
     });
     if(!oddPages.includes(currentChrPage)) currentChrPage = oddPages[0];
     sel.value = currentChrPage;
-    sel.onchange = (e) => { currentChrPage = parseInt(e.target.value) || oddPages[0]; refreshMetatileList(); };
+    sel.onchange = (e) => { switchToChrPage(parseInt(e.target.value) || oddPages[0]); };
+  }
+
+  // Troca a página de trabalho do CHR, preservando o desenho em progresso de cada página
+  // separadamente (evita misturar metatiles de páginas diferentes numa mesma tela).
+  function switchToChrPage(newPage){
+    if(newPage === currentChrPage) return;
+    pageDrafts[currentChrPage] = {
+      nametable: [...nametable], attributes: [...attributes], collisionMap: [...collisionMap],
+      textLayers: JSON.parse(JSON.stringify(textLayers))
+    };
+    currentChrPage = newPage;
+    const draft = pageDrafts[newPage];
+    if(draft){
+      nametable = [...draft.nametable]; attributes = [...draft.attributes]; collisionMap = [...draft.collisionMap];
+      textLayers = JSON.parse(JSON.stringify(draft.textLayers));
+      Project.status(`Página ${newPage}: rascunho anterior restaurado`);
+    } else {
+      nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0);
+      textLayers = [];
+      Project.status(`Página ${newPage}: tela em branco`);
+    }
+    selectedTextIdx = null; movingTextMode = false;
+    refreshMetatileList(); updateTextLayersUI(); render();
   }
 
   function refreshMetatileList(){
@@ -687,8 +716,9 @@ const BG = (() => {
           const type = collisionMap[ty*32+tx] || 0;
           if(type > 0) {
             if(type === 1) { bgCtx.fillStyle = 'rgba(255, 0, 0, 0.35)'; bgCtx.strokeStyle = '#ff3333'; }
-            else if(type === 2) { bgCtx.fillStyle = 'rgba(211, 84, 0, 0.45)'; bgCtx.strokeStyle = '#e67e22'; } // Cor da Warp no canvas
+            else if(type === 2) { bgCtx.fillStyle = 'rgba(39, 174, 96, 0.4)'; bgCtx.strokeStyle = '#27ae60'; } // Cor da Plataforma no canvas
             else if(type === 3) { bgCtx.fillStyle = 'rgba(142, 68, 173, 0.45)'; bgCtx.strokeStyle = '#9b59b6'; }
+            else if(type === 4) { bgCtx.fillStyle = 'rgba(211, 84, 0, 0.45)'; bgCtx.strokeStyle = '#e67e22'; } // Cor da Warp no canvas
             bgCtx.fillRect(tx*16, ty*16, 16, 16);
             bgCtx.strokeRect(tx*16+0.5, ty*16+0.5, 15, 15);
           }

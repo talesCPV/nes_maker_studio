@@ -175,50 +175,17 @@ const BUILD = (() => {
     info.innerHTML=`<b style="color:#ffcc00">[${typeLabel}] ${data.sourceName||data.name}</b><br>CHR: ${chrBuf.length} bytes<br>Tiles na tela: ${data.filled}/960<br>Tiles únicos usados: ${packed.usedCount}/256${overflowWarn}`;
     if(details && data.phase) details.innerHTML=`Fase: ${data.phase.name}<br>Gravity: ${data.phase.gravity}<br>Mapper: ${data.phase.mapper}`;
   }
-  // Detecta qual paleta é realmente usada pelos pixels "transparentes" (índice de cor 0
-  // dentro do próprio desenho do CHR, não o índice do tile) na nametable. É essa paleta -
-  // não necessariamente a paleta 0 do array - que vai definir a cor universal de fundo
-  // ($3F00) no hardware real, então usamos essa detecção tanto no preview quanto no .asm.
-  // Importante: olhamos o PIXEL (dado real do CHR), não o índice do tile - o céu pode ser
-  // um tile "de verdade" (índice != 0) cujo desenho é todo em branco (cor 0 em todo pixel).
+  // Detecção de cor de fundo e desenho de nametable agora centralizados em RENDER_UTILS
+  // (js/render-utils.js) - usado também pelo level-design.js, pra nunca mais divergir.
   function computeBackdropColor(nt, at, pals, chrBuf){
-    const counts = {};
-    for(let ty=0; ty<30; ty++) for(let tx=0; tx<32; tx++){
-      const tileIdx = nt[ty*32+tx]||0;
-      const off = tileIdx*16; if(off+16>chrBuf.length) continue;
-      const attrX=Math.floor(tx/2), attrY=Math.floor(ty/2), blockX=Math.floor(attrX/2), blockY=Math.floor(attrY/2);
-      const attrIdx=blockY*8+blockX; const attrByte=at[attrIdx]||0;
-      const subX=attrX%2, subY=attrY%2; const shift=(subY*2+subX)*2; const palIdx=(attrByte>>shift)&0x03;
-      for(let py=0; py<8; py++){
-        const p0=chrBuf[off+py], p1=chrBuf[off+py+8];
-        for(let px=0; px<8; px++){
-          const sh=7-px, b0=(p0>>sh)&1, b1=(p1>>sh)&1, ci=(b1<<1)|b0;
-          if(ci===0) counts[palIdx]=(counts[palIdx]||0)+1;
-        }
-      }
-    }
-    let bestPal=0, bestCount=-1;
-    for(const k in counts){ if(counts[k]>bestCount){ bestCount=counts[k]; bestPal=parseInt(k); } }
-    const pal = pals[bestPal]||pals[0]||[15,0,16,48];
-    return { color: (pal[0]!=null?pal[0]:15), palIdx: bestPal, count: Math.max(bestCount,0) };
+    return RENDER_UTILS.computeBackdropColor(nt, at, pals, chrBuf);
   }
   function renderPreview(){
     const canvas=document.getElementById('buildPreviewCanvas'); if(!canvas) return;
-    const ctx=canvas.getContext('2d'); ctx.fillStyle="#000"; ctx.fillRect(0,0,256,240);
     const data=getSelectedBuildData(); const nt=data.nametable; const at=data.attributes;
     const chrBuf=CHR.getBuffer?CHR.getBuffer():new Uint8Array(8192);
     const pals=CHR.getPalettes?CHR.getPalettes():[[15,0,16,48]];
-    const universalBackdrop = computeBackdropColor(nt, at, pals, chrBuf).color;
-    for(let ty=0;ty<30;ty++) for(let tx=0;tx<32;tx++){
-      const tileIdx=nt[ty*32+tx]||0; const off=tileIdx*16; if(off+16>chrBuf.length) continue;
-      const attrX=Math.floor(tx/2), attrY=Math.floor(ty/2); const blockX=Math.floor(attrX/2), blockY=Math.floor(attrY/2); const attrIdx=blockY*8+blockX; const attrByte=at[attrIdx]||0; const subX=attrX%2, subY=attrY%2; const shift=(subY*2+subX)*2; const palIdx=(attrByte>>shift)&0x03; const pal=pals[palIdx]||pals[0];
-      for(let py=0;py<8;py++){ const p0=chrBuf[off+py], p1=chrBuf[off+py+8]; for(let px=0;px<8;px++){ const sh=7-px, b0=(p0>>sh)&1, b1=(p1>>sh)&1, ci=(b1<<1)|b0;
-        // No hardware do NES, o índice de cor 0 de QUALQUER paleta de BG sempre mostra a
-        // cor universal de fundo ($3F00), que detectamos a partir da paleta usada nos
-        // tiles vazios (computeBackdropColor), não a paleta 0 do array por padrão.
-        const nesColor = ci===0 ? universalBackdrop : pal[ci];
-        ctx.fillStyle=NES_PALETTE[nesColor]; ctx.fillRect(tx*8+px, ty*8+py, 1,1); } }
-    }
+    RENDER_UTILS.drawNametableToCanvas(canvas, nt, at, chrBuf, pals);
   }
   function log(m){ const el=document.getElementById('buildLog'); if(el){ el.textContent+="\n"+m; el.scrollTop=el.scrollHeight; } }
 

@@ -1,8 +1,8 @@
 {
   "version": "0.7.0",
-  "name": "Meu Jogo",
-  "author": "",
-  "description": "",
+  "name": "Super Mario Teste",
+  "author": "Tales Cembraneli Dantas",
+  "description": "Hello World do NMS",
   "genre": "platformer",
   "mapper": 0,
   "mirroring": "horizontal",
@@ -13730,8 +13730,9 @@
   "sounds": {
     "song": [],
     "baseFrames": 30,
-    "asm": ""
+    "loop": true,
+    "asm": "; ==========================================\n; DATA.ASM - NES Sound Engine\n; Tempo Base: 1 Semínima = 30 Frames\n; NOTAS ÚNICAS: 1\n; ==========================================\n\n.segment \"RODATA\"\n\nPitchTableLo:\n    .byte $00\n\nPitchTableHi:\n    .byte $00\n\nScaleMelody:\n    .byte , $FF\n\nTimeMelody:\n    .byte \n"
   },
-  "savedAt": 1786718271353,
+  "savedAt": 1786734866034,
   "levels": []
 }
