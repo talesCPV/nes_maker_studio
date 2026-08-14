@@ -1,4 +1,4 @@
-// BACKGROUND MODULE v0.9.7 - Metatiles na Pág 1 + Offset Customizado de Texto
+// BACKGROUND MODULE v0.9.6 - Fix Texto + Editar/Mover/Deletar
 const BG = (() => {
   let nametable = new Array(32 * 30).fill(0);
   let attributes = new Array(64).fill(0);
@@ -13,22 +13,18 @@ const BG = (() => {
   let textMode = false;
   let textCursor = { x: 0, y: 0 };
   let textPalette = 0;
-  let textOffset = 0; // Offset customizado para caracteres (padrão $00 ou definido pelo usuário)
+  let textOffsetMode = 'smb'; // 'smb' (0-9,A-Z sequencial) ou 'ascii' (código ASCII direto)
   let bgCanvas, bgCtx;
   let currentTool = 'paint';
   let selectedTextIdx = null;
   let movingTextMode = false;
   let textLayers = [];
-  let currentChrPage = 0;
+  let currentChrPage = 1; // pg ímpar: pg0 de cada banco é reservada para sprites, background só usa pg1, pg3...
   let dragStart = null;
   let globalEventsAttached = false;
 
   function isValidForBG(mt) {
-    if (!mt) return false;
-    // Valida se o metatile é 2x2+ e se TODOS os tiles pertencem estritamente à Página 1 (índices 256 a 511)
-    if (!(mt.w >= 2 && mt.h >= 2 && mt.w % 2 === 0 && mt.h % 2 === 0)) return false;
-    if (!mt.tiles || mt.tiles.length === 0) return false;
-    return mt.tiles.every(t => t >= 256 && t < 512);
+    return mt && mt.w >= 2 && mt.h >= 2 && mt.w % 2 === 0 && mt.h % 2 === 0;
   }
 
   function formatTileAddr(tileIdx) {
@@ -53,7 +49,7 @@ const BG = (() => {
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <div style="display:flex;gap:8px;align-items:center;padding:8px 12px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
-          <h3 style="font-size:12px;color:#ffcc00;margin:0">🗺 BACKGROUNDS v0.9.7 • Metatiles Pág 1 + Texto Offset</h3>
+          <h3 style="font-size:12px;color:#ffcc00;margin:0">🗺 BACKGROUNDS v0.9.6 • Fix Texto + Hitbox</h3>
           <div style="display:flex;gap:6px;align-items:center;margin-left:12px">
             <span style="font-size:11px;color:#888">BG:</span>
             <select id="bgSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 6px;font-size:11px;min-width:140px"></select>
@@ -109,7 +105,14 @@ const BG = (() => {
               </div>
 
               <div id="bgTextPanel" style="display:none;background:#1a1a00;border:1px solid #665500;border-radius:6px;padding:8px;margin-top:8px">
-                <h4 style="font-size:10px;color:#ffcc00;margin-bottom:6px">🔤 TEXTO ASCII (PAG 1) - CLIQUE NO CANVAS</h4>
+                <h4 style="font-size:10px;color:#ffcc00;margin-bottom:6px">🔤 TEXTO - CLIQUE NO CANVAS PARA POSICIONAR</h4>
+                <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+                  <label style="font-size:10px;color:#888">Offset:</label>
+                  <select id="bgTextOffsetSelect" style="background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:3px;font-size:10px" onchange="BG.setTextOffsetMode(this.value)">
+                    <option value="smb">SMB (0-9, A-Z sequencial)</option>
+                    <option value="ascii">ASCII (código direto)</option>
+                  </select>
+                </div>
                 <div style="display:flex;gap:4px;margin:4px 0">
                   <input id="bgTextInput" type="text" placeholder="Digite texto + Enter" style="flex:1;background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:6px;font-size:12px;font-family:monospace">
                   <button class="btn-tool" onclick="BG.insertText()" style="background:#ffcc00;color:#000">Inserir</button>
@@ -117,24 +120,21 @@ const BG = (() => {
                 <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap">
                   <label style="font-size:10px;color:#888">Paleta:</label>
                   <div id="bgTextPalettes" style="display:flex;gap:4px"></div>
-                  <label style="font-size:10px;color:#888;margin-left:auto">Offset:</label>
-                  <input id="bgTextOffsetInput" type="text" value="$00" onchange="BG.updateTextOffsetFromInput(this.value)" style="width:38px;background:#000;color:#ffcc00;border:1px solid #444;border-radius:3px;font-size:10px;text-align:center" title="Ex: $00, $20, etc.">
-                </div>
-                <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
                   <span style="font-size:10px;color:#666">Cursor: <b id="bgCursorPos" style="color:#ffcc00">0,0</b></span>
                   <button class="btn-tool" onclick="BG.clearTextSelection()" style="font-size:9px;margin-left:auto">✖ Deselecionar</button>
                 </div>
                 <div style="margin-top:6px;font-size:9px;color:#888;line-height:1.3">
-                  • Caracteres ficam na Pág 1 (índices 256+)<br>
-                  • Use o offset para alinhar com a tabela de fontes na Pág 1
+                  • Clique no canvas para mover cursor<br>
+                  • Enter no campo insere<br>
+                  • Use as camadas à direita para editar/mover/deletar
                 </div>
               </div>
             </div>
 
             <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                <h4 style="font-size:11px;color:#4ec9b0;margin:0">METATILES PÁG 1 (2x2+)</h4>
-                <div style="font-size:10px;color:#888">Restrito à Pág 1 ($100-$1FF)</div>
+                <h4 style="font-size:11px;color:#4ec9b0;margin:0">METATILES (2x2+)</h4>
+                <div style="display:flex;align-items:center;gap:4px"><span style="font-size:10px;color:#888">Pág CHR:</span><select id="bgChrPageSelect" style="background:#000;color:#ffcc00;border:1px solid #444;border-radius:3px;font-size:10px;padding:2px"></select></div>
               </div>
               <div id="metatilePalette" style="display:flex;flex-wrap:wrap;gap:6px;max-height:180px;overflow:auto;padding-right:4px"></div>
             </div>
@@ -180,6 +180,7 @@ const BG = (() => {
     bgCanvas = document.getElementById('bgCanvas');
     bgCtx = bgCanvas ? bgCanvas.getContext('2d') : null;
     attachEvents();
+    initChrPageSelect();
     updateBGSelect();
     refreshMetatileList();
     updateAttrPaletteUI();
@@ -203,8 +204,8 @@ const BG = (() => {
     else if(t === 'fill') { label.textContent = 'Modo: Auto-Fill'; help.textContent = 'Preenchimento em massa.'; }
     else if(t === 'erase') { label.textContent = 'Modo: Borracha'; help.textContent = 'Clique (ou arraste) num tile para apagá-lo, tile por tile.'; }
     else if(t === 'text') { 
-      label.textContent = 'Modo: Texto ASCII (Pág 1) - CLIQUE NO CANVAS'; 
-      help.textContent = 'CLIQUE no canvas para posicionar o cursor amarelo. Digite no campo e insira. Caracteres são alocados na Pág 1 com o offset definido.';
+      label.textContent = 'Modo: Texto ASCII - CLIQUE NO CANVAS'; 
+      help.textContent = 'CLIQUE no canvas para posicionar o cursor amarelo. Depois digite no campo e clique Inserir. Use as camadas à direita para editar/mover/deletar.';
       updateCursorPos();
     }
     else { label.textContent = 'Modo: Pintura Metatile'; help.textContent = 'Pinta Metatile + Atributo + Hitbox sub-tile. Alt+clique clona. Shift+clique apaga.'; }
@@ -220,19 +221,6 @@ const BG = (() => {
   function updateCursorPos(){
     const el = document.getElementById('bgCursorPos');
     if(el) el.textContent = `${textCursor.x},${textCursor.y}`;
-  }
-
-  function updateTextOffsetFromInput(val){
-    let clean = val.trim();
-    if(clean.startsWith('$')) clean = clean.substring(1);
-    const parsed = parseInt(clean, 16);
-    if(!isNaN(parsed)){
-      textOffset = Math.max(0, Math.min(255, parsed));
-    } else {
-      textOffset = 0;
-    }
-    const inp = document.getElementById('bgTextOffsetInput');
-    if(inp) inp.value = `$${textOffset.toString(16).padStart(2, '0').toUpperCase()}`;
   }
 
   function clearTextSelection(){
@@ -399,8 +387,10 @@ const BG = (() => {
     const tx = Math.floor((mx * scaleX) / 16), ty = Math.floor((my * scaleY) / 16);
     if(tx < 0 || tx >= 32 || ty < 0 || ty >= 30) return;
 
+    // MODO TEXTO - POSICIONA CURSOR
     if(currentTool === 'text' || textMode){
       if(isInitialClick){
+        // Se clicou em cima de um texto existente, seleciona ele
         let clickedOnText = false;
         for(let i = textLayers.length-1; i >=0; i--){
           const layer = textLayers[i];
@@ -469,10 +459,13 @@ const BG = (() => {
 
   function attachEvents(){
     if(!bgCanvas) return;
+    // Handlers no canvas: o canvas é recriado a cada buildHTML(), então pode
+    // registrar de novo sem problema (o elemento antigo é descartado).
     bgCanvas.addEventListener('mousedown', e => {
       isDrawing = true;
       const r = bgCanvas.getBoundingClientRect();
       const mx = e.clientX - r.left, my = e.clientY - r.top;
+      // Para texto, tratamos como clique inicial para posicionar
       if(currentTool === 'text'){
         const scaleX = 512 / r.width, scaleY = 480 / r.height;
         const tx = Math.floor((mx * scaleX) / 16), ty = Math.floor((my * scaleY) / 16);
@@ -509,12 +502,17 @@ const BG = (() => {
     document.getElementById('chkShowHitbox')?.addEventListener('change', render);
     document.getElementById('bgGridSelect')?.addEventListener('change', render);
 
+    // BUG FIX: os listeners abaixo são globais (window/document), então NÃO podem
+    // ser re-registrados toda vez que o usuário troca de aba e attachEvents() roda
+    // de novo - senão cada troca de aba soma mais um handler e ações (Enter, mouseup)
+    // passam a disparar múltiplas vezes (texto duplicado, etc). Registra só uma vez.
     if(!globalEventsAttached){
       globalEventsAttached = true;
       window.addEventListener('mouseup', () => {
         isDrawing = false;
         if(dragStart){ dragStart = null; render(); }
       });
+      // Enter no campo de texto insere
       document.addEventListener('keydown', (e)=>{
         if(document.activeElement && document.activeElement.id === 'bgTextInput' && e.key === 'Enter'){
           e.preventDefault();
@@ -575,19 +573,37 @@ const BG = (() => {
     if (foundMt) selectMetatileObj(foundMt);
   }
 
+  function initChrPageSelect(){
+    const sel = document.getElementById('bgChrPageSelect'); if(!sel) return;
+    sel.innerHTML = '';
+    const chrBuf = (typeof CHR !== 'undefined' && CHR.getBuffer) ? CHR.getBuffer() : (Project.data?.chr || new Uint8Array(8192));
+    const totalPages = Math.max(1, Math.ceil(chrBuf.length / 4096));
+    // Decisão do projeto: pg par (0,2,4...) = sprites, pg ímpar (1,3,5...) = backgrounds/splash.
+    // O módulo de background só pode escolher entre as páginas ímpares, uma por vez.
+    const oddPages = [];
+    for(let i = 1; i < totalPages; i += 2) oddPages.push(i);
+    if(oddPages.length === 0) oddPages.push(0); // fallback de segurança se o CHR não tiver página ímpar
+    oddPages.forEach(i => {
+      const opt = document.createElement('option');
+      opt.value = i; opt.textContent = `Pág ${i} (backgrounds)`;
+      sel.appendChild(opt);
+    });
+    if(!oddPages.includes(currentChrPage)) currentChrPage = oddPages[0];
+    sel.value = currentChrPage;
+    sel.onchange = (e) => { currentChrPage = parseInt(e.target.value) || oddPages[0]; refreshMetatileList(); };
+  }
+
   function refreshMetatileList(){
     const container = document.getElementById('metatilePalette'); if(!container) return;
     let mets = (typeof CHR !== 'undefined' && CHR.getMetatiles) ? CHR.getMetatiles() : (Project.data?.metatiles || []);
-    mets = mets.filter(isValidForBG); // Filtra apenas metatiles válidos restritos à Página 1
+    mets = mets.filter(isValidForBG);
     container.innerHTML = '';
     const chrBuf = (typeof CHR !== 'undefined' && CHR.getBuffer) ? CHR.getBuffer() : (Project.data?.chr || new Uint8Array(8192));
-    
-    if(mets.length === 0){ 
-      container.innerHTML = `<div style="font-size:10px;color:#666;padding:8px">Nenhum metatile na pág 1 ($100-$1FF)</div>`; 
-      return; 
-    }
-    
-    mets.forEach((mt, idx) => {
+    const startTile = currentChrPage * 256;
+    const endTile = startTile + 256;
+    const pageMetatiles = mets.filter(mt => { if(!mt.tiles || mt.tiles.length === 0) return true; return mt.tiles.some(t => t >= startTile && t < endTile); });
+    if(pageMetatiles.length === 0){ container.innerHTML = `<div style="font-size:10px;color:#666;padding:8px">Nenhum metatile na pág</div>`; return; }
+    pageMetatiles.forEach((mt, idx) => {
       const div = document.createElement('div');
       const isSelected = selectedMetatile && selectedMetatile.id === mt.id;
       div.style.cssText = `width:44px;height:44px;border:2px solid ${isSelected ? '#ffcc00' : '#333'};background:#000;cursor:pointer;display:flex;align-items:center;justify-content:center;image-rendering:pixelated`;
@@ -682,6 +698,7 @@ const BG = (() => {
         }
       }
     }
+    // Destaca texto selecionado
     if(selectedTextIdx !== null && textLayers[selectedTextIdx]){
       const layer = textLayers[selectedTextIdx];
       bgCtx.strokeStyle = movingTextMode ? '#ffcc00' : '#00ff00';
@@ -689,12 +706,15 @@ const BG = (() => {
       bgCtx.setLineDash(movingTextMode ? [6,3] : []);
       bgCtx.strokeRect(layer.x*16, layer.y*16, layer.text.length*16, 16);
       bgCtx.setLineDash([]);
+      // Bolinha de arraste
       bgCtx.fillStyle = '#ffcc00';
       bgCtx.fillRect(layer.x*16 - 4, layer.y*16 - 4, 8, 8);
     }
+    // Cursor de texto amarelo
     if(textMode){
       bgCtx.strokeStyle = '#ffcc00'; bgCtx.lineWidth = 2;
       bgCtx.strokeRect(textCursor.x*16, textCursor.y*16, 16, 16);
+      // Pisca cursor
       bgCtx.fillStyle = 'rgba(255,204,0,0.3)';
       bgCtx.fillRect(textCursor.x*16, textCursor.y*16, 16, 16);
     }
@@ -754,19 +774,35 @@ const BG = (() => {
     render();
   }
 
-  // TEXTO (Página 1 garantida com offset customizado)
-  function resolveCharacterTile(ch) {
-    let code = ch.charCodeAt(0);
-    if(code > 127){ 
-      const map = {'Á':65,'É':69,'Í':73,'Ó':79,'Ú':85,'Ç':67,'á':97,'é':101,'í':105,'ó':111,'ú':117,'ç':99}; 
-      if(map[ch]) code = map[ch].charCodeAt(0); 
-      else code = 32; 
+  // TEXTO
+  const TEXT_ACCENT_MAP = {'Á':65,'É':69,'Í':73,'Ó':79,'Ú':85,'Ç':67,'á':97,'é':101,'í':105,'ó':111,'ú':117,'ç':99};
+  // Converte um caractere pro índice RELATIVO de tile (0-255, dentro de UMA página) conforme
+  // o modo de offset:
+  // - 'smb': estilo Super Mario 1 - a página de fonte começa em $00 com 0-9 (índices 0-9)
+  //   seguido de A-Z (índices 10-35, sequencial). Qualquer outro símbolo/espaço usa o tile
+  //   em branco $24 (36), igual ao tile de céu clássico da SMB1.
+  // - 'ascii': o índice do tile é o próprio código ASCII do caractere (comportamento antigo).
+  function charToTileIndex(ch, mode){
+    if(mode === 'smb'){
+      const upper = ch.toUpperCase();
+      if(upper >= '0' && upper <= '9') return upper.charCodeAt(0) - 48; // 0-9
+      if(upper >= 'A' && upper <= 'Z') return 10 + (upper.charCodeAt(0) - 65); // 10-35
+      return 36; // espaço ou símbolo sem tile dedicado no layout SMB
     }
-    // Base $100 (Página 1) + Offset definido pelo usuário + código do caractere
-    let finalTile = 256 + textOffset + (code % 256);
-    return Math.min(511, finalTile); // Garante que fica estritamente na Página 1
+    let code = ch.charCodeAt(0);
+    if(code > 127) code = TEXT_ACCENT_MAP[ch] || 32;
+    return code % 256;
   }
-
+  // Converte pro índice ABSOLUTO de tile dentro do CHR, já somando o deslocamento da página
+  // de background usada (currentChrPage, sempre ímpar - pg0 é reservada pra sprites). Sem
+  // essa soma, o índice relativo (ex: 'A'=10 no modo SMB) acaba caindo na pg0 (sprites) em
+  // vez da página onde a fonte realmente está desenhada.
+  function charToNametableTile(ch, mode, page){
+    const rel = charToTileIndex(ch, mode) % 256;
+    const pg = (typeof page === 'number') ? page : currentChrPage;
+    return pg * 256 + rel;
+  }
+  function setTextOffsetMode(mode){ textOffsetMode = (mode === 'smb') ? 'smb' : 'ascii'; }
   function insertCharAtCursor(tileIdx){
     if(textCursor.x >= 32){ textCursor.x = 0; textCursor.y++; }
     if(textCursor.y >= 30) return;
@@ -783,29 +819,35 @@ const BG = (() => {
   function insertText(){
     const input = document.getElementById('bgTextInput'); if(!input) return;
     let text = input.value; if(!text) return;
+    const selectEl = document.getElementById('bgTextOffsetSelect');
+    const mode = selectEl ? selectEl.value : textOffsetMode;
+    textOffsetMode = mode;
+    const page = currentChrPage;
     const startX = textCursor.x, startY = textCursor.y;
     for(let i=0; i<text.length; i++){
-      let tileIdx = resolveCharacterTile(text[i]);
-      insertCharAtCursor(tileIdx);
+      insertCharAtCursor(charToNametableTile(text[i], mode, page));
     }
-    textLayers.push({ text, x: startX, y: startY, pal: textPalette, offset: textOffset, id: Date.now() });
+    textLayers.push({ text, x: startX, y: startY, pal: textPalette, offset: mode, chrPage: page, id: Date.now() });
     selectedTextIdx = textLayers.length - 1;
     input.value = ''; updateTextLayersUI(); input.focus();
   }
 
+  // FUNÇÕES DE EDIÇÃO DE TEXTO - NOVAS
   function moveTextLayerTo(idx, newX, newY, shouldRender = true){
     if(idx < 0 || idx >= textLayers.length) return;
     const layer = textLayers[idx];
+    // Apaga texto antigo
     for(let i=0; i<layer.text.length; i++){
       const ox = layer.x + i, oy = layer.y;
       if(ox >=0 && ox <32 && oy >=0 && oy <30) nametable[oy*32+ox] = 0;
     }
+    // Atualiza posição
     layer.x = newX; layer.y = newY;
+    // Reescreve no novo lugar
     for(let i=0; i<layer.text.length; i++){
       const x = newX + i, y = newY;
       if(x <0 || x >=32 || y <0 || y >=30) continue;
-      let tileIdx = resolveCharacterTile(layer.text[i]);
-      nametable[y*32+x] = tileIdx;
+      nametable[y*32+x] = charToNametableTile(layer.text[i], layer.offset || 'ascii', layer.chrPage != null ? layer.chrPage : currentChrPage);
       const attrX = Math.floor(x/2), attrY = Math.floor(y/2);
       const attrIdx = Math.floor(attrY/2)*8 + Math.floor(attrX/2);
       const shift = ((attrY%2)*2 + (attrX%2))*2;
@@ -819,16 +861,17 @@ const BG = (() => {
     const layer = textLayers[idx];
     const newText = prompt("Editar texto:", layer.text);
     if(newText === null) return;
+    // Apaga antigo
     for(let i=0; i<layer.text.length; i++){
       const ox = layer.x + i, oy = layer.y;
       if(ox >=0 && ox <32 && oy >=0 && oy <30) nametable[oy*32+ox] = 0;
     }
     layer.text = newText;
+    // Reescreve
     for(let i=0; i<layer.text.length; i++){
       const x = layer.x + i, y = layer.y;
       if(x <0 || x >=32 || y <0 || y >=30) continue;
-      let tileIdx = resolveCharacterTile(layer.text[i]);
-      nametable[y*32+x] = tileIdx;
+      nametable[y*32+x] = charToNametableTile(layer.text[i], layer.offset || 'ascii', layer.chrPage != null ? layer.chrPage : currentChrPage);
       const attrX = Math.floor(x/2), attrY = Math.floor(y/2);
       const attrIdx = Math.floor(attrY/2)*8 + Math.floor(attrX/2);
       const shift = ((attrY%2)*2 + (attrX%2))*2;
@@ -879,11 +922,11 @@ const BG = (() => {
     const layer = textLayers[idx];
     const newLayer = { ...layer, x: Math.min(32 - layer.text.length, layer.x + 1), y: Math.min(29, layer.y + 1), id: Date.now() };
     textLayers.push(newLayer);
+    // Desenha duplicata
     for(let i=0; i<newLayer.text.length; i++){
       const x = newLayer.x + i, y = newLayer.y;
       if(x <0 || x >=32 || y <0 || y >=30) continue;
-      let tileIdx = resolveCharacterTile(newLayer.text[i]);
-      nametable[y*32+x] = tileIdx;
+      nametable[y*32+x] = charToNametableTile(newLayer.text[i], newLayer.offset || 'ascii', newLayer.chrPage != null ? newLayer.chrPage : currentChrPage);
       const attrX = Math.floor(x/2), attrY = Math.floor(y/2);
       const attrIdx = Math.floor(attrY/2)*8 + Math.floor(attrX/2);
       const shift = ((attrY%2)*2 + (attrX%2))*2;
@@ -905,8 +948,8 @@ const BG = (() => {
       
       const topRow = document.createElement('div');
       topRow.style.cssText = 'display:flex;align-items:center;gap:4px;';
-      topRow.innerHTML = `<div style="flex:1;min-width:0"><div style="color:${isSelected?'#ffcc00':'#fff'};font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${layer.text}">"${layer.text}"</div><div style="font-size:9px;color:#888">x:${layer.x} y:${layer.y} • pal:${layer.pal} • off:$${(layer.offset||0).toString(16).toUpperCase()}</div></div>`;
-      topRow.onclick = () => { selectedTextIdx = i; textCursor.x = layer.x + layer.text.length; textCursor.y = layer.y; movingTextMode = false; updateCursorPos(); updateTextLayersUI(); render(); };
+      topRow.innerHTML = `<div style="flex:1;min-width:0"><div style="color:${isSelected?'#ffcc00':'#fff'};font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${layer.text}">"${layer.text}"</div><div style="font-size:9px;color:#888">x:${layer.x} y:${layer.y} • pal:${layer.pal} • ${(layer.offset||'ascii').toUpperCase()} • ${layer.text.length} chars</div></div>`;
+      topRow.onclick = () => { selectedTextIdx = i; textCursor.x = layer.x + layer.text.length; textCursor.y = layer.y; movingTextMode = false; textOffsetMode = layer.offset || 'ascii'; const offSel=document.getElementById('bgTextOffsetSelect'); if(offSel) offSel.value = textOffsetMode; updateCursorPos(); updateTextLayersUI(); render(); };
       
       const btnRow = document.createElement('div');
       btnRow.style.cssText = 'display:flex;gap:3px;flex-wrap:wrap';
@@ -1079,7 +1122,7 @@ const BG = (() => {
 
   return {
     init: buildHTML, setTool, setCollisionType, setAllSubTilesCollision, applyMetatileHitboxToCanvas, 
-    insertText, updateTextOffsetFromInput, exportASM, fillAllEmpty, fillEntireScreen, applyAttrToAll,
+    insertText, exportASM, fillAllEmpty, fillEntireScreen, applyAttrToAll, setTextOffsetMode,
     newCanvas, saveAsNew, clearBackground, saveToProject, saveSplashToProject, deleteCurrentEntry, loadBackground, loadSplashEntry,
     editTextLayer, deleteTextLayer, toggleMoveMode, nudgeTextLayer, duplicateTextLayer, clearTextSelection,
     loadBackgrounds: (arr)=>{ if(Project.data) Project.data.backgrounds=arr; updateBGSelect(); },
