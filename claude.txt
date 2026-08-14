@@ -60,10 +60,10 @@ PROXIMO PROMPT:
 
 ATENÇÂO, antes de mudar qualquer módulos já feito, me peça para lhe enviar a ultima versão atualizada para não desfazer alguma coisa que foi feita "offline"
 
-1- Vamos criar o render-utils.js (coloque ele numa pasta acima do /modulos, junto com o core.js) para unificar o desenho de thumbnails, 
+ok 1- Vamos criar o render-utils.js (coloque ele numa pasta acima do /modulos, junto com o core.js) para unificar o desenho de thumbnails, 
 vamos refatorar todos os modulos que utilizam miniaturas de tela para utilizarem as mesmas funções centralizadas ali
 
-2- Vamos fazer a amarração entre o "level" e a fase de verdade do projeto como você sugeriu, evitando duplicidade de dados em nossos arquivos
+ok 2- Vamos fazer a amarração entre o "level" e a fase de verdade do projeto como você sugeriu, evitando duplicidade de dados em nossos arquivos
 
 3- Como o 6502 só consegue ler 2 páginas de chr ao mesmo tempo, mas nó decidimos que os splash e os backgrounds estarão sempre na pg1 do banco selecionado, 
 devemos poder escolher em qual banco ele esta usando para determinada fase e liberar as telas apenas da pg1 deste banco, por exemplo: vamos supor que nossa 
