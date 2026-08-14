@@ -1,4 +1,4 @@
-// BACKGROUND MODULE v0.9.6 - Fix Texto + Editar/Mover/Deletar
+// BACKGROUND MODULE v0.9.7 - Ferramenta Warp Separada no Menu
 const BG = (() => {
   let nametable = new Array(32 * 30).fill(0);
   let attributes = new Array(64).fill(0);
@@ -49,7 +49,7 @@ const BG = (() => {
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <div style="display:flex;gap:8px;align-items:center;padding:8px 12px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
-          <h3 style="font-size:12px;color:#ffcc00;margin:0">🗺 BACKGROUNDS v0.9.6 • Fix Texto + Hitbox</h3>
+          <h3 style="font-size:12px;color:#ffcc00;margin:0">🗺 BACKGROUNDS v0.9.7 • Ferramenta Warp Dedicada</h3>
           <div style="display:flex;gap:6px;align-items:center;margin-left:12px">
             <span style="font-size:11px;color:#888">BG:</span>
             <select id="bgSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 6px;font-size:11px;min-width:140px"></select>
@@ -75,6 +75,7 @@ const BG = (() => {
                 <button class="btn-tool tool-btn" data-bg-tool="flood" onclick="BG.setTool('flood')" style="background:#8e44ad;color:#fff;border:1px solid #9b59b6">🌊 Flood</button>
                 <button class="btn-tool tool-btn" data-bg-tool="attr" onclick="BG.setTool('attr')" style="background:#2980b9;color:#fff;border:1px solid #3498db">🖌 Paleta</button>
                 <button class="btn-tool tool-btn" data-bg-tool="hitbox" onclick="BG.setTool('hitbox')" style="background:#c0392b;color:#fff;border:1px solid #e74c3c">🛡 Hitbox</button>
+                <button class="btn-tool tool-btn" data-bg-tool="warp" onclick="BG.setTool('warp')" style="background:#d35400;color:#fff;border:1px solid #e67e22">🚪 Warp</button>
                 <button class="btn-tool tool-btn" data-bg-tool="erase" onclick="BG.setTool('erase')" style="background:#555;color:#fff;border:1px solid #777">🧽 Borracha</button>
                 <button class="btn-tool tool-btn" data-bg-tool="text" onclick="BG.setTool('text')" style="background:#ffcc00;color:#000">🔤 Texto</button>
                 <button class="btn-tool tool-btn" data-bg-tool="fill" onclick="BG.setTool('fill')">🪣 Auto-Fill</button>
@@ -89,7 +90,6 @@ const BG = (() => {
                 <div style="display:flex;gap:4px;flex-wrap:wrap">
                   <button class="btn-tool collision-btn" data-col-type="0" onclick="BG.setCollisionType(0)" style="font-size:10px">⬜ 0: Livre</button>
                   <button class="btn-tool collision-btn active" data-col-type="1" onclick="BG.setCollisionType(1)" style="font-size:10px;background:#c0392b;color:#fff">🟥 1: Sólido</button>
-                  <button class="btn-tool collision-btn" data-col-type="2" onclick="BG.setCollisionType(2)" style="font-size:10px;background:#d35400;color:#fff">🟧 2: Plat</button>
                   <button class="btn-tool collision-btn" data-col-type="3" onclick="BG.setCollisionType(3)" style="font-size:10px;background:#8e44ad;color:#fff">🟪 3: Dano</button>
                 </div>
               </div>
@@ -123,11 +123,6 @@ const BG = (() => {
                   <span style="font-size:10px;color:#666">Cursor: <b id="bgCursorPos" style="color:#ffcc00">0,0</b></span>
                   <button class="btn-tool" onclick="BG.clearTextSelection()" style="font-size:9px;margin-left:auto">✖ Deselecionar</button>
                 </div>
-                <div style="margin-top:6px;font-size:9px;color:#888;line-height:1.3">
-                  • Clique no canvas para mover cursor<br>
-                  • Enter no campo insere<br>
-                  • Use as camadas à direita para editar/mover/deletar
-                </div>
               </div>
             </div>
 
@@ -141,7 +136,7 @@ const BG = (() => {
 
             <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:8px">
               <div style="display:flex;gap:12px;align-items:center"><div><h4 style="font-size:10px;color:#888;margin-bottom:6px">PALETA (0-3)</h4><div id="attrPaletteSelect" style="display:flex;gap:6px;flex-direction:column"></div></div><div style="flex:1;display:flex;flex-direction:column;align-items:center"><div id="selectedInfo" style="font-size:10px;color:#aaa;text-align:center;margin-bottom:4px">Nenhum</div><div style="position:relative"><canvas id="selectedPreview" width="80" height="80" style="border:1px solid #ffcc00;background:#000;image-rendering:pixelated;display:block;cursor:pointer" title="Clique no sub-tile para alternar colisão!"></canvas></div></div></div>
-              <div style="border-top:1px solid #222;padding-top:6px;display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:10px;color:#ffcc00">🛡 Hitbox por Tile:</label><button class="btn-tool" onclick="BG.setAllSubTilesCollision()" style="font-size:9px;padding:1px 4px">Setar Todos</button></div><div style="display:flex;gap:4px"><select id="mtSubTileColSelect" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:10px"><option value="0">⬜ 0: Ar/Livre</option><option value="1">🟥 1: Sólido</option><option value="2">🟧 2: Plataforma</option><option value="3">🟪 3: Dano/Espinho</option></select><button class="btn-tool" onclick="BG.applyMetatileHitboxToCanvas()" style="font-size:10px;background:#27ae60;color:#fff">⚡ Recalcular</button></div></div>
+              <div style="border-top:1px solid #222;padding-top:6px;display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:10px;color:#ffcc00">🛡 Hitbox por Tile:</label><button class="btn-tool" onclick="BG.setAllSubTilesCollision()" style="font-size:9px;padding:1px 4px">Setar Todos</button></div><div style="display:flex;gap:4px"><select id="mtSubTileColSelect" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:10px"><option value="0">⬜ 0: Ar/Livre</option><option value="1">🟥 1: Sólido</option><option value="3">🟪 3: Dano/Espinho</option></select><button class="btn-tool" onclick="BG.applyMetatileHitboxToCanvas()" style="font-size:10px;background:#27ae60;color:#fff">⚡ Recalcular</button></div></div>
             </div>
           </div>
 
@@ -201,6 +196,7 @@ const BG = (() => {
     if(t === 'flood') { label.textContent = 'Modo: Flood Fill'; help.textContent = 'Preenche área contígua com o metatile selecionado.'; }
     else if(t === 'attr') { label.textContent = 'Modo: Pincel de Atributo'; help.textContent = 'Pinta a paleta mantendo as estampas.'; }
     else if(t === 'hitbox') { label.textContent = 'Modo: Hitbox Manual'; help.textContent = 'Pinta colisão individualmente. Shift+clique apaga.'; }
+    else if(t === 'warp') { label.textContent = 'Modo: Ferramenta Warp'; help.textContent = 'Clique em um tile para marcar/remover um warp (hitbox 2).'; }
     else if(t === 'fill') { label.textContent = 'Modo: Auto-Fill'; help.textContent = 'Preenchimento em massa.'; }
     else if(t === 'erase') { label.textContent = 'Modo: Borracha'; help.textContent = 'Clique (ou arraste) num tile para apagá-lo, tile por tile.'; }
     else if(t === 'text') { 
@@ -242,7 +238,10 @@ const BG = (() => {
     if(subX < 0 || subX >= w || subY < 0 || subY >= h) return;
     const subIdx = subY * w + subX;
     const curr = selectedMetatile.collisions[subIdx] || 0;
-    selectedMetatile.collisions[subIdx] = (curr + 1) % 4;
+    // Alterna entre 0, 1 e 3 (pulando o valor 2 que agora é exclusivo da ferramenta warp de tela)
+    let nextCol = (curr + 1) % 4;
+    if(nextCol === 2) nextCol = 3;
+    selectedMetatile.collisions[subIdx] = nextCol;
     updateSelectedInfo();
   }
 
@@ -277,6 +276,7 @@ const BG = (() => {
         }
         if(match) {
           const subX = x - snapX, subY = y - snapY;
+          // Se o tile já possuir Warp (2), podemos preservar ou atualizar de acordo com o metatile
           collisionMap[y * 32 + x] = mt.collisions[subY * mt.w + subX] || 0;
           count++;
         }
@@ -327,7 +327,6 @@ const BG = (() => {
         const colType = selectedMetatile.collisions[subIdx] || 0;
         if(colType > 0) {
           if(colType === 1) { cctx.fillStyle = 'rgba(255, 0, 0, 0.45)'; cctx.strokeStyle = '#ff3333'; }
-          else if(colType === 2) { cctx.fillStyle = 'rgba(255, 165, 0, 0.45)'; cctx.strokeStyle = '#ffcc00'; }
           else if(colType === 3) { cctx.fillStyle = 'rgba(142, 68, 173, 0.55)'; cctx.strokeStyle = '#9b59b6'; }
           cctx.fillRect(gx*tilePxW, gy*tilePxH, tilePxW, tilePxH);
           cctx.strokeRect(gx*tilePxW + 0.5, gy*tilePxH + 0.5, tilePxW - 1, tilePxH - 1);
@@ -387,10 +386,8 @@ const BG = (() => {
     const tx = Math.floor((mx * scaleX) / 16), ty = Math.floor((my * scaleY) / 16);
     if(tx < 0 || tx >= 32 || ty < 0 || ty >= 30) return;
 
-    // MODO TEXTO - POSICIONA CURSOR
     if(currentTool === 'text' || textMode){
       if(isInitialClick){
-        // Se clicou em cima de um texto existente, seleciona ele
         let clickedOnText = false;
         for(let i = textLayers.length-1; i >=0; i--){
           const layer = textLayers[i];
@@ -417,6 +414,16 @@ const BG = (() => {
     }
 
     if(isAlt) { if(isInitialClick) pickMetatileAt(tx, ty); return; }
+
+    // Ferramenta Warp Dedicada: Clicar adiciona warp (2), se já tiver, remove (0)
+    if(currentTool === 'warp') {
+      if(isInitialClick) {
+        const currCol = collisionMap[ty * 32 + tx];
+        collisionMap[ty * 32 + tx] = (currCol === 2) ? 0 : 2;
+        render();
+      }
+      return;
+    }
 
     if(currentTool === 'hitbox') {
       const isHitboxFlood = document.getElementById('chkHitboxFlood')?.checked;
@@ -459,13 +466,10 @@ const BG = (() => {
 
   function attachEvents(){
     if(!bgCanvas) return;
-    // Handlers no canvas: o canvas é recriado a cada buildHTML(), então pode
-    // registrar de novo sem problema (o elemento antigo é descartado).
     bgCanvas.addEventListener('mousedown', e => {
       isDrawing = true;
       const r = bgCanvas.getBoundingClientRect();
       const mx = e.clientX - r.left, my = e.clientY - r.top;
-      // Para texto, tratamos como clique inicial para posicionar
       if(currentTool === 'text'){
         const scaleX = 512 / r.width, scaleY = 480 / r.height;
         const tx = Math.floor((mx * scaleX) / 16), ty = Math.floor((my * scaleY) / 16);
@@ -493,7 +497,7 @@ const BG = (() => {
           newX = Math.max(0, Math.min(32 - textLayers[selectedTextIdx].text.length, newX));
           newY = Math.max(0, Math.min(29, newY));
           moveTextLayerTo(selectedTextIdx, newX, newY, false);
-        } else if(currentTool !== 'text'){
+        } else if(currentTool !== 'text' && currentTool !== 'warp'){
           paintAt(mx, my, e.shiftKey, e.altKey, false);
         }
       }
@@ -502,17 +506,12 @@ const BG = (() => {
     document.getElementById('chkShowHitbox')?.addEventListener('change', render);
     document.getElementById('bgGridSelect')?.addEventListener('change', render);
 
-    // BUG FIX: os listeners abaixo são globais (window/document), então NÃO podem
-    // ser re-registrados toda vez que o usuário troca de aba e attachEvents() roda
-    // de novo - senão cada troca de aba soma mais um handler e ações (Enter, mouseup)
-    // passam a disparar múltiplas vezes (texto duplicado, etc). Registra só uma vez.
     if(!globalEventsAttached){
       globalEventsAttached = true;
       window.addEventListener('mouseup', () => {
         isDrawing = false;
         if(dragStart){ dragStart = null; render(); }
       });
-      // Enter no campo de texto insere
       document.addEventListener('keydown', (e)=>{
         if(document.activeElement && document.activeElement.id === 'bgTextInput' && e.key === 'Enter'){
           e.preventDefault();
@@ -578,11 +577,9 @@ const BG = (() => {
     sel.innerHTML = '';
     const chrBuf = (typeof CHR !== 'undefined' && CHR.getBuffer) ? CHR.getBuffer() : (Project.data?.chr || new Uint8Array(8192));
     const totalPages = Math.max(1, Math.ceil(chrBuf.length / 4096));
-    // Decisão do projeto: pg par (0,2,4...) = sprites, pg ímpar (1,3,5...) = backgrounds/splash.
-    // O módulo de background só pode escolher entre as páginas ímpares, uma por vez.
     const oddPages = [];
     for(let i = 1; i < totalPages; i += 2) oddPages.push(i);
-    if(oddPages.length === 0) oddPages.push(0); // fallback de segurança se o CHR não tiver página ímpar
+    if(oddPages.length === 0) oddPages.push(0);
     oddPages.forEach(i => {
       const opt = document.createElement('option');
       opt.value = i; opt.textContent = `Pág ${i} (backgrounds)`;
@@ -690,7 +687,7 @@ const BG = (() => {
           const type = collisionMap[ty*32+tx] || 0;
           if(type > 0) {
             if(type === 1) { bgCtx.fillStyle = 'rgba(255, 0, 0, 0.35)'; bgCtx.strokeStyle = '#ff3333'; }
-            else if(type === 2) { bgCtx.fillStyle = 'rgba(255, 165, 0, 0.35)'; bgCtx.strokeStyle = '#ffcc00'; }
+            else if(type === 2) { bgCtx.fillStyle = 'rgba(211, 84, 0, 0.45)'; bgCtx.strokeStyle = '#e67e22'; } // Cor da Warp no canvas
             else if(type === 3) { bgCtx.fillStyle = 'rgba(142, 68, 173, 0.45)'; bgCtx.strokeStyle = '#9b59b6'; }
             bgCtx.fillRect(tx*16, ty*16, 16, 16);
             bgCtx.strokeRect(tx*16+0.5, ty*16+0.5, 15, 15);
@@ -698,7 +695,6 @@ const BG = (() => {
         }
       }
     }
-    // Destaca texto selecionado
     if(selectedTextIdx !== null && textLayers[selectedTextIdx]){
       const layer = textLayers[selectedTextIdx];
       bgCtx.strokeStyle = movingTextMode ? '#ffcc00' : '#00ff00';
@@ -706,15 +702,12 @@ const BG = (() => {
       bgCtx.setLineDash(movingTextMode ? [6,3] : []);
       bgCtx.strokeRect(layer.x*16, layer.y*16, layer.text.length*16, 16);
       bgCtx.setLineDash([]);
-      // Bolinha de arraste
       bgCtx.fillStyle = '#ffcc00';
       bgCtx.fillRect(layer.x*16 - 4, layer.y*16 - 4, 8, 8);
     }
-    // Cursor de texto amarelo
     if(textMode){
       bgCtx.strokeStyle = '#ffcc00'; bgCtx.lineWidth = 2;
       bgCtx.strokeRect(textCursor.x*16, textCursor.y*16, 16, 16);
-      // Pisca cursor
       bgCtx.fillStyle = 'rgba(255,204,0,0.3)';
       bgCtx.fillRect(textCursor.x*16, textCursor.y*16, 16, 16);
     }
@@ -774,29 +767,18 @@ const BG = (() => {
     render();
   }
 
-  // TEXTO
   const TEXT_ACCENT_MAP = {'Á':65,'É':69,'Í':73,'Ó':79,'Ú':85,'Ç':67,'á':97,'é':101,'í':105,'ó':111,'ú':117,'ç':99};
-  // Converte um caractere pro índice RELATIVO de tile (0-255, dentro de UMA página) conforme
-  // o modo de offset:
-  // - 'smb': estilo Super Mario 1 - a página de fonte começa em $00 com 0-9 (índices 0-9)
-  //   seguido de A-Z (índices 10-35, sequencial). Qualquer outro símbolo/espaço usa o tile
-  //   em branco $24 (36), igual ao tile de céu clássico da SMB1.
-  // - 'ascii': o índice do tile é o próprio código ASCII do caractere (comportamento antigo).
   function charToTileIndex(ch, mode){
     if(mode === 'smb'){
       const upper = ch.toUpperCase();
-      if(upper >= '0' && upper <= '9') return upper.charCodeAt(0) - 48; // 0-9
-      if(upper >= 'A' && upper <= 'Z') return 10 + (upper.charCodeAt(0) - 65); // 10-35
-      return 36; // espaço ou símbolo sem tile dedicado no layout SMB
+      if(upper >= '0' && upper <= '9') return upper.charCodeAt(0) - 48;
+      if(upper >= 'A' && upper <= 'Z') return 10 + (upper.charCodeAt(0) - 65);
+      return 36;
     }
     let code = ch.charCodeAt(0);
     if(code > 127) code = TEXT_ACCENT_MAP[ch] || 32;
     return code % 256;
   }
-  // Converte pro índice ABSOLUTO de tile dentro do CHR, já somando o deslocamento da página
-  // de background usada (currentChrPage, sempre ímpar - pg0 é reservada pra sprites). Sem
-  // essa soma, o índice relativo (ex: 'A'=10 no modo SMB) acaba caindo na pg0 (sprites) em
-  // vez da página onde a fonte realmente está desenhada.
   function charToNametableTile(ch, mode, page){
     const rel = charToTileIndex(ch, mode) % 256;
     const pg = (typeof page === 'number') ? page : currentChrPage;
@@ -832,18 +814,14 @@ const BG = (() => {
     input.value = ''; updateTextLayersUI(); input.focus();
   }
 
-  // FUNÇÕES DE EDIÇÃO DE TEXTO - NOVAS
   function moveTextLayerTo(idx, newX, newY, shouldRender = true){
     if(idx < 0 || idx >= textLayers.length) return;
     const layer = textLayers[idx];
-    // Apaga texto antigo
     for(let i=0; i<layer.text.length; i++){
       const ox = layer.x + i, oy = layer.y;
       if(ox >=0 && ox <32 && oy >=0 && oy <30) nametable[oy*32+ox] = 0;
     }
-    // Atualiza posição
     layer.x = newX; layer.y = newY;
-    // Reescreve no novo lugar
     for(let i=0; i<layer.text.length; i++){
       const x = newX + i, y = newY;
       if(x <0 || x >=32 || y <0 || y >=30) continue;
@@ -861,13 +839,11 @@ const BG = (() => {
     const layer = textLayers[idx];
     const newText = prompt("Editar texto:", layer.text);
     if(newText === null) return;
-    // Apaga antigo
     for(let i=0; i<layer.text.length; i++){
       const ox = layer.x + i, oy = layer.y;
       if(ox >=0 && ox <32 && oy >=0 && oy <30) nametable[oy*32+ox] = 0;
     }
     layer.text = newText;
-    // Reescreve
     for(let i=0; i<layer.text.length; i++){
       const x = layer.x + i, y = layer.y;
       if(x <0 || x >=32 || y <0 || y >=30) continue;
@@ -922,7 +898,6 @@ const BG = (() => {
     const layer = textLayers[idx];
     const newLayer = { ...layer, x: Math.min(32 - layer.text.length, layer.x + 1), y: Math.min(29, layer.y + 1), id: Date.now() };
     textLayers.push(newLayer);
-    // Desenha duplicata
     for(let i=0; i<newLayer.text.length; i++){
       const x = newLayer.x + i, y = newLayer.y;
       if(x <0 || x >=32 || y <0 || y >=30) continue;
@@ -1058,7 +1033,7 @@ const BG = (() => {
     } else if(currentEntryType === 'bg' && Project.data.backgrounds[currentBGIndex]){
       const b = Project.data.backgrounds[currentBGIndex];
       b.nametable = [...nametable]; b.attributes = [...attributes]; b.collisionMap = [...collisionMap]; b.textLayers = [...textLayers];
-      Project.status(`Background salvo`);
+      Project.status(`Background salvo com Hitmaps de Warp atualizados`);
     } else {
       Project.data.backgrounds.push({ id:'bg_'+Date.now(), name:`bg_${Project.data.backgrounds.length+1}`, nametable:[...nametable], attributes:[...attributes], collisionMap:[...collisionMap], textLayers:[...textLayers], created:Date.now() });
       currentEntryType = 'bg'; currentBGIndex = Project.data.backgrounds.length - 1;
