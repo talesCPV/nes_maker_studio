@@ -1,0 +1,91 @@
+MÓDULO - LEVEL-DESIGN
+
+
+Muito bom o esboço — a estrutura geral já reflete bem o que combinamos (grade, transitionType por fase, warps separadas). Deixa eu revisar com calma e te apontar o que vi.
+
+Identificou redundâncias, lacunas de design e oportunidades de melhoria arquitetural
+
+Revisei o level-design.js a fundo — testei a lógica isolada, cruzei com o backgrounds.js (pra confirmar que id existe nos backgrounds/splashes, bg_<timestamp>/splash_<timestamp> — beleza, essa parte é segura) e com o que já existe no build-rom.js. Está bem encaminhado. Aqui vai minha análise:
+
+O que já está sólido
+Arquitetura de dados bate com o que combinamos: transitionType é uma propriedade da fase inteira (currentWorld), não da
+conexão — exatamente o modelo "um eixo só por fase" que discutimos pra ser viável no 6502.
+Warps separadas dos hard-cuts por adjacência: separação limpa entre "conexão automática" (implícita pela grade) e "conexão
+manual" (lista warps), que é a distinção que você pediu.
+Reaproveita o sistema de id que o backgrounds.js já gera (bg_<timestamp>, splash_<timestamp>) — testei e não tem colisão 
+nem bug de seleção aí.
+Ferramentas (place/erase/warp) com feedback textual — simples e direto, bom pra MVP.
+Pontos que eu ajustaria
+
+1. Código duplicado de computeBackdropColor e da renderização de pixel a pixel
+Isso é uma cópia quase idêntica do que está em build-rom.js (e SVG a lógica de decodificar
+CHR também aparece no backgrounds.js). Já reformulamos essa lógica de detecção de cor de
+fundo umas 3 vezes nessa conversa — se ela mudar de novo, esse módulo novo vai ficar desatualizado
+silenciosamente. Vale extrair isso pra um helper compartilhado (um render-utils.js ou expor via CHR)
+que os três módulos chamem, em vez de cada um ter sua própria cópia.
+
+2. Nenhuma amarração entre o "level" e a fase de verdade do projeto
+Hoje currentWorld.name é um campo de texto livre, sem relação com Project.data.phases.
+O Build ROM (que já existe) trabalha com Project.data.phases[i].background (um background
+único por fase). Esse módulo novo assume "uma fase pode ter várias telas conectadas" — isso é
+uma evolução de conceito que precisa se refletir no resto do pipeline: em algum momento o Build ROM
+vai ter que aprender a puxar o mapa inteiro de uma fase (via LEVEL_DESIGN) em vez de um background isolado.
+Vale já linkar currentWorld a um phaseId real (dropdown com as fases existentes, não texto livre) pra
+ não ficar dessincronizado.
+
+3. A lista de backgrounds/splashes mostrada é o projeto inteiro, sem filtro por fase
+Se o projeto tiver Fase 1 com 10 telas e Fase 2 com mais 8, o painel esquerdo mostra as 18 juntas,
+sem separação. Como os objetos de background hoje não guardam a qual fase pertencem, não tem como 
+filtrar isso ainda. Duas saídas: (a) adicionar um campo phase no background quando ele é criado/editado 
+no backgrounds.js, ou (b) aceitar que os backgrounds são um "pool" livre do projeto e cada fase escolhe 
+quais usar (mais simples, mas pode poluir a lista em projetos grandes). Qual desses te agrada mais?
+
+4. Redimensionar a grade pra baixo não limpa células órfãs
+Se você tem uma grade 4x4 com células preenchidas e diminui pra 2x2, as células fora do novo intervalo continuam
+guardadas em currentWorld.cells (não aparecem, mas se você aumentar de novo elas reaparecem do nada). Pode ser 
+proposital (tipo "undo" de redimensionamento), mas vale confirmar se é isso que você quer ou se prefere que reduzir 
+a grade apague de verdade.
+
+5. Nada impede ainda misturar eixos numa fase de scroll
+Isso é esperado nessa fase do desenvolvimento (você mesmo colocou isso como próximo passo), só quero confirmar: 
+quando formos implementar de verdade, a regra vira "se transitionType for scroll_h, só as conexões esquerda/direita 
+viram scroll de verdade; qualquer vizinho acima/abaixo automaticamente cai pra hard-cut" (como th combinamos)? Ou você 
+quer que o editor bloqueie fisicamente preencher fora de uma linha/coluna quando o modo é scroll, pra nem deixar o 
+usuário montar algo que o 6502 não vai dar conta depois?
+
+Pra eu focar direito: qual desses pontos você quer resolver primeiro — o link fase↔level (ponto 2, que é o mais estrutural)
+ou prefere já esboçar como ficaria a regra de eixo único (ponto 5) antes de mexer em código?
+
+PROXIMO PROMPT:
+
+ATENÇÂO, antes de mudar qualquer módulos já feito, me peça para lhe enviar a ultima versão atualizada para não desfazer alguma coisa que foi feita "offline"
+
+1- Vamos criar o render-utils.js (coloque ele numa pasta acima do /modulos, junto com o core.js) para unificar o desenho de thumbnails, 
+vamos refatorar todos os modulos que utilizam miniaturas de tela para utilizarem as mesmas funções centralizadas ali
+
+2- Vamos fazer a amarração entre o "level" e a fase de verdade do projeto como você sugeriu, evitando duplicidade de dados em nossos arquivos
+
+3- Como o 6502 só consegue ler 2 páginas de chr ao mesmo tempo, mas nó decidimos que os splash e os backgrounds estarão sempre na pg1 do banco selecionado, 
+devemos poder escolher em qual banco ele esta usando para determinada fase e liberar as telas apenas da pg1 deste banco, por exemplo: vamos supor que nossa 
+chr tenha 4pgs (2 bancos), se o usuario escolher o banco 1 para a fase 1 devemos liberar todos os splashs e backgrounds contidos nesta pag (o modulo de backgrounds 
+já faz isso com os metatiles, é replicar este comportamento com as telas inteiras), se na fase 2 ele vai usar o banco 2 segue a mesma lógica para o banco 2, assim não 
+vamos poluir muito o menu de telas
+
+4- O modo de visualização da grade deve mudar de acordo co a opção selecionada em transição, o modo atual funciona bem para o hard-cut, case seja selecionado o modo horizontal
+devemos mostrar a grade mas com um espaçamento entre as linhas, lembrando que no caso de uma grade 4z4, a direita da celula 3,0, liga direto a esquerda da celula 0,1, o mesmo vale 
+se a orientação escolhida for vertical, mas ai os espaços na grade deve estar entre as colunas e a celula 0,0 deve estar embaixo a esquerda (normalmente usada em shumups, com a tela subindo).
+Também vamos aplicar a sua ideia de guardar as posições antigas caso a tela seja redimensionada para menor
+
+5- Não precisamos misturar os eixos da fase, pois iremos ter a opção de warps, então basta ligarmos um ponte de warp num buraco por exemplo para automaticamente cairmos em outro ponto de scroll 
+de telas, que pode estar desenhado mais para a frente na linha do tempo, alias a frente até do ponto final de uma fase.
+
+6- Eu implantei no modulo backgrounds.js um hitbox com o nome warp, para podermos usar no modulo de level-design, coloquei ele no lugar do hitbox: 2-plataforma, pois não sei a diferença 
+entre plataforma e solido, acredito que na pratica são a mesma coisa. Estes pontos de warp poderão ser ligados a outros pontos de warp neste modulo(ex: a tela 1 existe  3 pontos de warp, na tela 2 tem 1 na 
+tela 5 tem 2..., poderemos ter uma lista aqui ligando um ponto warp no outro para o hard-cut assim que estes hitbox sejam acionados). 
+Falta implantar no módulo level-design a opção de transição entre as telas, por ex:, poderia iniciar na cel 0,0 com a splash, na 1,0 já seria a primeira tela de jogo, a transição entre elas seria um hard-cut, 
+mas da 1,0 para a 2,0 poderia ser scroll. Poderiamos também ter a opção de acionar um segundo splash com um botão do controle para abrir um menu por exemplo.
+A opção de criar menus também deve ser pensada, podemos colocar um menu na splash com o num de jogadores, ou outra opção qualquer, ou abrir uma tela de seleção de armas, ou uma lojinha, que nada mais seria 
+do que uma splash com um menu em cima
+
+Acho que poderiamos começar com estas alterações, se você enxergar algum ponto crítico para o 6502 executar podemos voltar a discutir,s em problemas.
+
