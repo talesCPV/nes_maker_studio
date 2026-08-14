@@ -134,9 +134,10 @@ Forever:
   JMP Forever
 
 ; OBS: cor 0 de cada paleta = sempre a cor universal de fundo ($3F00), por limitacao do PPU.
+; Cor de fundo detectada a partir da paleta 3 (usada em 34480 tile(s) vazio(s) da imagem).
 PaletteData:
-  .byte $0f, $00, $10, $30, $0f, $20, $26, $06, $0f, $0a, $1a, $2a, $0f, $0d, $07, $2c
-  .byte $0f, $16, $30, $0f, $0f, $19, $29, $39, $0f, $03, $13, $23, $0f, $20, $07, $2c
+  .byte $1c, $00, $10, $30, $1c, $20, $26, $06, $1c, $0a, $1a, $2a, $1c, $0d, $07, $2c
+  .byte $1c, $16, $30, $0f, $1c, $19, $29, $39, $1c, $03, $13, $23, $1c, $20, $07, $2c
 
 NametableData:
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01

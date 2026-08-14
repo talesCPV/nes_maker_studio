@@ -175,20 +175,47 @@ const BUILD = (() => {
     info.innerHTML=`<b style="color:#ffcc00">[${typeLabel}] ${data.sourceName||data.name}</b><br>CHR: ${chrBuf.length} bytes<br>Tiles na tela: ${data.filled}/960<br>Tiles únicos usados: ${packed.usedCount}/256${overflowWarn}`;
     if(details && data.phase) details.innerHTML=`Fase: ${data.phase.name}<br>Gravity: ${data.phase.gravity}<br>Mapper: ${data.phase.mapper}`;
   }
+  // Detecta qual paleta é realmente usada pelos pixels "transparentes" (índice de cor 0
+  // dentro do próprio desenho do CHR, não o índice do tile) na nametable. É essa paleta -
+  // não necessariamente a paleta 0 do array - que vai definir a cor universal de fundo
+  // ($3F00) no hardware real, então usamos essa detecção tanto no preview quanto no .asm.
+  // Importante: olhamos o PIXEL (dado real do CHR), não o índice do tile - o céu pode ser
+  // um tile "de verdade" (índice != 0) cujo desenho é todo em branco (cor 0 em todo pixel).
+  function computeBackdropColor(nt, at, pals, chrBuf){
+    const counts = {};
+    for(let ty=0; ty<30; ty++) for(let tx=0; tx<32; tx++){
+      const tileIdx = nt[ty*32+tx]||0;
+      const off = tileIdx*16; if(off+16>chrBuf.length) continue;
+      const attrX=Math.floor(tx/2), attrY=Math.floor(ty/2), blockX=Math.floor(attrX/2), blockY=Math.floor(attrY/2);
+      const attrIdx=blockY*8+blockX; const attrByte=at[attrIdx]||0;
+      const subX=attrX%2, subY=attrY%2; const shift=(subY*2+subX)*2; const palIdx=(attrByte>>shift)&0x03;
+      for(let py=0; py<8; py++){
+        const p0=chrBuf[off+py], p1=chrBuf[off+py+8];
+        for(let px=0; px<8; px++){
+          const sh=7-px, b0=(p0>>sh)&1, b1=(p1>>sh)&1, ci=(b1<<1)|b0;
+          if(ci===0) counts[palIdx]=(counts[palIdx]||0)+1;
+        }
+      }
+    }
+    let bestPal=0, bestCount=-1;
+    for(const k in counts){ if(counts[k]>bestCount){ bestCount=counts[k]; bestPal=parseInt(k); } }
+    const pal = pals[bestPal]||pals[0]||[15,0,16,48];
+    return { color: (pal[0]!=null?pal[0]:15), palIdx: bestPal, count: Math.max(bestCount,0) };
+  }
   function renderPreview(){
     const canvas=document.getElementById('buildPreviewCanvas'); if(!canvas) return;
     const ctx=canvas.getContext('2d'); ctx.fillStyle="#000"; ctx.fillRect(0,0,256,240);
     const data=getSelectedBuildData(); const nt=data.nametable; const at=data.attributes;
     const chrBuf=CHR.getBuffer?CHR.getBuffer():new Uint8Array(8192);
     const pals=CHR.getPalettes?CHR.getPalettes():[[15,0,16,48]];
-    const universalBackdrop = (pals[0]&&pals[0][0]!=null) ? pals[0][0] : 15;
+    const universalBackdrop = computeBackdropColor(nt, at, pals, chrBuf).color;
     for(let ty=0;ty<30;ty++) for(let tx=0;tx<32;tx++){
       const tileIdx=nt[ty*32+tx]||0; const off=tileIdx*16; if(off+16>chrBuf.length) continue;
       const attrX=Math.floor(tx/2), attrY=Math.floor(ty/2); const blockX=Math.floor(attrX/2), blockY=Math.floor(attrY/2); const attrIdx=blockY*8+blockX; const attrByte=at[attrIdx]||0; const subX=attrX%2, subY=attrY%2; const shift=(subY*2+subX)*2; const palIdx=(attrByte>>shift)&0x03; const pal=pals[palIdx]||pals[0];
       for(let py=0;py<8;py++){ const p0=chrBuf[off+py], p1=chrBuf[off+py+8]; for(let px=0;px<8;px++){ const sh=7-px, b0=(p0>>sh)&1, b1=(p1>>sh)&1, ci=(b1<<1)|b0;
         // No hardware do NES, o índice de cor 0 de QUALQUER paleta de BG sempre mostra a
-        // cor universal de fundo ($3F00 / paleta 0, cor 0) - não a cor 0 da paleta escolhida
-        // pelo atributo. Reproduzimos isso aqui pra bater exatamente com a ROM compilada.
+        // cor universal de fundo ($3F00), que detectamos a partir da paleta usada nos
+        // tiles vazios (computeBackdropColor), não a paleta 0 do array por padrão.
         const nesColor = ci===0 ? universalBackdrop : pal[ci];
         ctx.fillStyle=NES_PALETTE[nesColor]; ctx.fillRect(tx*8+px, ty*8+py, 1,1); } }
     }
@@ -229,8 +256,12 @@ const BUILD = (() => {
     const paletteBytes=[]; for(let p=0;p<8;p++){ const pal=pals[p]||[15,0,16,48]; for(let c=0;c<4;c++) paletteBytes.push(pal[c]||0); }
     // Espelhamento de hardware do PPU: o índice de cor 0 de TODAS as paletas (BG e sprite)
     // é fisicamente o mesmo endereço $3F00 - não dá pra ter cores 0 diferentes por paleta.
-    // Forçamos os bytes aqui pra refletir a realidade da ROM (evita confusão ao inspecionar).
-    const universalBackdrop = paletteBytes[0];
+    // A cor gravada em $3F00 é detectada a partir da paleta REALMENTE usada pelos tiles
+    // vazios/de fundo na nametable (computeBackdropColor), não a paleta 0 do array por padrão -
+    // isso garante que a ROM mostre a mesma cor de fundo desenhada no editor de backgrounds.
+    const backdrop = computeBackdropColor(nt, at, pals, chrBuf);
+    const universalBackdrop = backdrop.color;
+    paletteBytes[0] = universalBackdrop;
     [4,8,12,16,20,24,28].forEach(i => { paletteBytes[i] = universalBackdrop; });
 
     // Reempacota os tiles usados (de qualquer página original) num único banco de 256 tiles.
@@ -374,7 +405,8 @@ const BUILD = (() => {
     L.push('Forever:');
     L.push('  JMP Forever');
     L.push('');
-    L.push('; OBS: cor 0 de cada paleta = sempre a cor universal de fundo ($3F00), por limitacao do PPU.');
+    L.push(`; OBS: cor 0 de cada paleta = sempre a cor universal de fundo ($3F00), por limitacao do PPU.`);
+    L.push(`; Cor de fundo detectada a partir da paleta ${backdrop.palIdx} (usada em ${backdrop.count} tile(s) vazio(s) da imagem).`);
     L.push('PaletteData:');
     for (let i = 0; i < paletteBytes.length; i += 16) {
       const chunk = paletteBytes.slice(i, i + 16).map(b => '$' + b.toString(16).padStart(2, '0')).join(', ');
