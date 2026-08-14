@@ -89,3 +89,189 @@ do que uma splash com um menu em cima
 
 Acho que poderiamos começar com estas alterações, se você enxergar algum ponto crítico para o 6502 executar podemos voltar a discutir,s em problemas.
 
+
+
+/* CONVERSA 14/08 15:00 */
+
+Combinado — antes de tocar em qualquer módulo já existente, preciso das versões mais atuais. Isso vale principalmente pro backgrounds.js, já que você mesmo me contou que mexeu nele offline (o hitbox "warp"). Pra eu não pisar em nada:
+
+Pode me mandar:
+
+backgrounds.js (com o hitbox warp que você adicionou)
+chr-editor.js (pra eu confirmar como o + BANK organiza as páginas, ponto 3)
+build-rom.js (vou mexer nele nos pontos 1 e 3)
+core.js (você mencionou que fica na pasta acima de /modulos — preciso ver o que tem lá)
+o arquivo que carrega os scripts (tipo index.html), pra eu entender a ordem de carregamento e onde encaixar o render-utils.js
+
+O level-design.js eu já tenho a versão que você mandou.
+
+Enquanto isso, deixa eu já reagir ao conteúdo de cada ponto, porque tem coisa importante pra alinhar antes de eu escrever qualquer linha:
+
+Ponto 3 — isso é o ponto crítico que você pediu pra eu sinalizar
+
+Hoje o projeto inteiro (cabeçalho da ROM, nrom.cfg, o .asm gerado) assume Mapper 0 (NROM), que tem CHR-ROM fixo de 8KB — sem troca de banco nenhuma. O PPU realmente só enxerga 2 páginas de 4KB por vez ($0000-$1FFF), mas com NROM essas 2 páginas são o CHR inteiro da ROM, gravado de uma vez só; não existe "escolher qual banco fica ativo" em tempo de execução.
+
+Se a CHR tiver 4 páginas (2 bancos = 16KB), isso não cabe mais num NROM. Pra "fase 1 usa banco 1, fase 2 usa banco 2" funcionar de verdade rodando no console, a ROM precisa de um mapper com troca de banco de CHR, tipo o CNROM (mapper 3) — o mais simples que existe pra isso: um registrador simples (escrita em qualquer endereço de 
+8000−
+8000−FFFF) troca qual banco de 8KB de CHR está visível, PRG continua fixo. Isso é uma mudança que afeta o build-rom.js/nrom.cfg inteiro (cabeçalho, config do ld65), não só o level-design.
+
+Isso bate com o que o CHR Editor já vinha antecipando (o botão + BANK), então acho que era esperado — só quero confirmar contigo que topa migrar pra CNROM antes de eu meter a mão nisso, porque muda o cabeçalho da ROM e a config de linkagem que já geramos antes.
+
+Ponto 2 — like evitar duplicidade
+
+Minha sugestão: em vez de Project.data.levels[] separado (casado por nome, frágil), guardar o mapa dentro da própria fase: Project.data.phases[i].levelMap = { cols, rows, transitionType, chrBank, cells, warps }. Sem array espelhado, sem risco de nome dessincronizar — a fase É a fonte única da verdade. O LEVEL_DESIGN passaria a operar direto em cima da fase selecionada, não num objeto solto.
+
+Ponto 3 (parte de dados) — como o level-design filtra por banco
+
+Pra filtrar "só telas dessa pg1 desse banco" sem precisar decodificar a nametable toda vez, acho melhor o backgrounds.js já gravar chrPage: currentChrPage no objeto do background/splash na hora de salvar (hoje esse campo não é salvo). Aí o level-design filtra rapidinho por esse número.
+
+Ponto 6 — atenção numa possível colisão de nomes
+
+Você trocou o hitbox "2-Plataforma" por "Warp". Só um alerta: plataforma (semi-sólida, jogador atravessa por baixo e pisa por cima) e sólido são fisicamente diferentes na prática de qualquer jogo de plataforma — não são a mesma coisa, só ainda não implementamos a física que faz essa diferença importar. Se quiser, dá pra adicionar "Warp" como um tipo novo (ex: tipo 5) em vez de substituir o 2, e manter "Plataforma" pra quando a física chegar. Você decide — só não queria que sumisse sem perceber.
+
+Sobre a ideia de splash-como-menu (seleção de jogadores, loja, armas): curti bastante, mas é bastante escopo a mais (input do controle, máquina de estados de menu). Sugiro deixarmos isso documentado como próxima etapa, depois que o mapa + transições básicas estiverem de pé — tudo bem pra você?
+
+Executou um comando, visualizou um arquivo
+
+Agora crio o render-utils.js, extraindo a lógica exata que já validamos (e testamos) no build-rom.js:
+
+Executou um comando
+
+Agora adapto o build-rom.js para usar essas funções em vez da cópia local:
+
+Identificou necessidade de localizar arquivo antes de refatorar
+
+Agora adapto o level-design.js (o rascunho que você me mandou) pra usar o mesmo RENDER_UTILS:
+
+Executou 2 comandos, editou um arquivo
+
+Agora atualizo o index.html pra carregar o render-utils.js logo após o core.js, e antes de qualquer módulo que o use:
+
+Editou um arquivo, executou um comando
+
+Boa, render-utils.js carrega logo após core.js, antes de level-design.js e build-rom.js. Vou copiar todos os arquivos finais pra pasta de saída e apresentar:
+
+Executou um comando, leu um arquivo
+
+O que mudou:
+
+js/render-utils.js (novo arquivo, mesma pasta do core.js): expõe RENDER_UTILS com 3 funções — computeBackdropColor (a detecção de cor de fundo real do PPU, que testamos várias vezes nessa conversa), drawNametableToCanvas (desenho genérico, escala automática pro tamanho do canvas) e drawAssetThumbnail (atalho que já busca CHR/paletas atuais do projeto sozinho).
+build-rom.js: renderPreview() e computeBackdropColor() agora só repassam pro RENDER_UTILS. Nenhuma lógica mudou — é literalmente o mesmo código, só que centralizado. generateASM() continua chamando computeBackdropColor(...) normalmente (mantive o wrapper local pra não precisar tocar em mais nenhuma linha ali).
+level-design.js: renderThumbnailToCanvas() virou uma casca fina de uma linha só, chamando RENDER_UTILS.drawAssetThumbnail(canvas, bgObj). Removi a cópia de computeBackdropColor que estava duplicada ali.
+index.html: adicionei <script src="js/render-utils.js"></script> logo depois do core.js, antes de qualquer módulo — garante que RENDER_UTILS já existe quando level-design.js e build-rom.js carregam.
+
+Não toquei no backgrounds.js — o render() dele é a tela de edição interativa (grid, overlay de hitbox, cursor de texto), bem diferente de uma thumbnail estática, então deixei fora do escopo como você pediu ("adaptando apenas o necessário"). Se um dia quiser que a tela de edição também respeite a cor de fundo universal do PPU (hoje ela só pula tile-índice-0, sem aplicar a regra do hardware), me avisa que a gente trata à parte.
+
+Testei a sintaxe dos 3 arquivos JS (node --check) e todos passaram. Pronto pro ponto 2 (link fase↔level no core.js) quando quiser seguir.
+
+Render utils
+JS 
+Build rom
+JS 
+Level design
+JS 
+Index
+Código · HTML 
+
+vc já fez o item 2- Vamos fazer a amarração entre o "level" e a fase de verdade do projeto como você sugeriu, evitando duplicidade de dados em nossos arquivos?
+
+Arquitetou integração de mapas de nível nas fases do projeto
+
+Ainda não — só tinha feito o ponto 1 (render-utils). Vamos ao ponto 2 agora.
+
+Mapeou estratégia de migração de dados e validou segurança da refatoração
+
+Antes de eu mexer nisso — tem um risco concreto que preciso descartar primeiro.
+
+Olhando o core.js, o save() faz isto:
+
+js
+if(typeof DASHBOARD!=='undefined' && DASHBOARD.getPhases){ try{ this.data.phases = DASHBOARD.getPhases(); }catch(e){} }
+
+Ou seja, toda vez que salva, o array phases inteiro é substituído pelo que DASHBOARD.getPhases() devolve. Se guardarmos o mapa do level-design dentro de phase.levelMap (como propus), e o DASHBOARD.getPhases() reconstruir os objetos de fase do zero a partir só dos campos que ele conhece (nome, gravidade, mapper...), o levelMap seria apagado silenciosamente todo santo save — o bug mais chato de existir, porque não dá erro nenhum, só some.
+
+Não tenho o dashboard.js ainda (não veio nos arquivos anteriores). Preciso dele pra confirmar se getPhases() preserva campos extras nos objetos de fase ou se reconstrói do zero. Pode me mandar?
+
+Enquanto isso, deixa eu já adiantar o resto do plano pra quando o arquivo chegar:
+
+core.js
+
+defaultData(): remove o array levels: [], e cada fase padrão ganha levelMap: null.
+loadFromFile(): migra .nms antigos — se existir json.levels, casa cada item pelo nome com uma fase (phases[i].name) e move o conteúdo pra phases[i].levelMap; depois remove json.levels de vez.
+
+level-design.js
+
+Troca o campo de texto livre currentWorld.name por um <select> de fases de verdade (lendo Project.data.phases, igual o Build ROM já faz).
+saveToProject() passa a escrever em Project.data.phases[i].levelMap em vez de Project.data.levels[].
+loadLevel() vira loadPhaseMap(phaseId).
+
+Assim que tiver o dashboard.js (e confirmar que getPhases() não vai comer o levelMap), eu já mando os três arquivos prontos.
+
+dashboard.js
+
+JS
+
+ai esta o arquivo que pediu
+
+Executou um comando
+
+Ótima notícia — getPhases() só devolve Project.data?.phases||[], a mesma referência que já está lá, sem reconstruir nada. Risco descartado nesse ponto. Só vou conferir se a edição de fase (o formulário) também mantém os campos extras ao salvar, em vez de recriar o objeto do zero:
+
+Analisou estrutura de dados e planejou refatoração de arquitetura
+
+Perfeito, risco eliminado — getPhases() só devolve a mesma referência (Project.data?.phases||[]), e savePhaseDetail() só faz phase.name = ... (mutação de campo, nunca recria o objeto). É seguro guardar phase.levelMap direto. Vou implementar.
+
+Ver o topo do level-design.js (estado e buildHTML) que preciso editar
+
+Agora troco o campo de texto livre por um <select> de fases de verdade:
+
+Editou 2 arquivos, executou um comando, visualizou um arquivo
+
+Agora resizeGrid(), saveToProject() e o objeto retornado:
+
+Verificou tratamento de casos extremos e compatibilidade de lógica
+
+Bom, só chamado a partir de loadPhaseMap. Agora valido a sintaxe:
+
+Executou um comando
+
+Agora o core.js: remover o array levels[] duplicado, migrar .nms antigos e amarrar levelMap na fase padrão:
+
+Executou um comando, editou um arquivo
+
+Agora a migração no loadFromFile():
+
+Visualizou um arquivo, editou um arquivo, executou um comando
+
+Agora testo a migração com um .nms simulado (formato antigo, com levels[] separado) pra garantir que os dados realmente migram pra dentro da fase certa:
+
+Executou um comando
+
+Migração funcionando perfeitamente — cada levelMap foi pra dentro da fase certa, com o campo name redundante removido, e o array levels não existe mais no JSON final. Copio os arquivos finais:
+
+Executou um comando, leu um arquivo
+
+Resumo do que mudou:
+
+core.js
+
+defaultData(): removi o array levels: []; a fase padrão agora nasce com levelMap: null.
+loadFromFile(): se o .nms carregado for de um formato antigo (com json.levels[]), cada item é casado pela name com a fase correspondente, o conteúdo (menos o name, que já existe na fase) vira phase.levelMap, e o array levels é apagado do objeto. Testei essa migração isolada com dois níveis simulados — funcionou certinho.
+
+level-design.js
+
+O campo de texto livre "Fase" virou um <select id="ldPhaseSelect"> que lista Project.data.phases de verdade.
+currentWorld não guarda mais .name — a fase é a única fonte de nome.
+loadPhaseMap(phaseId) (nova função pública, substitui o antigo loadLevel) lê phase.levelMap se existir, ou cria um mapa em branco.
+saveToProject() agora escreve direto em phase.levelMap, sem find/push num array paralelo.
+resizeGrid() não mexe mais em nome nenhum, só cols/rows (mantendo a lógica de preservar células ao redimensionar, como já tínhamos combinado).
+Trocar de fase no <select> carrega o mapa daquela fase automaticamente — sem confirmação, mesmo padrão que o backgrounds.js já usa pra trocar entre backgrounds salvos.
+
+Não precisei tocar no dashboard.js nem no chr-editor.js. Sintaxe validada nos dois arquivos.
+
+Próximo da lista é o ponto 4 (grade adaptativa por tipo de transição — espaçamento diferente pra hard-cut/scroll horizontal/scroll vertical, com a orientação de shmup pro modo vertical). Sigo pra esse?
+
+Core
+JS 
+Level design
+JS 
