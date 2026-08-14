@@ -20,8 +20,7 @@ const Project = {
       metatiles: [],
       backgrounds: [],
       splashScreens: [],
-      phases: [{ id:'phase_1', name:'Fase 1 - Inicio', description:'Primeira fase', mapper:0, bank:0, gravity:'down', gravityStrength:4, scroll:'static', background:'', splash:'', created:Date.now() }],
-      levels: [],
+      phases: [{ id:'phase_1', name:'Fase 1 - Inicio', description:'Primeira fase', mapper:0, bank:0, gravity:'down', gravityStrength:4, scroll:'static', background:'', splash:'', levelMap:null, created:Date.now() }],
       characters: [],
       cheats: [],
       gameConfig: { lives: 3, continues: 3, energy: 16 },
@@ -104,8 +103,18 @@ const Project = {
       if(!json.metatiles) json.metatiles=[]; 
       if(!json.backgrounds) json.backgrounds=[];
       if(!json.splashScreens) json.splashScreens=[];
-      if(!json.phases) json.phases=[{ id:'phase_1', name:'Fase 1', gravity:'down', mapper:0, bank:0, scroll:'static', background:'', splash:'' }];
-      if(!json.levels) json.levels=[];
+      if(!json.phases) json.phases=[{ id:'phase_1', name:'Fase 1', gravity:'down', mapper:0, bank:0, scroll:'static', background:'', splash:'', levelMap:null }];
+      // Migração de .nms antigos: o mapa de level-design costumava viver num array solto
+      // (json.levels), casado por nome com a fase. Agora ele vive dentro da própria fase
+      // (phase.levelMap), então movemos o conteúdo pra lá e descartamos o array duplicado.
+      if(json.levels && json.levels.length){
+        json.levels.forEach(lvl=>{
+          const phase = json.phases.find(p=>p.name===lvl.name);
+          if(phase){ const {name, ...mapData} = lvl; phase.levelMap = mapData; }
+        });
+      }
+      delete json.levels;
+      json.phases.forEach(p=>{ if(p.levelMap===undefined) p.levelMap=null; });
       if(!json.sounds) json.sounds={ song: [], baseFrames: 30, loop: true, asm: '' };
       if(!json.cheats) json.cheats=[];
       if(!json.characters) json.characters=[];

@@ -1,20 +1,31 @@
-// LEVEL DESIGN MODULE v1.2.3 - World/Phase Map Builder com Renderização Direta no Grid
+// LEVEL DESIGN MODULE v1.3.0 - Mapa amarrado à fase real do projeto (Project.data.phases[i].levelMap)
 const LEVEL_DESIGN = (() => {
-  let currentWorld = {
-    name: "world_1",
-    cols: 4,
-    rows: 4,
-    transitionType: "hard_cut",
-    cells: {}, 
-    warps: []  
-  };
+  function defaultWorld(){
+    return { cols: 4, rows: 4, transitionType: "hard_cut", cells: {}, warps: [] };
+  }
+  let currentPhaseId = null;
+  let currentWorld = defaultWorld();
   let selectedAsset = { id: null, type: null }; 
   let activeTool = 'place'; 
   let warpSource = null;
 
+  // Carrega o levelMap salvo dentro da fase (ou cria um em branco se a fase ainda não tem um).
+  // O mapa vive DENTRO da fase (Project.data.phases[i].levelMap) - não existe mais um array
+  // "levels" separado, então não tem como o nome do mapa dessincronizar do nome da fase.
+  function loadPhaseMap(phaseId){
+    const phases = Project.data?.phases || [];
+    const phase = phases.find(p => p.id === phaseId) || phases[0];
+    if(!phase){ currentPhaseId = null; currentWorld = defaultWorld(); buildHTML(); return; }
+    currentPhaseId = phase.id;
+    currentWorld = phase.levelMap ? JSON.parse(JSON.stringify(phase.levelMap)) : defaultWorld();
+    buildHTML();
+  }
+
   function buildHTML() {
     const root = document.getElementById('mod-world');
     if (!root) return;
+    const phases = Project.data?.phases || [];
+    if(!currentPhaseId && phases.length > 0) currentPhaseId = phases[0].id;
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <!-- Topbar -->
@@ -22,7 +33,9 @@ const LEVEL_DESIGN = (() => {
           <h3 style="font-size:12px;color:#ffcc00;margin:0">🗺️ LEVEL DESIGN (MAPAS DE FASES)</h3>
           <div style="display:flex;gap:6px;align-items:center;margin-left:12px">
             <span style="font-size:11px;color:#888">Fase:</span>
-            <input id="ldWorldName" type="text" value="${currentWorld.name}" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 6px;font-size:11px;width:100px">
+            <select id="ldPhaseSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 6px;font-size:11px;min-width:140px">
+              ${phases.length===0 ? '<option value="">Nenhuma fase criada</option>' : phases.map(p => `<option value="${p.id}" ${p.id===currentPhaseId?'selected':''}>${p.name}</option>`).join('')}
+            </select>
             <span style="font-size:11px;color:#888">Transição:</span>
             <select id="ldTransitionType" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 6px;font-size:11px">
               <option value="hard_cut" ${currentWorld.transitionType==='hard_cut'?'selected':''}>Hard-Cut (Zelda)</option>
@@ -36,7 +49,7 @@ const LEVEL_DESIGN = (() => {
             <button class="btn-tool" onclick="LEVEL_DESIGN.resizeGrid()" style="padding:4px 8px">🔄 Redimensionar</button>
           </div>
           <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
-            <button class="btn-tool" onclick="LEVEL_DESIGN.saveToProject()" style="background:#27ae60;color:#fff">💾 Salvar Fase</button>
+            <button class="btn-tool" onclick="LEVEL_DESIGN.saveToProject()" style="background:#27ae60;color:#fff" ${!currentPhaseId?'disabled':''}>💾 Salvar Fase</button>
           </div>
         </div>
 
@@ -81,6 +94,7 @@ const LEVEL_DESIGN = (() => {
         </div>
       </div>
     `;
+    document.getElementById('ldPhaseSelect')?.addEventListener('change', e => loadPhaseMap(e.target.value));
     refreshAssetLists();
     renderGrid();
     renderWarpsList();
@@ -288,37 +302,30 @@ const LEVEL_DESIGN = (() => {
   function resizeGrid() {
     const colsEl = document.getElementById('ldCols');
     const rowsEl = document.getElementById('ldRows');
-    const nameEl = document.getElementById('ldWorldName');
     if (colsEl) currentWorld.cols = parseInt(colsEl.value) || 4;
     if (rowsEl) currentWorld.rows = parseInt(rowsEl.value) || 4;
-    if (nameEl) currentWorld.name = nameEl.value || 'world_1';
     renderGrid();
     Project.status('Grade de level design redimensionada.');
   }
 
+  // O mapa vive dentro da própria fase (phase.levelMap) - sem array paralelo, sem nome pra
+  // dessincronizar. Se a fase for deletada no Dashboard, o mapa some junto (sem órfão).
   function saveToProject() {
-    if (!Project.data) return;
-    const nameEl = document.getElementById('ldWorldName');
+    if (!Project.data || !currentPhaseId) return;
     const transEl = document.getElementById('ldTransitionType');
-    if (nameEl) currentWorld.name = nameEl.value;
     if (transEl) currentWorld.transitionType = transEl.value;
-
-    if (!Project.data.levels) Project.data.levels = [];
-    const existingIdx = Project.data.levels.findIndex(l => l.name === currentWorld.name);
-    if (existingIdx >= 0) {
-      Project.data.levels[existingIdx] = JSON.parse(JSON.stringify(currentWorld));
-    } else {
-      Project.data.levels.push(JSON.parse(JSON.stringify(currentWorld)));
-    }
-    Project.status(`Fase "${currentWorld.name}" salva com sucesso no projeto!`);
+    const phase = (Project.data.phases || []).find(p => p.id === currentPhaseId);
+    if (!phase) { Project.status('Fase não encontrada - selecione uma fase válida.'); return; }
+    phase.levelMap = JSON.parse(JSON.stringify(currentWorld));
+    Project.status(`Mapa da fase "${phase.name}" salvo com sucesso!`);
   }
 
   return {
-    init: buildHTML,
+    init: () => loadPhaseMap(currentPhaseId),
     setTool,
     resizeGrid,
     removeWarp,
     saveToProject,
-    loadLevel: (lvl) => { currentWorld = JSON.parse(JSON.stringify(lvl)); buildHTML(); }
+    loadPhaseMap
   };
 })();

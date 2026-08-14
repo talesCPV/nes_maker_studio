@@ -13730,9 +13730,8 @@
   "sounds": {
     "song": [],
     "baseFrames": 30,
-    "loop": true,
-    "asm": "; ==========================================\n; DATA.ASM - NES Sound Engine\n; Tempo Base: 1 Semínima = 30 Frames\n; NOTAS ÚNICAS: 1\n; ==========================================\n\n.segment \"RODATA\"\n\nPitchTableLo:\n    .byte $00\n\nPitchTableHi:\n    .byte $00\n\nScaleMelody:\n    .byte , $FF\n\nTimeMelody:\n    .byte \n"
+    "asm": ""
   },
-  "savedAt": 1786734866034,
+  "savedAt": 1786735421070,
   "levels": []
 }
