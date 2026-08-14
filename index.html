@@ -30,7 +30,7 @@
     <div class="side-item" data-mod="bg" onclick="UI.switchModule('bg')">🗺 Backgrounds</div>
     <div class="side-item" data-mod="char" onclick="UI.switchModule('char')">🦸 Personagens</div>
     <div class="side-item" data-mod="sound" onclick="UI.switchModule('sound')">🎵 Sons APU</div>
-    <div class="side-item" data-mod="world" onclick="UI.switchModule('world')">🌍 Mundo / Transições</div>
+    <div class="side-item" data-mod="world" onclick="UI.switchModule('world')">🌍 level-design</div>
     <div class="side-item" data-mod="build" onclick="UI.switchModule('build')">🔨 Build ROM</div>
     <div style="margin-top:auto;padding:12px;border-top:1px solid #222;font-size:11px;color:#666;line-height:1.4">
       <div>CHR: <span id="infoCHR">8KB</span></div>
@@ -46,7 +46,7 @@
     <div class="module" id="mod-bg"></div>
     <div class="module" id="mod-char"></div>
     <div class="module" id="mod-sound"></div>
-    <div class="module" id="mod-world"><div class="placeholder"><div class="big">🌍</div><h2>Mundo & Transições — Em construção</h2></div></div>
+    <div class="module" id="mod-world"></div>
     <div class="module" id="mod-build"></div>
   </div>
 </div>
@@ -55,6 +55,7 @@
 <script src="js/modules/chr-editor.js"></script>
 <script src="js/modules/char-editor.js"></script>
 <script src="js/modules/backgrounds.js"></script>
+<script src="js/modules/level-design.js"></script>
 <script src="js/build.js"></script>
 <script src="js/modules/build-rom.js"></script>
 <script src="js/modules/sound-editor.js"></script>
@@ -69,6 +70,7 @@ const UI = {
     if(name==='chr'){ try{ CHR.renderAll(); }catch(e){} }
     if(name==='char'){ try{ CHAR.init(); }catch(e){} }
     if(name==='bg'){ try{ BG.init(); BG.refreshMetatileList(); }catch(e){} }
+    if(name==='world'){ try{ LEVEL_DESIGN.init(); }catch(e){} }
     if(name==='build'){ try{ BUILD.init(); }catch(e){} }
     if(name==='sound'){ try{ SOUND.init(); }catch(e){} }
   }

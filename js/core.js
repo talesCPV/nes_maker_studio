@@ -1,4 +1,4 @@
-// CORE v0.6.5 FINAL FIX TELA PRETA - Dashboard + Splash + Fill
+// CORE v0.6.5 FINAL FIX TELA PRETA - Dashboard + Splash + Fill + Level Design
 const NES_PALETTE = ["#666666","#002A88","#1412A7","#3B00A4","#5C007E","#6E0040","#6C0600","#561D00","#333500","#0B4800","#005200","#004F08","#00404D","#000000","#000000","#000000","#ADADAD","#155FD9","#4240FF","#7527FE","#A01ACC","#B71E7B","#B53120","#994E00","#6B6D00","#388700","#0C9300","#008F32","#007C8D","#000000","#000000","#000000","#FFFEFF","#64B0FF","#9290FF","#C676FF","#F36AFF","#FE6ECC","#FE8170","#EA9E22","#BCBE00","#88D800","#5CE430","#45E082","#48CDDE","#4F4F4F","#000000","#000000","#FFFEFF","#C0E0FF","#D3D2FF","#E8C8FF","#FBC2FF","#FEC2EB","#FECCC5","#F7D8A5","#E4E594","#CFEE96","#BDF4AB","#B3F3CC","#B5EBF2","#B8B8B8","#000000","#000000"];
 const Project = {
   data: null,
@@ -21,6 +21,7 @@ const Project = {
       backgrounds: [],
       splashScreens: [],
       phases: [{ id:'phase_1', name:'Fase 1 - Inicio', description:'Primeira fase', mapper:0, bank:0, gravity:'down', gravityStrength:4, scroll:'static', background:'', splash:'', created:Date.now() }],
+      levels: [],
       characters: [],
       cheats: [],
       gameConfig: { lives: 3, continues: 3, energy: 16 },
@@ -104,6 +105,7 @@ const Project = {
       if(!json.backgrounds) json.backgrounds=[];
       if(!json.splashScreens) json.splashScreens=[];
       if(!json.phases) json.phases=[{ id:'phase_1', name:'Fase 1', gravity:'down', mapper:0, bank:0, scroll:'static', background:'', splash:'' }];
+      if(!json.levels) json.levels=[];
       if(!json.sounds) json.sounds={ song: [], baseFrames: 30, loop: true, asm: '' };
       if(!json.cheats) json.cheats=[];
       if(!json.characters) json.characters=[];
