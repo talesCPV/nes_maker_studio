@@ -49,7 +49,7 @@ const LEVEL_DESIGN = (() => {
             <button class="btn-tool" onclick="LEVEL_DESIGN.resizeGrid()" style="padding:4px 8px">🔄 Redimensionar</button>
           </div>
           <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
-            <button class="btn-tool" onclick="LEVEL_DESIGN.saveToProject()" style="background:#27ae60;color:#fff" ${!currentPhaseId?'disabled':''}>💾 Salvar Fase</button>
+            <span style="font-size:10px;color:#666">💾 salva sozinho a cada edição - use o Salvar Projeto (topo) pra gravar o .nms</span>
           </div>
         </div>
 
@@ -96,6 +96,7 @@ const LEVEL_DESIGN = (() => {
       </div>
     `;
     document.getElementById('ldPhaseSelect')?.addEventListener('change', e => loadPhaseMap(e.target.value));
+    document.getElementById('ldTransitionType')?.addEventListener('change', e => { currentWorld.transitionType = e.target.value; persistLevelMap(); });
     refreshAssetLists();
     renderGrid();
     renderWarpsList();
@@ -269,10 +270,10 @@ const LEVEL_DESIGN = (() => {
         return;
       }
       currentWorld.cells[key] = { bgId: selectedAsset.id, type: selectedAsset.type, x, y };
-      renderGrid();
+      renderGrid(); persistLevelMap();
     } else if (activeTool === 'erase') {
       delete currentWorld.cells[key];
-      renderGrid();
+      renderGrid(); persistLevelMap();
     } else if (activeTool === 'warp') {
       if (!warpSource) {
         if (!currentWorld.cells[key]) { alert('A sala de origem precisa ter uma tela alocada.'); return; }
@@ -282,14 +283,23 @@ const LEVEL_DESIGN = (() => {
         if (!currentWorld.cells[key]) { alert('A sala de destino precisa ter uma tela alocada.'); return; }
         currentWorld.warps.push({ from: warpSource, to: { x, y } });
         warpSource = null;
-        renderWarpsList();
+        renderWarpsList(); persistLevelMap();
         alert('Warp criada com sucesso!');
       }
     } else if (activeTool === 'hardcut') {
       if (!currentWorld.cells[key]) { alert('A célula precisa ter uma tela alocada primeiro.'); return; }
       currentWorld.cells[key].hardCut = !currentWorld.cells[key].hardCut;
-      renderGrid();
+      renderGrid(); persistLevelMap();
     }
+  }
+
+  // Grava currentWorld em phase.levelMap a cada edição, sem precisar de um clique manual em
+  // "Salvar Fase" - evita perder trabalho por esquecimento antes do save global (.nms).
+  function persistLevelMap(){
+    if (!Project.data || !currentPhaseId) return;
+    const phase = (Project.data.phases || []).find(p => p.id === currentPhaseId);
+    if (!phase) return;
+    phase.levelMap = JSON.parse(JSON.stringify(currentWorld));
   }
 
   function renderWarpsList() {
@@ -310,7 +320,7 @@ const LEVEL_DESIGN = (() => {
 
   function removeWarp(idx) {
     currentWorld.warps.splice(idx, 1);
-    renderWarpsList();
+    renderWarpsList(); persistLevelMap();
   }
 
   function resizeGrid() {
@@ -318,28 +328,21 @@ const LEVEL_DESIGN = (() => {
     const rowsEl = document.getElementById('ldRows');
     if (colsEl) currentWorld.cols = parseInt(colsEl.value) || 4;
     if (rowsEl) currentWorld.rows = parseInt(rowsEl.value) || 4;
-    renderGrid();
+    renderGrid(); persistLevelMap();
     Project.status('Grade de level design redimensionada.');
   }
 
   // O mapa vive dentro da própria fase (phase.levelMap) - sem array paralelo, sem nome pra
   // dessincronizar. Se a fase for deletada no Dashboard, o mapa some junto (sem órfão).
-  function saveToProject() {
-    if (!Project.data || !currentPhaseId) return;
-    const transEl = document.getElementById('ldTransitionType');
-    if (transEl) currentWorld.transitionType = transEl.value;
-    const phase = (Project.data.phases || []).find(p => p.id === currentPhaseId);
-    if (!phase) { Project.status('Fase não encontrada - selecione uma fase válida.'); return; }
-    phase.levelMap = JSON.parse(JSON.stringify(currentWorld));
-    Project.status(`Mapa da fase "${phase.name}" salvo com sucesso!`);
-  }
+  // Toda edição no grid já chama persistLevelMap() sozinha (ver handleCellClick,
+  // resizeGrid, removeWarp) - não existe mais um botão separado de "salvar fase": o único
+  // save manual que resta é o Salvar Projeto global (topo), que grava o .nms.
 
   return {
     init: () => loadPhaseMap(currentPhaseId),
     setTool,
     resizeGrid,
     removeWarp,
-    saveToProject,
     loadPhaseMap
   };
 })();

@@ -581,50 +581,63 @@ const BG = (() => {
     });
     if(!oddPages.includes(currentChrPage)) currentChrPage = oddPages[0];
     sel.value = currentChrPage;
-    sel.onchange = (e) => { switchToChrPage(parseInt(e.target.value) || oddPages[0]); };
+    sel.onchange = (e) => { const v = parseInt(e.target.value); switchToChrPage(isNaN(v) ? oddPages[0] : v); };
   }
 
   // Troca a página de trabalho do CHR, preservando o desenho em progresso de cada página
   // separadamente (evita misturar metatiles de páginas diferentes numa mesma tela).
-  // Troca a página de trabalho do CHR. Ponto 1: procura uma tela SALVA que já use essa
-  // página e carrega ela automaticamente (pra nunca desenhar com metatiles de outra
-  // página); se nenhuma tela salva usa essa página ainda, pergunta se quer criar uma.
+  // Cria uma tela em branco na página atual, pedindo o nome. Usada tanto pelo botão "Novo"
+  // quanto automaticamente pelo bgChrPageSelect quando nenhuma tela salva usa a página escolhida.
+  function promptNewCanvasForCurrentPage(){
+    const name = prompt("Nome da nova tela:", `tela_pg${currentChrPage}`);
+    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0);
+    textLayers = [];
+    if(name){ currentEntryId = 'scr_'+Date.now(); currentEntryName = name.trim(); currentEntryType = null; }
+    else { currentEntryId = null; currentEntryName = ''; currentEntryType = null; }
+    selectedTextIdx = null; movingTextMode = false; duplicatingTextMode = false; textUnderCache = {};
+    updateTextLayersUI(); updateBGSelect(); render();
+    return !!name;
+  }
+
+  // Troca a página de trabalho do CHR, sempre nessa ordem:
+  // 1) atualiza a lista de metatiles pra nova página (incondicional);
+  // 2) procura uma tela salva (background ou splash) que já use essa página e carrega ela;
+  // 3) se não achar nenhuma, restaura um rascunho em progresso dessa página, ou aciona o
+  //    mesmo fluxo do botão "Novo" (pede nome).
   function switchToChrPage(newPage){
-    if(newPage === currentChrPage) return;
+    if(newPage === currentChrPage){ refreshMetatileList(); return; }
     pageDrafts[currentChrPage] = {
       nametable: [...nametable], attributes: [...attributes], collisionMap: [...collisionMap],
       textLayers: JSON.parse(JSON.stringify(textLayers))
     };
     currentChrPage = newPage;
 
+    // 1) Sempre atualiza os metatiles primeiro, incondicionalmente.
+    refreshMetatileList();
+
+    // 2) Procura uma tela salva que já use essa página (sobe ou desce na lista, tanto faz).
     const bgs = Project.data?.backgrounds || [];
     const splashes = Project.data?.splashScreens || [];
-    const foundBg = bgs.find(b => b.chrPage === newPage);
-    const foundSplash = !foundBg ? splashes.find(s => s.chrPage === newPage) : null;
+    const matchesPage = e => (e.chrPage != null ? e.chrPage : inferChrPageFromNametable(e.nametable)) === newPage;
+    const foundBg = bgs.find(matchesPage);
+    const foundSplash = splashes.find(matchesPage);
 
     if(foundBg){ loadEntry('bg', foundBg.id); Project.status(`Página ${newPage}: background "${foundBg.name}" carregado`); return; }
     if(foundSplash){ loadEntry('splash', foundSplash.id); Project.status(`Página ${newPage}: splash "${foundSplash.name}" carregada`); return; }
 
+    // 3) Nenhuma tela salva usa essa página - restaura rascunho em progresso, ou aciona "Novo".
     const draft = pageDrafts[newPage];
     if(draft){
       nametable = [...draft.nametable]; attributes = [...draft.attributes]; collisionMap = [...draft.collisionMap];
       textLayers = JSON.parse(JSON.stringify(draft.textLayers));
       currentEntryId = null; currentEntryName = ''; currentEntryType = null;
+      selectedTextIdx = null; movingTextMode = false; duplicatingTextMode = false; textUnderCache = {};
+      updateTextLayersUI(); updateBGSelect(); render();
       Project.status(`Página ${newPage}: rascunho anterior restaurado (ainda não salvo)`);
-    } else if(confirm(`Nenhuma tela salva usa a página ${newPage} ainda. Quer criar uma tela nova nessa página?`)){
-      const name = prompt("Nome da nova tela:", `tela_pg${newPage}`);
-      nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0);
-      textLayers = [];
-      if(name){ currentEntryId = 'scr_'+Date.now(); currentEntryName = name.trim(); currentEntryType = null; }
-      else { currentEntryId = null; currentEntryName = ''; currentEntryType = null; }
-      Project.status(`Página ${newPage}: tela em branco`);
     } else {
-      nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0);
-      textLayers = []; currentEntryId = null; currentEntryName = ''; currentEntryType = null;
-      Project.status(`Página ${newPage}: tela em branco`);
+      const named = promptNewCanvasForCurrentPage();
+      Project.status(named ? `Página ${newPage}: nova tela "${currentEntryName}"` : `Página ${newPage}: tela em branco`);
     }
-    selectedTextIdx = null; movingTextMode = false; duplicatingTextMode = false; textUnderCache = {};
-    refreshMetatileList(); updateTextLayersUI(); updateBGSelect(); render();
   }
 
   function refreshMetatileList(){
@@ -1035,13 +1048,8 @@ const BG = (() => {
   // Project.data.backgrounds/splashScreens quando "Salvar como..." for clicado - até lá
   // fica só em memória, sem tipo definido.
   function newCanvas(){
-    const name = prompt("Nome da nova tela:", `tela_${(Project.data?.backgrounds?.length||0)+(Project.data?.splashScreens?.length||0)+1}`);
-    if(!name) return;
-    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0);
-    textLayers = []; selectedTextIdx = null; textUnderCache = {}; movingTextMode = false; duplicatingTextMode = false;
-    currentEntryId = 'scr_'+Date.now(); currentEntryName = name.trim(); currentEntryType = null;
-    updateTextLayersUI(); updateBGSelect(); render();
-    Project.status(`Nova tela "${currentEntryName}" - use "Salvar como..." pra definir o tipo`);
+    const named = promptNewCanvasForCurrentPage();
+    Project.status(named ? `Nova tela "${currentEntryName}" - use "Salvar como..." pra definir o tipo` : 'Tela em branco');
   }
 
   function clearBackground(){
@@ -1049,7 +1057,17 @@ const BG = (() => {
   }
 
   // Carrega uma tela salva (background ou splash) e sincroniza a página do CHR trabalhada
-  // com a página que essa tela realmente usa, pra nunca desenhar com metatiles de outra página.
+  // com a página que essa tela realmente usa - sempre, subindo ou descendo, sem depender de
+  // comparação condicional (currentChrPage pode já ter sido pré-alterado por quem chamou).
+  // Descobre a página do CHR usada por uma tela olhando os próprios tiles da nametable
+  // (índice absoluto / 256 = página). Serve de reforço pro campo chrPage salvo - cobre
+  // telas salvas antes desse campo existir, ou qualquer outra inconsistência nele.
+  function inferChrPageFromNametable(nt){
+    if(!nt) return null;
+    for(const t of nt){ if(t) return Math.floor(t/256); }
+    return null;
+  }
+
   function loadEntry(type, id){
     const arr = type === 'splash' ? (Project.data?.splashScreens||[]) : (Project.data?.backgrounds||[]);
     const b = arr.find(e => e.id === id); if(!b) return;
@@ -1059,11 +1077,12 @@ const BG = (() => {
     textLayers = b.textLayers ? [...b.textLayers] : [];
     selectedTextIdx = null; textUnderCache = {}; movingTextMode = false; duplicatingTextMode = false;
     currentEntryId = b.id; currentEntryName = b.name; currentEntryType = type;
-    if(b.chrPage != null && b.chrPage !== currentChrPage){
-      currentChrPage = b.chrPage;
+    const page = (b.chrPage != null) ? b.chrPage : inferChrPageFromNametable(nametable);
+    if(page != null){
+      currentChrPage = page;
       const pageSel = document.getElementById('bgChrPageSelect'); if(pageSel) pageSel.value = currentChrPage;
-      refreshMetatileList();
     }
+    refreshMetatileList();
     updateBGSelect(); updateTextLayersUI(); render();
   }
 
