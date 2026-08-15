@@ -23,6 +23,22 @@ const Project = {
       phases: [{ id:'phase_1', name:'Fase 1 - Inicio', description:'Primeira fase', mapper:0, bank:0, gravity:'down', gravityStrength:4, scroll:'static', background:'', splash:'', levelMap:null, created:Date.now() }],
       characters: [],
       cheats: [],
+      variables: [],
+      events: [
+        { id:'ev_up', name:'Cima', category:'input', builtin:true },
+        { id:'ev_down', name:'Baixo', category:'input', builtin:true },
+        { id:'ev_left', name:'Esquerda', category:'input', builtin:true },
+        { id:'ev_right', name:'Direita', category:'input', builtin:true },
+        { id:'ev_a', name:'Botão A', category:'input', builtin:true },
+        { id:'ev_b', name:'Botão B', category:'input', builtin:true },
+        { id:'ev_start', name:'Start', category:'input', builtin:true },
+        { id:'ev_select', name:'Select', category:'input', builtin:true },
+        { id:'ev_hit_solido', name:'Hitbox: Sólido', category:'hitbox', builtin:true },
+        { id:'ev_hit_plataforma', name:'Hitbox: Plataforma', category:'hitbox', builtin:true },
+        { id:'ev_hit_dano', name:'Hitbox: Dano', category:'hitbox', builtin:true },
+        { id:'ev_hit_warp', name:'Hitbox: Warp', category:'hitbox', builtin:true }
+      ],
+      rules: [],
       gameConfig: { lives: 3, continues: 3, energy: 16 },
       sounds: { song: [], baseFrames: 30, loop: true, asm: '' }
     }
@@ -43,6 +59,7 @@ const Project = {
     this.loadIntoEditors();
     this.updateUI();
     this.status("novo projeto v0.6.5 FINAL");
+    if(typeof UI!=='undefined' && UI.switchModule) UI.switchModule('dashboard');
   },
   loadIntoEditors(){
     const chrU8 = new Uint8Array(this.data.chr);
@@ -119,8 +136,15 @@ const Project = {
       if(!json.cheats) json.cheats=[];
       if(!json.characters) json.characters=[];
       if(!json.gameConfig) json.gameConfig={ lives:3, continues:3, energy:16 };
+      if(!json.variables) json.variables=[];
+      if(!json.events) json.events=this.defaultData().events;
+      if(!json.rules) json.rules=[];
       this.data = json; this.fileName = file.name; this.loadIntoEditors(); this.updateUI(); this.status(`carregado v${json.version||'0.4'} - ${json.splashScreens.length} splash`);
-      setTimeout(()=>{ try{ DASHBOARD.init(); }catch(e){} try{ BG.loadSplashScreens(json.splashScreens); }catch(e){} },300);
+      setTimeout(()=>{
+        try{ BG.loadSplashScreens(json.splashScreens); }catch(e){}
+        if(typeof UI!=='undefined' && UI.switchModule) UI.switchModule('dashboard');
+        else { try{ DASHBOARD.init(); }catch(e){} }
+      },300);
     }catch(e){ alert("Erro ao abrir .nms: "+e); }
   }
 };

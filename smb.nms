@@ -25965,8 +25965,108 @@
   "sounds": {
     "song": [],
     "baseFrames": 30,
-    "loop": true,
-    "asm": "; ==========================================\n; DATA.ASM - NES Sound Engine\n; Tempo Base: 1 Semínima = 30 Frames\n; NOTAS ÚNICAS: 1\n; ==========================================\n\n.segment \"RODATA\"\n\nPitchTableLo:\n    .byte $00\n\nPitchTableHi:\n    .byte $00\n\nScaleMelody:\n    .byte , $FF\n\nTimeMelody:\n    .byte \n"
+    "asm": ""
   },
-  "savedAt": 1786793867978
+  "savedAt": 1786818274488,
+  "variables": [
+    {
+      "id": "var_1786818039217",
+      "name": "Energia",
+      "type": "byte",
+      "zeroPage": true
+    }
+  ],
+  "events": [
+    {
+      "id": "ev_up",
+      "name": "Cima",
+      "category": "input",
+      "builtin": true
+    },
+    {
+      "id": "ev_down",
+      "name": "Baixo",
+      "category": "input",
+      "builtin": true
+    },
+    {
+      "id": "ev_left",
+      "name": "Esquerda",
+      "category": "input",
+      "builtin": true
+    },
+    {
+      "id": "ev_right",
+      "name": "Direita",
+      "category": "input",
+      "builtin": true
+    },
+    {
+      "id": "ev_a",
+      "name": "Botão A",
+      "category": "input",
+      "builtin": true
+    },
+    {
+      "id": "ev_b",
+      "name": "Botão B",
+      "category": "input",
+      "builtin": true
+    },
+    {
+      "id": "ev_start",
+      "name": "Start",
+      "category": "input",
+      "builtin": true
+    },
+    {
+      "id": "ev_select",
+      "name": "Select",
+      "category": "input",
+      "builtin": true
+    },
+    {
+      "id": "ev_hit_solido",
+      "name": "Hitbox: Sólido",
+      "category": "hitbox",
+      "builtin": true
+    },
+    {
+      "id": "ev_hit_plataforma",
+      "name": "Hitbox: Plataforma",
+      "category": "hitbox",
+      "builtin": true
+    },
+    {
+      "id": "ev_hit_dano",
+      "name": "Hitbox: Dano",
+      "category": "hitbox",
+      "builtin": true
+    },
+    {
+      "id": "ev_hit_warp",
+      "name": "Hitbox: Warp",
+      "category": "hitbox",
+      "builtin": true
+    }
+  ],
+  "rules": [
+    {
+      "id": "rule_1786818071027",
+      "name": "regra_1",
+      "scope": "global",
+      "steps": [
+        {
+          "type": "if_event",
+          "eventId": "ev_hit_dano"
+        },
+        {
+          "type": "set_var",
+          "eventId": "",
+          "varId": "var_1786818039217",
+          "value": -2
+        }
+      ]
+    }
+  ]
 }
