@@ -140,7 +140,7 @@ const CHR = (() => {
 
   function populateSelects(){ const cSel=document.getElementById('tileColsSelect'), rSel=document.getElementById('tileRowsSelect'); if(!cSel||!rSel) return; cSel.innerHTML=""; rSel.innerHTML=""; for(let i=1;i<=8;i++){ let o=document.createElement('option'); o.value=i; o.textContent=i+` col`; cSel.appendChild(o); let o2=document.createElement('option'); o2.value=i; o2.textContent=i+` lin`; rSel.appendChild(o2); } cSel.value=gridW; rSel.value=gridH; cSel.onchange=()=>setGrid(parseInt(cSel.value),gridH); rSel.onchange=()=>setGrid(gridW,parseInt(rSel.value)); }
   function isSpriteBank(bankIdx){ return bankIdx%2===0; } // pg0 (par) = sprites, pg1 (ímpar) = backgrounds/splash
-  function updateBankSelect(){ const sel=document.getElementById('bankSelect'); if(!sel) return; sel.innerHTML=""; const total=Math.max(2,Math.ceil(chrBuffer.length/4096)); for(let i=0;i<total;i++){ let o=document.createElement('option'); o.value=i; o.textContent=`${i%2===0?'PT0 $0000':'PT1 $1000'} (${isSpriteBank(i)?'sprites':'backgrounds'})`; sel.appendChild(o); } sel.value=currentBank; sel.onchange=e=>{ currentBank=parseInt(e.target.value); ensurePaletteMatchesBank(); renderAll(); updateLabels(); initPalUI(); }; }
+  function updateBankSelect(){ const sel=document.getElementById('bankSelect'); if(!sel) return; sel.innerHTML=""; const total=Math.max(2,Math.ceil(chrBuffer.length/4096)); for(let i=0;i<total;i++){ let o=document.createElement('option'); o.value=i; o.textContent=`${i%2===0?'PT0 $0000':'PT1 $1000'} (${isSpriteBank(i)?'sprites':'backgrounds'})`; sel.appendChild(o); } sel.value=currentBank; sel.onchange=e=>{ currentBank=parseInt(e.target.value); ensurePaletteMatchesBank(); renderAll(); updateLabels(); initPalUI(); updateMetatileSelect(); }; }
   function ensurePaletteMatchesBank(){
     const wantsSprite=isSpriteBank(currentBank);
     const activeIsSprite=activePal>=4;
@@ -189,7 +189,7 @@ const CHR = (() => {
 
   function renderMetatilePreview(){
     const cont=document.getElementById('metatilePreview'); if(!cont) return; cont.innerHTML='';
-    metatiles.forEach(mt=>{
+    metatiles.filter(mt => (mt.bank||0) === currentBank).forEach(mt=>{
       const wrap=document.createElement('div'); wrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px;background:#222;border:1px solid #444;border-radius:4px;cursor:pointer;min-width:60px';
       wrap.onclick=()=>{ const sel=document.getElementById('metatileSelect'); if(sel){ sel.value=mt.id; loadSelectedMetatile(); } };
       const canvas=document.createElement('canvas'); canvas.width=mt.w*8; canvas.height=mt.h*8; canvas.style.cssText=`width:${mt.w*12}px;height:${mt.h*12}px;image-rendering:pixelated;background:#000;border:1px solid #333`;
@@ -282,13 +282,54 @@ const CHR = (() => {
     window.addEventListener('mouseup', ()=>{ isDrawing=false; if(copyDrag&&copyDrag.active){ copyDrag.active=false; doCopy(copyDrag.x0, copyDrag.y0, copyDrag.x1, copyDrag.y1); renderZoom(); copyDrag=null; } });
   }
 
-  function findEmptyTile(){ const base=currentBank*256; for(let i=0;i<256;i++){ const ti=base+i; const off=ti*16; if(off+16>chrBuffer.length) break; let empty=true; for(let b=0;b<16;b++){ if(chrBuffer[off+b]!==0){ empty=false; break; } } if(empty) return ti; } return null; }
-  function newTile(){ const empty=findEmptyTile(); let target=empty!==null?empty:currentBank*256; chrBuffer.fill(0, target*16, target*16+16); gridW=1; gridH=1; selectedTiles=[target]; activeSlotIdx=0; currentBank=Math.floor(target/256); renderAll(); updateLabels(); }
-  function saveMetatile(){ const name=prompt(`Nome:`, `metatile_${metatiles.length+1}_${gridW}x${gridH}_PT${currentBank}`); if(!name) return; const id='mt_'+Date.now(); const mt={ id, name:name.trim(), w:gridW, h:gridH, tiles:[...selectedTiles], bank:currentBank, palette:activePal, created:Date.now() }; metatiles.push(mt); updateMetatileSelect(); renderAll(); }
+  function saveMetatile(){
+    const sel=document.getElementById('metatileSelect');
+    const existingId = sel && sel.value;
+    if(existingId){
+      const mt = metatiles.find(m=>m.id===existingId);
+      if(mt){
+        mt.w=gridW; mt.h=gridH; mt.tiles=[...selectedTiles]; mt.bank=currentBank; mt.palette=activePal;
+        updateMetatileSelect(); renderAll();
+        if(typeof Project!=='undefined' && Project.status) Project.status(`Metatile "${mt.name}" atualizado`);
+        return;
+      }
+    }
+    // Nenhum metatile selecionado no dropdown - cria um novo como fallback
+    const name=prompt(`Nome:`, `metatile_${metatiles.length+1}_${gridW}x${gridH}_PT${currentBank}`); if(!name) return;
+    const id='mt_'+Date.now(); const mt={ id, name:name.trim(), w:gridW, h:gridH, tiles:[...selectedTiles], bank:currentBank, palette:activePal, created:Date.now() };
+    metatiles.push(mt); updateMetatileSelect(); if(sel) sel.value=id; renderAll();
+  }
+  // Cria um metatile novo de verdade (pede nome, abre uma seleção 2x2 com os 4 primeiros
+  // tiles do banco atual pra o usuário editar/redimensionar). O metatile já fica selecionado
+  // no dropdown, então clicar em Save salva as alterações nele (mesmo caminho de saveMetatile
+  // acima, não cria um segundo metatile).
+  function newTile(){
+    const name=prompt("Nome do novo metatile:", `metatile_${metatiles.length+1}`); if(!name) return;
+    const base=currentBank*256;
+    gridW=2; gridH=2; selectedTiles=[base, base+1, base+16, base+17]; activeSlotIdx=0;
+    const id='mt_'+Date.now();
+    const mt={ id, name:name.trim(), w:gridW, h:gridH, tiles:[...selectedTiles], bank:currentBank, palette:activePal, created:Date.now() };
+    metatiles.push(mt);
+    updateMetatileSelect();
+    const sel=document.getElementById('metatileSelect'); if(sel) sel.value=id;
+    renderAll(); updateLabels();
+    if(typeof Project!=='undefined' && Project.status) Project.status(`Novo metatile "${mt.name}" - edite e clique em Save`);
+  }
   function loadSelectedMetatile(){ const sel=document.getElementById('metatileSelect'); if(!sel||!sel.value) return; const mt=metatiles.find(m=>m.id===sel.value); if(!mt) return; gridW=mt.w; gridH=mt.h; selectedTiles=[...mt.tiles]; currentBank=mt.bank||0; activePal=mt.palette||0; activeSlotIdx=0; renderAll(); updateLabels(); }
   function onMetatileSelectChange(){ loadSelectedMetatile(); }
   function deleteMetatile(){ const sel=document.getElementById('metatileSelect'); if(!sel||!sel.value) return; metatiles=metatiles.filter(m=>m.id!==sel.value); updateMetatileSelect(); renderAll(); }
-  function updateMetatileSelect(){ const sel=document.getElementById('metatileSelect'); const countEl=document.getElementById('lblMetatileCount'); if(countEl) countEl.textContent=metatiles.length; if(!sel) return; const cur=sel.value; sel.innerHTML='<option value="">— Metatiles —</option>'; metatiles.forEach(mt=>{ const o=document.createElement('option'); o.value=mt.id; o.textContent=`${mt.name} (${mt.w}x${mt.h}) PT${mt.bank||0}`; sel.appendChild(o); }); if(cur) sel.value=cur; renderMetatilePreview(); }
+  function updateMetatileSelect(){
+    const sel=document.getElementById('metatileSelect');
+    const countEl=document.getElementById('lblMetatileCount');
+    const bankMetatiles = metatiles.filter(mt => (mt.bank||0) === currentBank);
+    if(countEl) countEl.textContent=bankMetatiles.length;
+    if(!sel) return;
+    const cur=sel.value;
+    sel.innerHTML='<option value="">— Metatiles —</option>';
+    bankMetatiles.forEach(mt=>{ const o=document.createElement('option'); o.value=mt.id; o.textContent=`${mt.name} (${mt.w}x${mt.h}) PT${mt.bank||0}`; sel.appendChild(o); });
+    if(cur && bankMetatiles.some(m=>m.id===cur)) sel.value=cur;
+    renderMetatilePreview();
+  }
 
   function setToolImpl(t){ tool=t; toolStart=null; toolPreviewEnd=null; if(copyDrag) copyDrag.active=false; try{ document.querySelectorAll('.tool-btn').forEach(b=>{ b.classList.toggle('active', b.dataset.tool===t); if(b.dataset.tool===t){ b.style.background='#ffcc00'; b.style.color='#000'; } else { b.style.background=''; b.style.color=''; } }); }catch(e){} renderAll(); }
   async function tryLoadDefaultCHR(){
@@ -338,7 +379,7 @@ const CHR = (() => {
     clearGroup(){ pushUndo(); selectedTiles.forEach(ti=>chrBuffer.fill(0,ti*16,ti*16+16)); renderAll(); },
     undo(){ if(undoStack.length){ chrBuffer=undoStack.pop(); renderAll(); } },
     importCHR(){ document.getElementById('importCHR_internal')?.click(); },
-    saveMetatile, loadSelectedMetatile, deleteMetatile, updateMetatileSelect, onMetatileSelectChange, newTile, findEmptyTile,
+    saveMetatile, loadSelectedMetatile, deleteMetatile, updateMetatileSelect, onMetatileSelectChange, newTile,
     setTool(t){ setToolImpl(t); }
   };
 })();

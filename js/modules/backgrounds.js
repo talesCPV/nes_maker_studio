@@ -3,9 +3,9 @@ const BG = (() => {
   let nametable = new Array(32 * 30).fill(0);
   let attributes = new Array(64).fill(0);
   let collisionMap = new Array(32 * 30).fill(0);
-  let currentBGIndex = 0;
-  let currentEntryType = 'bg';
-  let currentSplashIndex = 0;
+  let currentEntryId = null;
+  let currentEntryName = '';
+  let currentEntryType = null; // 'bg' | 'splash' | null (tela nova, ainda não classificada)
   let selectedMetatile = null;
   let activePalette = 0;
   let selectedCollisionType = 1;
@@ -18,6 +18,11 @@ const BG = (() => {
   let currentTool = 'paint';
   let selectedTextIdx = null;
   let movingTextMode = false;
+  let duplicatingTextMode = false;
+  // Cache do que existia no nametable/atributos ANTES de cada camada de texto ser escrita,
+  // guardado por layer.id. Só em memória durante a edição - nunca vai pro .nms porque fica
+  // fora do objeto da camada (que é o que de fato é serializado ao salvar).
+  let textUnderCache = {};
   let textLayers = [];
   let currentChrPage = 1; // pg ímpar: pg0 de cada banco é reservada para sprites, background só usa pg1, pg3...
   // Rascunho em memória por página do CHR: evita misturar metatiles de páginas diferentes na
@@ -25,7 +30,6 @@ const BG = (() => {
   // próprio nametable/atributos/colisão/textos em progresso; trocar de página salva o estado
   // atual na página de origem e restaura (ou cria em branco) o estado da página de destino.
   let pageDrafts = {};
-  let dragStart = null;
   let globalEventsAttached = false;
 
   function isValidForBG(mt) {
@@ -59,9 +63,8 @@ const BG = (() => {
             <span style="font-size:11px;color:#888">BG:</span>
             <select id="bgSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 6px;font-size:11px;min-width:140px"></select>
             <button class="btn-tool" onclick="BG.newCanvas()" style="padding:4px 8px">✨ Novo</button>
-            <button class="btn-tool" onclick="BG.saveToProject()" style="background:#27ae60;color:#fff">💾 Salvar</button>
-            <button class="btn-tool" onclick="BG.saveAsNew()" style="background:#2980b9;color:#fff">💾 Save Background</button>
-            <button class="btn-tool" onclick="BG.saveSplashToProject()" style="background:#8e44ad;color:#fff">🎬 Save Splash</button>
+            <button class="btn-tool" onclick="BG.saveEntryAs('bg')" style="background:#ffcc00;color:#000">🗺 Salvar como Background</button>
+            <button class="btn-tool" onclick="BG.saveEntryAs('splash')" style="background:#8e44ad;color:#fff">🎬 Salvar como Splash</button>
             <button class="btn-tool" onclick="BG.deleteCurrentEntry()" style="background:#c0392b;color:#fff">🗑 Deletar</button>
           </div>
           <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
@@ -80,7 +83,6 @@ const BG = (() => {
                 <button class="btn-tool tool-btn" data-bg-tool="flood" onclick="BG.setTool('flood')" style="background:#8e44ad;color:#fff;border:1px solid #9b59b6">🌊 Flood</button>
                 <button class="btn-tool tool-btn" data-bg-tool="attr" onclick="BG.setTool('attr')" style="background:#2980b9;color:#fff;border:1px solid #3498db">🖌 Paleta</button>
                 <button class="btn-tool tool-btn" data-bg-tool="hitbox" onclick="BG.setTool('hitbox')" style="background:#c0392b;color:#fff;border:1px solid #e74c3c">🛡 Hitbox</button>
-                <button class="btn-tool tool-btn" data-bg-tool="warp" onclick="BG.setTool('warp')" style="background:#d35400;color:#fff;border:1px solid #e67e22">🚪 Warp</button>
                 <button class="btn-tool tool-btn" data-bg-tool="erase" onclick="BG.setTool('erase')" style="background:#555;color:#fff;border:1px solid #777">🧽 Borracha</button>
                 <button class="btn-tool tool-btn" data-bg-tool="text" onclick="BG.setTool('text')" style="background:#ffcc00;color:#000">🔤 Texto</button>
                 <button class="btn-tool tool-btn" data-bg-tool="fill" onclick="BG.setTool('fill')">🪣 Auto-Fill</button>
@@ -97,6 +99,7 @@ const BG = (() => {
                   <button class="btn-tool collision-btn active" data-col-type="1" onclick="BG.setCollisionType(1)" style="font-size:10px;background:#c0392b;color:#fff">🟥 1: Sólido</button>
                   <button class="btn-tool collision-btn" data-col-type="2" onclick="BG.setCollisionType(2)" style="font-size:10px;background:#27ae60;color:#fff">🟩 2: Plataforma</button>
                   <button class="btn-tool collision-btn" data-col-type="3" onclick="BG.setCollisionType(3)" style="font-size:10px;background:#8e44ad;color:#fff">🟪 3: Dano</button>
+                  <button class="btn-tool collision-btn" data-col-type="4" onclick="BG.setCollisionType(4)" style="font-size:10px;background:#d35400;color:#fff">🚪 4: Warp</button>
                 </div>
               </div>
 
@@ -201,8 +204,7 @@ const BG = (() => {
     textMode = (t === 'text');
     if(t === 'flood') { label.textContent = 'Modo: Flood Fill'; help.textContent = 'Preenche área contígua com o metatile selecionado.'; }
     else if(t === 'attr') { label.textContent = 'Modo: Pincel de Atributo'; help.textContent = 'Pinta a paleta mantendo as estampas.'; }
-    else if(t === 'hitbox') { label.textContent = 'Modo: Hitbox Manual'; help.textContent = 'Pinta colisão individualmente. Shift+clique apaga.'; }
-    else if(t === 'warp') { label.textContent = 'Modo: Ferramenta Warp'; help.textContent = 'Clique em um tile para marcar/remover um ponto de warp (hitbox 4).'; }
+    else if(t === 'hitbox') { label.textContent = 'Modo: Hitbox Manual'; help.textContent = 'Pinta colisão individualmente (inclui Warp). Shift+clique apaga.'; }
     else if(t === 'fill') { label.textContent = 'Modo: Auto-Fill'; help.textContent = 'Preenchimento em massa.'; }
     else if(t === 'erase') { label.textContent = 'Modo: Borracha'; help.textContent = 'Clique (ou arraste) num tile para apagá-lo, tile por tile.'; }
     else if(t === 'text') { 
@@ -316,7 +318,7 @@ const BG = (() => {
     const w = selectedMetatile.w, h = selectedMetatile.h;
     const tilePxW = 80 / w, tilePxH = 80 / h;
     selectedMetatile.tiles.forEach((t, tIdx)=>{
-      const off = (t % 512) * 16; if(off + 16 > chrBuf.length) return;
+      const off = t * 16; if(off + 16 > chrBuf.length) return;
       const gx = (tIdx % w), gy = Math.floor(tIdx / w);
       for(let py=0; py<8; py++){
         const p0 = chrBuf[off+py], p1 = chrBuf[off+py+8];
@@ -421,16 +423,6 @@ const BG = (() => {
 
     if(isAlt) { if(isInitialClick) pickMetatileAt(tx, ty); return; }
 
-    // Ferramenta Warp Dedicada: Clicar adiciona warp (4), se já tiver, remove (0)
-    if(currentTool === 'warp') {
-      if(isInitialClick) {
-        const currCol = collisionMap[ty * 32 + tx];
-        collisionMap[ty * 32 + tx] = (currCol === 4) ? 0 : 4;
-        render();
-      }
-      return;
-    }
-
     if(currentTool === 'hitbox') {
       const isHitboxFlood = document.getElementById('chkHitboxFlood')?.checked;
       if(isHitboxFlood) { if(isInitialClick) floodFillHitbox(tx, ty, erasing ? 0 : selectedCollisionType); }
@@ -480,7 +472,14 @@ const BG = (() => {
         const scaleX = 512 / r.width, scaleY = 480 / r.height;
         const tx = Math.floor((mx * scaleX) / 16), ty = Math.floor((my * scaleY) / 16);
         if(movingTextMode && selectedTextIdx !== null){
-          dragStart = { x: tx, y: ty, origX: textLayers[selectedTextIdx].x, origY: textLayers[selectedTextIdx].y };
+          moveTextLayerTo(selectedTextIdx, tx, ty, true);
+          movingTextMode = false;
+          Project.status("Texto movido");
+          updateTextLayersUI();
+        } else if(duplicatingTextMode && selectedTextIdx !== null){
+          duplicateTextLayerAt(selectedTextIdx, tx, ty);
+          duplicatingTextMode = false;
+          Project.status("Texto duplicado");
         } else {
           paintAt(mx, my, e.shiftKey, e.altKey, true);
         }
@@ -494,18 +493,8 @@ const BG = (() => {
       const tx = Math.floor((mx / r.width) * 32), ty = Math.floor((my / r.height) * 30);
       const hover = document.getElementById('hoverPos');
       if(hover) hover.textContent = `x:${tx} y:${ty} • Tile: ${formatTileAddr(nametable[ty*32+tx])} • Col: ${collisionMap[ty*32+tx]||0}`;
-      if(isDrawing){
-        if(currentTool === 'text' && movingTextMode && selectedTextIdx !== null && dragStart){
-          const scaleX = 512 / r.width, scaleY = 480 / r.height;
-          const curTx = Math.floor((mx * scaleX) / 16), curTy = Math.floor((my * scaleY) / 16);
-          const dx = curTx - dragStart.x, dy = curTy - dragStart.y;
-          let newX = dragStart.origX + dx, newY = dragStart.origY + dy;
-          newX = Math.max(0, Math.min(32 - textLayers[selectedTextIdx].text.length, newX));
-          newY = Math.max(0, Math.min(29, newY));
-          moveTextLayerTo(selectedTextIdx, newX, newY, false);
-        } else if(currentTool !== 'text' && currentTool !== 'warp'){
-          paintAt(mx, my, e.shiftKey, e.altKey, false);
-        }
+      if(isDrawing && currentTool !== 'text'){
+        paintAt(mx, my, e.shiftKey, e.altKey, false);
       }
     });
     document.getElementById('selectedPreview')?.addEventListener('click', handlePreviewClick);
@@ -516,7 +505,6 @@ const BG = (() => {
       globalEventsAttached = true;
       window.addEventListener('mouseup', () => {
         isDrawing = false;
-        if(dragStart){ dragStart = null; render(); }
       });
       document.addEventListener('keydown', (e)=>{
         if(document.activeElement && document.activeElement.id === 'bgTextInput' && e.key === 'Enter'){
@@ -598,6 +586,9 @@ const BG = (() => {
 
   // Troca a página de trabalho do CHR, preservando o desenho em progresso de cada página
   // separadamente (evita misturar metatiles de páginas diferentes numa mesma tela).
+  // Troca a página de trabalho do CHR. Ponto 1: procura uma tela SALVA que já use essa
+  // página e carrega ela automaticamente (pra nunca desenhar com metatiles de outra
+  // página); se nenhuma tela salva usa essa página ainda, pergunta se quer criar uma.
   function switchToChrPage(newPage){
     if(newPage === currentChrPage) return;
     pageDrafts[currentChrPage] = {
@@ -605,18 +596,35 @@ const BG = (() => {
       textLayers: JSON.parse(JSON.stringify(textLayers))
     };
     currentChrPage = newPage;
+
+    const bgs = Project.data?.backgrounds || [];
+    const splashes = Project.data?.splashScreens || [];
+    const foundBg = bgs.find(b => b.chrPage === newPage);
+    const foundSplash = !foundBg ? splashes.find(s => s.chrPage === newPage) : null;
+
+    if(foundBg){ loadEntry('bg', foundBg.id); Project.status(`Página ${newPage}: background "${foundBg.name}" carregado`); return; }
+    if(foundSplash){ loadEntry('splash', foundSplash.id); Project.status(`Página ${newPage}: splash "${foundSplash.name}" carregada`); return; }
+
     const draft = pageDrafts[newPage];
     if(draft){
       nametable = [...draft.nametable]; attributes = [...draft.attributes]; collisionMap = [...draft.collisionMap];
       textLayers = JSON.parse(JSON.stringify(draft.textLayers));
-      Project.status(`Página ${newPage}: rascunho anterior restaurado`);
-    } else {
+      currentEntryId = null; currentEntryName = ''; currentEntryType = null;
+      Project.status(`Página ${newPage}: rascunho anterior restaurado (ainda não salvo)`);
+    } else if(confirm(`Nenhuma tela salva usa a página ${newPage} ainda. Quer criar uma tela nova nessa página?`)){
+      const name = prompt("Nome da nova tela:", `tela_pg${newPage}`);
       nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0);
       textLayers = [];
+      if(name){ currentEntryId = 'scr_'+Date.now(); currentEntryName = name.trim(); currentEntryType = null; }
+      else { currentEntryId = null; currentEntryName = ''; currentEntryType = null; }
+      Project.status(`Página ${newPage}: tela em branco`);
+    } else {
+      nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0);
+      textLayers = []; currentEntryId = null; currentEntryName = ''; currentEntryType = null;
       Project.status(`Página ${newPage}: tela em branco`);
     }
-    selectedTextIdx = null; movingTextMode = false;
-    refreshMetatileList(); updateTextLayersUI(); render();
+    selectedTextIdx = null; movingTextMode = false; duplicatingTextMode = false; textUnderCache = {};
+    refreshMetatileList(); updateTextLayersUI(); updateBGSelect(); render();
   }
 
   function refreshMetatileList(){
@@ -642,7 +650,7 @@ const BG = (() => {
       const pals = (typeof CHR !== 'undefined' && CHR.getPalettes) ? CHR.getPalettes() : (Project.data?.palettes || [[15,0,16,48]]);
       const pal = pals[mt.palette || 0] || pals[0];
       mt.tiles.forEach((t, tIdx) => {
-        const off = (t % 512) * 16; if(off + 16 > chrBuf.length) return;
+        const off = t * 16; if(off + 16 > chrBuf.length) return;
         const gx = (tIdx % w), gy = Math.floor(tIdx / w);
         for(let py=0; py<8; py++){
           const p0 = chrBuf[off+py], p1 = chrBuf[off+py+8];
@@ -693,7 +701,7 @@ const BG = (() => {
       for(let tx=0; tx<32; tx++){
         const tileIdx = nametable[ty*32+tx] || 0;
         if(tileIdx === 0) continue;
-        const off = (tileIdx % 512) * 16; if(off + 16 > chrBuf.length) continue;
+        const off = tileIdx * 16; if(off + 16 > chrBuf.length) continue;
         const attrX = Math.floor(tx/2), attrY = Math.floor(ty/2);
         const blockX = Math.floor(attrX/2), blockY = Math.floor(attrY/2);
         const attrIdx = blockY*8 + blockX;
@@ -815,17 +823,41 @@ const BG = (() => {
     return pg * 256 + rel;
   }
   function setTextOffsetMode(mode){ textOffsetMode = (mode === 'smb') ? 'smb' : 'ascii'; }
-  function insertCharAtCursor(tileIdx){
-    if(textCursor.x >= 32){ textCursor.x = 0; textCursor.y++; }
-    if(textCursor.y >= 30) return;
-    nametable[textCursor.y*32+textCursor.x] = tileIdx;
-    const attrX = Math.floor(textCursor.x/2), attrY = Math.floor(textCursor.y/2);
-    const attrIdx = Math.floor(attrY/2)*8 + Math.floor(attrX/2);
-    const shift = ((attrY%2)*2 + (attrX%2))*2;
-    attributes[attrIdx] = (attributes[attrIdx] & ~(0x03 << shift)) | ((textPalette & 0x03) << shift);
-    textCursor.x++;
-    updateCursorPos();
-    render();
+
+  function positionsForRow(x, y, len){ const arr=[]; for(let i=0;i<len;i++) arr.push({x:x+i, y}); return arr; }
+
+  // Devolve o nametable/atributos ao estado de antes da camada de texto ter sido escrita ali.
+  function restoreUnderText(layer){
+    const snap = textUnderCache[layer.id]; if(!snap) return;
+    snap.nt.forEach(({idx, tile}) => { nametable[idx] = tile; });
+    snap.attr.forEach(({idx, byte}) => { attributes[idx] = byte; });
+    delete textUnderCache[layer.id];
+  }
+  // Guarda o que está no nametable/atributos ANTES de escrever o texto nessas posições,
+  // pra dar pra restaurar depois (mover/editar/apagar).
+  function captureUnderText(layer, positions){
+    const nt = []; const attrBlocks = new Map();
+    positions.forEach(({x,y}) => {
+      if(x<0||x>=32||y<0||y>=30) return;
+      const idx = y*32+x;
+      nt.push({ idx, tile: nametable[idx] });
+      const attrX=Math.floor(x/2), attrY=Math.floor(y/2);
+      const attrIdx = Math.floor(attrY/2)*8+Math.floor(attrX/2);
+      if(!attrBlocks.has(attrIdx)) attrBlocks.set(attrIdx, attributes[attrIdx]);
+    });
+    textUnderCache[layer.id] = { nt, attr: Array.from(attrBlocks, ([idx,byte]) => ({idx, byte})) };
+  }
+  function writeTextAt(layer, x, y){
+    for(let i=0; i<layer.text.length; i++){
+      const tx = x+i, ty = y;
+      if(tx<0||tx>=32||ty<0||ty>=30) continue;
+      nametable[ty*32+tx] = charToNametableTile(layer.text[i], layer.offset || 'ascii', layer.chrPage != null ? layer.chrPage : currentChrPage);
+      const attrX=Math.floor(tx/2), attrY=Math.floor(ty/2);
+      const attrIdx=Math.floor(attrY/2)*8+Math.floor(attrX/2);
+      const shift=((attrY%2)*2+(attrX%2))*2;
+      attributes[attrIdx] = (attributes[attrIdx] & ~(0x03<<shift)) | ((layer.pal & 0x03)<<shift);
+    }
+    layer.x = x; layer.y = y;
   }
 
   function insertText(){
@@ -835,32 +867,25 @@ const BG = (() => {
     const mode = selectEl ? selectEl.value : textOffsetMode;
     textOffsetMode = mode;
     const page = currentChrPage;
-    const startX = textCursor.x, startY = textCursor.y;
-    for(let i=0; i<text.length; i++){
-      insertCharAtCursor(charToNametableTile(text[i], mode, page));
-    }
-    textLayers.push({ text, x: startX, y: startY, pal: textPalette, offset: mode, chrPage: page, id: Date.now() });
+    const startX = Math.max(0, Math.min(32 - text.length, textCursor.x)), startY = textCursor.y;
+    const layer = { text, x: startX, y: startY, pal: textPalette, offset: mode, chrPage: page, id: Date.now() };
+    captureUnderText(layer, positionsForRow(startX, startY, text.length));
+    writeTextAt(layer, startX, startY);
+    textLayers.push(layer);
     selectedTextIdx = textLayers.length - 1;
-    input.value = ''; updateTextLayersUI(); input.focus();
+    textCursor.x = Math.min(32, startX + text.length);
+    updateCursorPos();
+    input.value = ''; updateTextLayersUI(); input.focus(); render();
   }
 
   function moveTextLayerTo(idx, newX, newY, shouldRender = true){
     if(idx < 0 || idx >= textLayers.length) return;
     const layer = textLayers[idx];
-    for(let i=0; i<layer.text.length; i++){
-      const ox = layer.x + i, oy = layer.y;
-      if(ox >=0 && ox <32 && oy >=0 && oy <30) nametable[oy*32+ox] = 0;
-    }
-    layer.x = newX; layer.y = newY;
-    for(let i=0; i<layer.text.length; i++){
-      const x = newX + i, y = newY;
-      if(x <0 || x >=32 || y <0 || y >=30) continue;
-      nametable[y*32+x] = charToNametableTile(layer.text[i], layer.offset || 'ascii', layer.chrPage != null ? layer.chrPage : currentChrPage);
-      const attrX = Math.floor(x/2), attrY = Math.floor(y/2);
-      const attrIdx = Math.floor(attrY/2)*8 + Math.floor(attrX/2);
-      const shift = ((attrY%2)*2 + (attrX%2))*2;
-      attributes[attrIdx] = (attributes[attrIdx] & ~(0x03 << shift)) | ((layer.pal & 0x03) << shift);
-    }
+    restoreUnderText(layer);
+    newX = Math.max(0, Math.min(32 - layer.text.length, newX));
+    newY = Math.max(0, Math.min(29, newY));
+    captureUnderText(layer, positionsForRow(newX, newY, layer.text.length));
+    writeTextAt(layer, newX, newY);
     if(shouldRender){ render(); updateTextLayersUI(); }
   }
 
@@ -868,21 +893,12 @@ const BG = (() => {
     if(idx <0 || idx >= textLayers.length) return;
     const layer = textLayers[idx];
     const newText = prompt("Editar texto:", layer.text);
-    if(newText === null) return;
-    for(let i=0; i<layer.text.length; i++){
-      const ox = layer.x + i, oy = layer.y;
-      if(ox >=0 && ox <32 && oy >=0 && oy <30) nametable[oy*32+ox] = 0;
-    }
+    if(newText === null || newText === '') return;
+    restoreUnderText(layer);
     layer.text = newText;
-    for(let i=0; i<layer.text.length; i++){
-      const x = layer.x + i, y = layer.y;
-      if(x <0 || x >=32 || y <0 || y >=30) continue;
-      nametable[y*32+x] = charToNametableTile(layer.text[i], layer.offset || 'ascii', layer.chrPage != null ? layer.chrPage : currentChrPage);
-      const attrX = Math.floor(x/2), attrY = Math.floor(y/2);
-      const attrIdx = Math.floor(attrY/2)*8 + Math.floor(attrX/2);
-      const shift = ((attrY%2)*2 + (attrX%2))*2;
-      attributes[attrIdx] = (attributes[attrIdx] & ~(0x03 << shift)) | ((layer.pal & 0x03) << shift);
-    }
+    const clampedX = Math.max(0, Math.min(32 - newText.length, layer.x));
+    captureUnderText(layer, positionsForRow(clampedX, layer.y, newText.length));
+    writeTextAt(layer, clampedX, layer.y);
     render(); updateTextLayersUI();
     Project.status(`Texto editado: "${newText}"`);
   }
@@ -891,17 +907,15 @@ const BG = (() => {
     if(idx <0 || idx >= textLayers.length) return;
     if(!confirm(`Deletar texto "${textLayers[idx].text}"?`)) return;
     const layer = textLayers[idx];
-    for(let i=0; i<layer.text.length; i++){
-      const x = layer.x + i, y = layer.y;
-      if(x >=0 && x <32 && y >=0 && y <30) nametable[y*32+x] = 0;
-    }
+    restoreUnderText(layer);
     textLayers.splice(idx,1);
-    if(selectedTextIdx === idx) selectedTextIdx = null;
+    if(selectedTextIdx === idx){ selectedTextIdx = null; movingTextMode = false; duplicatingTextMode = false; }
     else if(selectedTextIdx !== null && selectedTextIdx > idx) selectedTextIdx--;
     render(); updateTextLayersUI();
     Project.status("Texto deletado");
   }
 
+  // Ativa o modo mover: o próximo clique no canvas manda o texto pra lá (não é mais drag).
   function toggleMoveMode(idx){
     if(selectedTextIdx !== idx){
       selectedTextIdx = idx;
@@ -909,9 +923,10 @@ const BG = (() => {
     } else {
       movingTextMode = !movingTextMode;
     }
+    duplicatingTextMode = false;
     updateTextLayersUI();
     render();
-    Project.status(movingTextMode ? "Modo mover ativo: arraste no canvas ou use setas" : "Modo mover desativado");
+    Project.status(movingTextMode ? "Modo mover ativo: clique no canvas no destino" : "Modo mover desativado");
   }
 
   function nudgeTextLayer(idx, dx, dy){
@@ -923,20 +938,26 @@ const BG = (() => {
     moveTextLayerTo(idx, newX, newY, true);
   }
 
-  function duplicateTextLayer(idx){
+  // Ativa o modo duplicar: o próximo clique no canvas cria uma cópia do texto lá (o
+  // original permanece intacto, ao contrário do mover).
+  function startDuplicateTextMode(idx){
     if(idx <0 || idx >= textLayers.length) return;
-    const layer = textLayers[idx];
-    const newLayer = { ...layer, x: Math.min(32 - layer.text.length, layer.x + 1), y: Math.min(29, layer.y + 1), id: Date.now() };
+    selectedTextIdx = idx;
+    duplicatingTextMode = true;
+    movingTextMode = false;
+    updateTextLayersUI();
+    Project.status("Duplicar: clique no canvas onde o novo texto deve começar");
+  }
+
+  function duplicateTextLayerAt(idx, x, y){
+    if(idx <0 || idx >= textLayers.length) return;
+    const src = textLayers[idx];
+    const newLayer = { text: src.text, pal: src.pal, offset: src.offset, chrPage: src.chrPage, x: 0, y: 0, id: Date.now() };
+    const clampedX = Math.max(0, Math.min(32 - newLayer.text.length, x));
+    const clampedY = Math.max(0, Math.min(29, y));
+    captureUnderText(newLayer, positionsForRow(clampedX, clampedY, newLayer.text.length));
+    writeTextAt(newLayer, clampedX, clampedY);
     textLayers.push(newLayer);
-    for(let i=0; i<newLayer.text.length; i++){
-      const x = newLayer.x + i, y = newLayer.y;
-      if(x <0 || x >=32 || y <0 || y >=30) continue;
-      nametable[y*32+x] = charToNametableTile(newLayer.text[i], newLayer.offset || 'ascii', newLayer.chrPage != null ? newLayer.chrPage : currentChrPage);
-      const attrX = Math.floor(x/2), attrY = Math.floor(y/2);
-      const attrIdx = Math.floor(attrY/2)*8 + Math.floor(attrX/2);
-      const shift = ((attrY%2)*2 + (attrX%2))*2;
-      attributes[attrIdx] = (attributes[attrIdx] & ~(0x03 << shift)) | ((newLayer.pal & 0x03) << shift);
-    }
     selectedTextIdx = textLayers.length - 1;
     render(); updateTextLayersUI();
   }
@@ -960,8 +981,8 @@ const BG = (() => {
       btnRow.style.cssText = 'display:flex;gap:3px;flex-wrap:wrap';
       btnRow.innerHTML = `
         <button class="btn-tool" onclick="event.stopPropagation(); BG.editTextLayer(${i})" style="font-size:9px;padding:2px 5px;background:#2980b9;color:#fff">✏ Editar</button>
-        <button class="btn-tool" onclick="event.stopPropagation(); BG.toggleMoveMode(${i})" style="font-size:9px;padding:2px 5px;background:${isMoving?'#ffcc00;color:#000':'#444;color:#fff'}">${isMoving?'🟡 Movendo':'📦 Mover'}</button>
-        <button class="btn-tool" onclick="event.stopPropagation(); BG.duplicateTextLayer(${i})" style="font-size:9px;padding:2px 5px;background:#27ae60;color:#fff">⎘ Duplicar</button>
+        <button class="btn-tool" onclick="event.stopPropagation(); BG.toggleMoveMode(${i})" style="font-size:9px;padding:2px 5px;background:${isMoving?'#ffcc00;color:#000':'#444;color:#fff'}">${isMoving?'🟡 Clique no destino':'📦 Mover'}</button>
+        <button class="btn-tool" onclick="event.stopPropagation(); BG.startDuplicateTextMode(${i})" style="font-size:9px;padding:2px 5px;background:${(isSelected&&duplicatingTextMode)?'#ffcc00;color:#000':'#27ae60;color:#fff'}">${(isSelected&&duplicatingTextMode)?'🟡 Clique no destino':'⎘ Duplicar'}</button>
         <button class="btn-tool" onclick="event.stopPropagation(); BG.deleteTextLayer(${i})" style="font-size:9px;padding:2px 5px;background:#c0392b;color:#fff">🗑</button>
         <div style="display:flex;gap:1px;margin-left:auto">
           <button class="btn-tool" onclick="event.stopPropagation(); BG.nudgeTextLayer(${i},0,-1)" style="font-size:8px;padding:1px 3px">↑</button>
@@ -979,18 +1000,17 @@ const BG = (() => {
 
   function updateBGSelect(){
     const sel = document.getElementById('bgSelect'); if(!sel) return; sel.innerHTML = '';
+    const optNew = document.createElement('option'); optNew.value = ''; optNew.textContent = currentEntryType ? '— tela sem nome —' : `✨ ${currentEntryName || 'nova tela (não salva)'}`;
+    sel.appendChild(optNew);
     const bgs = Project.data?.backgrounds || [];
     const splashes = Project.data?.splashScreens || [];
-    bgs.forEach((s, i) => { const o = document.createElement('option'); o.value = `bg:${i}`; o.textContent = `bg-${s.name || ('bg_'+(i+1))}`; sel.appendChild(o); });
-    splashes.forEach((s, i) => { const o = document.createElement('option'); o.value = `sp:${i}`; o.textContent = `sp-${s.name || ('splash_'+(i+1))}`; sel.appendChild(o); });
-    if(currentEntryType === 'bg' && bgs.length > 0 && (currentBGIndex < 0 || currentBGIndex >= bgs.length)) currentBGIndex = 0;
-    if(currentEntryType === 'splash' && splashes.length > 0 && (currentSplashIndex < 0 || currentSplashIndex >= splashes.length)) currentSplashIndex = 0;
-    if(currentEntryType === 'bg' && bgs.length > 0) sel.value = `bg:${currentBGIndex}`;
-    else if(currentEntryType === 'splash' && splashes.length > 0) sel.value = `sp:${currentSplashIndex}`;
+    bgs.forEach(b => { const o = document.createElement('option'); o.value = `bg:${b.id}`; o.textContent = `🗺 ${b.name}`; sel.appendChild(o); });
+    splashes.forEach(s => { const o = document.createElement('option'); o.value = `sp:${s.id}`; o.textContent = `🎬 ${s.name}`; sel.appendChild(o); });
+    sel.value = currentEntryType ? `${currentEntryType === 'bg' ? 'bg' : 'sp'}:${currentEntryId}` : '';
     sel.onchange = e => {
       const v = e.target.value; if(!v) return;
-      const [type, idxStr] = v.split(':'); const idx = parseInt(idxStr);
-      if(type === 'bg') loadBackground(idx); else loadSplashEntry(idx);
+      const [type, id] = v.split(':');
+      loadEntry(type === 'bg' ? 'bg' : 'splash', id);
     };
   }
 
@@ -1003,121 +1023,108 @@ const BG = (() => {
 
   function pruneEmptyEntries(){
     if(!Project.data) return;
-    const keepBgId = currentEntryType === 'bg' ? Project.data.backgrounds?.[currentBGIndex]?.id : null;
-    const keepSpId = currentEntryType === 'splash' ? Project.data.splashScreens?.[currentSplashIndex]?.id : null;
     if(Array.isArray(Project.data.backgrounds)){
-      Project.data.backgrounds = Project.data.backgrounds.filter(b => b.id === keepBgId || !isEntryEmpty(b));
-      if(currentEntryType === 'bg'){ const ni = Project.data.backgrounds.findIndex(b => b.id === keepBgId); currentBGIndex = ni >= 0 ? ni : 0; }
+      Project.data.backgrounds = Project.data.backgrounds.filter(b => b.id === currentEntryId || !isEntryEmpty(b));
     }
     if(Array.isArray(Project.data.splashScreens)){
-      Project.data.splashScreens = Project.data.splashScreens.filter(s => s.id === keepSpId || !isEntryEmpty(s));
-      if(currentEntryType === 'splash'){ const ni = Project.data.splashScreens.findIndex(s => s.id === keepSpId); currentSplashIndex = ni >= 0 ? ni : 0; }
+      Project.data.splashScreens = Project.data.splashScreens.filter(s => s.id === currentEntryId || !isEntryEmpty(s));
     }
   }
 
+  // Cria uma tela nova em branco, já pedindo o nome. Ela só é gravada em
+  // Project.data.backgrounds/splashScreens quando "Salvar como..." for clicado - até lá
+  // fica só em memória, sem tipo definido.
   function newCanvas(){
-    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0);
-    textLayers = []; selectedTextIdx = null; currentEntryType = null;
-    updateTextLayersUI(); render(); Project.status('Nova tela');
-  }
-
-  function saveAsNew(){
-    const name = prompt("Nome do Background:", `bg_${(Project.data?.backgrounds?.length||0)+1}`);
+    const name = prompt("Nome da nova tela:", `tela_${(Project.data?.backgrounds?.length||0)+(Project.data?.splashScreens?.length||0)+1}`);
     if(!name) return;
-    if(!Project.data.backgrounds) Project.data.backgrounds = [];
-    Project.data.backgrounds.push({ id:'bg_'+Date.now(), name, nametable:[...nametable], attributes:[...attributes], collisionMap:[...collisionMap], textLayers:[...textLayers], created:Date.now() });
-    currentEntryType = 'bg'; currentBGIndex = Project.data.backgrounds.length - 1;
-    pruneEmptyEntries(); updateBGSelect(); Project.status(`Salvo como ${name}`);
+    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0);
+    textLayers = []; selectedTextIdx = null; textUnderCache = {}; movingTextMode = false; duplicatingTextMode = false;
+    currentEntryId = 'scr_'+Date.now(); currentEntryName = name.trim(); currentEntryType = null;
+    updateTextLayersUI(); updateBGSelect(); render();
+    Project.status(`Nova tela "${currentEntryName}" - use "Salvar como..." pra definir o tipo`);
   }
 
   function clearBackground(){
     nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0); textLayers = []; selectedTextIdx = null; render();
   }
 
-  function loadBackground(idx){
-    const b = Project.data?.backgrounds?.[idx]; if(!b) return;
+  // Carrega uma tela salva (background ou splash) e sincroniza a página do CHR trabalhada
+  // com a página que essa tela realmente usa, pra nunca desenhar com metatiles de outra página.
+  function loadEntry(type, id){
+    const arr = type === 'splash' ? (Project.data?.splashScreens||[]) : (Project.data?.backgrounds||[]);
+    const b = arr.find(e => e.id === id); if(!b) return;
     nametable = b.nametable ? [...b.nametable] : new Array(960).fill(0);
     attributes = b.attributes ? [...b.attributes] : new Array(64).fill(0);
     collisionMap = b.collisionMap ? [...b.collisionMap] : new Array(960).fill(0);
     textLayers = b.textLayers ? [...b.textLayers] : [];
-    selectedTextIdx = null; currentEntryType = 'bg'; currentBGIndex = idx; updateBGSelect(); updateTextLayersUI(); render();
+    selectedTextIdx = null; textUnderCache = {}; movingTextMode = false; duplicatingTextMode = false;
+    currentEntryId = b.id; currentEntryName = b.name; currentEntryType = type;
+    if(b.chrPage != null && b.chrPage !== currentChrPage){
+      currentChrPage = b.chrPage;
+      const pageSel = document.getElementById('bgChrPageSelect'); if(pageSel) pageSel.value = currentChrPage;
+      refreshMetatileList();
+    }
+    updateBGSelect(); updateTextLayersUI(); render();
   }
 
-  function loadSplashEntry(idx){
-    const b = Project.data?.splashScreens?.[idx]; if(!b) return;
-    nametable = b.nametable ? [...b.nametable] : new Array(960).fill(0);
-    attributes = b.attributes ? [...b.attributes] : new Array(64).fill(0);
-    collisionMap = new Array(960).fill(0);
-    textLayers = b.textLayers ? [...b.textLayers] : [];
-    selectedTextIdx = null; currentEntryType = 'splash'; currentSplashIndex = idx; updateBGSelect(); updateTextLayersUI(); render();
-  }
-
-  function saveToProject(){
+  // Salva a tela atual como Background ou Splash. Se ela já existia com o OUTRO tipo (ex:
+  // era splash e agora clicou "Salvar como Background"), remove do array antigo e adiciona
+  // no novo - a tela muda de status em vez de duplicar.
+  function saveEntryAs(type){
     if(!Project.data) return;
     if(!Project.data.backgrounds) Project.data.backgrounds = [];
     if(!Project.data.splashScreens) Project.data.splashScreens = [];
-    if(currentEntryType === 'splash' && Project.data.splashScreens[currentSplashIndex]){
-      const b = Project.data.splashScreens[currentSplashIndex];
-      b.nametable = [...nametable]; b.attributes = [...attributes]; b.textLayers = [...textLayers];
-      Project.status(`Splash Screen salva com sucesso.`);
-    } else if(currentEntryType === 'bg' && Project.data.backgrounds[currentBGIndex]){
-      const b = Project.data.backgrounds[currentBGIndex];
-      b.nametable = [...nametable]; b.attributes = [...attributes]; b.collisionMap = [...collisionMap]; b.textLayers = [...textLayers];
-      Project.status(`Background salvo com Hitmaps de Warp atualizados`);
-    } else {
-      Project.data.backgrounds.push({ id:'bg_'+Date.now(), name:`bg_${Project.data.backgrounds.length+1}`, nametable:[...nametable], attributes:[...attributes], collisionMap:[...collisionMap], textLayers:[...textLayers], created:Date.now() });
-      currentEntryType = 'bg'; currentBGIndex = Project.data.backgrounds.length - 1;
-      Project.status(`Background salvo`);
+    if(!currentEntryId){ currentEntryId = 'scr_'+Date.now(); if(!currentEntryName) currentEntryName = `tela_${Date.now()}`; }
+
+    const targetArr = type === 'splash' ? Project.data.splashScreens : Project.data.backgrounds;
+    const otherArr = type === 'splash' ? Project.data.backgrounds : Project.data.splashScreens;
+    if(currentEntryType && currentEntryType !== type){
+      const oi = otherArr.findIndex(e => e.id === currentEntryId);
+      if(oi >= 0) otherArr.splice(oi, 1);
     }
+    const payload = { id: currentEntryId, name: currentEntryName, nametable:[...nametable], attributes:[...attributes], textLayers:[...textLayers], chrPage: currentChrPage, created: Date.now() };
+    if(type === 'bg') payload.collisionMap = [...collisionMap];
+    const idx = targetArr.findIndex(e => e.id === currentEntryId);
+    if(idx >= 0) targetArr[idx] = { ...targetArr[idx], ...payload };
+    else targetArr.push(payload);
+
+    const wasConverted = currentEntryType && currentEntryType !== type;
+    currentEntryType = type;
     pruneEmptyEntries(); updateBGSelect();
+    Project.status(wasConverted
+      ? `"${currentEntryName}" convertido pra ${type === 'splash' ? 'Splash' : 'Background'}`
+      : `${type === 'splash' ? 'Splash' : 'Background'} "${currentEntryName}" salvo`);
   }
 
-  function loadAdjacentAfterDelete(type, removedIdx){
+  function loadAdjacentAfterDelete(type, removedId){
     const bgs = Project.data?.backgrounds || [];
     const splashes = Project.data?.splashScreens || [];
     if(type === 'bg'){
-      if(bgs.length > 0){ loadBackground(Math.min(removedIdx, bgs.length - 1)); return; }
-      if(splashes.length > 0){ loadSplashEntry(0); return; }
+      if(bgs.length > 0){ loadEntry('bg', bgs[0].id); return; }
+      if(splashes.length > 0){ loadEntry('splash', splashes[0].id); return; }
     } else {
-      if(splashes.length > 0){ loadSplashEntry(Math.min(removedIdx, splashes.length - 1)); return; }
-      if(bgs.length > 0){ loadBackground(0); return; }
+      if(splashes.length > 0){ loadEntry('splash', splashes[0].id); return; }
+      if(bgs.length > 0){ loadEntry('bg', bgs[0].id); return; }
     }
-    currentEntryType = null; newCanvas(); updateBGSelect();
+    currentEntryId = null; currentEntryName = ''; currentEntryType = null;
+    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0);
+    textLayers = []; updateTextLayersUI(); updateBGSelect(); render();
   }
 
   function deleteCurrentEntry(){
-    if(!Project.data) return;
-    if(currentEntryType === 'bg' && Project.data.backgrounds?.[currentBGIndex]){
-      const nome = Project.data.backgrounds[currentBGIndex].name || `bg_${currentBGIndex+1}`;
-      if(!confirm(`Remover o background "${nome}"? Esta ação não pode ser desfeita.`)) return;
-      const removedIdx = currentBGIndex;
-      Project.data.backgrounds.splice(currentBGIndex, 1);
-      loadAdjacentAfterDelete('bg', removedIdx);
-    } else if(currentEntryType === 'splash' && Project.data.splashScreens?.[currentSplashIndex]){
-      const nome = Project.data.splashScreens[currentSplashIndex].name || `splash_${currentSplashIndex+1}`;
-      if(!confirm(`Remover a splash "${nome}"? Esta ação não pode ser desfeita.`)) return;
-      const removedIdx = currentSplashIndex;
-      Project.data.splashScreens.splice(currentSplashIndex, 1);
-      loadAdjacentAfterDelete('splash', removedIdx);
-    } else {
-      alert("Nenhuma tela selecionada para deletar.");
-      return;
-    }
+    if(!Project.data || !currentEntryId || !currentEntryType){ alert("Nenhuma tela salva selecionada para deletar."); return; }
+    const arr = currentEntryType === 'bg' ? Project.data.backgrounds : Project.data.splashScreens;
+    const idx = arr?.findIndex(e => e.id === currentEntryId);
+    if(idx == null || idx < 0){ alert("Nenhuma tela salva selecionada para deletar."); return; }
+    const nome = arr[idx].name || currentEntryId;
+    if(!confirm(`Remover "${nome}"? Esta ação não pode ser desfeita.`)) return;
+    arr.splice(idx, 1);
+    loadAdjacentAfterDelete(currentEntryType, currentEntryId);
     Project.status(`Removido com sucesso`);
   }
 
-  function saveSplashToProject(){
-    const name = prompt("Nome da Splash Screen:", `splash_${(Project.data?.splashScreens?.length||0)+1}`);
-    if(!name) return;
-    if(!Project.data) return;
-    if(!Project.data.splashScreens) Project.data.splashScreens = [];
-    Project.data.splashScreens.push({ id:'splash_'+Date.now(), name, nametable:[...nametable], attributes:[...attributes], textLayers:[...textLayers], created:Date.now() });
-    currentEntryType = 'splash'; currentSplashIndex = Project.data.splashScreens.length - 1;
-    pruneEmptyEntries(); updateBGSelect(); Project.status(`Splash Screen salva com sucesso.`);
-  }
-
   function exportASM(){
-    const bgName = Project.data?.backgrounds?.[currentBGIndex]?.name || 'bg';
+    const bgName = currentEntryName || 'bg';
     let out = `; BACKGROUND ${bgName}\n${bgName}_nametable:\n`;
     for(let y=0; y<30; y++) out += `  .byte ` + nametable.slice(y*32, y*32+32).map(t => "$" + (t%256).toString(16).padStart(2,"0")).join(",") + "\n";
     out += `${bgName}_attributes:\n  .byte ` + attributes.map(a => "$" + a.toString(16).padStart(2,"0")).join(",") + "\n";
@@ -1128,8 +1135,8 @@ const BG = (() => {
   return {
     init: buildHTML, setTool, setCollisionType, setAllSubTilesCollision, applyMetatileHitboxToCanvas, 
     insertText, exportASM, fillAllEmpty, fillEntireScreen, applyAttrToAll, setTextOffsetMode,
-    newCanvas, saveAsNew, clearBackground, saveToProject, saveSplashToProject, deleteCurrentEntry, loadBackground, loadSplashEntry,
-    editTextLayer, deleteTextLayer, toggleMoveMode, nudgeTextLayer, duplicateTextLayer, clearTextSelection,
+    newCanvas, clearBackground, saveEntryAs, deleteCurrentEntry, loadEntry,
+    editTextLayer, deleteTextLayer, toggleMoveMode, nudgeTextLayer, startDuplicateTextMode, duplicateTextLayerAt, clearTextSelection,
     loadBackgrounds: (arr)=>{ if(Project.data) Project.data.backgrounds=arr; updateBGSelect(); },
     loadSplashScreens: (arr)=>{ if(Project.data) Project.data.splashScreens=arr; updateBGSelect(); },
     getBackgrounds: ()=> Project.data?.backgrounds||[],

@@ -275,3 +275,41 @@ Core
 JS 
 Level design
 JS 
+
+PROXIMO PROMPT
+Alterações propostas:
+
+No modulo backgrounds:
+1- Vamos pegar a ferramenta Warp e colocar ela dentro do menu de ferramentas/hitbox, pois iremos "pintar" os hitbox da mesma maneira
+2- Quando o usuario troca a pag do chr, ele até apresenta os metatiles gerados para aquela pg, mas esta puxando os tiles sempre dos endereços da pag1, mesmo que eu tenha selecionado a pg3
+3- No mover texto esta muito dificil, quero que quando eu selecione mover no menu do texto ele vá automaticamente para qualquer ponto do grid que eu clique e apague do ponto anterior( importante, ao apagar os tiles do texto, tente retornar o nametable que estava por baixo, antes do texto, pode guardar essa informação apenas em tempo de edição, não precisa salvar isso no .nms, mantenha também as paletas atuais)
+4- O duplicar texto deve ser praticamente a mesma função do mover, apenas não apague o texto original, mas ao clicar em duplicar, aguarde o usuario clicar na posição desejada de inicio do texto, do mesmo modo do mover. 
+
+No chr-editor:
+1- Filtrar os metatiles apresentados de acordo com o banco esolhido em bankSelect, do mesmo modo que faz em backgrounds.js
+2- Quando eu clicar em Save, quero que salve as alterações feitas no nametable atual (selecionado em metatileSelect)
+3- Quando eu clicar em New, ai sim pedir para o usuario entrar com um nome, então para criar um metatile novo, eu clico em new, vc abre um 4x4 selecionando os 4 primeiros tiles, ai o usuario , edita do jeito que quer, redimensiona, seleciona os tiles desejados na ordem desejada e quando ele clicar em save vc salva ele em cima do tile atual
+
+No level-design
+1- Salvar o mapa criado no arquivo .nms
+2- Poder marcar uma tela como hard-cut dentro do grid. Se eu quiser uma tela de splash, marco a primeira tela como hard-cut e após um evento direciono o usuario para a segunda tela, onde começa o scroll propriamente dito, se eu quiser um menu, ou uma cutscene, termino o scroll antes e uso os ultimos quadros como hard-cut para guardar estas telas.
+
+
+Após estas alterações feitas, vamos partir pro planejamento do menu, que será o próximos comportamento que iremos implantar em nossa build.
+Quero poder gerar um menu que será apresentado em alguma posição da tela como uma lista de opções, vamos ter que selecionar um tile para cursor, o texto já esta configurado. Imagine o menu como uma lista vertical de strings com um cursor na frente, o jogador pode mover ele para cima ou para baixo e selecionar com o start
+Vamos ter também que começar a pensar em lista de ações, pois cada item do menu poderá disparar uma ação diferente.
+Talvez possamos ter um modulo de lista ações, onde lá implantaremos a lógica de cada ação do jogo, seria uma lista de eventos que ligaremos futuramente a funções dentro do código,desde os eventos do joystick (cima, baixo, A,B...) e outros que possamos criar (hitbox dano, hitbox, warp, etc)
+Não sei se seria possivel liberarmos algumas funções simples de loop em javascript por exemplo, para o sistema parsear isso e transformar numa função loop am ASM, ex:
+for(let i=0;i<5; i++){
+    faça alguma coisa 
+}
+
+em asm seria algo parecido com:
+func1:
+  LDA NametableData+0,X
+  STA $2007
+  INX
+  BNE func1
+
+Não sei a logica correta, mas deve ser algo como um contador e uma comparação no final, talvez tenhamos que ter variaveis especificas só para contador de loop e evitar ao maximo concatenar loops dentro de loops, rs
+A ideia é deixar o usuario programar numa linguagem mais amigável e o nosso sistema traduzir pro ASM, sei que não é nada fácil fazer isso, tanto que não conheço nenhuma devkit pro NES, como existe pro MegaDrive por exemplo, estamos sendo pioneiros 

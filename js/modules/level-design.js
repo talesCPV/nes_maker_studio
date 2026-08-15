@@ -62,6 +62,7 @@ const LEVEL_DESIGN = (() => {
                 <button class="btn-tool ld-tool-btn active" data-tool="place" onclick="LEVEL_DESIGN.setTool('place')">🧩 Posicionar</button>
                 <button class="btn-tool ld-tool-btn" data-tool="erase" onclick="LEVEL_DESIGN.setTool('erase')" style="background:#c0392b;color:#fff">🧹 Apagar</button>
                 <button class="btn-tool ld-tool-btn" data-tool="warp" onclick="LEVEL_DESIGN.setTool('warp')" style="background:#8e44ad;color:#fff">🌀 Warp</button>
+                <button class="btn-tool ld-tool-btn" data-tool="hardcut" onclick="LEVEL_DESIGN.setTool('hardcut')" style="background:#d35400;color:#fff" title="Marca/desmarca uma célula como corte seco, mesmo dentro de uma fase de scroll (splash, menu, cutscene...)">🔒 Hard-Cut</button>
               </div>
               <div id="ldHelpText" style="font-size:10px;color:#888;background:#000;border:1px solid #222;border-radius:3px;padding:4px 6px">Selecione um Asset e clique no grid.</div>
             </div>
@@ -109,6 +110,7 @@ const LEVEL_DESIGN = (() => {
     if (t === 'place') help.textContent = 'Clique em uma célula do grid para encaixar o Asset.';
     else if (t === 'erase') help.textContent = 'Clique em uma célula preenchida para removê-la.';
     else if (t === 'warp') help.textContent = 'Modo Warp: Clique na origem e no destino.';
+    else if (t === 'hardcut') help.textContent = 'Clique numa célula preenchida pra marcar/desmarcar como corte seco (ignora o eixo de scroll da fase).';
   }
 
   // Detecção de cor de fundo e desenho de nametable agora centralizados em RENDER_UTILS
@@ -221,6 +223,14 @@ const LEVEL_DESIGN = (() => {
           cellDiv.style.border = `2px solid ${borderColor}`;
           cellDiv.style.background = bgColor;
 
+          if (cellData.hardCut) {
+            cellDiv.style.boxShadow = 'inset 0 0 0 2px #e67e22';
+            const badge = document.createElement('span');
+            badge.textContent = '🔒 hard-cut';
+            badge.style.cssText = `position:absolute;top:2px;left:2px;font-size:8px;color:#fff;background:#d35400;padding:1px 4px;border-radius:3px;line-height:1.4`;
+            cellDiv.appendChild(badge);
+          }
+
           const canvas = document.createElement('canvas');
           canvas.width = 64;
           canvas.height = 48;
@@ -275,6 +285,10 @@ const LEVEL_DESIGN = (() => {
         renderWarpsList();
         alert('Warp criada com sucesso!');
       }
+    } else if (activeTool === 'hardcut') {
+      if (!currentWorld.cells[key]) { alert('A célula precisa ter uma tela alocada primeiro.'); return; }
+      currentWorld.cells[key].hardCut = !currentWorld.cells[key].hardCut;
+      renderGrid();
     }
   }
 
