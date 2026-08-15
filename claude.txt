@@ -294,6 +294,7 @@ No level-design
 1- Salvar o mapa criado no arquivo .nms
 2- Poder marcar uma tela como hard-cut dentro do grid. Se eu quiser uma tela de splash, marco a primeira tela como hard-cut e após um evento direciono o usuario para a segunda tela, onde começa o scroll propriamente dito, se eu quiser um menu, ou uma cutscene, termino o scroll antes e uso os ultimos quadros como hard-cut para guardar estas telas.
 
+/* ATE AQUI OK */
 
 Após estas alterações feitas, vamos partir pro planejamento do menu, que será o próximos comportamento que iremos implantar em nossa build.
 Quero poder gerar um menu que será apresentado em alguma posição da tela como uma lista de opções, vamos ter que selecionar um tile para cursor, o texto já esta configurado. Imagine o menu como uma lista vertical de strings com um cursor na frente, o jogador pode mover ele para cima ou para baixo e selecionar com o start
