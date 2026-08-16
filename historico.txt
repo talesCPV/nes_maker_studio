@@ -493,3 +493,118 @@ O hitbox é bom sempre vir junto com o objeto atingido, pois podemos ter niveis 
 
 REGRAS:
 gostei demais da estrutura, ficou melhor até do que eu estava imaginando.
+
+
+/* 16/08/26 00:21 */
+
+Resumo das alterações nos 3 arquivos para documentação:
+
+1. js/modules/dashboard.js (v0.7.1)
+Bank Switch por fase
+
+Painel de detalhes da fase com seletor de CHR Bank
+Bancos disponíveis conforme o tamanho real do CHR (1 banco = 8KB / 2 páginas / 512 tiles)
+UI 1-based: Bank 1, Bank 2… (interno continua 0-based)
+Removidos selects de “Splash vinculada” e “Background vinculado”
+Conceito: a fase escolhe um banco inteiro, não uma tela isolada
+Aviso se houver múltiplos bancos e o mapper for NROM (precisa CNROM+)
+
+Scroll e mirroring
+
+Removida opção de scroll Free (inválida no hardware NES simples)
+Opções restantes: static, scroll_h, scroll_v
+Mirroring global removido das Informações do Jogo
+Mirroring passa a ser por fase, derivado do scroll:
+static → vertical
+scroll_h → vertical
+scroll_v → horizontal
+
+Cards da fase mostram: Scroll H · V-Mirror
+Migração: .nms antigos com mirroring global → copiado para fases sem o campo
+scroll: "free" antigo → convertido para static
+
+Outros no painel da fase
+
+Nome, descrição, gravidade + força, tipo de scroll
+Badge de bank nos cards da lista de fases
+
+
+2. js/modules/sound-editor.js (v3)
+Multi-canal (v2 → base da v3)
+
+Canais APU: Pulse 1, Pulse 2, Triangle, Noise
+Cada tipo só pode ser usado uma vez
+Botão + Canal / mute / remover canal
+Timeline compartilhada (colunas alinhadas)
+Playback toca todos os canais não-mutados juntos
+Preview Web Audio (square / triangle / noise)
+
+Composição
+
+Nova nota (+): clona a última do canal ativo (nota + figura)
+Outros canais na nova coluna: REST com a mesma figura
+Seletor de duração: range (slider) em vez de select
+Figura editável durante o play (vale na próxima passagem da coluna)
+
+Biblioteca de peças (v3)
+Estrutura:
+JavaScriptsounds: {
+  version: 3,
+  activeId: "song_1",
+  items: [
+    {
+      id, type: "song" | "sfx", name,
+      loop, baseFrames,
+      channels: [{ id, type, muted, notes: [{note, figure}] }]
+    }
+  ]
+}
+UI da biblioteca:
+
+Dropdown agrupado (Músicas / Efeitos)
++ Música / + SFX / Renomear / Apagar
+Badge SONG ou SFX
+Cada peça tem loop e tempo próprios
+
+Export ASM
+
+Gera dados de toda a biblioteca
+Labels por peça + canal (Scale_Pulse1_TitleTheme, etc.)
+
+Migração de formatos
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+EntradaResultadov3 (items[])mantémv2 (channels no root)1 item “Musica 1”song[] antigobiblioteca limpa padrão
+
+3. js/core.js (v0.7.1)
+Som
+
+defaultSounds() → formato v3 (biblioteca com 1 música padrão)
+normalizeSounds(raw):
+v3 → mantém
+v2 → promove para 1 item na biblioteca
+antigo/inválido → biblioteca limpa
+
+save() grava version: 3 + items + activeId
+loadIntoEditors() / loadFromFile() passam pelo normalizeSounds
+Status de save/load mostra quantidade de peças de som
+

@@ -1,11 +1,11 @@
 {
-  "version": "0.7.0",
+  "version": "0.7.1",
   "name": "Super Mario Teste",
   "author": "Tales Cembraneli Dantas",
   "description": "Hello World do NMS",
   "genre": "platformer",
   "mapper": 3,
-  "mirroring": "horizontal",
+  "mirroring": "vertical",
   "scrollType": "static",
   "created": 1786573155671,
   "palettes": [
@@ -25964,11 +25964,69 @@
     "energy": 16
   },
   "sounds": {
-    "song": [],
-    "baseFrames": 30,
-    "asm": ""
+    "version": 3,
+    "activeId": "song_1",
+    "items": [
+      {
+        "id": "song_1",
+        "type": "song",
+        "name": "Musica 1",
+        "loop": true,
+        "baseFrames": 30,
+        "channels": [
+          {
+            "id": "ch_pulse1",
+            "type": "pulse1",
+            "muted": false,
+            "notes": [
+              {
+                "note": "E5",
+                "figure": "thirtysecond"
+              },
+              {
+                "note": "E5",
+                "figure": "sixteenth"
+              },
+              {
+                "note": "E5",
+                "figure": "sixteenth"
+              },
+              {
+                "note": "REST",
+                "figure": "sixteenth"
+              },
+              {
+                "note": "C5",
+                "figure": "sixteenth"
+              },
+              {
+                "note": "E5",
+                "figure": "sixteenth"
+              },
+              {
+                "note": "REST",
+                "figure": "sixteenth"
+              },
+              {
+                "note": "G5",
+                "figure": "sixteenth"
+              },
+              {
+                "note": "REST",
+                "figure": "sixteenth"
+              },
+              {
+                "note": "G4",
+                "figure": "sixteenth"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "asm": "; ==========================================\n; DATA.ASM - NES Sound Library\n; Pecas: 1 (1 songs, 0 sfx)\n; ==========================================\n\n.segment \"RODATA\"\n\n; ========== SONG: Musica 1 (song_1) ==========\n\n; --- Pulse 1 ---\nPitchTableLo_Pulse1_Musica_1:\n    .byte $00, $A9, $D5, $8E, $1C\n\nPitchTableHi_Pulse1_Musica_1:\n    .byte $00, $00, $00, $00, $01\n\nScale_Pulse1_Musica_1:\n    .byte 1, 1, 1, 0, 2, 1, 0, 3, 0, 4, $FF\n\nTime_Pulse1_Musica_1:\n    .byte 4, 8, 8, 8, 8, 8, 8, 8, 8, 8\n"
   },
-  "savedAt": 1786846950174,
+  "savedAt": 1786852514770,
   "variables": [
     {
       "id": "var_1786818039217",
