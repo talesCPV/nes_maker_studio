@@ -224,6 +224,7 @@ const SOUND = (() => {
       #mod-sound button.btn-add-ch { background:#8b5cf6; color:#fff; }
       #mod-sound button.btn-song { background:#0ea5e9; color:#fff; }
       #mod-sound button.btn-sfx { background:#f59e0b; color:#0f172a; }
+      #mod-sound button#btn-import-midi { background:#6366f1; color:#fff; }
       #mod-sound button:disabled { opacity:.4; cursor:not-allowed; }
 
       #mod-sound .library-bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:10px 12px; background:#151525; border-bottom:1px solid var(--border); }
@@ -305,6 +306,8 @@ const SOUND = (() => {
         <select id="library-select" title="Peca ativa"></select>
         <button id="btn-new-song" class="btn-song">+ Musica</button>
         <button id="btn-new-sfx" class="btn-sfx">+ SFX</button>
+        <button id="btn-import-midi" class="secondary" title="Importar arquivo MIDI">Import MIDI</button>
+        <input type="file" id="midi-file-input" accept=".mid,.midi,audio/midi,audio/x-midi" style="display:none">
         <button id="btn-rename" class="secondary">Renomear</button>
         <button id="btn-delete-item" class="btn-del">Apagar</button>
         <span id="sound-status" style="font-size:11px;color:#888;margin-left:auto"></span>
@@ -973,6 +976,318 @@ const SOUND = (() => {
     renderTracks();
   }
 
+
+
+  // ===== MIDI IMPORT =====
+  // Importa para uma GRADE TEMPORAL COMUM (padrao: semicolcheia).
+  // Assim a coluna i = mesmo instante em todos os canais, e o playback
+  // nao "segura" no tempo da figura mais longa de um canal desalinhado.
+
+  function midiNoteToName(midi){
+    let m = Math.max(24, Math.min(107, midi|0));
+    const note = NOTE_NAMES[m % 12];
+    let oct = Math.floor(m / 12) - 1;
+    if(oct < 1) oct = 1;
+    if(oct > 7) oct = 7;
+    return note + oct;
+  }
+
+  function readVarLen(view, offset){
+    let value = 0;
+    let b;
+    do {
+      b = view.getUint8(offset++);
+      value = (value << 7) | (b & 0x7F);
+    } while(b & 0x80);
+    return { value, offset };
+  }
+
+  function parseMidiArrayBuffer(buf){
+    const view = new DataView(buf);
+    if(view.byteLength < 14) throw new Error("Arquivo muito pequeno");
+    const magic = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
+    if(magic !== "MThd") throw new Error("Nao e um arquivo MIDI (MThd ausente)");
+    const headerLen = view.getUint32(4);
+    const format = view.getUint16(8);
+    const ntrks = view.getUint16(10);
+    const division = view.getUint16(12);
+    if(division & 0x8000) throw new Error("MIDI com SMPTE timing nao suportado");
+    const ticksPerQuarter = division;
+
+    let offset = 8 + headerLen;
+    const tracks = [];
+    let microsecondsPerQuarter = 500000; // 120 BPM default
+
+    for(let t=0; t<ntrks && offset < view.byteLength; t++){
+      if(offset + 8 > view.byteLength) break;
+      const id = String.fromCharCode(view.getUint8(offset), view.getUint8(offset+1), view.getUint8(offset+2), view.getUint8(offset+3));
+      const trackLen = view.getUint32(offset+4);
+      offset += 8;
+      if(id !== "MTrk"){ offset += trackLen; continue; }
+      const trackEnd = offset + trackLen;
+      let tick = 0;
+      let runningStatus = 0;
+      const openNotes = new Map();
+      const notes = [];
+      let isPercussion = false;
+      let channelUsed = null;
+
+      while(offset < trackEnd){
+        const vl = readVarLen(view, offset);
+        tick += vl.value;
+        offset = vl.offset;
+        if(offset >= trackEnd) break;
+
+        let status = view.getUint8(offset);
+        if(status < 0x80){
+          status = runningStatus;
+        } else {
+          offset++;
+          runningStatus = status;
+        }
+
+        const eventType = status & 0xF0;
+        const channel = status & 0x0F;
+
+        if(status === 0xFF){
+          const metaType = view.getUint8(offset++);
+          const ml = readVarLen(view, offset);
+          offset = ml.offset;
+          const metaLen = ml.value;
+          if(metaType === 0x51 && metaLen === 3){
+            microsecondsPerQuarter = (view.getUint8(offset)<<16) | (view.getUint8(offset+1)<<8) | view.getUint8(offset+2);
+          }
+          offset += metaLen;
+        } else if(status === 0xF0 || status === 0xF7){
+          const sl = readVarLen(view, offset);
+          offset = sl.offset + sl.value;
+        } else if(eventType === 0x90 || eventType === 0x80){
+          const note = view.getUint8(offset++);
+          const vel = view.getUint8(offset++);
+          channelUsed = channel;
+          if(channel === 9) isPercussion = true;
+          if(eventType === 0x90 && vel > 0){
+            openNotes.set(note, tick);
+          } else {
+            const startTick = openNotes.get(note);
+            if(startTick !== undefined){
+              notes.push({ midi: note, start: startTick, end: Math.max(startTick+1, tick), channel });
+              openNotes.delete(note);
+            }
+          }
+        } else if(eventType === 0xA0 || eventType === 0xB0 || eventType === 0xE0){
+          offset += 2;
+        } else if(eventType === 0xC0 || eventType === 0xD0){
+          offset += 1;
+        } else {
+          if(status < 0x80) offset++;
+        }
+      }
+      openNotes.forEach((startTick, note)=>{
+        notes.push({ midi: note, start: startTick, end: Math.max(startTick+1, tick), channel: channelUsed||0 });
+      });
+
+      if(notes.length){
+        tracks.push({ notes, isPercussion, channel: channelUsed, noteCount: notes.length });
+      }
+    }
+
+    const bpm = Math.round(60000000 / microsecondsPerQuarter);
+    return { format, ticksPerQuarter, bpm, microsecondsPerQuarter, tracks };
+  }
+
+  // Rasteriza notas de uma track numa grade de steps (todos os canais compartilham a mesma grade)
+  function rasterizeTrackToGrid(notes, stepTicks, numSteps){
+    const cells = new Array(numSteps);
+    for(let s=0; s<numSteps; s++){
+      const t0 = s * stepTicks;
+      const t1 = t0 + stepTicks;
+      let best = null;
+      for(let i=0; i<notes.length; i++){
+        const n = notes[i];
+        // nota cobre este step se intersecta [t0,t1)
+        if(n.start < t1 && n.end > t0){
+          if(!best || n.midi > best.midi) best = n;
+        }
+      }
+      if(best){
+        cells[s] = { note: midiNoteToName(best.midi), figure: "sixteenth" };
+      } else {
+        cells[s] = { note: "REST", figure: "sixteenth" };
+      }
+    }
+    return cells;
+  }
+
+  // Compacta runs consecutivos da MESMA nota em figuras maiores (em todos os canais,
+  // usando fronteiras comuns — so compacta spans onde TODOS os canais sao constantes).
+  function compressGridChannels(channelNoteArrays){
+    if(!channelNoteArrays.length) return channelNoteArrays;
+    const len = channelNoteArrays[0].length;
+    const out = channelNoteArrays.map(()=>[]);
+
+    // Figuras disponiveis em steps de semicolcheia (1 step = sixteenth)
+    // breve=16, whole=8, quarter=4, eighth=2, sixteenth=1
+    const stepFigures = [
+      { steps: 16, id: "breve" },
+      { steps: 8,  id: "whole" },
+      { steps: 4,  id: "quarter" },
+      { steps: 2,  id: "eighth" },
+      { steps: 1,  id: "sixteenth" }
+    ];
+
+    let i = 0;
+    while(i < len){
+      // Descobre quantos steps a frente todos os canais permanecem iguais a si mesmos
+      let run = 1;
+      while(i + run < len){
+        let same = true;
+        for(let c=0; c<channelNoteArrays.length; c++){
+          if(channelNoteArrays[c][i+run].note !== channelNoteArrays[c][i].note){
+            same = false; break;
+          }
+        }
+        if(!same) break;
+        run++;
+      }
+
+      // Quebra o run em figuras padrao (maior primeiro)
+      let remaining = run;
+      while(remaining > 0){
+        let placed = null;
+        for(const sf of stepFigures){
+          if(sf.steps <= remaining){ placed = sf; break; }
+        }
+        if(!placed) placed = stepFigures[stepFigures.length-1];
+        for(let c=0; c<channelNoteArrays.length; c++){
+          out[c].push({
+            note: channelNoteArrays[c][i].note,
+            figure: placed.id
+          });
+        }
+        remaining -= placed.steps;
+        i += placed.steps;
+      }
+    }
+    return out;
+  }
+
+  function midiToLibraryItem(parsed, fileName){
+    const tpq = parsed.ticksPerQuarter || 480;
+    // Grade em semicolcheias (1/4 da seminima)
+    const stepTicks = Math.max(1, Math.round(tpq / 4));
+
+    let maxTick = 0;
+    parsed.tracks.forEach(t=>{
+      t.notes.forEach(n=>{ if(n.end > maxTick) maxTick = n.end; });
+    });
+
+    // Limite de seguranca: 4096 semicolcheias (~ 1024 seminimas)
+    const rawSteps = Math.ceil(maxTick / stepTicks) || 1;
+    const numSteps = Math.min(rawSteps, 4096);
+
+    const melodic = parsed.tracks.filter(t => !t.isPercussion).sort((a,b)=> b.noteCount - a.noteCount);
+    const perc = parsed.tracks.filter(t => t.isPercussion).sort((a,b)=> b.noteCount - a.noteCount);
+
+    const typeOrder = ["pulse1", "pulse2", "triangle", "noise"];
+    const grids = [];
+    const types = [];
+
+    for(let i=0; i<melodic.length && types.length < 3; i++){
+      grids.push(rasterizeTrackToGrid(melodic[i].notes, stepTicks, numSteps));
+      types.push(typeOrder[types.length]);
+    }
+    if(perc.length && types.length < 4){
+      grids.push(rasterizeTrackToGrid(perc[0].notes, stepTicks, numSteps));
+      types.push("noise");
+    }
+    if(!grids.length && melodic.length){
+      grids.push(rasterizeTrackToGrid(melodic[0].notes, stepTicks, numSteps));
+      types.push("pulse1");
+    }
+    if(!grids.length){
+      grids.push(Array.from({length:1}, ()=>({ note:"C4", figure:"sixteenth" })));
+      types.push("pulse1");
+    }
+
+    // Compacta runs alinhados entre canais (mantem sync)
+    const compressed = compressGridChannels(grids);
+
+    const channels = compressed.map((notes, idx)=>({
+      id: uid("ch"),
+      type: types[idx],
+      muted: false,
+      notes
+    }));
+
+    // baseFrames a partir do BPM: frames por seminima @ 60fps
+    let baseFrames = Math.round(3600 / (parsed.bpm || 120));
+    baseFrames = Math.max(8, Math.min(120, baseFrames));
+
+    const baseName = (fileName || "MIDI").replace(/\.(mid|midi)$/i, "");
+    return {
+      id: uid("song"),
+      type: "song",
+      name: baseName,
+      loop: true,
+      baseFrames,
+      channels,
+      _importMeta: {
+        bpm: parsed.bpm,
+        steps: numSteps,
+        compressedLen: compressed[0]?.length || 0,
+        truncated: rawSteps > numSteps
+      }
+    };
+  }
+
+  function importMidiFile(file){
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const parsed = parseMidiArrayBuffer(reader.result);
+        if(!parsed.tracks.length){
+          alert("MIDI sem notas de Note On/Off.");
+          return;
+        }
+        flushActiveToItem();
+        const item = midiToLibraryItem(parsed, file.name);
+        const meta = item._importMeta || {};
+        delete item._importMeta;
+        items.push(item);
+        activeId = item.id;
+        channels = JSON.parse(JSON.stringify(item.channels));
+        activeChannel = 0;
+        selectedIndex = 0;
+        playbackIndex = 0;
+        selectedCells.clear();
+        undoStack = [];
+        if(els.quarterInput) els.quarterInput.value = item.baseFrames;
+        const loopCb = document.getElementById("loop-checkbox");
+        if(loopCb) loopCb.checked = true;
+        renderLibrarySelect();
+        renderAll();
+        const mel = parsed.tracks.filter(t=>!t.isPercussion).length;
+        const percN = parsed.tracks.filter(t=>t.isPercussion).length;
+        alert(
+          'MIDI importado: "' + item.name + '"\n' +
+          "BPM ~" + (meta.bpm || parsed.bpm) + " → " + item.baseFrames + " frames/seminima\n" +
+          "Tracks: " + parsed.tracks.length + " (" + mel + " melodicas, " + percN + " percussao)\n" +
+          "Canais NES: " + item.channels.length + "\n" +
+          "Grade: semicolcheia → " + (meta.compressedLen || timelineLength()) + " colunas" +
+          (meta.truncated ? " (truncado)" : "") + "\n\n" +
+          "Canais alinhados no tempo — ajuste fino no editor se necessario."
+        );
+      }catch(err){
+        console.error(err);
+        alert("Falha ao importar MIDI: " + (err.message || err));
+      }
+    };
+    reader.onerror = ()=> alert("Nao foi possivel ler o arquivo.");
+    reader.readAsArrayBuffer(file);
+  }
+
   // ===== ASM (biblioteca inteira) =====
   function generateASM(){
     flushActiveToItem();
@@ -1048,6 +1363,12 @@ Time_${label}:
     document.getElementById("btn-new-sfx").onclick = addSfx;
     document.getElementById("btn-rename").onclick = renameItem;
     document.getElementById("btn-delete-item").onclick = deleteItem;
+    document.getElementById("btn-import-midi").onclick = ()=> document.getElementById("midi-file-input").click();
+    document.getElementById("midi-file-input").onchange = (e)=>{
+      const f = e.target.files && e.target.files[0];
+      if(f) importMidiFile(f);
+      e.target.value = "";
+    };
 
     if(els.librarySelect){
       els.librarySelect.onchange = (e)=>{
