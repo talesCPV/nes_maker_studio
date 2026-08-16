@@ -18,7 +18,7 @@ then
     git add index.html
     git add hello.nms
     git add smb.nms
-    git add claude.txt
+    git add historico.txt
 
     git commit -m "by_script"
 

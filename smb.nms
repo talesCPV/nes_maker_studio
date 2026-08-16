@@ -4,7 +4,7 @@
   "author": "Tales Cembraneli Dantas",
   "description": "Hello World do NMS",
   "genre": "platformer",
-  "mapper": 0,
+  "mapper": 3,
   "mirroring": "horizontal",
   "scrollType": "static",
   "created": 1786573155671,
@@ -25873,11 +25873,11 @@
       "id": "phase_1",
       "name": "Fase 1 - Inicio",
       "description": "Primeira fase",
-      "mapper": 0,
+      "mapper": 3,
       "bank": 0,
       "gravity": "down",
       "gravityStrength": 4,
-      "scroll": "static",
+      "scroll": "scroll_h",
       "background": "",
       "splash": "",
       "created": 1786573155674,
@@ -25907,7 +25907,8 @@
           }
         },
         "warps": []
-      }
+      },
+      "mirroring": "vertical"
     }
   ],
   "characters": [
@@ -25967,7 +25968,7 @@
     "baseFrames": 30,
     "asm": ""
   },
-  "savedAt": 1786818274488,
+  "savedAt": 1786846950174,
   "variables": [
     {
       "id": "var_1786818039217",
@@ -26061,12 +26062,27 @@
           "eventId": "ev_hit_dano"
         },
         {
-          "type": "set_var",
+          "type": "sub_var",
           "eventId": "",
           "varId": "var_1786818039217",
           "value": -2
+        },
+        {
+          "type": "if_event",
+          "eventId": "ev_up"
+        },
+        {
+          "type": "action",
+          "eventId": "",
+          "actionId": "open_menu"
         }
       ]
+    },
+    {
+      "id": "rule_1786819319392",
+      "name": "regra_2",
+      "scope": "global",
+      "steps": []
     }
   ]
 }
