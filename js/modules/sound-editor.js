@@ -644,6 +644,25 @@ const SOUND = (() => {
     if(els.timelineCursor){
       els.timelineCursor.style.left = getCellPosition(stepIndex) + "px";
     }
+    scrollTimelineToStep(stepIndex);
+  }
+
+  // Mantem a celula tocada visivel no scroll horizontal
+  function scrollTimelineToStep(stepIndex){
+    const wrap = document.getElementById("tracks-scroll");
+    if(!wrap) return;
+    const headerW = 150; // .track-header
+    const cellW = 34;    // ~28px + margem
+    const cellLeft = headerW + 10 + stepIndex * cellW;
+    const cellRight = cellLeft + cellW;
+    const viewLeft = wrap.scrollLeft;
+    const viewRight = viewLeft + wrap.clientWidth;
+    const margin = 64;
+    // So rola se a celula estiver saindo da area visivel
+    if(cellLeft < viewLeft + margin || cellRight > viewRight - margin){
+      const target = Math.max(0, cellLeft - wrap.clientWidth * 0.35);
+      wrap.scrollTo({ left: target, behavior: isPlaying ? "auto" : "smooth" });
+    }
   }
 
   // ===== BIBLIOTECA =====
