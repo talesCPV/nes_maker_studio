@@ -78,6 +78,8 @@ const PROGRAM = (() => {
   }
 
   // ---------------- VARIÁVEIS ----------------
+  function maxForType(type){ return type==='bool' ? 1 : type==='word' ? 65535 : 255; }
+
   function renderVarsTab(){
     const vars = Project.data?.variables || [];
     const { list, totalBytes } = computeAllocation(vars);
@@ -88,19 +90,23 @@ const PROGRAM = (() => {
         <td style="padding:6px;color:#ffcc00;font-family:monospace">
           ${v.type==='bool' ? `$${(v.zeroPage?0:0x0300+v.byteIndex).toString(16).padStart(v.zeroPage?2:4,'0')} bit ${v.bitIndex}` : `$${(v.zeroPage?0:0x0300)+v.byteIndex} (${v.sizeBytes} byte${v.sizeBytes>1?'s':''})`}
         </td>
+        <td style="padding:6px;color:#4ec9b0;font-family:monospace">${v.initialValue ?? 0}</td>
         <td style="padding:6px;text-align:right"><button class="btn-tool" onclick="PROGRAM.deleteVariable('${v.id}')" style="background:#c0392b;color:#fff;font-size:10px">🗑</button></td>
       </tr>`).join('');
     return `
-      <div style="max-width:700px">
+      <div style="max-width:760px">
         <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;margin-bottom:12px">
           <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">NOVA VARIÁVEL</h4>
           <div style="display:flex;gap:6px;align-items:center">
             <input id="varName" type="text" placeholder="nome_da_variavel" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
-            <select id="varType" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
+            <select id="varType" onchange="PROGRAM.onVarTypeChange()" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
               <option value="bool">bool (1 bit)</option>
               <option value="byte">byte (0-255)</option>
               <option value="word">word (0-65535)</option>
             </select>
+            <label style="font-size:10px;color:#888;display:flex;align-items:center;gap:4px">valor inicial
+              <input id="varInitial" type="number" value="0" min="0" max="255" style="width:70px;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
+            </label>
             <label style="font-size:10px;color:#888;display:flex;align-items:center;gap:4px"><input id="varZP" type="checkbox"> zero page</label>
             <button class="btn-tool" onclick="PROGRAM.addVariable()" style="background:#27ae60;color:#fff">+ Adicionar</button>
           </div>
@@ -108,18 +114,30 @@ const PROGRAM = (() => {
         <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
           <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">VARIÁVEIS DO PROJETO (${list.length}) - ${totalBytes} byte(s) usados</h4>
           <table style="width:100%;border-collapse:collapse;font-size:11px">
-            <thead><tr style="border-bottom:1px solid #444;color:#888;text-align:left"><th style="padding:6px">Nome</th><th style="padding:6px">Tipo</th><th style="padding:6px">Endereço</th><th></th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="4" style="padding:10px;color:#666">Nenhuma variável ainda.</td></tr>'}</tbody>
+            <thead><tr style="border-bottom:1px solid #444;color:#888;text-align:left"><th style="padding:6px">Nome</th><th style="padding:6px">Tipo</th><th style="padding:6px">Endereço</th><th style="padding:6px">Valor inicial</th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="5" style="padding:10px;color:#666">Nenhuma variável ainda.</td></tr>'}</tbody>
           </table>
         </div>
       </div>`;
   }
 
+  function onVarTypeChange(){
+    const typeEl = document.getElementById('varType'); const initEl = document.getElementById('varInitial');
+    if(!typeEl || !initEl) return;
+    const max = maxForType(typeEl.value);
+    initEl.max = max;
+    if(parseInt(initEl.value) > max) initEl.value = max;
+  }
+
   function addVariable(){
-    const nameEl = document.getElementById('varName'); const typeEl = document.getElementById('varType'); const zpEl = document.getElementById('varZP');
+    const nameEl = document.getElementById('varName'); const typeEl = document.getElementById('varType'); const zpEl = document.getElementById('varZP'); const initEl = document.getElementById('varInitial');
     const name = nameEl.value.trim(); if(!name) return;
+    const type = typeEl.value;
+    const max = maxForType(type);
+    let initialValue = parseInt(initEl.value); if(isNaN(initialValue)) initialValue = 0;
+    initialValue = Math.max(0, Math.min(max, initialValue));
     if(!Project.data.variables) Project.data.variables = [];
-    Project.data.variables.push({ id: 'var_'+Date.now(), name, type: typeEl.value, zeroPage: zpEl.checked });
+    Project.data.variables.push({ id: 'var_'+Date.now(), name, type, zeroPage: zpEl.checked, initialValue });
     renderTab();
   }
   function deleteVariable(id){
@@ -291,7 +309,7 @@ const PROGRAM = (() => {
 
   return {
     init: buildHTML, setTab,
-    addVariable, deleteVariable,
+    addVariable, deleteVariable, onVarTypeChange,
     addEvent, deleteEvent,
     addRule, selectRule, renameRule, setRuleScope, deleteRule, addStep, updateStep, moveStep, deleteStep
   };
