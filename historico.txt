@@ -538,6 +538,7 @@ Botão + Canal / mute / remover canal
 Timeline compartilhada (colunas alinhadas)
 Playback toca todos os canais não-mutados juntos
 Preview Web Audio (square / triangle / noise)
+Midi import, agora aceita arquivos Midi
 
 Composição
 
@@ -572,24 +573,6 @@ Gera dados de toda a biblioteca
 Labels por peça + canal (Scale_Pulse1_TitleTheme, etc.)
 
 Migração de formatos
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

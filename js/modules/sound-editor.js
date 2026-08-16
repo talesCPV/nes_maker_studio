@@ -66,6 +66,15 @@ const SOUND = (() => {
   let draggedIndex = null;
   let els = {};
 
+  // Audio engine (reutilizado — evita travar criando AudioContext a cada nota)
+  let audioCtx = null;
+  const pulseWaveCache = new Map(); // key: "duty" -> PeriodicWave
+  const noiseBufCache = new Map();  // key: hold -> AudioBuffer
+  let activeSources = [];           // nodes para stop() no pause
+  let schedStep = 0;
+  let schedNextTime = 0;            // audioCtx.currentTime da proxima coluna
+  let schedTimer = null;
+
   function uid(prefix){
     return (prefix || "id") + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
   }
@@ -488,35 +497,153 @@ const SOUND = (() => {
     updateFigureLabel(i);
   }
 
+  function getAudioCtx(){
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if(!audioCtx || audioCtx.state === "closed"){
+      audioCtx = new AC();
+      pulseWaveCache.clear();
+      noiseBufCache.clear();
+    }
+    if(audioCtx.state === "suspended"){
+      try{ audioCtx.resume(); }catch(e){}
+    }
+    return audioCtx;
+  }
+
+  // Onda pulse com duty cycle (cache por duty)
+  function createPulseWave(ctx, duty){
+    const d = Math.min(0.9, Math.max(0.05, duty || 0.5));
+    const key = d.toFixed(3);
+    if(pulseWaveCache.has(key)) return pulseWaveCache.get(key);
+    const n = 48;
+    const real = new Float32Array(n);
+    const imag = new Float32Array(n);
+    for(let k=1; k<n; k++){
+      imag[k] = (2 / (k * Math.PI)) * Math.sin(k * Math.PI * d);
+    }
+    const wave = ctx.createPeriodicWave(real, imag, { disableNormalization: false });
+    pulseWaveCache.set(key, wave);
+    return wave;
+  }
+
+  // envelope: attack + sustain + release
+  // legato=true → mantem volume (liga com a proxima nota)
+  function applyNesEnvelope(gainNode, t0, peak, durSec, legato){
+    const d = Math.max(0.025, durSec);
+    const attack = Math.min(0.006, d * 0.12);
+    gainNode.gain.cancelScheduledValues(t0);
+    gainNode.gain.setValueAtTime(0.0001, t0);
+    gainNode.gain.exponentialRampToValueAtTime(peak, t0 + attack);
+    if(legato){
+      // Sustain ate o fim — a proxima nota continua o fraseado
+      gainNode.gain.setValueAtTime(peak, t0 + d);
+    } else {
+      // Sustain ~80%, release curto no final
+      const relStart = t0 + Math.max(attack, d * 0.8);
+      gainNode.gain.setValueAtTime(peak, relStart);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+    }
+  }
+
+  // Noise periodizado em buffer curto com loop (barato)
+  function getNesNoiseBuffer(ctx, freqHint){
+    const hold = Math.max(1, Math.floor(ctx.sampleRate / Math.max(80, Math.min(6000, (freqHint || 400) * 2))));
+    if(noiseBufCache.has(hold)) return noiseBufCache.get(hold);
+    const len = Math.max(hold * 32, Math.floor(ctx.sampleRate * 0.08));
+    const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
+    const out = buffer.getChannelData(0);
+    let reg = 1;
+    let sample = 0;
+    for(let i=0; i<len; i++){
+      if(i % hold === 0){
+        const bit = (reg ^ (reg >> 1)) & 1;
+        reg = (reg >> 1) | (bit << 14);
+        sample = (reg & 1) ? 0.7 : -0.7;
+      }
+      out[i] = sample;
+    }
+    noiseBufCache.set(hold, buffer);
+    return buffer;
+  }
+
+  // when = audioCtx.currentTime para agendar no futuro
+  // legato = nao corta o volume no fim (proxima nota no mesmo pitch/canal)
+  function playTone(ctx, info, freq, durSec, peak, when, legato){
+    const t0 = (when != null) ? when : ctx.currentTime;
+    const dur = Math.max(0.025, durSec);
+    // leve overlap no legato evita "buraco" entre celulas
+    const stopAt = t0 + dur + (legato ? 0.012 : 0);
+    const gain = ctx.createGain();
+    gain.connect(ctx.destination);
+
+    let src;
+    if(info.wave === "noise"){
+      src = ctx.createBufferSource();
+      src.buffer = getNesNoiseBuffer(ctx, freq);
+      src.loop = true;
+      applyNesEnvelope(gain, t0, peak * 0.7, dur, !!legato);
+      src.connect(gain);
+      src.start(t0);
+      src.stop(stopAt);
+    } else {
+      src = ctx.createOscillator();
+      if(info.wave === "triangle"){
+        src.type = "triangle";
+      } else {
+        const duty = (info.duty != null) ? info.duty : 0.5;
+        src.setPeriodicWave(createPulseWave(ctx, duty));
+      }
+      src.frequency.setValueAtTime(freq, t0);
+      applyNesEnvelope(gain, t0, peak, dur, !!legato);
+      src.connect(gain);
+      src.start(t0);
+      src.stop(stopAt);
+    }
+    activeSources.push(src);
+    src.onended = ()=>{
+      const i = activeSources.indexOf(src);
+      if(i >= 0) activeSources.splice(i, 1);
+    };
+    return src;
+  }
+
+  function stopAllSources(){
+    activeSources.forEach(s=>{
+      try{ s.stop(0); }catch(e){}
+    });
+    activeSources = [];
+  }
+
   function playSingleNote(noteKey, channelType){
     const data = NOTE_MAP[noteKey];
     if(!data || data.isRest) return;
     const info = typeInfo(channelType);
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    if(info.wave === "noise"){
-      const bufferSize = ctx.sampleRate * 0.15;
-      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const out = buffer.getChannelData(0);
-      for(let i=0;i<bufferSize;i++) out[i] = Math.random()*2 - 1;
-      const src = ctx.createBufferSource();
-      const gain = ctx.createGain();
-      src.buffer = buffer;
-      gain.gain.setValueAtTime(0.08, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-      src.connect(gain); gain.connect(ctx.destination);
-      src.start(); src.stop(ctx.currentTime + 0.15);
-      src.onended = () => ctx.close();
-      return;
+    const ctx = getAudioCtx();
+    playTone(ctx, info, data.freq || 200, 0.18, 0.14, ctx.currentTime);
+  }
+
+  function stepDurationSec(stepIndex){
+    let maxFrames = 1;
+    const base = getBaseFrames();
+    channels.forEach(ch=>{
+      const n = ch.notes[stepIndex];
+      if(n) maxFrames = Math.max(maxFrames, calculateFrames(n.figure, base));
+    });
+    return maxFrames / 60.0;
+  }
+
+  // Highlight leve — NAO reconstrói o DOM
+  function updatePlayingHighlight(stepIndex){
+    document.querySelectorAll("#mod-sound .track-cell.playing").forEach(c=>{
+      c.classList.remove("playing");
+    });
+    document.querySelectorAll("#mod-sound .track-cell").forEach(c=>{
+      if(parseInt(c.dataset.index, 10) === stepIndex) c.classList.add("playing");
+    });
+    playbackIndex = stepIndex;
+    if(els.timelineCursor){
+      els.timelineCursor.style.left = getCellPosition(stepIndex) + "px";
     }
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = info.wave === "triangle" ? "triangle" : "square";
-    osc.frequency.setValueAtTime(data.freq, ctx.currentTime);
-    gain.gain.setValueAtTime(0.1, ctx.currentTime);
-    gain.gain.setValueAtTime(0.01, ctx.currentTime + 0.18);
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(); osc.stop(ctx.currentTime + 0.2);
-    osc.onended = () => ctx.close();
   }
 
   // ===== BIBLIOTECA =====
@@ -855,73 +982,94 @@ const SOUND = (() => {
     el.textContent = (it?it.name:"—") + " \u2022 " + channels.length + "ch [" + types + "] \u2022 " + timelineLength() + " col \u2022 lib: " + nSongs + " song / " + nSfx + " sfx";
   }
 
-  // ===== PLAYBACK =====
-  function playFromIndex(start){
+  // ===== PLAYBACK (look-ahead + AudioContext unico) =====
+  function scheduleStepNotes(stepIndex, when, dur){
+    const ctx = getAudioCtx();
     const len = timelineLength();
-    if(!isPlaying || start >= len){ stopPlayback(); return; }
-    playbackIndex = start;
-    updateTimelineBar();
-    renderTracks();
-
-    let maxFrames = 1;
-    channels.forEach(ch=>{
-      const n = ch.notes[start];
-      if(n) maxFrames = Math.max(maxFrames, calculateFrames(n.figure, getBaseFrames()));
-    });
-    const dur = maxFrames / 60.0;
-
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    let anySound = false;
     channels.forEach(ch=>{
       if(ch.muted) return;
-      const n = ch.notes[start];
+      const n = ch.notes[stepIndex];
       if(!n || n.note === "REST") return;
       const data = NOTE_MAP[n.note];
-      if(!data || data.isRest || data.freq <= 0) return;
-      anySound = true;
+      if(!data || data.isRest) return;
       const info = typeInfo(ch.type);
-      if(info.wave === "noise"){
-        const bufferSize = Math.floor(ctx.sampleRate * dur);
-        const buffer = ctx.createBuffer(1, Math.max(1, bufferSize), ctx.sampleRate);
-        const out = buffer.getChannelData(0);
-        for(let i=0;i<out.length;i++) out[i] = Math.random()*2 - 1;
-        const src = ctx.createBufferSource();
-        const gain = ctx.createGain();
-        src.buffer = buffer;
-        gain.gain.setValueAtTime(0.07, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + Math.max(0.02, dur - 0.01));
-        src.connect(gain); gain.connect(ctx.destination);
-        src.start(); src.stop(ctx.currentTime + dur);
-      } else {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = info.wave === "triangle" ? "triangle" : "square";
-        osc.frequency.setValueAtTime(data.freq, ctx.currentTime);
-        gain.gain.setValueAtTime(0.09, ctx.currentTime);
-        gain.gain.setValueAtTime(0.01, ctx.currentTime + Math.max(0.02, dur - 0.01));
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.start(); osc.stop(ctx.currentTime + dur);
-      }
-    });
-    if(!anySound){ try{ ctx.close(); }catch(e){} }
+      if(info.wave !== "noise" && (!data.freq || data.freq <= 0)) return;
+      const freq = (data.freq > 0) ? data.freq : 400;
+      const peak = info.wave === "triangle" ? 0.11 : (info.wave === "noise" ? 0.1 : 0.13);
 
-    playbackTimeout = setTimeout(()=>{
-      const next = start + 1;
-      if(next >= len){
-        if(document.getElementById("loop-checkbox")?.checked) playFromIndex(0);
-        else stopPlayback();
-      } else playFromIndex(next);
-    }, dur * 1000);
+      // Legato: proxima celula no mesmo canal continua a mesma nota (ou outra nota — fraseado)
+      const next = (stepIndex + 1 < len) ? ch.notes[stepIndex + 1] : null;
+      const nextIsRest = !next || next.note === "REST";
+      const samePitch = next && next.note === n.note;
+      // mesma nota = legato forte; nota diferente ainda sustenta (release so antes de REST)
+      const legato = !nextIsRest && (samePitch || info.wave !== "noise");
+
+      playTone(ctx, info, freq, dur, peak, when, legato);
+    });
+  }
+
+  function schedulerTick(){
+    if(!isPlaying) return;
+    const ctx = getAudioCtx();
+    const len = timelineLength();
+    if(len <= 0){ stopPlayback(); return; }
+
+    // Agenda ~120ms a frente (look-ahead)
+    const horizon = ctx.currentTime + 0.12;
+    let guard = 0;
+    while(schedNextTime < horizon && guard < 32){
+      guard++;
+      if(schedStep >= len){
+        if(document.getElementById("loop-checkbox")?.checked){
+          schedStep = 0;
+        } else {
+          // agenda stop quando o ultimo som acabar
+          const remain = Math.max(0, (schedNextTime - ctx.currentTime) * 1000);
+          schedTimer = setTimeout(()=> stopPlayback(), remain + 30);
+          return;
+        }
+      }
+      const dur = stepDurationSec(schedStep);
+      scheduleStepNotes(schedStep, schedNextTime, dur);
+      // UI: mostra o step que esta "agora" (nao o look-ahead)
+      const uiStep = schedStep;
+      const delayUI = Math.max(0, (schedNextTime - ctx.currentTime) * 1000);
+      setTimeout(()=>{ if(isPlaying) updatePlayingHighlight(uiStep); }, delayUI);
+
+      schedNextTime += dur;
+      schedStep++;
+    }
+
+    schedTimer = setTimeout(schedulerTick, 25);
+  }
+
+  function playFromIndex(start){
+    const len = timelineLength();
+    if(len <= 0) return;
+    const ctx = getAudioCtx();
+    stopAllSources();
+    if(schedTimer){ clearTimeout(schedTimer); schedTimer = null; }
+    if(playbackTimeout){ clearTimeout(playbackTimeout); playbackTimeout = null; }
+
+    isPlaying = true;
+    schedStep = Math.max(0, Math.min(start, len - 1));
+    playbackIndex = schedStep;
+    // pequena folga para o audio thread
+    schedNextTime = ctx.currentTime + 0.06;
+    updatePlayingHighlight(schedStep);
+    schedulerTick();
   }
 
   function stopPlayback(){
     isPlaying = false;
+    if(schedTimer){ clearTimeout(schedTimer); schedTimer = null; }
     if(playbackTimeout){ clearTimeout(playbackTimeout); playbackTimeout = null; }
+    stopAllSources();
     selectedIndex = playbackIndex;
     const playBtn = document.getElementById("play-btn");
     if(playBtn){ playBtn.textContent = "\u25B6"; playBtn.title = "Play"; playBtn.classList.remove("playing"); }
-    // Figura continua editavel durante e apos o play
     if(els.quarterInput) els.quarterInput.disabled = false;
+    document.querySelectorAll("#mod-sound .track-cell.playing").forEach(c=> c.classList.remove("playing"));
     renderAll();
   }
 
