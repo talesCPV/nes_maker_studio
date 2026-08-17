@@ -1,4 +1,4 @@
-// BUILD ROM v0.8.0 - Splash/BG + Music test (sound-editor v3 → APU)
+// BUILD ROM v0.8.1 - Splash/BG + Music test (sound-editor v3 → APU)
 const BUILD = (() => {
   let lastROM = null;
   let lastASM = "";
@@ -111,9 +111,9 @@ const BUILD = (() => {
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <div style="display:flex;gap:8px;align-items:center;padding:10px 12px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
-          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.8.0 • Splash/BG + Music Test</h3>
+          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.8.1 • Splash/BG + Music Test</h3>
           <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn-tool" onclick="BUILD.buildROM()" style="background:#27ae60;color:#fff;padding:6px 14px;font-weight:bold">🔨 Build .NES + .asm</button>
+            <button class="btn-tool" onclick="BUILD.buildROM()" style="background:#27ae60;color:#fff;padding:6px 14px;font-weight:bold">🔨 Build ROM</button>
             <button class="btn-tool" onclick="BUILD.downloadROM()" id="btnDownload" style="display:none;background:#2980b9;color:#fff">⬇ .nes</button>
             <button class="btn-tool" onclick="BUILD.downloadASM()" id="btnDownloadASM" style="display:none;background:#8e44ad;color:#fff">⬇ .asm</button>
             <button class="btn-tool" onclick="BUILD.downloadCFG()" id="btnDownloadCFG" style="background:#d35400;color:#fff">⬇ nrom.cfg</button>
@@ -359,10 +359,10 @@ const BUILD = (() => {
   // ---- Music engine ASM helpers ----
   const CH_ORDER = ["pulse1", "pulse2", "triangle", "noise"];
   const CH_META = {
-    pulse1:   { regVol: "$4000", regLo: "$4002", regHi: "$4003", dutyVol: "%10111111", silence: "%00110000", enableBit: 0 },
-    pulse2:   { regVol: "$4004", regLo: "$4006", regHi: "$4007", dutyVol: "%01111111", silence: "%00110000", enableBit: 1 },
-    triangle: { regVol: "$4008", regLo: "$400A", regHi: "$400B", dutyVol: "%11111111", silence: "%00000000", enableBit: 2 },
-    noise:    { regVol: "$400C", regLo: "$400E", regHi: "$400F", dutyVol: "%00111111", silence: "%00110000", enableBit: 3 }
+    pulse1:   { regVol: "$4000", regLo: "$4002", regHi: "$4003", dutyVol: "%10111111", silence: "%00110000", enableBit: 0, vol: 0x4000, lo: 0x4002, hi: 0x4003, duty: 0xBF, sil: 0x30 },
+    pulse2:   { regVol: "$4004", regLo: "$4006", regHi: "$4007", dutyVol: "%01111111", silence: "%00110000", enableBit: 1, vol: 0x4004, lo: 0x4006, hi: 0x4007, duty: 0x7F, sil: 0x30 },
+    triangle: { regVol: "$4008", regLo: "$400A", regHi: "$400B", dutyVol: "%11111111", silence: "%00000000", enableBit: 2, vol: 0x4008, lo: 0x400A, hi: 0x400B, duty: 0xFF, sil: 0x00 },
+    noise:    { regVol: "$400C", regLo: "$400E", regHi: "$400F", dutyVol: "%00111111", silence: "%00110000", enableBit: 3, vol: 0x400C, lo: 0x400E, hi: 0x400F, duty: 0x3F, sil: 0x30 }
   };
 
   function emitMusicEngine(L, music){
@@ -423,7 +423,7 @@ const BUILD = (() => {
     }
 
     const L=[];
-    L.push("; NES Game Maker - Gerado por BUILD ROM v0.8.0");
+    L.push("; NES Game Maker - Gerado por BUILD ROM v0.8.1");
     L.push(`; Imagem: [${data.type==="background"?"Background":"Splash"}] ${data.sourceName||data.name}`);
     L.push(`; CHR reempacotado: ${packed.usedCount}/256 tiles`);
     if(music && musicChans) L.push(`; Musica: ${music.name} · ${musicChans.length} canal(is) · baseFrames=${music.baseFrames||30}`);
@@ -721,27 +721,391 @@ const BUILD = (() => {
     return L.join("\n");
   }
 
+  // ===== Geração binária .nes (NROM-128 @ $C000) — equivalente ao ASM =====
+  function createPrg(base){
+    base = base || 0xC000;
+    const bytes = [];
+    const labels = Object.create(null);
+    const fixups = [];
+    function pc(){ return base + bytes.length; }
+    function emit(){ for(let i=0;i<arguments.length;i++) bytes.push(arguments[i] & 0xFF); }
+    function absFix(name){ fixups.push({ at: bytes.length, name, kind: "abs" }); emit(0, 0); }
+    function relFix(name){ fixups.push({ at: bytes.length, name, kind: "rel" }); emit(0); }
+    return {
+      base, bytes, labels, pc,
+      label(name){ labels[name] = pc(); },
+      emit,
+      pha(){ emit(0x48); }, pla(){ emit(0x68); },
+      txa(){ emit(0x8A); }, tax(){ emit(0xAA); },
+      tya(){ emit(0x98); }, tay(){ emit(0xA8); },
+      inx(){ emit(0xE8); }, iny(){ emit(0xC8); },
+      rts(){ emit(0x60); }, rti(){ emit(0x40); },
+      sei(){ emit(0x78); }, cld(){ emit(0xD8); }, txs(){ emit(0x9A); },
+      lda_imm(v){ emit(0xA9, v); },
+      ldx_imm(v){ emit(0xA2, v); },
+      ldy_imm(v){ emit(0xA0, v); },
+      lda_zp(z){ emit(0xA5, z); },
+      sta_zp(z){ emit(0x85, z); },
+      ldy_zp(z){ emit(0xA4, z); },
+      sty_zp(z){ emit(0x84, z); },
+      dec_zp(z){ emit(0xC6, z); },
+      cmp_imm(v){ emit(0xC9, v); },
+      cpx_imm(v){ emit(0xE0, v); },
+      ora_imm(v){ emit(0x09, v); },
+      and_imm(v){ emit(0x29, v); },
+      lda_abs(name){ emit(0xAD); absFix(name); },
+      sta_abs(name){ emit(0x8D); absFix(name); },
+      lda_absx(name){ emit(0xBD); absFix(name); },
+      lda_absy(name){ emit(0xB9); absFix(name); },
+      sta_absx_addr(addr){ emit(0x9D, addr & 0xFF, (addr >> 8) & 0xFF); },
+      sta_addr(addr){ emit(0x8D, addr & 0xFF, (addr >> 8) & 0xFF); },
+      lda_addr(addr){ emit(0xAD, addr & 0xFF, (addr >> 8) & 0xFF); },
+      stx_addr(addr){ emit(0x8E, addr & 0xFF, (addr >> 8) & 0xFF); },
+      bit_addr(addr){ emit(0x2C, addr & 0xFF, (addr >> 8) & 0xFF); },
+      jsr(name){ emit(0x20); absFix(name); },
+      jmp(name){ emit(0x4C); absFix(name); },
+      beq(name){ emit(0xF0); relFix(name); },
+      bne(name){ emit(0xD0); relFix(name); },
+      bpl(name){ emit(0x10); relFix(name); },
+      raw(arr){ for(let i=0;i<arr.length;i++) emit(arr[i]); },
+      resolve(){
+        for(const f of fixups){
+          const addr = labels[f.name];
+          if(addr == null) throw new Error("Label ausente: " + f.name);
+          if(f.kind === "abs"){
+            bytes[f.at] = addr & 0xFF;
+            bytes[f.at+1] = (addr >> 8) & 0xFF;
+          } else {
+            const next = base + f.at + 1;
+            const rel = addr - next;
+            if(rel < -128 || rel > 127) throw new Error("Branch longe: " + f.name + " (" + rel + ")");
+            bytes[f.at] = rel & 0xFF;
+          }
+        }
+      },
+      padTo(absAddr, fill){
+        const need = absAddr - base;
+        if(need < bytes.length) throw new Error("PRG overflow antes de $" + absAddr.toString(16) + " (len=" + bytes.length + ")");
+        while(bytes.length < need) bytes.push(fill == null ? 0xFF : fill);
+      }
+    };
+  }
+
+  function collectMusicChannels(music){
+    if(!music) return null;
+    const baseFrames = music.baseFrames || 30;
+    const loop = music.loop !== false;
+    const out = [];
+    CH_ORDER.forEach(type=>{
+      const ch = (music.channels || []).find(c => c.type === type);
+      if(ch) out.push({ type, enc: encodeChannel(ch.notes || [], baseFrames, loop) });
+    });
+    (music.channels || []).forEach(ch=>{
+      if(out.some(u => u.type === ch.type)) return;
+      const free = CH_ORDER.find(t => !out.some(u => u.type === t));
+      if(free) out.push({ type: free, enc: encodeChannel(ch.notes || [], baseFrames, loop) });
+    });
+    return out.length ? out : null;
+  }
+
+  function generateNES(){
+    const chrBuf = CHR.getBuffer ? CHR.getBuffer() : new Uint8Array(8192);
+    const pals = CHR.getPalettes ? CHR.getPalettes() : [[15,0,16,48],[15,6,22,38],[15,10,26,42],[15,2,18,34],[15,22,48,15],[15,25,41,57],[15,3,19,35],[15,9,25,41]];
+    const data = getSelectedBuildData();
+    const nt = data.nametable, at = data.attributes;
+    const music = getSelectedMusic();
+    const musicChans = collectMusicChannels(music);
+
+    const paletteBytes = [];
+    for(let p=0;p<8;p++){
+      const pal = pals[p] || [15,0,16,48];
+      for(let c=0;c<4;c++) paletteBytes.push(pal[c] || 0);
+    }
+    const backdrop = computeBackdropColor(nt, at, pals, chrBuf);
+    paletteBytes[0] = backdrop.color;
+    [4,8,12,16,20,24,28].forEach(i => { paletteBytes[i] = backdrop.color; });
+
+    const packed = packBackgroundCHR(chrBuf, nt);
+    const packedNt = packed.remappedNt;
+
+    const ZP_ON = 0x00;
+    const zpT = i => 1 + i * 2;
+    const zpP = i => 2 + i * 2;
+
+    const P = createPrg(0xC000);
+
+    // ---- NMI ----
+    P.label("NMI");
+    if(musicChans){
+      P.pha(); P.txa(); P.pha(); P.tya(); P.pha();
+      P.jsr("music_update");
+      P.pla(); P.tay(); P.pla(); P.tax(); P.pla();
+    }
+    P.rti();
+
+    P.label("IRQ");
+    P.rti();
+
+    // ---- music_update / music_init ----
+    if(musicChans){
+      P.label("music_update");
+      P.lda_zp(ZP_ON);
+      P.bne("mu_run");
+      P.rts();
+      P.label("mu_run");
+      musicChans.forEach((mc, i)=>{
+        const meta = CH_META[mc.type];
+        const t = zpT(i), p = zpP(i);
+        const L = "c" + i;
+        P.label(L);
+        P.lda_zp(t);
+        P.beq(L + "_n");
+        P.dec_zp(t);
+        P.jmp(L + "_e");
+        P.label(L + "_n");
+        P.ldy_zp(p);
+        P.lda_absy("Scale" + i);
+        P.cmp_imm(0xFF);
+        P.bne(L + "_nf");
+        P.lda_imm(0); P.sta_zp(p); P.ldy_imm(0);
+        P.lda_absy("Scale" + i);
+        P.label(L + "_nf");
+        P.cmp_imm(0xFE);
+        P.bne(L + "_pl");
+        P.lda_imm(meta.sil); P.sta_addr(meta.vol);
+        P.jmp(L + "_e");
+        P.label(L + "_pl");
+        P.tax();
+        P.lda_absy("Time" + i);
+        P.sta_zp(t);
+        P.iny(); P.sty_zp(p);
+        P.cpx_imm(0);
+        P.bne(L + "_tn");
+        P.lda_imm(meta.sil); P.sta_addr(meta.vol);
+        P.jmp(L + "_e");
+        P.label(L + "_tn");
+        P.lda_imm(meta.duty); P.sta_addr(meta.vol);
+        if(mc.type === "noise"){
+          P.lda_absx("PLo" + i);
+          P.and_imm(0x0F);
+          P.sta_addr(meta.lo);
+          P.lda_imm(0x08);
+          P.sta_addr(meta.hi);
+        } else if(mc.type === "triangle"){
+          P.lda_absx("PLo" + i); P.sta_addr(meta.lo);
+          P.lda_absx("PHi" + i); P.sta_addr(meta.hi);
+        } else {
+          P.lda_absx("PLo" + i); P.sta_addr(meta.lo);
+          P.lda_absx("PHi" + i); P.ora_imm(0x08); P.sta_addr(meta.hi);
+        }
+        P.label(L + "_e");
+      });
+      P.rts();
+
+      P.label("music_init");
+      P.lda_imm(0x0F); P.sta_addr(0x4015);
+      P.lda_imm(0); P.sta_addr(0x4001); P.sta_addr(0x4005);
+      musicChans.forEach((_, i)=>{
+        P.lda_imm(0); P.sta_zp(zpP(i));
+        P.lda_imm(1); P.sta_zp(zpT(i));
+      });
+      P.lda_imm(1); P.sta_zp(ZP_ON);
+      P.rts();
+    }
+
+    // ---- Reset ----
+    P.label("Reset");
+    P.sei(); P.cld();
+    P.ldx_imm(0x40); P.stx_addr(0x4017);
+    P.ldx_imm(0xFF); P.txs();
+    P.lda_imm(0); P.sta_addr(0x2000); P.sta_addr(0x2001);
+
+    P.label("vb1");
+    P.bit_addr(0x2002); P.bpl("vb1");
+
+    // Clear RAM $0000-$07FF
+    P.lda_imm(0); P.ldx_imm(0);
+    P.label("clram");
+    P.sta_absx_addr(0x0000);
+    P.sta_absx_addr(0x0100);
+    P.sta_absx_addr(0x0200);
+    P.sta_absx_addr(0x0300);
+    P.sta_absx_addr(0x0400);
+    P.sta_absx_addr(0x0500);
+    P.sta_absx_addr(0x0600);
+    P.sta_absx_addr(0x0700);
+    P.inx();
+    P.bne("clram");
+
+    P.label("vb2");
+    P.bit_addr(0x2002); P.bpl("vb2");
+
+    // Palettes
+    P.bit_addr(0x2002);
+    P.lda_imm(0x3F); P.sta_addr(0x2006);
+    P.lda_imm(0x00); P.sta_addr(0x2006);
+    P.ldx_imm(0);
+    P.label("ldpal");
+    P.lda_absx("PaletteData");
+    P.sta_addr(0x2007);
+    P.inx();
+    P.cpx_imm(32);
+    P.bne("ldpal");
+
+    // Nametable 960 bytes in 4 blocks
+    P.bit_addr(0x2002);
+    P.lda_imm(0x20); P.sta_addr(0x2006);
+    P.lda_imm(0x00); P.sta_addr(0x2006);
+    P.ldx_imm(0);
+    P.label("nb1");
+    P.lda_absx("Nametable0");
+    P.sta_addr(0x2007);
+    P.inx(); P.bne("nb1");
+    P.ldx_imm(0);
+    P.label("nb2");
+    P.lda_absx("Nametable1");
+    P.sta_addr(0x2007);
+    P.inx(); P.bne("nb2");
+    P.ldx_imm(0);
+    P.label("nb3");
+    P.lda_absx("Nametable2");
+    P.sta_addr(0x2007);
+    P.inx(); P.bne("nb3");
+    P.ldx_imm(0);
+    P.label("nb4");
+    P.lda_absx("Nametable3");
+    P.sta_addr(0x2007);
+    P.inx();
+    P.cpx_imm(192);
+    P.bne("nb4");
+
+    // Attributes
+    P.bit_addr(0x2002);
+    P.lda_imm(0x23); P.sta_addr(0x2006);
+    P.lda_imm(0xC0); P.sta_addr(0x2006);
+    P.ldx_imm(0);
+    P.label("ldattr");
+    P.lda_absx("AttributeData");
+    P.sta_addr(0x2007);
+    P.inx();
+    P.cpx_imm(64);
+    P.bne("ldattr");
+
+    // Scroll
+    P.bit_addr(0x2002);
+    P.lda_imm(0); P.sta_addr(0x2005); P.sta_addr(0x2005);
+
+    if(musicChans) P.jsr("music_init");
+
+    // Enable NMI + rendering (bg pattern $1000)
+    P.lda_imm(0x90); P.sta_addr(0x2000);
+    P.lda_imm(0x1E); P.sta_addr(0x2001);
+
+    P.label("Forever");
+    P.jmp("Forever");
+
+    // ---- DATA ----
+    P.label("PaletteData");
+    P.raw(paletteBytes);
+
+    // Nametable split into 256/256/256/192 for abs,X without page cross issues beyond 256
+    P.label("Nametable0"); P.raw(packedNt.slice(0, 256));
+    P.label("Nametable1"); P.raw(packedNt.slice(256, 512));
+    P.label("Nametable2"); P.raw(packedNt.slice(512, 768));
+    P.label("Nametable3"); P.raw(packedNt.slice(768, 960));
+
+    P.label("AttributeData");
+    P.raw(at.map(b => b & 0xFF));
+
+    if(musicChans){
+      musicChans.forEach((mc, i)=>{
+        P.label("PLo" + i); P.raw(mc.enc.lo);
+        P.label("PHi" + i); P.raw(mc.enc.hi);
+        P.label("Scale" + i); P.raw(mc.enc.scale);
+        P.label("Time" + i); P.raw(mc.enc.time);
+      });
+    }
+
+    // Vectors at $FFFA
+    P.padTo(0xFFFA, 0xFF);
+    P.label("VEC_NMI");
+    // emit vector words by fixup
+    P.emit(0, 0); // NMI - patch after resolve via labels
+    P.emit(0, 0); // RESET
+    P.emit(0, 0); // IRQ
+    // Manual vector placement
+    const nmiA = P.labels["NMI"], resA = P.labels["Reset"], irqA = P.labels["IRQ"];
+    // overwrite last 6 bytes
+    const blen = P.bytes.length;
+    P.bytes[blen - 6] = nmiA & 0xFF;
+    P.bytes[blen - 5] = (nmiA >> 8) & 0xFF;
+    P.bytes[blen - 4] = resA & 0xFF;
+    P.bytes[blen - 3] = (resA >> 8) & 0xFF;
+    P.bytes[blen - 2] = irqA & 0xFF;
+    P.bytes[blen - 1] = (irqA >> 8) & 0xFF;
+
+    P.resolve();
+
+    if(P.bytes.length !== 0x4000){
+      // padTo FFFA + 6 should be 0x4000
+      if(P.bytes.length > 0x4000) throw new Error("PRG > 16KB: " + P.bytes.length);
+      while(P.bytes.length < 0x4000) P.bytes.push(0xFF);
+    }
+
+    // CHR: pg0 original + pg1 packed
+    const chrFinal = new Uint8Array(8192);
+    chrFinal.set(chrBuf.slice(0, 4096), 0);
+    chrFinal.set(packed.bgChr, 4096);
+
+    // iNES header: 16KB PRG, 8KB CHR, mapper 0, horizontal mirroring default
+    const header = new Uint8Array(16);
+    header[0] = 0x4E; header[1] = 0x45; header[2] = 0x53; header[3] = 0x1A;
+    header[4] = 1; // PRG banks
+    header[5] = 1; // CHR banks
+    header[6] = 0; // mapper 0, horiz mirror
+
+    const rom = new Uint8Array(16 + 0x4000 + 0x2000);
+    rom.set(header, 0);
+    rom.set(P.bytes, 16);
+    rom.set(chrFinal, 16 + 0x4000);
+    return rom;
+  }
+
+
   function buildROM(){
-    const logEl=document.getElementById("buildLog"); if(logEl) logEl.textContent="Iniciando build v0.8.0...\n";
+    const logEl=document.getElementById("buildLog"); if(logEl) logEl.textContent="Iniciando build v0.8.1...\n";
     try{
       const chrBuf=CHR.getBuffer?CHR.getBuffer():new Uint8Array(8192);
       const data=getSelectedBuildData();
       const packed=packBackgroundCHR(chrBuf, data.nametable);
       const music = getSelectedMusic();
-      log(`Imagem: ${data.sourceName||data.name} (${data.filled} tiles)`);
-      log(`CHR empacotado: ${packed.usedCount}/256`);
-      if(music) log(`Música: ${music.name} · ${(music.channels||[]).length} canal(is)`);
+      log("Imagem: " + (data.sourceName||data.name) + " (" + data.filled + " tiles)");
+      log("CHR empacotado: " + packed.usedCount + "/256");
+      if(music) log("Música: " + music.name + " · " + (music.channels||[]).length + " canal(is)");
       else log("Música: (nenhuma)");
+
       const asm=generateASM(); lastASM=asm;
-      log("✅ ASM gerado (ca65). Compile localmente para ouvir a APU de verdade.");
+      log("ASM gerado (" + asm.length + " chars) — opção ca65 local.");
       const asmEl=document.getElementById("buildASMPreview"); if(asmEl) asmEl.value=asm;
       document.getElementById("btnDownloadASM").style.display="inline-block";
       document.getElementById("btnDownloadCFG").style.display="inline-block";
-      // placeholder ROM header-only (compile real via ca65)
-      lastROM = null;
-      document.getElementById("btnDownload").style.display="none";
+
+      try{
+        lastROM = generateNES();
+        log("✅ ROM .nes gerada no browser: " + lastROM.length + " bytes");
+        document.getElementById("btnDownload").style.display="inline-block";
+      }catch(ne){
+        lastROM = null;
+        document.getElementById("btnDownload").style.display="none";
+        log("⚠ Binário .nes: " + ne.message);
+        console.error(ne);
+      }
+
       const stats=document.getElementById("buildStats");
-      if(stats) stats.innerHTML = `ASM: ${asm.length} chars<br>Música: ${music?music.name:"—"}<br>Use ca65 para .nes`;
+      if(stats){
+        stats.innerHTML = "ASM: " + asm.length + " chars<br>ROM: " + (lastROM? lastROM.length+" bytes" : "—") +
+          "<br>Música: " + (music?music.name:"—");
+      }
     }catch(e){
       log("❌ Erro: "+e.message);
       console.error(e);
@@ -789,7 +1153,14 @@ const BUILD = (() => {
     const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
     a.download="nrom.cfg"; a.click();
   }
-  function downloadROM(){ alert("Compile o .asm com ca65/ld65 para gerar o .nes real."); }
+  function downloadROM(){
+    if(!lastROM){ alert("Gere o build primeiro (ou o binário falhou — veja o log)."); return; }
+    const blob = new Blob([lastROM], { type: "application/octet-stream" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = (Project.data?.name || "meu-jogo").replace(/\s+/g, "_") + ".nes";
+    a.click();
+  }
   function copyASM(){ const ta=document.getElementById("buildASMPreview"); if(!ta) return; ta.select(); document.execCommand("copy"); }
   function openEmulator(){}
 
