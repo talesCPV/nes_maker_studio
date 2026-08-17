@@ -1,6 +1,5 @@
 // CORE v0.7.1 - Sound library v3 (songs+SFX) + Mirroring por fase
 const NES_PALETTE = ["#666666","#002A88","#1412A7","#3B00A4","#5C007E","#6E0040","#6C0600","#561D00","#333500","#0B4800","#005200","#004F08","#00404D","#000000","#000000","#000000","#ADADAD","#155FD9","#4240FF","#7527FE","#A01ACC","#B71E7B","#B53120","#994E00","#6B6D00","#388700","#0C9300","#008F32","#007C8D","#000000","#000000","#000000","#FFFEFF","#64B0FF","#9290FF","#C676FF","#F36AFF","#FE6ECC","#FE8170","#EA9E22","#BCBE00","#88D800","#5CE430","#45E082","#48CDDE","#4F4F4F","#000000","#000000","#FFFEFF","#C0E0FF","#D3D2FF","#E8C8FF","#FBC2FF","#FEC2EB","#FECCC5","#F7D8A5","#E4E594","#CFEE96","#BDF4AB","#B3F3CC","#B5EBF2","#B8B8B8","#000000","#000000"];
-
 const Project = {
   data: null,
   fileName: "sem-titulo.nms",
@@ -8,7 +7,6 @@ const Project = {
     const el = document.getElementById('projStatus');
     if(el){ el.textContent = "● " + msg; setTimeout(()=>el.textContent = "● pronto", 2000); }
   },
-
   defaultSounds(){
     return {
       version: 3,
@@ -33,7 +31,6 @@ const Project = {
       asm: ''
     };
   },
-
   defaultData(){
     return {
       version: "0.7.1",
@@ -85,11 +82,11 @@ const Project = {
         { id:'ev_hit_warp', name:'Hitbox: Warp', category:'hitbox', builtin:true }
       ],
       rules: [],
+      hitboxObjects: [],
       gameConfig: { lives: 3, continues: 3, energy: 16 },
       sounds: this.defaultSounds()
     };
   },
-
   // Normaliza sounds para o formato v3 (biblioteca de musicas + SFX).
   // v2 (channels no root) vira 1 item. Formato antigo (song[]) e descartado.
   normalizeSounds(raw){
@@ -122,7 +119,6 @@ const Project = {
     // Qualquer coisa antiga ou invalida → biblioteca limpa
     return this.defaultSounds();
   },
-
   async newProject(silent=false){
     if(!silent && !confirm("Criar novo projeto? Progresso não salvo será perdido.")) return;
     this.data = this.defaultData();
@@ -145,7 +141,6 @@ const Project = {
     this.status("novo projeto v0.7.1");
     if(typeof UI !== 'undefined' && UI.switchModule) UI.switchModule('dashboard');
   },
-
   loadIntoEditors(){
     const chrU8 = new Uint8Array(this.data.chr);
     if(typeof CHR !== 'undefined'){
@@ -178,7 +173,6 @@ const Project = {
     const spEl = document.getElementById('infoSplash');
     if(spEl) spEl.textContent = (this.data.splashScreens?.length || 0);
   },
-
   updateUI(){
     const n = document.getElementById('projNameLabel');
     if(n) n.textContent = this.data.name;
@@ -189,7 +183,6 @@ const Project = {
     const spEl = document.getElementById('infoSplash');
     if(spEl) spEl.textContent = (this.data.splashScreens?.length || 0);
   },
-
   save(){
     if(!this.data){ alert("Nenhum projeto"); return; }
     try{
@@ -204,26 +197,21 @@ const Project = {
         this.data.mirroring = this.data.phases[0].mirroring;
       }
     }catch(e){}
-
     if(typeof CHR !== 'undefined'){
       this.data.palettes = CHR.getPalettes();
       this.data.chr = Array.from(CHR.getBuffer());
       this.data.metatiles = CHR.getMetatiles ? CHR.getMetatiles() : (this.data.metatiles || []);
     }
-
     this.data.characters = typeof CHAR !== 'undefined' ? (this.data.characters || []) : (this.data.characters || []);
-
     if(typeof BG !== 'undefined'){
       try{
         if(BG.getBackgrounds){ const bgs = BG.getBackgrounds(); if(bgs) this.data.backgrounds = bgs; }
         if(BG.getSplashScreens){ const spl = BG.getSplashScreens(); if(spl) this.data.splashScreens = spl; }
       }catch(e){}
     }
-
     if(typeof DASHBOARD !== 'undefined' && DASHBOARD.getPhases){
       try{ this.data.phases = DASHBOARD.getPhases(); }catch(e){}
     }
-
     // Sound v3 — biblioteca de musicas + SFX
     try{
       if(typeof SOUND !== 'undefined' && SOUND.getData){
@@ -244,10 +232,8 @@ const Project = {
     }catch(e){
       this.data.sounds = this.normalizeSounds(this.data.sounds);
     }
-
     this.data.savedAt = Date.now();
     this.data.version = "0.7.1";
-
     const blob = new Blob([JSON.stringify(this.data, null, 2)], { type: "application/json" });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -257,7 +243,6 @@ const Project = {
     const itemCount = this.data.sounds?.items?.length || 0;
     this.status(`salvo v0.7.1 - ${this.data.splashScreens?.length||0} splash • ${itemCount} peca(s) de som`);
   },
-
   async loadFromFile(file){
     const text = await file.text();
     try{
@@ -272,7 +257,6 @@ const Project = {
           scroll: 'static', mirroring: 'vertical', background: '', splash: '', levelMap: null
         }];
       }
-
       // Migração level-design: levels[] solto → phase.levelMap
       if(json.levels && json.levels.length){
         json.levels.forEach(lvl=>{
@@ -293,17 +277,15 @@ const Project = {
           else p.mirroring = json.mirroring || 'vertical';
         }
       });
-
       // Sound: formato antigo (song[]) e descartado
       json.sounds = this.normalizeSounds(json.sounds);
-
       if(!json.cheats) json.cheats = [];
       if(!json.characters) json.characters = [];
       if(!json.gameConfig) json.gameConfig = { lives:3, continues:3, energy:16 };
       if(!json.variables) json.variables = [];
       if(!json.events) json.events = this.defaultData().events;
       if(!json.rules) json.rules = [];
-
+      if(!json.hitboxObjects) json.hitboxObjects = [];
       this.data = json;
       this.fileName = file.name;
       this.loadIntoEditors();
@@ -320,7 +302,6 @@ const Project = {
     }
   }
 };
-
 document.getElementById('openNMS')?.addEventListener('change', e=>{
   const f = e.target.files[0];
   if(f) Project.loadFromFile(f);

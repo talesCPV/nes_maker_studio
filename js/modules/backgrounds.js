@@ -24,6 +24,7 @@ const BG = (() => {
   // fora do objeto da camada (que é o que de fato é serializado ao salvar).
   let textUnderCache = {};
   let textLayers = [];
+  let hitboxInstances = []; // [{x,y,hitboxObjectId}] - por-tela, sparse (só posições com dano/warp)
   let currentChrPage = 1; // pg ímpar: pg0 de cada banco é reservada para sprites, background só usa pg1, pg3...
   // Rascunho em memória por página do CHR: evita misturar metatiles de páginas diferentes na
   // mesma tela quando o usuário troca de página no meio do desenho. Cada página guarda seu
@@ -83,6 +84,7 @@ const BG = (() => {
                 <button class="btn-tool tool-btn" data-bg-tool="flood" onclick="BG.setTool('flood')" style="background:#8e44ad;color:#fff;border:1px solid #9b59b6">🌊 Flood</button>
                 <button class="btn-tool tool-btn" data-bg-tool="attr" onclick="BG.setTool('attr')" style="background:#2980b9;color:#fff;border:1px solid #3498db">🖌 Paleta</button>
                 <button class="btn-tool tool-btn" data-bg-tool="hitbox" onclick="BG.setTool('hitbox')" style="background:#c0392b;color:#fff;border:1px solid #e74c3c">🛡 Hitbox</button>
+                <button class="btn-tool tool-btn" data-bg-tool="assign" onclick="BG.setTool('assign')" style="background:#16a085;color:#fff;border:1px solid #1abc9c" title="Clique numa instância de Dano/Warp já pintada pra trocar qual objeto ela usa">🎯 Objeto</button>
                 <button class="btn-tool tool-btn" data-bg-tool="erase" onclick="BG.setTool('erase')" style="background:#555;color:#fff;border:1px solid #777">🧽 Borracha</button>
                 <button class="btn-tool tool-btn" data-bg-tool="text" onclick="BG.setTool('text')" style="background:#ffcc00;color:#000">🔤 Texto</button>
                 <button class="btn-tool tool-btn" data-bg-tool="fill" onclick="BG.setTool('fill')">🪣 Auto-Fill</button>
@@ -145,7 +147,12 @@ const BG = (() => {
 
             <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:8px">
               <div style="display:flex;gap:12px;align-items:center"><div><h4 style="font-size:10px;color:#888;margin-bottom:6px">PALETA (0-3)</h4><div id="attrPaletteSelect" style="display:flex;gap:6px;flex-direction:column"></div></div><div style="flex:1;display:flex;flex-direction:column;align-items:center"><div id="selectedInfo" style="font-size:10px;color:#aaa;text-align:center;margin-bottom:4px">Nenhum</div><div style="position:relative"><canvas id="selectedPreview" width="80" height="80" style="border:1px solid #ffcc00;background:#000;image-rendering:pixelated;display:block;cursor:pointer" title="Clique no sub-tile para alternar colisão!"></canvas></div></div></div>
-              <div style="border-top:1px solid #222;padding-top:6px;display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:10px;color:#ffcc00">🛡 Hitbox por Tile:</label><button class="btn-tool" onclick="BG.setAllSubTilesCollision()" style="font-size:9px;padding:1px 4px">Setar Todos</button></div><div style="display:flex;gap:4px"><select id="mtSubTileColSelect" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:10px"><option value="0">⬜ 0: Ar/Livre</option><option value="1">🟥 1: Sólido</option><option value="2">🟩 2: Plataforma</option><option value="3">🟪 3: Dano/Espinho</option></select><button class="btn-tool" onclick="BG.applyMetatileHitboxToCanvas()" style="font-size:10px;background:#27ae60;color:#fff">⚡ Recalcular</button></div></div>
+              <div style="border-top:1px solid #222;padding-top:6px;display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:10px;color:#ffcc00">🛡 Hitbox por Tile:</label><button class="btn-tool" onclick="BG.setAllSubTilesCollision()" style="font-size:9px;padding:1px 4px">Setar Todos</button></div><div style="display:flex;gap:4px"><select id="mtSubTileColSelect" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:10px"><option value="0">⬜ 0: Ar/Livre</option><option value="1">🟥 1: Sólido</option><option value="2">🟩 2: Plataforma</option><option value="3">🟪 3: Dano/Espinho</option><option value="4">🚪 4: Warp</option></select><button class="btn-tool" onclick="BG.applyMetatileHitboxToCanvas()" style="font-size:10px;background:#27ae60;color:#fff">⚡ Recalcular</button></div></div>
+              <div id="mtDefaultObjWrap" style="border-top:1px solid #222;padding-top:6px;display:none;flex-direction:column;gap:4px">
+                <label style="font-size:10px;color:#ffcc00">🎯 Objeto padrão (Dano/Warp):</label>
+                <select id="mtDefaultObjSelect" onchange="BG.setMetatileDefaultObject(this.value)" style="background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:10px"></select>
+                <div style="font-size:9px;color:#666;line-height:1.3">Usado quando este metatile é carimbado na tela. Cada carimbo pode depois trocar pra outro objeto individualmente.</div>
+              </div>
             </div>
           </div>
 
@@ -205,6 +212,7 @@ const BG = (() => {
     if(t === 'flood') { label.textContent = 'Modo: Flood Fill'; help.textContent = 'Preenche área contígua com o metatile selecionado.'; }
     else if(t === 'attr') { label.textContent = 'Modo: Pincel de Atributo'; help.textContent = 'Pinta a paleta mantendo as estampas.'; }
     else if(t === 'hitbox') { label.textContent = 'Modo: Hitbox Manual'; help.textContent = 'Pinta colisão individualmente (inclui Warp). Shift+clique apaga.'; }
+    else if(t === 'assign') { label.textContent = 'Modo: Atribuir Objeto'; help.textContent = 'Clique numa instância de Dano/Warp já pintada pra trocar qual objeto ela usa.'; }
     else if(t === 'fill') { label.textContent = 'Modo: Auto-Fill'; help.textContent = 'Preenchimento em massa.'; }
     else if(t === 'erase') { label.textContent = 'Modo: Borracha'; help.textContent = 'Clique (ou arraste) num tile para apagá-lo, tile por tile.'; }
     else if(t === 'text') { 
@@ -335,7 +343,9 @@ const BG = (() => {
         const colType = selectedMetatile.collisions[subIdx] || 0;
         if(colType > 0) {
           if(colType === 1) { cctx.fillStyle = 'rgba(255, 0, 0, 0.45)'; cctx.strokeStyle = '#ff3333'; }
+          else if(colType === 2) { cctx.fillStyle = 'rgba(39, 174, 96, 0.5)'; cctx.strokeStyle = '#27ae60'; }
           else if(colType === 3) { cctx.fillStyle = 'rgba(142, 68, 173, 0.55)'; cctx.strokeStyle = '#9b59b6'; }
+          else if(colType === 4) { cctx.fillStyle = 'rgba(211, 84, 0, 0.55)'; cctx.strokeStyle = '#e67e22'; }
           cctx.fillRect(gx*tilePxW, gy*tilePxH, tilePxW, tilePxH);
           cctx.strokeRect(gx*tilePxW + 0.5, gy*tilePxH + 0.5, tilePxW - 1, tilePxH - 1);
         }
@@ -343,6 +353,26 @@ const BG = (() => {
         cctx.strokeRect(gx*tilePxW, gy*tilePxH, tilePxW, tilePxH);
       }
     }
+    updateMetatileDefaultObjectUI();
+  }
+
+  // Mostra/popula o seletor de "objeto padrão" só quando o metatile selecionado tem algum
+  // sub-tile marcado como Dano(3) ou Warp(4) - senão não faz sentido perguntar.
+  function updateMetatileDefaultObjectUI(){
+    const wrap = document.getElementById('mtDefaultObjWrap');
+    const sel = document.getElementById('mtDefaultObjSelect');
+    if(!wrap || !sel || !selectedMetatile) { if(wrap) wrap.style.display = 'none'; return; }
+    const hasDano = selectedMetatile.collisions.some(c => c === 3);
+    const hasWarp = selectedMetatile.collisions.some(c => c === 4);
+    if(!hasDano && !hasWarp){ wrap.style.display = 'none'; return; }
+    wrap.style.display = 'flex';
+    const objs = (Project.data?.hitboxObjects || []).filter(o => (hasDano && o.kind === 'dano') || (hasWarp && o.kind === 'warp'));
+    const cur = selectedMetatile.defaultHitboxObjectId || '';
+    sel.innerHTML = '<option value="">— nenhum (sem objeto padrão) —</option>' + objs.map(o => `<option value="${o.id}" ${o.id===cur?'selected':''}>${o.kind==='dano'?'🔻':'🚪'} ${o.name}</option>`).join('');
+  }
+  function setMetatileDefaultObject(id){
+    if(!selectedMetatile) return;
+    selectedMetatile.defaultHitboxObjectId = id || null;
   }
 
   function floodFillAt(tx, ty) {
@@ -376,6 +406,7 @@ const BG = (() => {
             const shift = ((attrY%2)*2 + (attrX%2))*2;
             attributes[attrIdx] = (attributes[attrIdx] & ~(0x03 << shift)) | ((activePalette & 0x03) << shift);
             collisionMap[ny * 32 + nx] = mt.collisions[subIdx] || 0;
+            setHitboxInstanceAt(nx, ny, mt.collisions[subIdx] || 0, mt.defaultHitboxObjectId || null);
           }
         }
       }
@@ -385,6 +416,45 @@ const BG = (() => {
       queue.push({x: cx, y: cy - mt.h});
     }
     render();
+  }
+
+  // Grava/atualiza/remove a instância de hitbox numa posição, conforme o tipo de colisão
+  // pintado ali. Repintar sempre usa o objeto padrão (se houver) - reatribuir individualmente
+  // é feito depois, clicando na instância já colocada (ver reassignHitboxInstance).
+  function setHitboxInstanceAt(x, y, colType, defaultObjId){
+    const idx = hitboxInstances.findIndex(h => h.x === x && h.y === y);
+    if(colType === 3 || colType === 4){
+      if(idx >= 0) hitboxInstances[idx].hitboxObjectId = defaultObjId || null;
+      else hitboxInstances.push({ x, y, hitboxObjectId: defaultObjId || null });
+    } else if(idx >= 0){
+      hitboxInstances.splice(idx, 1);
+    }
+  }
+  function clearHitboxInstanceAt(x, y){
+    const idx = hitboxInstances.findIndex(h => h.x === x && h.y === y);
+    if(idx >= 0) hitboxInstances.splice(idx, 1);
+  }
+  function reassignHitboxInstance(x, y, hitboxObjectId){
+    const idx = hitboxInstances.findIndex(h => h.x === x && h.y === y);
+    if(idx >= 0) hitboxInstances[idx].hitboxObjectId = hitboxObjectId || null;
+  }
+  // Abre uma escolha simples (por número) dos objetos compatíveis com o tipo de colisão
+  // desse tile específico, e reatribui só essa instância - sem mexer no metatile/desenho.
+  function assignHitboxObjectAt(tx, ty){
+    const idx = hitboxInstances.findIndex(h => h.x === tx && h.y === ty);
+    if(idx < 0){ alert('Não há hitbox de Dano/Warp nesse tile. Pinte um primeiro (ferramenta Hitbox ou um metatile com Dano/Warp).'); return; }
+    const colType = collisionMap[ty*32+tx];
+    const kind = colType === 4 ? 'warp' : 'dano';
+    const objs = (Project.data?.hitboxObjects || []).filter(o => o.kind === kind);
+    if(objs.length === 0){ alert(`Nenhum objeto de ${kind === 'warp' ? 'Warp' : 'Dano'} cadastrado ainda. Crie um em Programação > Objetos.`); return; }
+    const listStr = objs.map((o,i) => `${i+1}. ${o.name}`).join('\n');
+    const answer = prompt(`Tile (${tx},${ty}) - escolha o objeto de ${kind === 'warp' ? 'Warp' : 'Dano'}:\n${listStr}\n\nDigite o número:`, '');
+    if(answer === null) return;
+    const n = parseInt(answer);
+    if(isNaN(n) || n < 1 || n > objs.length) return;
+    reassignHitboxInstance(tx, ty, objs[n-1].id);
+    render();
+    Project.status(`Tile (${tx},${ty}) agora usa "${objs[n-1].name}"`);
   }
 
   function paintAt(mx, my, erasing = false, isAlt = false, isInitialClick = false) {
@@ -423,14 +493,15 @@ const BG = (() => {
 
     if(isAlt) { if(isInitialClick) pickMetatileAt(tx, ty); return; }
 
+    if(currentTool === 'assign') { if(isInitialClick) assignHitboxObjectAt(tx, ty); return; }
     if(currentTool === 'hitbox') {
       const isHitboxFlood = document.getElementById('chkHitboxFlood')?.checked;
       if(isHitboxFlood) { if(isInitialClick) floodFillHitbox(tx, ty, erasing ? 0 : selectedCollisionType); }
-      else { collisionMap[ty * 32 + tx] = erasing ? 0 : selectedCollisionType; render(); }
+      else { const ct = erasing ? 0 : selectedCollisionType; collisionMap[ty * 32 + tx] = ct; setHitboxInstanceAt(tx, ty, ct, null); render(); }
       return;
     }
     if(currentTool === 'flood') { if(isInitialClick) floodFillAt(tx, ty); return; }
-    if(currentTool === 'erase') { nametable[ty*32+tx] = 0; collisionMap[ty*32+tx] = 0; render(); return; }
+    if(currentTool === 'erase') { nametable[ty*32+tx] = 0; collisionMap[ty*32+tx] = 0; clearHitboxInstanceAt(tx, ty); render(); return; }
     if(currentTool === 'attr') {
       const attrX = Math.floor(tx/2), attrY = Math.floor(ty/2);
       const blockX = Math.floor(attrX/2), blockY = Math.floor(attrY/2);
@@ -440,7 +511,7 @@ const BG = (() => {
       render(); return;
     }
     if(!selectedMetatile && !erasing) return;
-    if(erasing){ nametable[ty*32+tx] = 0; collisionMap[ty*32+tx] = 0; render(); return; }
+    if(erasing){ nametable[ty*32+tx] = 0; collisionMap[ty*32+tx] = 0; clearHitboxInstanceAt(tx, ty); render(); return; }
     ensureMetatileCollisions(selectedMetatile);
     const mt = selectedMetatile;
     const snapX = Math.floor(tx / mt.w) * mt.w;
@@ -457,6 +528,7 @@ const BG = (() => {
         const shift = ((attrY%2)*2 + (attrX%2))*2;
         attributes[attrIdx] = (attributes[attrIdx] & ~(0x03 << shift)) | ((activePalette & 0x03) << shift);
         collisionMap[ny * 32 + nx] = mt.collisions[subIdx] || 0;
+        setHitboxInstanceAt(nx, ny, mt.collisions[subIdx] || 0, mt.defaultHitboxObjectId || null);
       }
     }
     render();
@@ -591,7 +663,7 @@ const BG = (() => {
   function promptNewCanvasForCurrentPage(){
     const name = prompt("Nome da nova tela:", `tela_pg${currentChrPage}`);
     nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0);
-    textLayers = [];
+    textLayers = []; hitboxInstances = [];
     if(name){ currentEntryId = 'scr_'+Date.now(); currentEntryName = name.trim(); currentEntryType = null; }
     else { currentEntryId = null; currentEntryName = ''; currentEntryType = null; }
     selectedTextIdx = null; movingTextMode = false; duplicatingTextMode = false; textUnderCache = {};
@@ -608,7 +680,7 @@ const BG = (() => {
     if(newPage === currentChrPage){ refreshMetatileList(); return; }
     pageDrafts[currentChrPage] = {
       nametable: [...nametable], attributes: [...attributes], collisionMap: [...collisionMap],
-      textLayers: JSON.parse(JSON.stringify(textLayers))
+      textLayers: JSON.parse(JSON.stringify(textLayers)), hitboxInstances: JSON.parse(JSON.stringify(hitboxInstances))
     };
     currentChrPage = newPage;
 
@@ -630,6 +702,7 @@ const BG = (() => {
     if(draft){
       nametable = [...draft.nametable]; attributes = [...draft.attributes]; collisionMap = [...draft.collisionMap];
       textLayers = JSON.parse(JSON.stringify(draft.textLayers));
+      hitboxInstances = JSON.parse(JSON.stringify(draft.hitboxInstances || []));
       currentEntryId = null; currentEntryName = ''; currentEntryType = null;
       selectedTextIdx = null; movingTextMode = false; duplicatingTextMode = false; textUnderCache = {};
       updateTextLayersUI(); updateBGSelect(); render();
@@ -1053,7 +1126,7 @@ const BG = (() => {
   }
 
   function clearBackground(){
-    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0); textLayers = []; selectedTextIdx = null; render();
+    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0); textLayers = []; hitboxInstances = []; selectedTextIdx = null; render();
   }
 
   // Carrega uma tela salva (background ou splash) e sincroniza a página do CHR trabalhada
@@ -1075,6 +1148,7 @@ const BG = (() => {
     attributes = b.attributes ? [...b.attributes] : new Array(64).fill(0);
     collisionMap = b.collisionMap ? [...b.collisionMap] : new Array(960).fill(0);
     textLayers = b.textLayers ? [...b.textLayers] : [];
+    hitboxInstances = b.hitboxInstances ? JSON.parse(JSON.stringify(b.hitboxInstances)) : [];
     selectedTextIdx = null; textUnderCache = {}; movingTextMode = false; duplicatingTextMode = false;
     currentEntryId = b.id; currentEntryName = b.name; currentEntryType = type;
     const page = (b.chrPage != null) ? b.chrPage : inferChrPageFromNametable(nametable);
@@ -1101,7 +1175,7 @@ const BG = (() => {
       const oi = otherArr.findIndex(e => e.id === currentEntryId);
       if(oi >= 0) otherArr.splice(oi, 1);
     }
-    const payload = { id: currentEntryId, name: currentEntryName, nametable:[...nametable], attributes:[...attributes], textLayers:[...textLayers], chrPage: currentChrPage, created: Date.now() };
+    const payload = { id: currentEntryId, name: currentEntryName, nametable:[...nametable], attributes:[...attributes], textLayers:[...textLayers], hitboxInstances: JSON.parse(JSON.stringify(hitboxInstances)), chrPage: currentChrPage, created: Date.now() };
     if(type === 'bg') payload.collisionMap = [...collisionMap];
     const idx = targetArr.findIndex(e => e.id === currentEntryId);
     if(idx >= 0) targetArr[idx] = { ...targetArr[idx], ...payload };
@@ -1127,7 +1201,7 @@ const BG = (() => {
     }
     currentEntryId = null; currentEntryName = ''; currentEntryType = null;
     nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0);
-    textLayers = []; updateTextLayersUI(); updateBGSelect(); render();
+    textLayers = []; hitboxInstances = []; updateTextLayersUI(); updateBGSelect(); render();
   }
 
   function deleteCurrentEntry(){
@@ -1152,7 +1226,7 @@ const BG = (() => {
   }
 
   return {
-    init: buildHTML, setTool, setCollisionType, setAllSubTilesCollision, applyMetatileHitboxToCanvas, 
+    init: buildHTML, setTool, setCollisionType, setAllSubTilesCollision, applyMetatileHitboxToCanvas, setMetatileDefaultObject,
     insertText, exportASM, fillAllEmpty, fillEntireScreen, applyAttrToAll, setTextOffsetMode,
     newCanvas, clearBackground, saveEntryAs, deleteCurrentEntry, loadEntry,
     editTextLayer, deleteTextLayer, toggleMoveMode, nudgeTextLayer, startDuplicateTextMode, duplicateTextLayerAt, clearTextSelection,

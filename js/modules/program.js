@@ -58,6 +58,7 @@ const PROGRAM = (() => {
           <h3 style="font-size:12px;color:#ffcc00;margin:0">🧠 PROGRAMAÇÃO (esboço)</h3>
           <div style="display:flex;gap:4px;margin-left:20px">
             <button class="btn-tool prog-tab-btn" data-tab="vars" onclick="PROGRAM.setTab('vars')" style="${activeTab==='vars'?'background:#ffcc00;color:#000':''}">🔢 Variáveis</button>
+            <button class="btn-tool prog-tab-btn" data-tab="objects" onclick="PROGRAM.setTab('objects')" style="${activeTab==='objects'?'background:#ffcc00;color:#000':''}">🎯 Objetos</button>
             <button class="btn-tool prog-tab-btn" data-tab="events" onclick="PROGRAM.setTab('events')" style="${activeTab==='events'?'background:#ffcc00;color:#000':''}">⚡ Eventos</button>
             <button class="btn-tool prog-tab-btn" data-tab="rules" onclick="PROGRAM.setTab('rules')" style="${activeTab==='rules'?'background:#ffcc00;color:#000':''}">📜 Regras</button>
           </div>
@@ -73,6 +74,7 @@ const PROGRAM = (() => {
   function renderTab(){
     const cont = document.getElementById('progTabContent'); if(!cont) return;
     if(activeTab === 'vars') cont.innerHTML = renderVarsTab();
+    else if(activeTab === 'objects') cont.innerHTML = renderObjectsTab();
     else if(activeTab === 'events') cont.innerHTML = renderEventsTab();
     else cont.innerHTML = renderRulesTab();
   }
@@ -147,26 +149,98 @@ const PROGRAM = (() => {
     renderTab();
   }
 
-  // ---------------- EVENTOS ----------------
-  function renderEventsTab(){
-    const events = Project.data?.events || [];
-    const rows = events.map(e => `
+  // ---------------- OBJETOS (hitbox) ----------------
+  function renderObjectsTab(){
+    const objs = Project.data?.hitboxObjects || [];
+    const rows = objs.map(o => `
       <tr style="border-bottom:1px solid #222">
-        <td style="padding:6px;color:#fff">${e.name}</td>
-        <td style="padding:6px;color:#888">${e.category}</td>
-        <td style="padding:6px">${e.builtin ? '<span style="color:#4ec9b0;font-size:10px">nativo</span>' : '<span style="color:#ffcc00;font-size:10px">customizado</span>'}</td>
-        <td style="padding:6px;text-align:right">${e.builtin ? '' : `<button class="btn-tool" onclick="PROGRAM.deleteEvent('${e.id}')" style="background:#c0392b;color:#fff;font-size:10px">🗑</button>`}</td>
+        <td style="padding:6px;color:#fff">${o.name}</td>
+        <td style="padding:6px;color:#888">${o.kind === 'dano' ? '🔻 Dano' : '🚪 Warp'}</td>
+        <td style="padding:6px;color:#4ec9b0">${o.kind === 'dano' ? (o.damage ?? 0) : '—'}</td>
+        <td style="padding:6px;text-align:right"><button class="btn-tool" onclick="PROGRAM.deleteHitboxObject('${o.id}')" style="background:#c0392b;color:#fff;font-size:10px">🗑</button></td>
       </tr>`).join('');
     return `
       <div style="max-width:700px">
         <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;margin-bottom:12px">
-          <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">NOVO EVENTO CUSTOMIZADO</h4>
+          <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">NOVO OBJETO DE HITBOX</h4>
+          <div style="font-size:9px;color:#666;margin-bottom:8px;line-height:1.4">
+            Um objeto é a "identidade" de um gatilho (dano ou warp). O mesmo metatile pode ter várias
+            instâncias na tela, cada uma apontando pra um objeto diferente - ex: dois espinhos iguais
+            visualmente, um tira 10 e o outro 20; ou duas portas iguais que levam pra lugares diferentes.
+          </div>
           <div style="display:flex;gap:6px;align-items:center">
-            <input id="evName" type="text" placeholder="nome_do_evento" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
-            <select id="evCategory" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
+            <input id="objName" type="text" placeholder="nome_do_objeto" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
+            <select id="objKind" onchange="PROGRAM.onObjKindChange()" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
+              <option value="dano">Dano</option>
+              <option value="warp">Warp</option>
+            </select>
+            <input id="objDamage" type="number" min="0" max="255" value="10" placeholder="dano" style="width:70px;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
+            <button class="btn-tool" onclick="PROGRAM.addHitboxObject()" style="background:#27ae60;color:#fff">+ Adicionar</button>
+          </div>
+        </div>
+        <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
+          <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">OBJETOS DO PROJETO (${objs.length})</h4>
+          <table style="width:100%;border-collapse:collapse;font-size:11px">
+            <thead><tr style="border-bottom:1px solid #444;color:#888;text-align:left"><th style="padding:6px">Nome</th><th style="padding:6px">Tipo</th><th style="padding:6px">Dano</th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="4" style="padding:10px;color:#666">Nenhum objeto ainda.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  function onObjKindChange(){
+    const kindEl = document.getElementById('objKind'); const dmgEl = document.getElementById('objDamage');
+    if(!kindEl || !dmgEl) return;
+    dmgEl.style.display = kindEl.value === 'dano' ? 'inline-block' : 'none';
+  }
+
+  function addHitboxObject(){
+    const nameEl = document.getElementById('objName'); const kindEl = document.getElementById('objKind'); const dmgEl = document.getElementById('objDamage');
+    const name = nameEl.value.trim(); if(!name) return;
+    const kind = kindEl.value;
+    if(!Project.data.hitboxObjects) Project.data.hitboxObjects = [];
+    const obj = { id: 'hb_'+Date.now(), name, kind };
+    if(kind === 'dano'){ let d = parseInt(dmgEl.value); if(isNaN(d)) d = 0; obj.damage = Math.max(0, Math.min(255, d)); }
+    Project.data.hitboxObjects.push(obj);
+    renderTab();
+  }
+  function deleteHitboxObject(id){
+    if(!Project.data?.hitboxObjects) return;
+    if(!confirm('Remover esse objeto? Instâncias que o usam nas telas ficarão com referência quebrada.')) return;
+    Project.data.hitboxObjects = Project.data.hitboxObjects.filter(o => o.id !== id);
+    renderTab();
+  }
+
+  // ---------------- EVENTOS ----------------
+  const INPUT_BUTTONS = ["P1-UP","P1-DOWN","P1-LEFT","P1-RIGHT","P1-A","P1-B","P1-START","P1-SELECT","P2-UP","P2-DOWN","P2-LEFT","P2-RIGHT","P2-A","P2-B","P2-START","P2-SELECT"];
+
+  function renderEventsTab(){
+    const events = Project.data?.events || [];
+    const hitboxObjs = Project.data?.hitboxObjects || [];
+    const rows = events.map(e => `
+      <tr style="border-bottom:1px solid #222">
+        <td style="padding:6px;color:#fff">${e.name}</td>
+        <td style="padding:6px;color:#888">${e.category}${e.button ? ' ('+e.button+')' : ''}${e.hitboxObjectId ? ' ('+(hitboxObjs.find(o=>o.id===e.hitboxObjectId)?.name || '?')+')' : ''}</td>
+        <td style="padding:6px">${e.builtin ? '<span style="color:#4ec9b0;font-size:10px">nativo</span>' : '<span style="color:#ffcc00;font-size:10px">customizado</span>'}</td>
+        <td style="padding:6px;text-align:right">${e.builtin ? '' : `<button class="btn-tool" onclick="PROGRAM.deleteEvent('${e.id}')" style="background:#c0392b;color:#fff;font-size:10px">🗑</button>`}</td>
+      </tr>`).join('');
+    return `
+      <div style="max-width:760px">
+        <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;margin-bottom:12px">
+          <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">NOVO EVENTO CUSTOMIZADO</h4>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <input id="evName" type="text" placeholder="nome_do_evento" style="flex:1;min-width:140px;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
+            <select id="evCategory" onchange="PROGRAM.onEvCategoryChange()" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
               <option value="input">input</option>
               <option value="hitbox">hitbox</option>
               <option value="custom">custom</option>
+            </select>
+            <select id="evButton" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
+              ${INPUT_BUTTONS.map(b=>`<option value="${b}">${b}</option>`).join('')}
+            </select>
+            <select id="evHitboxObj" style="display:none;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
+              <option value="">— objeto —</option>
+              ${hitboxObjs.map(o=>`<option value="${o.id}">${o.name}</option>`).join('')}
             </select>
             <button class="btn-tool" onclick="PROGRAM.addEvent()" style="background:#27ae60;color:#fff">+ Adicionar</button>
           </div>
@@ -181,11 +255,22 @@ const PROGRAM = (() => {
       </div>`;
   }
 
+  function onEvCategoryChange(){
+    const catEl = document.getElementById('evCategory'); const btnEl = document.getElementById('evButton'); const objEl = document.getElementById('evHitboxObj');
+    if(!catEl) return;
+    btnEl.style.display = catEl.value === 'input' ? 'inline-block' : 'none';
+    objEl.style.display = catEl.value === 'hitbox' ? 'inline-block' : 'none';
+  }
+
   function addEvent(){
     const nameEl = document.getElementById('evName'); const catEl = document.getElementById('evCategory');
+    const btnEl = document.getElementById('evButton'); const objEl = document.getElementById('evHitboxObj');
     const name = nameEl.value.trim(); if(!name) return;
     if(!Project.data.events) Project.data.events = [];
-    Project.data.events.push({ id: 'ev_'+Date.now(), name, category: catEl.value, builtin: false });
+    const ev = { id: 'ev_'+Date.now(), name, category: catEl.value, builtin: false };
+    if(catEl.value === 'input') ev.button = btnEl.value;
+    if(catEl.value === 'hitbox') ev.hitboxObjectId = objEl.value || null;
+    Project.data.events.push(ev);
     renderTab();
   }
   function deleteEvent(id){
@@ -310,7 +395,8 @@ const PROGRAM = (() => {
   return {
     init: buildHTML, setTab,
     addVariable, deleteVariable, onVarTypeChange,
-    addEvent, deleteEvent,
+    addHitboxObject, deleteHitboxObject, onObjKindChange,
+    addEvent, deleteEvent, onEvCategoryChange,
     addRule, selectRule, renameRule, setRuleScope, deleteRule, addStep, updateStep, moveStep, deleteStep
   };
 })();

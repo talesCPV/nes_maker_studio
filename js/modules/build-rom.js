@@ -1,18 +1,122 @@
-// BUILD ROM v0.7.0 - Splash + Background Selecionados + ca65 Correto
+// BUILD ROM v0.8.0 - Splash/BG + Music test (sound-editor v3 → APU)
 const BUILD = (() => {
   let lastROM = null;
   let lastASM = "";
+
+  const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  const CPU_FREQ_NTSC = 1789773;
+  const RHYTHM = {
+    breve: 4, whole: 2, quarter: 1, eighth: 0.5,
+    sixteenth: 0.25, thirtysecond: 0.125, sixtyfourth: 0.0625
+  };
+
+  // period NES (11-bit) a partir do nome da nota do editor
+  function noteToPeriod(noteName){
+    if(!noteName || noteName === "REST") return { lo: 0, hi: 0 };
+    const m = noteName.match(/^([A-G]#?)(\d+)$/);
+    if(!m) return { lo: 0, hi: 0 };
+    const noteIndex = NOTE_NAMES.indexOf(m[1]);
+    if(noteIndex < 0) return { lo: 0, hi: 0 };
+    const octave = parseInt(m[2], 10);
+    const midi = (octave + 1) * 12 + noteIndex;
+    const freq = 440 * Math.pow(2, (midi - 69) / 12);
+    let period = Math.round((CPU_FREQ_NTSC / (16 * freq)) - 1);
+    if(period < 0) period = 0;
+    if(period > 2047) period = 2047;
+    return { lo: period & 0xFF, hi: (period >> 8) & 0x07 };
+  }
+
+  function framesForFigure(figId, baseFrames){
+    const mul = RHYTHM[figId] != null ? RHYTHM[figId] : 1;
+    return Math.max(1, Math.min(255, Math.round(baseFrames * mul)));
+  }
+
+  function hexByte(b){
+    return "$" + (b & 0xFF).toString(16).padStart(2, "0").toUpperCase();
+  }
+
+  function formatBytes(arr, per){
+    per = per || 16;
+    const lines = [];
+    for(let i=0;i<arr.length;i+=per){
+      lines.push("  .byte " + arr.slice(i, i+per).map(hexByte).join(", "));
+    }
+    return lines;
+  }
+
+  // Converte um canal do editor → tabelas Scale/Time/Pitch
+  function encodeChannel(notes, baseFrames, loop){
+    const pitchList = ["REST"];
+    const pitchIndex = { REST: 0 };
+    const scale = [];
+    const time = [];
+    const list = Array.isArray(notes) ? notes : [];
+    const maxNotes = 2048;
+    const n = Math.min(list.length, maxNotes);
+    for(let i=0;i<n;i++){
+      const note = list[i]?.note || "REST";
+      const fig = list[i]?.figure || "quarter";
+      if(pitchIndex[note] === undefined){
+        pitchIndex[note] = pitchList.length;
+        pitchList.push(note);
+      }
+      scale.push(pitchIndex[note]);
+      time.push(framesForFigure(fig, baseFrames));
+    }
+    if(!scale.length){
+      scale.push(0);
+      time.push(30);
+    }
+    scale.push(loop ? 0xFF : 0xFE);
+
+    const lo = [];
+    const hi = [];
+    pitchList.forEach(name=>{
+      const p = noteToPeriod(name);
+      lo.push(p.lo);
+      hi.push(p.hi);
+    });
+    return { scale, time, lo, hi, pitchList, truncated: list.length > maxNotes };
+  }
+
+  function getMusicItems(){
+    const sounds = Project?.data?.sounds;
+    if(!sounds) return [];
+    if(sounds.version === 3 && Array.isArray(sounds.items)){
+      return sounds.items.filter(it => it && Array.isArray(it.channels) && it.channels.length);
+    }
+    // v2 legado
+    if(sounds.version === 2 && Array.isArray(sounds.channels)){
+      return [{
+        id: "song_legacy",
+        type: "song",
+        name: "Musica 1",
+        loop: sounds.loop !== false,
+        baseFrames: sounds.baseFrames || 30,
+        channels: sounds.channels
+      }];
+    }
+    return [];
+  }
+
+  function getSelectedMusic(){
+    const sel = document.getElementById("buildMusicSelect");
+    const items = getMusicItems();
+    if(!sel || sel.value === "" || sel.value === "none") return null;
+    return items.find(it => it.id === sel.value) || null;
+  }
+
   function buildHTML(){
-    const root = document.getElementById('mod-build'); if(!root) return;
+    const root = document.getElementById("mod-build"); if(!root) return;
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <div style="display:flex;gap:8px;align-items:center;padding:10px 12px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
-          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.7.0 • Splash/Background • ca65</h3>
+          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.8.0 • Splash/BG + Music Test</h3>
           <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn-tool" onclick="BUILD.buildROM()" style="background:#27ae60;color:#fff;padding:6px 14px;font-weight:bold">🔨 Build .NES + .asm</button>
             <button class="btn-tool" onclick="BUILD.downloadROM()" id="btnDownload" style="display:none;background:#2980b9;color:#fff">⬇ .nes</button>
             <button class="btn-tool" onclick="BUILD.downloadASM()" id="btnDownloadASM" style="display:none;background:#8e44ad;color:#fff">⬇ .asm</button>
-            <button class="btn-tool" onclick="BUILD.downloadCFG()" id="btnDownloadCFG" style="display:none;background:#d35400;color:#fff">⬇ nrom.cfg</button>
+            <button class="btn-tool" onclick="BUILD.downloadCFG()" id="btnDownloadCFG" style="background:#d35400;color:#fff">⬇ nrom.cfg</button>
           </div>
         </div>
         <div style="display:flex;flex:1;overflow:hidden">
@@ -31,10 +135,15 @@ const BUILD = (() => {
               <select id="buildImageSelect" style="width:100%;background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:5px;font-size:11px"></select>
               <div id="buildPhaseDetails" style="margin-top:8px;font-size:10px;color:#666;background:#000;padding:6px;border-radius:4px;border:1px solid #222"></div>
             </div>
+            <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
+              <h4 style="font-size:10px;color:#4ec9b0;margin-bottom:6px">🎵 MÚSICA NA ROM (teste APU)</h4>
+              <select id="buildMusicSelect" style="width:100%;background:#000;color:#4ec9b0;border:1px solid #2a5a4a;border-radius:4px;padding:5px;font-size:11px"></select>
+              <div id="buildMusicDetails" style="margin-top:8px;font-size:10px;color:#666;background:#000;padding:6px;border-radius:4px;border:1px solid #222">Nenhuma música</div>
+            </div>
             <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px">
               <h4 style="font-size:10px;color:#8585ff;margin-bottom:4px">🐧 COMPILAÇÃO LOCAL (ca65)</h4>
               <div style="font-size:10px;color:#aaa;line-height:1.5;font-family:monospace">
-                ca65 main.asm -o main.o<br>ld65 -C nrom.cfg main.o -o jogo.nes<br>fceux jogo.nes
+                ca65 Hello.asm -o Hello.o<br>ld65 -C nrom.cfg Hello.o -o jogo.nes<br>fceux jogo.nes
               </div>
             </div>
           </div>
@@ -57,148 +166,174 @@ const BUILD = (() => {
     `;
     refreshSelects(); updateInfo(); renderPreview();
   }
+
+  function refreshMusicSelect(){
+    const sel = document.getElementById("buildMusicSelect");
+    if(!sel) return;
+    const items = getMusicItems();
+    const prev = sel.value;
+    sel.innerHTML = "";
+    const optNone = document.createElement("option");
+    optNone.value = "none";
+    optNone.textContent = "— Sem música —";
+    sel.appendChild(optNone);
+    items.forEach(it=>{
+      const o = document.createElement("option");
+      o.value = it.id;
+      const nch = (it.channels || []).length;
+      const tag = it.type === "sfx" ? "SFX" : "SONG";
+      o.textContent = `[${tag}] ${it.name || it.id} (${nch} ch)`;
+      sel.appendChild(o);
+    });
+    if(prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+    else if(items.length) sel.value = items[0].id;
+    sel.onchange = ()=> updateInfo();
+    updateMusicDetails();
+  }
+
+  function updateMusicDetails(){
+    const el = document.getElementById("buildMusicDetails");
+    if(!el) return;
+    const music = getSelectedMusic();
+    if(!music){
+      el.innerHTML = "Nenhuma música selecionada — ROM silenciosa.";
+      return;
+    }
+    const base = music.baseFrames || 30;
+    const chans = (music.channels || []).map(c => c.type).join(", ");
+    const cols = Math.max(0, ...(music.channels || []).map(c => (c.notes||[]).length));
+    el.innerHTML = `<b style="color:#4ec9b0">${music.name}</b><br>Canais: ${chans || "—"}<br>Colunas: ${cols}<br>Frames/♩: ${base} · Loop: ${music.loop !== false ? "sim" : "não"}`;
+  }
+
   function refreshSelects(){
-    const phaseSel=document.getElementById('buildPhaseSelect');
-    const typeSel=document.getElementById('buildImageTypeSelect');
-    const imgSel=document.getElementById('buildImageSelect');
+    const phaseSel=document.getElementById("buildPhaseSelect");
+    const typeSel=document.getElementById("buildImageTypeSelect");
+    const imgSel=document.getElementById("buildImageSelect");
     if(!phaseSel||!typeSel||!imgSel) return;
     const phases=Project.data?.phases||[];
-    phaseSel.innerHTML='';
-    phases.forEach((p,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=`Fase ${i+1}: ${p.name}`; phaseSel.appendChild(o); });
-    if(phases.length===0){ const o=document.createElement('option'); o.textContent='Nenhuma fase'; phaseSel.appendChild(o); }
-
+    phaseSel.innerHTML="";
+    phases.forEach((p,i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=`Fase ${i+1}: ${p.name}`; phaseSel.appendChild(o); });
+    if(phases.length===0){ const o=document.createElement("option"); o.textContent="Nenhuma fase"; phaseSel.appendChild(o); }
     refreshImageSelect();
-
+    refreshMusicSelect();
     phaseSel.onchange=()=>{ updateInfo(); renderPreview(); };
     typeSel.onchange=()=>{ refreshImageSelect(); updateInfo(); renderPreview(); };
     imgSel.onchange=()=>{ updateInfo(); renderPreview(); };
   }
+
   function refreshImageSelect(){
-    const typeSel=document.getElementById('buildImageTypeSelect');
-    const imgSel=document.getElementById('buildImageSelect');
+    const typeSel=document.getElementById("buildImageTypeSelect");
+    const imgSel=document.getElementById("buildImageSelect");
     if(!typeSel||!imgSel) return;
     const type=typeSel.value;
     const splashes=Project.data?.splashScreens||[];
     const bgs=Project.data?.backgrounds||[];
-    imgSel.innerHTML='';
-    const optAuto=document.createElement('option'); optAuto.value='auto';
-    optAuto.textContent = type==='background' ? '— Auto: background da fase / 1º BG —' : '— Auto: splash da fase / 1ª splash —';
+    imgSel.innerHTML="";
+    const optAuto=document.createElement("option"); optAuto.value="auto";
+    optAuto.textContent = type==="background" ? "— Auto: background da fase / 1º BG —" : "— Auto: splash da fase / 1ª splash —";
     imgSel.appendChild(optAuto);
-    const list = type==='background' ? bgs : splashes;
+    const list = type==="background" ? bgs : splashes;
     list.forEach((item,i)=>{
-      const o=document.createElement('option'); o.value=i;
+      const o=document.createElement("option"); o.value=i;
       const filled = item.nametable ? item.nametable.filter(t=>t!==0).length : 0;
-      const defaultName = type==='background' ? `BG ${i+1}` : `Splash ${i+1}`;
+      const defaultName = type==="background" ? `BG ${i+1}` : `Splash ${i+1}`;
       o.textContent = `${item.name||defaultName} (${filled} tiles)`;
       imgSel.appendChild(o);
     });
     if(list.length===0){
-      const o=document.createElement('option'); o.disabled=true;
-      o.textContent = type==='background' ? 'Nenhum background cadastrado' : 'Nenhuma splash cadastrada';
+      const o=document.createElement("option"); o.disabled=true;
+      o.textContent = type==="background" ? "Nenhum background cadastrado" : "Nenhuma splash cadastrada";
       imgSel.appendChild(o);
     }
   }
+
   function getSelectedBuildData(){
-    const phaseSel=document.getElementById('buildPhaseSelect');
-    const typeSel=document.getElementById('buildImageTypeSelect');
-    const imgSel=document.getElementById('buildImageSelect');
+    const phaseSel=document.getElementById("buildPhaseSelect");
+    const typeSel=document.getElementById("buildImageTypeSelect");
+    const imgSel=document.getElementById("buildImageSelect");
     const phases=Project.data?.phases||[];
     const splashes=Project.data?.splashScreens||[];
     const bgs=Project.data?.backgrounds||[];
     let targetPhase = phases[0];
     if(phaseSel && !isNaN(parseInt(phaseSel.value)) && phases[parseInt(phaseSel.value)]) targetPhase=phases[parseInt(phaseSel.value)];
+    const type = typeSel ? typeSel.value : "splash";
+    let imageData=null, sourceName="";
 
-    const type = typeSel ? typeSel.value : 'splash';
-    let imageData=null, sourceName='';
-
-    // 1) Seleção manual explícita do usuário (Splash OU Background, conforme o tipo escolhido)
-    if(imgSel && imgSel.value!=='auto'){
+    if(imgSel && imgSel.value!=="auto"){
       const idx=parseInt(imgSel.value);
-      if(type==='background' && !isNaN(idx) && bgs[idx]){
+      if(type==="background" && !isNaN(idx) && bgs[idx]){
         imageData={ nametable:[...bgs[idx].nametable], attributes:[...bgs[idx].attributes], name: bgs[idx].name || `BG ${idx+1}` };
         sourceName=`Background "${imageData.name}" (manual)`;
-      } else if(type==='splash' && !isNaN(idx) && splashes[idx]){
+      } else if(type==="splash" && !isNaN(idx) && splashes[idx]){
         imageData={ nametable:[...splashes[idx].nametable], attributes:[...splashes[idx].attributes], name: splashes[idx].name };
         sourceName=`Splash "${imageData.name}" (manual)`;
       }
     }
-
-    // 2) Auto: splash vinculada à fase selecionada
-    if(!imageData && type==='splash' && targetPhase && targetPhase.splash){
+    if(!imageData && type==="splash" && targetPhase && targetPhase.splash){
       const found=splashes.find(s=>s.name===targetPhase.splash);
       if(found){ imageData={ nametable:[...found.nametable], attributes:[...found.attributes], name:found.name }; sourceName=`Splash "${found.name}" da fase "${targetPhase.name}"`; }
     }
-
-    // 2b) Auto: background vinculado à fase selecionada (se o projeto guardar essa referência)
-    if(!imageData && type==='background' && targetPhase && targetPhase.background){
+    if(!imageData && type==="background" && targetPhase && targetPhase.background){
       const found=bgs.find(b=>b.name===targetPhase.background);
       if(found){ imageData={ nametable:[...found.nametable], attributes:[...found.attributes], name:found.name }; sourceName=`Background "${found.name}" da fase "${targetPhase.name}"`; }
     }
-
-    // 3) Fallback: primeiro item do tipo escolhido
-    if(!imageData && type==='splash' && splashes.length>0){
+    if(!imageData && type==="splash" && splashes.length>0){
       imageData={ nametable:[...splashes[0].nametable], attributes:[...splashes[0].attributes], name:splashes[0].name };
       sourceName=`Primeiro splash "${imageData.name}"`;
     }
-    if(!imageData && type==='background' && bgs.length>0){
-      imageData={ nametable:[...bgs[0].nametable], attributes:[...bgs[0].attributes], name: bgs[0].name || 'BG 1' };
+    if(!imageData && type==="background" && bgs.length>0){
+      imageData={ nametable:[...bgs[0].nametable], attributes:[...bgs[0].attributes], name: bgs[0].name || "BG 1" };
       sourceName=`Primeiro background "${imageData.name}"`;
     }
-
-    // 4) Fallback cruzado: se o tipo escolhido estiver vazio, tenta o outro tipo
     if(!imageData){
       if(splashes.length>0){ imageData={ nametable:[...splashes[0].nametable], attributes:[...splashes[0].attributes], name:splashes[0].name }; sourceName=`Fallback: splash "${imageData.name}"`; }
-      else if(bgs.length>0){ imageData={ nametable:[...bgs[0].nametable], attributes:[...bgs[0].attributes], name: bgs[0].name || 'BG 1' }; sourceName=`Fallback: background "${imageData.name}"`; }
+      else if(bgs.length>0){ imageData={ nametable:[...bgs[0].nametable], attributes:[...bgs[0].attributes], name: bgs[0].name || "BG 1" }; sourceName=`Fallback: background "${imageData.name}"`; }
     }
-
-    // 5) Fallback final: BG atual do editor em memória
     if(!imageData){
-      if(typeof BG!=='undefined' && BG.getNametable){
-        try{ const nt=BG.getNametable(); const at=BG.getAttributes(); if(nt && nt.filter(t=>t!==0).length>0) imageData={ nametable:nt, attributes:at, name:'BG atual' }; }catch(e){}
+      if(typeof BG!=="undefined" && BG.getNametable){
+        try{ const nt=BG.getNametable(); const at=BG.getAttributes(); if(nt && nt.filter(t=>t!==0).length>0) imageData={ nametable:nt, attributes:at, name:"BG atual" }; }catch(e){}
       }
     }
-    if(!imageData) imageData={ nametable:new Array(960).fill(0), attributes:new Array(64).fill(0), name:'vazio' };
+    if(!imageData) imageData={ nametable:new Array(960).fill(0), attributes:new Array(64).fill(0), name:"vazio" };
     if(!sourceName) sourceName=imageData.name;
-
     return { ...imageData, sourceName, phase:targetPhase, type, filled: imageData.nametable.filter(t=>t!==0).length };
   }
+
   function updateInfo(){
-    const info=document.getElementById('buildInfo');
-    const details=document.getElementById('buildPhaseDetails');
+    const info=document.getElementById("buildInfo");
+    const details=document.getElementById("buildPhaseDetails");
     if(!info) return;
     const chrBuf=CHR.getBuffer?CHR.getBuffer():new Uint8Array(8192);
     const data=getSelectedBuildData();
-    const typeLabel = data.type==='background' ? 'Background' : 'Splash';
+    const typeLabel = data.type==="background" ? "Background" : "Splash";
     const packed=packBackgroundCHR(chrBuf, data.nametable);
-    let overflowWarn = '';
+    let overflowWarn = "";
     if(packed.overflowCount>0) overflowWarn = `<br><span style="color:#ff5555">⚠ ${packed.overflowCount} tile(s) a mais não cabem em 256 e virarão vazio</span>`;
-    info.innerHTML=`<b style="color:#ffcc00">[${typeLabel}] ${data.sourceName||data.name}</b><br>CHR: ${chrBuf.length} bytes<br>Tiles na tela: ${data.filled}/960<br>Tiles únicos usados: ${packed.usedCount}/256${overflowWarn}`;
+    const music = getSelectedMusic();
+    const musicLine = music
+      ? `<br><span style="color:#4ec9b0">🎵 Música: ${music.name} (${(music.channels||[]).length} ch)</span>`
+      : `<br><span style="color:#666">🎵 Sem música</span>`;
+    info.innerHTML=`<b style="color:#ffcc00">[${typeLabel}] ${data.sourceName||data.name}</b><br>CHR: ${chrBuf.length} bytes<br>Tiles na tela: ${data.filled}/960<br>Tiles únicos usados: ${packed.usedCount}/256${overflowWarn}${musicLine}`;
     if(details && data.phase) details.innerHTML=`Fase: ${data.phase.name}<br>Gravity: ${data.phase.gravity}<br>Mapper: ${data.phase.mapper}`;
+    updateMusicDetails();
   }
-  // Detecção de cor de fundo e desenho de nametable agora centralizados em RENDER_UTILS
-  // (js/render-utils.js) - usado também pelo level-design.js, pra nunca mais divergir.
+
   function computeBackdropColor(nt, at, pals, chrBuf){
     return RENDER_UTILS.computeBackdropColor(nt, at, pals, chrBuf);
   }
   function renderPreview(){
-    const canvas=document.getElementById('buildPreviewCanvas'); if(!canvas) return;
+    const canvas=document.getElementById("buildPreviewCanvas"); if(!canvas) return;
     const data=getSelectedBuildData(); const nt=data.nametable; const at=data.attributes;
     const chrBuf=CHR.getBuffer?CHR.getBuffer():new Uint8Array(8192);
     const pals=CHR.getPalettes?CHR.getPalettes():[[15,0,16,48]];
     RENDER_UTILS.drawNametableToCanvas(canvas, nt, at, chrBuf, pals);
   }
-  function log(m){ const el=document.getElementById('buildLog'); if(el){ el.textContent+="\n"+m; el.scrollTop=el.scrollHeight; } }
+  function log(m){ const el=document.getElementById("buildLog"); if(el){ el.textContent+="\n"+m; el.scrollTop=el.scrollHeight; } }
 
-  // Reempacota os tiles REALMENTE usados pela imagem (nametable) num banco de padrões
-  // dedicado de até 256 tiles, não importa se no editor eles vieram da pg-0 ou da pg-1
-  // (índices 0-255 ou 256-511 do CHR original). Isso resolve a limitação de hardware do
-  // NES, que só permite UMA página de 256 tiles ativa por vez para o background: em vez
-  // de descartar metade do desenho, colocamos só os tiles usados (deduplicados) nessa
-  // única página, e remapeamos a nametable para apontar pros novos índices 0-255.
   function packBackgroundCHR(chrBuf, nt){
     const mapping = new Map();
     const usedTiles = [];
-    mapping.set(0, 0); usedTiles.push(0); // índice 0 sempre reservado (tile "vazio")
+    mapping.set(0, 0); usedTiles.push(0);
     const overflow = new Set();
     for (const raw of nt) {
       const orig = raw || 0;
@@ -208,260 +343,460 @@ const BUILD = (() => {
       usedTiles.push(orig);
     }
     const bgChr = new Uint8Array(4096);
-    usedTiles.forEach((origIdx, newIdx) => {
-      const srcOff = origIdx * 16;
-      if (srcOff + 16 <= chrBuf.length) bgChr.set(chrBuf.subarray(srcOff, srcOff + 16), newIdx * 16);
+    for (let i = 0; i < usedTiles.length; i++) {
+      const srcIdx = usedTiles[i];
+      const srcOff = (srcIdx % 512) * 16;
+      if (srcOff + 16 <= chrBuf.length) bgChr.set(chrBuf.slice(srcOff, srcOff + 16), i * 16);
+    }
+    const remappedNt = nt.map(t => {
+      const orig = t || 0;
+      if (mapping.has(orig)) return mapping.get(orig);
+      return 0;
     });
-    const remappedNt = nt.map(t => mapping.get(t || 0) ?? 0);
     return { bgChr, remappedNt, usedCount: usedTiles.length, overflowCount: overflow.size };
+  }
+
+  // ---- Music engine ASM helpers ----
+  const CH_ORDER = ["pulse1", "pulse2", "triangle", "noise"];
+  const CH_META = {
+    pulse1:   { regVol: "$4000", regLo: "$4002", regHi: "$4003", dutyVol: "%10111111", silence: "%00110000", enableBit: 0 },
+    pulse2:   { regVol: "$4004", regLo: "$4006", regHi: "$4007", dutyVol: "%01111111", silence: "%00110000", enableBit: 1 },
+    triangle: { regVol: "$4008", regLo: "$400A", regHi: "$400B", dutyVol: "%11111111", silence: "%00000000", enableBit: 2 },
+    noise:    { regVol: "$400C", regLo: "$400E", regHi: "$400F", dutyVol: "%00111111", silence: "%00110000", enableBit: 3 }
+  };
+
+  function emitMusicEngine(L, music){
+    if(!music){
+      L.push("; (sem musica)");
+      return null;
+    }
+    const baseFrames = music.baseFrames || 30;
+    const loop = music.loop !== false;
+    const channels = music.channels || [];
+    // ordena / mapeia tipos unicos
+    const used = [];
+    CH_ORDER.forEach(type=>{
+      const ch = channels.find(c => c.type === type);
+      if(ch) used.push({ type, ch, enc: encodeChannel(ch.notes || [], baseFrames, loop) });
+    });
+    // canais extras com tipo desconhecido → primeiros slots livres
+    channels.forEach(ch=>{
+      if(used.some(u => u.ch === ch)) return;
+      const free = CH_ORDER.find(t => !used.some(u => u.type === t));
+      if(free) used.push({ type: free, ch, enc: encodeChannel(ch.notes || [], baseFrames, loop) });
+    });
+    if(!used.length) return null;
+
+    L.push(`; === MUSIC ENGINE: ${music.name} (${used.length} canais, baseFrames=${baseFrames}) ===`);
+    return used;
   }
 
   function generateASM(){
     const chrBuf=CHR.getBuffer?CHR.getBuffer():new Uint8Array(8192);
     const pals=CHR.getPalettes?CHR.getPalettes():[[15,0,16,48],[15,6,22,38],[15,10,26,42],[15,2,18,34],[15,22,48,15],[15,25,41,57],[15,3,19,35],[15,9,25,41]];
     const data=getSelectedBuildData(); const nt=data.nametable; const at=data.attributes;
+    const music = getSelectedMusic();
     const paletteBytes=[]; for(let p=0;p<8;p++){ const pal=pals[p]||[15,0,16,48]; for(let c=0;c<4;c++) paletteBytes.push(pal[c]||0); }
-    // Espelhamento de hardware do PPU: o índice de cor 0 de TODAS as paletas (BG e sprite)
-    // é fisicamente o mesmo endereço $3F00 - não dá pra ter cores 0 diferentes por paleta.
-    // A cor gravada em $3F00 é detectada a partir da paleta REALMENTE usada pelos tiles
-    // vazios/de fundo na nametable (computeBackdropColor), não a paleta 0 do array por padrão -
-    // isso garante que a ROM mostre a mesma cor de fundo desenhada no editor de backgrounds.
     const backdrop = computeBackdropColor(nt, at, pals, chrBuf);
     const universalBackdrop = backdrop.color;
     paletteBytes[0] = universalBackdrop;
     [4,8,12,16,20,24,28].forEach(i => { paletteBytes[i] = universalBackdrop; });
-
-    // Reempacota os tiles usados (de qualquer página original) num único banco de 256 tiles.
     const packed = packBackgroundCHR(chrBuf, nt);
     const packedNt = packed.remappedNt;
 
+    // Encode music channels first
+    let musicChans = null;
+    if(music){
+      const baseFrames = music.baseFrames || 30;
+      const loop = music.loop !== false;
+      musicChans = [];
+      CH_ORDER.forEach(type=>{
+        const ch = (music.channels || []).find(c => c.type === type);
+        if(ch) musicChans.push({ type, enc: encodeChannel(ch.notes || [], baseFrames, loop) });
+      });
+      (music.channels || []).forEach(ch=>{
+        if(musicChans.some(u => u.type === ch.type)) return;
+        const free = CH_ORDER.find(t => !musicChans.some(u => u.type === t));
+        if(free) musicChans.push({ type: free, enc: encodeChannel(ch.notes || [], baseFrames, loop) });
+      });
+      if(!musicChans.length) musicChans = null;
+    }
+
     const L=[];
-    L.push('; NES Game Maker - Gerado por BUILD ROM v0.7.0');
-    L.push(`; Imagem selecionada: [${data.type==='background'?'Background':'Splash'}] ${data.sourceName||data.name}`);
-    L.push(`; CHR do background reempacotado: ${packed.usedCount}/256 tiles usados (pg-0 e pg-1 originais combinados em uma unica pagina)`);
-    if(packed.overflowCount>0) L.push(`; AVISO: ${packed.overflowCount} tile(s) distinto(s) a mais nao couberam nos 256 slots e foram substituidos por tile vazio (0).`);
+    L.push("; NES Game Maker - Gerado por BUILD ROM v0.8.0");
+    L.push(`; Imagem: [${data.type==="background"?"Background":"Splash"}] ${data.sourceName||data.name}`);
+    L.push(`; CHR reempacotado: ${packed.usedCount}/256 tiles`);
+    if(music && musicChans) L.push(`; Musica: ${music.name} · ${musicChans.length} canal(is) · baseFrames=${music.baseFrames||30}`);
+    else L.push("; Musica: (nenhuma)");
     L.push('.segment "HEADER"');
-    L.push('  .byte $4E,$45,$53,$1A,1,1,0,0,0,0,0,0,0,0,0,0');
-    L.push('');
+    L.push("  .byte $4E,$45,$53,$1A,1,1,0,0,0,0,0,0,0,0,0,0");
+    L.push("");
     L.push('.segment "ZEROPAGE"');
-    L.push('');
+    if(musicChans){
+      L.push("music_on:    .res 1");
+      musicChans.forEach((_,i)=>{
+        L.push(`ch${i}_timer:  .res 1`);
+        L.push(`ch${i}_pos:    .res 1`);
+      });
+    }
+    L.push("");
     L.push('.segment "CODE"');
-    L.push('');
-    L.push('NMI:');
-    L.push('  RTI');
-    L.push('');
-    L.push('IRQ:');
-    L.push('  RTI');
-    L.push('');
-    L.push('Reset:');
-    L.push('  SEI');
-    L.push('  CLD');
-    L.push('  LDX #$40');
-    L.push('  STX $4017');
-    L.push('  LDX #$FF');
-    L.push('  TXS');
-    L.push('  LDA #0');
-    L.push('  STA $2000');
-    L.push('  STA $2001');
-    L.push('');
-    L.push('vblankwait1:');
-    L.push('  BIT $2002');
-    L.push('  BPL vblankwait1');
-    L.push('');
-    L.push('  ; Clear RAM');
-    L.push('  LDA #0');
-    L.push('  LDX #0');
-    L.push('clram:');
-    L.push('  STA $0000,X');
-    L.push('  STA $0100,X');
-    L.push('  STA $0200,X');
-    L.push('  STA $0300,X');
-    L.push('  STA $0400,X');
-    L.push('  STA $0500,X');
-    L.push('  STA $0600,X');
-    L.push('  STA $0700,X');
-    L.push('  INX');
-    L.push('  BNE clram');
-    L.push('');
-    L.push('vblankwait2:');
-    L.push('  BIT $2002');
-    L.push('  BPL vblankwait2');
-    L.push('');
-    L.push('  ; Load Palettes');
-    L.push('  BIT $2002');
-    L.push('  LDA #$3F');
-    L.push('  STA $2006');
-    L.push('  LDA #$00');
-    L.push('  STA $2006');
-    L.push('  LDX #0');
-    L.push('load_palettes:');
-    L.push('  LDA PaletteData,X');
-    L.push('  STA $2007');
-    L.push('  INX');
-    L.push('  CPX #32');
-    L.push('  BNE load_palettes');
-    L.push('');
-    L.push(`  ; Load Nametable ($2000) - Imagem selecionada: ${data.type==='background'?'Background':'Splash'} "${data.name}" - 960 bytes em 4 blocos`);
-    L.push('  BIT $2002');
-    L.push('  LDA #$20');
-    L.push('  STA $2006');
-    L.push('  LDA #$00');
-    L.push('  STA $2006');
-    L.push('');
-    L.push('  ; Bloco 1 (256 bytes)');
-    L.push('  LDX #0');
-    L.push('nb1:');
-    L.push('  LDA NametableData+0,X');
-    L.push('  STA $2007');
-    L.push('  INX');
-    L.push('  BNE nb1');
-    L.push('');
-    L.push('  ; Bloco 2 (256 bytes)');
-    L.push('  LDX #0');
-    L.push('nb2:');
-    L.push('  LDA NametableData+256,X');
-    L.push('  STA $2007');
-    L.push('  INX');
-    L.push('  BNE nb2');
-    L.push('');
-    L.push('  ; Bloco 3 (256 bytes)');
-    L.push('  LDX #0');
-    L.push('nb3:');
-    L.push('  LDA NametableData+512,X');
-    L.push('  STA $2007');
-    L.push('  INX');
-    L.push('  BNE nb3');
-    L.push('');
-    L.push('  ; Bloco 4 (192 bytes restantes)');
-    L.push('  LDX #0');
-    L.push('nb4:');
-    L.push('  LDA NametableData+768,X');
-    L.push('  STA $2007');
-    L.push('  INX');
-    L.push('  CPX #192');
-    L.push('  BNE nb4');
-    L.push('');
-    L.push('  ; Load Attributes ($23C0) - 64 bytes');
-    L.push('  BIT $2002');
-    L.push('  LDA #$23');
-    L.push('  STA $2006');
-    L.push('  LDA #$C0');
-    L.push('  STA $2006');
-    L.push('  LDX #0');
-    L.push('load_attrs:');
-    L.push('  LDA AttributeData,X');
-    L.push('  STA $2007');
-    L.push('  INX');
-    L.push('  CPX #64');
-    L.push('  BNE load_attrs');
-    L.push('');
-    L.push('  ; Reset do scroll ($2005) - OBRIGATORIO apos usar $2006/$2007 pra carregar VRAM,');
-    L.push('  ; senao o PPU comeca a renderizar com o endereco/scroll "sujo" da ultima escrita,');
-    L.push('  ; causando uma linha/coluna de lixo no topo ou lateral da tela.');
-    L.push('  BIT $2002');
-    L.push('  LDA #$00');
-    L.push('  STA $2005');
-    L.push('  STA $2005');
-    L.push('');
-    L.push(`  ; Enable Rendering (pg0/$0000 = sprites, pg1/$1000 = background reempacotado)`);
-    L.push(`  LDA #%10010000`);
-    L.push('  STA $2000');
-    L.push('  LDA #%00011110');
-    L.push('  STA $2001');
-    L.push('');
-    L.push('Forever:');
-    L.push('  JMP Forever');
-    L.push('');
-    L.push(`; OBS: cor 0 de cada paleta = sempre a cor universal de fundo ($3F00), por limitacao do PPU.`);
-    L.push(`; Cor de fundo detectada a partir da paleta ${backdrop.palIdx} (usada em ${backdrop.count} tile(s) vazio(s) da imagem).`);
-    L.push('PaletteData:');
+    L.push("");
+
+    // ---- NMI ----
+    L.push("NMI:");
+    if(musicChans){
+      L.push("  PHA");
+      L.push("  TXA");
+      L.push("  PHA");
+      L.push("  TYA");
+      L.push("  PHA");
+      L.push("  JSR music_update");
+      L.push("  PLA");
+      L.push("  TAY");
+      L.push("  PLA");
+      L.push("  TAX");
+      L.push("  PLA");
+    }
+    L.push("  RTI");
+    L.push("");
+    L.push("IRQ:");
+    L.push("  RTI");
+    L.push("");
+
+    // ---- music_update ----
+    if(musicChans){
+      L.push("; --- music_update: chamado a cada NMI (60Hz) ---");
+      L.push("music_update:");
+      L.push("  LDA music_on");
+      // JMP absoluto: corpo com 3-4 canais passa de 127 bytes (BEQ relativo quebra)
+      L.push("  BNE mu_run");
+      L.push("  RTS");
+      L.push("mu_run:");
+      musicChans.forEach((mc, i)=>{
+        const meta = CH_META[mc.type];
+        const lbl = `mu_ch${i}`;
+        L.push(`${lbl}:`);
+        L.push(`  LDA ch${i}_timer`);
+        L.push(`  BEQ ${lbl}_next`);
+        L.push(`  DEC ch${i}_timer`);
+        L.push(`  JMP ${lbl}_end`);
+        L.push(`${lbl}_next:`);
+        L.push(`  LDY ch${i}_pos`);
+        L.push(`  LDA Scale_ch${i},Y`);
+        L.push(`  CMP #$FF`);
+        L.push(`  BNE ${lbl}_nof`);
+        L.push(`  LDA #0`);
+        L.push(`  STA ch${i}_pos`);
+        L.push(`  LDY #0`);
+        L.push(`  LDA Scale_ch${i},Y`);
+        L.push(`${lbl}_nof:`);
+        L.push(`  CMP #$FE`);
+        L.push(`  BNE ${lbl}_play`);
+        // silence + stop advancing
+        L.push(`  LDA #${meta.silence}`);
+        L.push(`  STA ${meta.regVol}`);
+        L.push(`  JMP ${lbl}_end`);
+        L.push(`${lbl}_play:`);
+        // A = pitch index
+        L.push(`  TAX`);
+        L.push(`  LDA Time_ch${i},Y`);
+        L.push(`  STA ch${i}_timer`);
+        L.push(`  INY`);
+        L.push(`  STY ch${i}_pos`);
+        L.push(`  CPX #0`);
+        L.push(`  BNE ${lbl}_tone`);
+        // REST
+        L.push(`  LDA #${meta.silence}`);
+        L.push(`  STA ${meta.regVol}`);
+        L.push(`  JMP ${lbl}_end`);
+        L.push(`${lbl}_tone:`);
+        if(mc.type === "noise"){
+          // Noise: usa lo byte como periodo (4 bits) + volume
+          L.push(`  LDA #${meta.dutyVol}`);
+          L.push(`  STA ${meta.regVol}`);
+          L.push(`  LDA PitchLo_ch${i},X`);
+          L.push(`  AND #$0F`);
+          L.push(`  STA ${meta.regLo}`);
+          L.push(`  LDA #$08`);
+          L.push(`  STA ${meta.regHi}`);
+        } else if(mc.type === "triangle"){
+          L.push(`  LDA #${meta.dutyVol}`);
+          L.push(`  STA ${meta.regVol}`);
+          L.push(`  LDA PitchLo_ch${i},X`);
+          L.push(`  STA ${meta.regLo}`);
+          L.push(`  LDA PitchHi_ch${i},X`);
+          L.push(`  STA ${meta.regHi}`);
+        } else {
+          // pulse
+          L.push(`  LDA #${meta.dutyVol}`);
+          L.push(`  STA ${meta.regVol}`);
+          L.push(`  LDA PitchLo_ch${i},X`);
+          L.push(`  STA ${meta.regLo}`);
+          L.push(`  LDA PitchHi_ch${i},X`);
+          L.push(`  ORA #$08`);  // length counter load
+          L.push(`  STA ${meta.regHi}`);
+        }
+        L.push(`${lbl}_end:`);
+      });
+      L.push("  RTS");
+      L.push("");
+
+      L.push("music_init:");
+      L.push("  LDA #$0F");
+      L.push("  STA $4015");
+      L.push("  LDA #$00");
+      L.push("  STA $4001");
+      L.push("  STA $4005");
+      musicChans.forEach((_,i)=>{
+        L.push(`  LDA #0`);
+        L.push(`  STA ch${i}_pos`);
+        L.push(`  LDA #1`);
+        L.push(`  STA ch${i}_timer`); // força load na 1a nota
+      });
+      L.push("  LDA #1");
+      L.push("  STA music_on");
+      L.push("  RTS");
+      L.push("");
+    }
+
+    // ---- Reset ----
+    L.push("Reset:");
+    L.push("  SEI");
+    L.push("  CLD");
+    L.push("  LDX #$40");
+    L.push("  STX $4017");
+    L.push("  LDX #$FF");
+    L.push("  TXS");
+    L.push("  LDA #0");
+    L.push("  STA $2000");
+    L.push("  STA $2001");
+    L.push("");
+    L.push("vblankwait1:");
+    L.push("  BIT $2002");
+    L.push("  BPL vblankwait1");
+    L.push("");
+    L.push("  LDA #0");
+    L.push("  LDX #0");
+    L.push("clram:");
+    L.push("  STA $0000,X");
+    L.push("  STA $0100,X");
+    L.push("  STA $0200,X");
+    L.push("  STA $0300,X");
+    L.push("  STA $0400,X");
+    L.push("  STA $0500,X");
+    L.push("  STA $0600,X");
+    L.push("  STA $0700,X");
+    L.push("  INX");
+    L.push("  BNE clram");
+    L.push("");
+    L.push("vblankwait2:");
+    L.push("  BIT $2002");
+    L.push("  BPL vblankwait2");
+    L.push("");
+    L.push("  BIT $2002");
+    L.push("  LDA #$3F");
+    L.push("  STA $2006");
+    L.push("  LDA #$00");
+    L.push("  STA $2006");
+    L.push("  LDX #0");
+    L.push("load_palettes:");
+    L.push("  LDA PaletteData,X");
+    L.push("  STA $2007");
+    L.push("  INX");
+    L.push("  CPX #32");
+    L.push("  BNE load_palettes");
+    L.push("");
+    L.push(`  ; Nametable — ${data.type==="background"?"Background":"Splash"} "${data.name}"`);
+    L.push("  BIT $2002");
+    L.push("  LDA #$20");
+    L.push("  STA $2006");
+    L.push("  LDA #$00");
+    L.push("  STA $2006");
+    L.push("  LDX #0");
+    L.push("nb1:");
+    L.push("  LDA NametableData+0,X");
+    L.push("  STA $2007");
+    L.push("  INX");
+    L.push("  BNE nb1");
+    L.push("  LDX #0");
+    L.push("nb2:");
+    L.push("  LDA NametableData+256,X");
+    L.push("  STA $2007");
+    L.push("  INX");
+    L.push("  BNE nb2");
+    L.push("  LDX #0");
+    L.push("nb3:");
+    L.push("  LDA NametableData+512,X");
+    L.push("  STA $2007");
+    L.push("  INX");
+    L.push("  BNE nb3");
+    L.push("  LDX #0");
+    L.push("nb4:");
+    L.push("  LDA NametableData+768,X");
+    L.push("  STA $2007");
+    L.push("  INX");
+    L.push("  CPX #192");
+    L.push("  BNE nb4");
+    L.push("");
+    L.push("  BIT $2002");
+    L.push("  LDA #$23");
+    L.push("  STA $2006");
+    L.push("  LDA #$C0");
+    L.push("  STA $2006");
+    L.push("  LDX #0");
+    L.push("load_attrs:");
+    L.push("  LDA AttributeData,X");
+    L.push("  STA $2007");
+    L.push("  INX");
+    L.push("  CPX #64");
+    L.push("  BNE load_attrs");
+    L.push("");
+    L.push("  BIT $2002");
+    L.push("  LDA #$00");
+    L.push("  STA $2005");
+    L.push("  STA $2005");
+    L.push("");
+    if(musicChans){
+      L.push("  JSR music_init");
+      L.push("");
+    }
+    L.push("  ; NMI on + bg pattern $1000");
+    L.push("  LDA #%10010000");
+    L.push("  STA $2000");
+    L.push("  LDA #%00011110");
+    L.push("  STA $2001");
+    L.push("");
+    L.push("Forever:");
+    L.push("  JMP Forever");
+    L.push("");
+
+    // ---- Data ----
+    L.push("PaletteData:");
     for (let i = 0; i < paletteBytes.length; i += 16) {
-      const chunk = paletteBytes.slice(i, i + 16).map(b => '$' + b.toString(16).padStart(2, '0')).join(', ');
-      L.push(`  .byte ${chunk}`);
+      L.push("  .byte " + paletteBytes.slice(i, i + 16).map(b => hexByte(b)).join(", "));
     }
-    L.push('');
-    L.push('NametableData:');
+    L.push("");
+    L.push("NametableData:");
     for (let i = 0; i < packedNt.length; i += 32) {
-      const row = packedNt.slice(i, i + 32).map(b => '$' + (b % 256).toString(16).padStart(2, '0')).join(', ');
-      L.push(`  .byte ${row}`);
+      L.push("  .byte " + packedNt.slice(i, i + 32).map(b => hexByte(b % 256)).join(", "));
     }
-    L.push('');
-    L.push('AttributeData:');
+    L.push("");
+    L.push("AttributeData:");
     for (let i = 0; i < at.length; i += 32) {
-      const row = at.slice(i, i + 32).map(b => '$' + (b % 256).toString(16).padStart(2, '0')).join(', ');
-      L.push(`  .byte ${row}`);
+      L.push("  .byte " + at.slice(i, i + 32).map(b => hexByte(b % 256)).join(", "));
     }
-    L.push('');
+    L.push("");
+
+    if(musicChans){
+      L.push("; --- Music data ---");
+      musicChans.forEach((mc, i)=>{
+        L.push(`; canal ${i}: ${mc.type}`);
+        L.push(`PitchLo_ch${i}:`);
+        formatBytes(mc.enc.lo).forEach(line => L.push(line));
+        L.push(`PitchHi_ch${i}:`);
+        formatBytes(mc.enc.hi).forEach(line => L.push(line));
+        L.push(`Scale_ch${i}:`);
+        formatBytes(mc.enc.scale).forEach(line => L.push(line));
+        L.push(`Time_ch${i}:`);
+        formatBytes(mc.enc.time).forEach(line => L.push(line));
+        L.push("");
+      });
+    }
+
     L.push('.segment "VECTORS"');
-    L.push('  .word NMI');
-    L.push('  .word Reset');
-    L.push('  .word IRQ');
-    L.push('');
+    L.push("  .word NMI");
+    L.push("  .word Reset");
+    L.push("  .word IRQ");
+    L.push("");
     L.push('.segment "CHARS"');
-    L.push('  ; Primeiros 4KB ($0000-$0FFF / pg-0): CHR original, sem alterações (sprites)');
+    L.push("  ; pg-0 sprites / pg-1 background empacotado");
     const chrFinal = new Uint8Array(8192);
-    chrFinal.set(chrBuf.slice(0, 4096), 0); // mantém pg-0 original (sprites) intacta
-    chrFinal.set(packed.bgChr, 4096); // banco reempacotado com os tiles usados por esta imagem
+    chrFinal.set(chrBuf.slice(0, 4096), 0);
+    chrFinal.set(packed.bgChr, 4096);
     for (let i = 0; i < chrFinal.length; i += 16) {
-      if (i === 4096) L.push('  ; Últimos 4KB ($1000-$1FFF / pg-1): banco reempacotado com os tiles usados por esta imagem (background)');
-      const chunk = Array.from(chrFinal.slice(i, i + 16)).map(b => '$' + b.toString(16).padStart(2, '0')).join(', ');
-      L.push(`  .byte ${chunk}`);
+      if (i === 4096) L.push("  ; $1000 background");
+      L.push("  .byte " + Array.from(chrFinal.slice(i, i + 16)).map(b => hexByte(b)).join(", "));
     }
-    return L.join('\n');
+    return L.join("\n");
   }
 
   function buildROM(){
-    const logEl=document.getElementById('buildLog'); if(logEl) logEl.textContent='Iniciando build v0.7.0...\n';
+    const logEl=document.getElementById("buildLog"); if(logEl) logEl.textContent="Iniciando build v0.8.0...\n";
     try{
       const chrBuf=CHR.getBuffer?CHR.getBuffer():new Uint8Array(8192);
       const data=getSelectedBuildData();
       const packed=packBackgroundCHR(chrBuf, data.nametable);
-      const chr8k=new Uint8Array(8192); chr8k.set(chrBuf.slice(0,4096),0); chr8k.set(packed.bgChr,4096);
-      log(`Tipo: ${data.type==='background'?'Background':'Splash'} | Fonte: ${data.sourceName} - ${data.filled} tiles na tela`);
-      log(`CHR reempacotado: ${packed.usedCount}/256 tiles únicos${packed.overflowCount>0?` (⚠ ${packed.overflowCount} não couberam e viraram vazio)`:''}`);
+      const music = getSelectedMusic();
+      log(`Imagem: ${data.sourceName||data.name} (${data.filled} tiles)`);
+      log(`CHR empacotado: ${packed.usedCount}/256`);
+      if(music) log(`Música: ${music.name} · ${(music.channels||[]).length} canal(is)`);
+      else log("Música: (nenhuma)");
       const asm=generateASM(); lastASM=asm;
-
-      // Simulação rápida interna de binário para download direto do .nes se necessário
-      // (O foco principal agora é o .asm gerado perfeitamente para o ca65)
-      const header=new Uint8Array([0x4E,0x45,0x53,0x1A,1,1,0,0,0,0,0,0,0,0,0,0]);
-      // Para o download direto via botão web, criamos uma ROM vazia de teste ou integrada,
-      // mas o ideal é compilar o .asm pelo ca65 localmente. Aqui geramos um placeholder seguro de 16KB PRG.
-      const prgDummy = new Uint8Array(16384);
-      const rom=new Uint8Array(16+16384+8192); rom.set(header,0); rom.set(prgDummy,16); rom.set(chr8k,16+16384); lastROM=rom;
-
-      log(`✅ Código .ASM gerado com sucesso! Pronto para ca65.`);
-      const asmEl=document.getElementById('buildASMPreview'); if(asmEl) asmEl.value=asm;
-      document.getElementById('btnDownload').style.display='inline-block';
-      document.getElementById('btnDownloadASM').style.display='inline-block';
-      document.getElementById('btnDownloadCFG').style.display='inline-block';
-      document.getElementById('buildStats').innerHTML=`ROM: ${rom.length}<br>[${data.type==='background'?'Background':'Splash'}] ${data.name}<br>${data.filled}/960 tiles • ${packed.usedCount}/256 únicos<br><span style="color:#0f0">● OK v0.7.0</span>`;
-      renderPreview();
-    }catch(e){ log(`❌ ${e.message}`); }
+      log("✅ ASM gerado (ca65). Compile localmente para ouvir a APU de verdade.");
+      const asmEl=document.getElementById("buildASMPreview"); if(asmEl) asmEl.value=asm;
+      document.getElementById("btnDownloadASM").style.display="inline-block";
+      document.getElementById("btnDownloadCFG").style.display="inline-block";
+      // placeholder ROM header-only (compile real via ca65)
+      lastROM = null;
+      document.getElementById("btnDownload").style.display="none";
+      const stats=document.getElementById("buildStats");
+      if(stats) stats.innerHTML = `ASM: ${asm.length} chars<br>Música: ${music?music.name:"—"}<br>Use ca65 para .nes`;
+    }catch(e){
+      log("❌ Erro: "+e.message);
+      console.error(e);
+    }
   }
-  function downloadROM(){ if(!lastROM){ alert("Build primeiro!"); return; } const blob=new Blob([lastROM],{type:'application/octet-stream'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=(Project.data?.name||"meu-jogo").replace(/\s+/g,"_")+"_splash.nes"; a.click(); }
-  function downloadASM(){ if(!lastASM){ alert("Build primeiro!"); return; } const blob=new Blob([lastASM],{type:'text/plain;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=(Project.data?.name||"meu-jogo").replace(/\s+/g,"_")+".asm"; a.click(); }
+
+  function downloadASM(){
+    if(!lastASM){ alert("Build primeiro!"); return; }
+    const blob=new Blob([lastASM],{type:"text/plain;charset=utf-8"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+    a.download=(Project.data?.name||"meu-jogo").replace(/\s+/g,"_")+".asm"; a.click();
+  }
+
+  // Linker script sempre alinhado ao header gerado (NROM 16KB PRG @ $C000)
+  function generateCFG(){
+    const name = (Project?.data?.name || "projeto").replace(/\s+/g, "_");
+    const mapper = Project?.data?.mapper != null ? Project.data.mapper : 0;
+    // IMPORTANTE: ld65 so aceita # como comentario no .cfg (nao ;)
+    return [
+      "# nrom.cfg gerado pelo NES Maker Studio",
+      "# Projeto: " + name,
+      "# Mapper: " + mapper + " (NROM) | PRG 16KB @ $C000 | CHR 8KB",
+      "# Deve acompanhar o .asm do Build (header PRG banks = 1)",
+      "MEMORY {",
+      "  ZP:     start = $0000, size = $0100, type = rw, define = yes;",
+      "  RAM:    start = $0300, size = $0500, type = rw, define = yes;",
+      "  HDR:    start = $0000, size = $0010, type = ro, file = %O, fill = yes;",
+      "  PRG:    start = $C000, size = $4000, type = ro, file = %O, fill = yes, define = yes;",
+      "  CHR:    start = $0000, size = $2000, type = ro, file = %O, fill = yes;",
+      "}",
+      "SEGMENTS {",
+      "  HEADER:   load = HDR, type = ro;",
+      "  ZEROPAGE: load = ZP,  type = zp;",
+      "  CODE:     load = PRG, type = ro;",
+      "  RODATA:   load = PRG, type = ro, optional = yes;",
+      "  VECTORS:  load = PRG, type = ro, offset = $3FFA;",
+      "  CHARS:    load = CHR, type = ro;",
+      "}",
+      ""
+    ].join("\n");
+  }
   function downloadCFG(){
-    const cfg = `MEMORY {\n` +
-      `  ZP:   start = $0000, size = $0100, type = rw, define = yes;\n` +
-      `  RAM:  start = $0300, size = $0500, type = rw, define = yes;\n` +
-      `  HDR:  start = $0000, size = $0010, type = ro, file = %O, fill = yes;\n` +
-      `  PRG:  start = $C000, size = $4000, type = ro, file = %O, fill = yes, define = yes;\n` +
-      `  CHR:  start = $0000, size = $2000, type = ro, file = %O, fill = yes;\n` +
-      `}\n` +
-      `SEGMENTS {\n` +
-      `  HEADER:   load = HDR, type = ro;\n` +
-      `  ZEROPAGE: load = ZP, type = zp;\n` +
-      `  CODE:     load = PRG, type = ro;\n` +
-      `  VECTORS:  load = PRG, type = ro, offset = $3FFA;\n` +
-      `  CHARS:    load = CHR, type = ro;\n` +
-      `}\n`;
-    const blob=new Blob([cfg],{type:'text/plain'});
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download="nrom.cfg";
-    a.click();
+    const cfg = generateCFG();
+    const blob=new Blob([cfg],{type:"text/plain;charset=utf-8"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+    a.download="nrom.cfg"; a.click();
   }
-  function copyASM(){ const ta=document.getElementById('buildASMPreview'); if(!ta) return; ta.select(); document.execCommand('copy'); }
-  function openEmulator(){ window.open('https://www.nesjs.com/','_blank'); }
-  return { init(){ buildHTML(); }, buildROM, downloadROM, downloadASM, downloadCFG, copyASM, openEmulator, renderPreview, getCurrentData: getSelectedBuildData, generateASM };
+  function downloadROM(){ alert("Compile o .asm com ca65/ld65 para gerar o .nes real."); }
+  function copyASM(){ const ta=document.getElementById("buildASMPreview"); if(!ta) return; ta.select(); document.execCommand("copy"); }
+  function openEmulator(){}
+
+  return {
+    init(){ buildHTML(); },
+    buildROM, downloadROM, downloadASM, downloadCFG, copyASM, openEmulator,
+    renderPreview, getCurrentData: getSelectedBuildData, generateASM,
+    refreshSelects
+  };
 })();
