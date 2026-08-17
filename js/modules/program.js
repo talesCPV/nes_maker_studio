@@ -2,7 +2,8 @@
 // Ainda não gera .asm - por enquanto só estrutura o dado que o build-rom vai consumir depois,
 // quando a fundação de loop principal + leitura de input existir.
 const PROGRAM = (() => {
-  let activeTab = 'vars'; // 'vars' | 'events' | 'rules'
+  let activeTab = 'vars'; // 'vars' | 'objects' | 'events' | 'menus' | 'rules'
+  let selectedMenuId = null;
   let selectedRuleId = null;
 
   // Tipos de passo disponíveis dentro de uma Regra. Lista pequena e curada de primitivas -
@@ -61,6 +62,7 @@ const PROGRAM = (() => {
             <button class="btn-tool prog-tab-btn" data-tab="objects" onclick="PROGRAM.setTab('objects')" style="${activeTab==='objects'?'background:#ffcc00;color:#000':''}">🎯 Objetos</button>
             <button class="btn-tool prog-tab-btn" data-tab="events" onclick="PROGRAM.setTab('events')" style="${activeTab==='events'?'background:#ffcc00;color:#000':''}">⚡ Eventos</button>
             <button class="btn-tool prog-tab-btn" data-tab="rules" onclick="PROGRAM.setTab('rules')" style="${activeTab==='rules'?'background:#ffcc00;color:#000':''}">📜 Regras</button>
+            <button class="btn-tool prog-tab-btn" data-tab="menus" onclick="PROGRAM.setTab('menus')" style="${activeTab==='menus'?'background:#ffcc00;color:#000':''}">📋 Menus</button>
           </div>
         </div>
         <div id="progTabContent" style="flex:1;overflow:auto;padding:14px"></div>
@@ -76,7 +78,35 @@ const PROGRAM = (() => {
     if(activeTab === 'vars') cont.innerHTML = renderVarsTab();
     else if(activeTab === 'objects') cont.innerHTML = renderObjectsTab();
     else if(activeTab === 'events') cont.innerHTML = renderEventsTab();
+    else if(activeTab === 'menus'){
+      cont.innerHTML = renderMenusTab();
+      const menu = (Project.data?.menus || []).find(m => m.id === selectedMenuId);
+      if(menu){ const canvas = document.getElementById('menuCursorPreview_'+menu.id); renderSingleTilePreview(canvas, menu.cursorTile || 0, 0); }
+    }
     else cont.innerHTML = renderRulesTab();
+  }
+
+  // Preview simples de um único tile do CHR (usado pra mostrar o glifo escolhido como
+  // cursor do menu, sem precisar de um seletor visual completo por enquanto).
+  function renderSingleTilePreview(canvas, tileIdx, palIdx){
+    if(!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const chrBuf = (typeof CHR !== 'undefined' && CHR.getBuffer) ? CHR.getBuffer() : new Uint8Array(8192);
+    const pals = (typeof CHR !== 'undefined' && CHR.getPalettes) ? CHR.getPalettes() : [[15,0,16,48]];
+    const pal = pals[palIdx] || pals[0];
+    const off = (tileIdx || 0) * 16;
+    if(off + 16 > chrBuf.length) return;
+    const scale = canvas.width / 8;
+    for(let py=0; py<8; py++){
+      const p0 = chrBuf[off+py], p1 = chrBuf[off+py+8];
+      for(let px=0; px<8; px++){
+        const sh = 7-px, b0 = (p0>>sh)&1, b1 = (p1>>sh)&1, ci = (b1<<1)|b0;
+        if(ci === 0) continue;
+        ctx.fillStyle = (typeof NES_PALETTE !== 'undefined' && NES_PALETTE[pal[ci]]) ? NES_PALETTE[pal[ci]] : '#fff';
+        ctx.fillRect(px*scale, py*scale, scale, scale);
+      }
+    }
   }
 
   // ---------------- VARIÁVEIS ----------------
@@ -92,7 +122,10 @@ const PROGRAM = (() => {
         <td style="padding:6px;color:#ffcc00;font-family:monospace">
           ${v.type==='bool' ? `$${(v.zeroPage?0:0x0300+v.byteIndex).toString(16).padStart(v.zeroPage?2:4,'0')} bit ${v.bitIndex}` : `$${(v.zeroPage?0:0x0300)+v.byteIndex} (${v.sizeBytes} byte${v.sizeBytes>1?'s':''})`}
         </td>
-        <td style="padding:6px;color:#4ec9b0;font-family:monospace">${v.initialValue ?? 0}</td>
+        <td style="padding:6px">
+          <input type="number" id="varVal_${v.id}" value="${v.initialValue ?? 0}" min="0" max="${maxForType(v.type)}" style="width:65px;background:#000;color:#4ec9b0;border:1px solid #444;border-radius:3px;padding:3px;font-family:monospace">
+          <button class="btn-tool" onclick="PROGRAM.saveVariableValue('${v.id}')" style="font-size:9px;padding:2px 5px;background:#27ae60;color:#fff">💾</button>
+        </td>
         <td style="padding:6px;text-align:right"><button class="btn-tool" onclick="PROGRAM.deleteVariable('${v.id}')" style="background:#c0392b;color:#fff;font-size:10px">🗑</button></td>
       </tr>`).join('');
     return `
@@ -148,6 +181,18 @@ const PROGRAM = (() => {
     Project.data.variables = Project.data.variables.filter(v => v.id !== id);
     renderTab();
   }
+  // Edita o valor inicial de uma variável já criada, sem precisar recriá-la.
+  // Não re-renderiza a aba inteira (só corrige o próprio input) pra não perder foco/scroll.
+  function saveVariableValue(id){
+    const v = Project.data?.variables?.find(v => v.id === id); if(!v) return;
+    const input = document.getElementById('varVal_'+id); if(!input) return;
+    const max = maxForType(v.type);
+    let val = parseInt(input.value); if(isNaN(val)) val = 0;
+    val = Math.max(0, Math.min(max, val));
+    v.initialValue = val;
+    input.value = val;
+    Project.status(`Variável "${v.name}" agora inicia em ${val}`);
+  }
 
   // ---------------- OBJETOS (hitbox) ----------------
   function renderObjectsTab(){
@@ -156,7 +201,10 @@ const PROGRAM = (() => {
       <tr style="border-bottom:1px solid #222">
         <td style="padding:6px;color:#fff">${o.name}</td>
         <td style="padding:6px;color:#888">${o.kind === 'dano' ? '🔻 Dano' : '🚪 Warp'}</td>
-        <td style="padding:6px;color:#4ec9b0">${o.kind === 'dano' ? (o.damage ?? 0) : '—'}</td>
+        <td style="padding:6px">${o.kind === 'dano'
+          ? `<input type="number" id="objDmg_${o.id}" value="${o.damage ?? 0}" min="0" max="255" style="width:60px;background:#000;color:#4ec9b0;border:1px solid #444;border-radius:3px;padding:3px;font-family:monospace">
+             <button class="btn-tool" onclick="PROGRAM.saveObjectDamage('${o.id}')" style="font-size:9px;padding:2px 5px;background:#27ae60;color:#fff">💾</button>`
+          : '—'}</td>
         <td style="padding:6px;text-align:right"><button class="btn-tool" onclick="PROGRAM.deleteHitboxObject('${o.id}')" style="background:#c0392b;color:#fff;font-size:10px">🗑</button></td>
       </tr>`).join('');
     return `
@@ -210,6 +258,15 @@ const PROGRAM = (() => {
     Project.data.hitboxObjects = Project.data.hitboxObjects.filter(o => o.id !== id);
     renderTab();
   }
+  function saveObjectDamage(id){
+    const o = Project.data?.hitboxObjects?.find(o => o.id === id); if(!o || o.kind !== 'dano') return;
+    const input = document.getElementById('objDmg_'+id); if(!input) return;
+    let val = parseInt(input.value); if(isNaN(val)) val = 0;
+    val = Math.max(0, Math.min(255, val));
+    o.damage = val;
+    input.value = val;
+    Project.status(`"${o.name}" agora causa ${val} de dano`);
+  }
 
   // ---------------- EVENTOS ----------------
   const INPUT_BUTTONS = ["P1-UP","P1-DOWN","P1-LEFT","P1-RIGHT","P1-A","P1-B","P1-START","P1-SELECT","P2-UP","P2-DOWN","P2-LEFT","P2-RIGHT","P2-A","P2-B","P2-START","P2-SELECT"];
@@ -222,7 +279,7 @@ const PROGRAM = (() => {
         <td style="padding:6px;color:#fff">${e.name}</td>
         <td style="padding:6px;color:#888">${e.category}${e.button ? ' ('+e.button+')' : ''}${e.hitboxObjectId ? ' ('+(hitboxObjs.find(o=>o.id===e.hitboxObjectId)?.name || '?')+')' : ''}</td>
         <td style="padding:6px">${e.builtin ? '<span style="color:#4ec9b0;font-size:10px">nativo</span>' : '<span style="color:#ffcc00;font-size:10px">customizado</span>'}</td>
-        <td style="padding:6px;text-align:right">${e.builtin ? '' : `<button class="btn-tool" onclick="PROGRAM.deleteEvent('${e.id}')" style="background:#c0392b;color:#fff;font-size:10px">🗑</button>`}</td>
+        <td style="padding:6px;text-align:right"><button class="btn-tool" onclick="PROGRAM.deleteEvent('${e.id}')" style="background:#c0392b;color:#fff;font-size:10px">🗑</button></td>
       </tr>`).join('');
     return `
       <div style="max-width:760px">
@@ -276,9 +333,126 @@ const PROGRAM = (() => {
   function deleteEvent(id){
     if(!Project.data?.events) return;
     const ev = Project.data.events.find(e => e.id === id);
-    if(ev?.builtin){ alert('Eventos nativos não podem ser removidos.'); return; }
-    if(!confirm('Remover esse evento? Qualquer Regra que o use vai ficar com referência quebrada.')) return;
+    const msg = ev?.builtin
+      ? `"${ev.name}" é um evento nativo do sistema. Remover mesmo assim? Qualquer Regra que o use vai ficar com referência quebrada.`
+      : 'Remover esse evento? Qualquer Regra que o use vai ficar com referência quebrada.';
+    if(!confirm(msg)) return;
     Project.data.events = Project.data.events.filter(e => e.id !== id);
+    renderTab();
+  }
+
+  // ---------------- MENUS ----------------
+  // Cada menu define nome, tile do cursor e uma lista ordenada de itens. Cada item, ao ser
+  // criado, já ganha um evento próprio (categoria 'menu') automaticamente - o que acontece
+  // quando o item é selecionado se define em Regras, não aqui. A posição do menu na tela
+  // fica pro Backgrounds decidir depois (o mesmo menu pode ser usado em telas diferentes).
+  function renderMenusTab(){
+    const menus = Project.data?.menus || [];
+    const listHtml = menus.map(m => `
+      <div onclick="PROGRAM.selectMenu('${m.id}')" style="padding:8px;border-radius:4px;cursor:pointer;background:${m.id===selectedMenuId?'#3a3a10':'#181818'};border:1px solid ${m.id===selectedMenuId?'#ffcc00':'#333'};margin-bottom:4px">
+        <div style="color:#fff;font-size:11px">${m.name}</div>
+        <div style="color:#888;font-size:9px">${m.items.length} item(ns)</div>
+      </div>`).join('');
+    const selectedMenu = menus.find(m => m.id === selectedMenuId);
+    return `
+      <div style="display:flex;gap:14px;height:100%">
+        <div style="width:260px;display:flex;flex-direction:column;gap:8px">
+          <button class="btn-tool" onclick="PROGRAM.addMenu()" style="background:#27ae60;color:#fff">+ Novo Menu</button>
+          <div style="overflow:auto">${listHtml || '<div style="color:#666;font-size:11px">Nenhum menu ainda.</div>'}</div>
+        </div>
+        <div style="flex:1;background:#111;border:1px solid #333;border-radius:6px;padding:12px;overflow:auto">
+          ${selectedMenu ? renderMenuEditor(selectedMenu) : '<div style="color:#666;font-size:11px">Selecione ou crie um menu.</div>'}
+        </div>
+      </div>`;
+  }
+
+  function renderMenuEditor(menu){
+    const itemsHtml = menu.items.map((it, i) => `
+      <div style="display:flex;gap:6px;align-items:center;background:#181818;border:1px solid #2a2a2a;border-radius:4px;padding:6px">
+        <span style="color:#666;font-size:9px;width:16px">${i+1}</span>
+        <input value="${it.label}" onchange="PROGRAM.updateMenuItem('${menu.id}',${i},'label',this.value)" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px">
+        <span style="font-size:9px;color:#4ec9b0;font-family:monospace">${it.eventId ? '⚡ evento vinculado' : '—'}</span>
+        <button class="btn-tool" onclick="PROGRAM.moveMenuItem('${menu.id}',${i},-1)" style="font-size:9px;padding:2px 5px">↑</button>
+        <button class="btn-tool" onclick="PROGRAM.moveMenuItem('${menu.id}',${i},1)" style="font-size:9px;padding:2px 5px">↓</button>
+        <button class="btn-tool" onclick="PROGRAM.deleteMenuItem('${menu.id}',${i})" style="font-size:9px;padding:2px 5px;background:#c0392b;color:#fff">🗑</button>
+      </div>`).join('');
+    return `
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+        <input value="${menu.name}" onchange="PROGRAM.renameMenu('${menu.id}', this.value)" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:12px">
+        <button class="btn-tool" onclick="PROGRAM.deleteMenu('${menu.id}')" style="background:#c0392b;color:#fff;font-size:10px">🗑 Deletar Menu</button>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;background:#181818;border:1px solid #2a2a2a;border-radius:4px;padding:8px">
+        <div>
+          <label style="font-size:10px;color:#888;display:block;margin-bottom:2px">Tile do cursor (índice CHR)</label>
+          <input type="number" min="0" value="${menu.cursorTile ?? 0}" onchange="PROGRAM.updateMenuCursor('${menu.id}', parseInt(this.value)||0)" style="width:70px;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px">
+        </div>
+        <canvas id="menuCursorPreview_${menu.id}" width="32" height="32" style="background:#000;border:1px solid #444;image-rendering:pixelated"></canvas>
+        <div style="font-size:9px;color:#666;line-height:1.3;max-width:260px">
+          Escolha o tile da fonte que serve de cursor (ex: um ">" ou uma mãozinha). No build, esse
+          desenho é copiado pra página de sprites - o cursor sempre vira um sprite de verdade,
+          nunca redesenha o fundo.
+        </div>
+      </div>
+      <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">ITENS DO MENU</h4>
+      <div style="display:flex;flex-direction:column;gap:6px">${itemsHtml || '<div style="color:#666;font-size:11px">Nenhum item ainda.</div>'}</div>
+      <button class="btn-tool" onclick="PROGRAM.addMenuItem('${menu.id}')" style="margin-top:10px;background:#2980b9;color:#fff">+ Item</button>
+    `;
+  }
+
+  function addMenu(){
+    const name = prompt('Nome do menu:', `menu_${(Project.data?.menus?.length||0)+1}`); if(!name) return;
+    if(!Project.data.menus) Project.data.menus = [];
+    const m = { id:'menu_'+Date.now(), name: name.trim(), cursorTile: 0, items: [] };
+    Project.data.menus.push(m); selectedMenuId = m.id; renderTab();
+  }
+  function selectMenu(id){ selectedMenuId = id; renderTab(); }
+  function renameMenu(id, name){
+    const m = Project.data?.menus?.find(m => m.id === id);
+    if(m && name.trim()) m.name = name.trim();
+    renderTab();
+  }
+  function deleteMenu(id){
+    const m = Project.data?.menus?.find(m => m.id === id); if(!m) return;
+    if(!confirm(`Deletar o menu "${m.name}"? Os eventos dos itens dele também serão removidos.`)) return;
+    const eventIds = m.items.map(it => it.eventId).filter(Boolean);
+    Project.data.events = (Project.data.events || []).filter(e => !eventIds.includes(e.id));
+    Project.data.menus = Project.data.menus.filter(m => m.id !== id);
+    if(selectedMenuId === id) selectedMenuId = null;
+    renderTab();
+  }
+  function updateMenuCursor(id, tileIdx){
+    const m = Project.data?.menus?.find(m => m.id === id); if(!m) return;
+    m.cursorTile = tileIdx;
+    renderSingleTilePreview(document.getElementById('menuCursorPreview_'+id), tileIdx, 0);
+  }
+  function addMenuItem(menuId){
+    const m = Project.data?.menus?.find(m => m.id === menuId); if(!m) return;
+    const label = prompt('Texto do item:', `item_${m.items.length+1}`); if(!label) return;
+    if(!Project.data.events) Project.data.events = [];
+    const ev = { id:'ev_'+Date.now(), name:`${m.name}: ${label.trim()}`, category:'menu', builtin:false };
+    Project.data.events.push(ev);
+    m.items.push({ id:'mi_'+Date.now(), label: label.trim(), eventId: ev.id });
+    renderTab();
+  }
+  function updateMenuItem(menuId, idx, field, value){
+    const m = Project.data?.menus?.find(m => m.id === menuId); if(!m || !m.items[idx]) return;
+    m.items[idx][field] = value;
+    if(field === 'label'){
+      const ev = Project.data.events?.find(e => e.id === m.items[idx].eventId);
+      if(ev) ev.name = `${m.name}: ${value}`;
+    }
+  }
+  function moveMenuItem(menuId, idx, dir){
+    const m = Project.data?.menus?.find(m => m.id === menuId); if(!m) return;
+    const newIdx = idx + dir; if(newIdx < 0 || newIdx >= m.items.length) return;
+    [m.items[idx], m.items[newIdx]] = [m.items[newIdx], m.items[idx]];
+    renderTab();
+  }
+  function deleteMenuItem(menuId, idx){
+    const m = Project.data?.menus?.find(m => m.id === menuId); if(!m || !m.items[idx]) return;
+    const it = m.items[idx];
+    if(it.eventId) Project.data.events = (Project.data.events || []).filter(e => e.id !== it.eventId);
+    m.items.splice(idx, 1);
     renderTab();
   }
 
@@ -339,9 +513,28 @@ const PROGRAM = (() => {
         <option value="">— variável —</option>${vars.map(v=>`<option value="${v.id}" ${step.varId===v.id?'selected':''}>${v.name}</option>`).join('')}</select>
         <input type="number" value="${step.value ?? 0}" onchange="PROGRAM.updateStep('${rule.id}',${idx},'value',parseInt(this.value)||0)" style="width:60px;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:10px">`;
     } else if(step.type === 'action'){
-      fields = `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'actionId',this.value)" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:10px">
-        <option value="">— ação —</option>${Object.entries(ACTION_CATALOG).map(([k,v])=>`<option value="${k}" ${step.actionId===k?'selected':''}>${v.label}</option>`).join('')}</select>
-        <input type="text" placeholder="parâmetro (livre por enquanto)" value="${step.params||''}" onchange="PROGRAM.updateStep('${rule.id}',${idx},'params',this.value)" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:10px">`;
+      const selStyle = "background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:10px";
+      fields = `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'actionId',this.value)" style="${selStyle}">
+        <option value="">— ação —</option>${Object.entries(ACTION_CATALOG).map(([k,v])=>`<option value="${k}" ${step.actionId===k?'selected':''}>${v.label}</option>`).join('')}</select>`;
+      // Segundo select, populado de acordo com a ação escolhida - cada ação referencia um
+      // catálogo diferente já existente no projeto (warps, sons, objetos de hitbox...).
+      if(step.actionId === 'goto_warp'){
+        const warpObjs = (Project.data?.hitboxObjects || []).filter(o => o.kind === 'warp');
+        fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle}">
+          <option value="">— warp —</option>${warpObjs.map(o=>`<option value="${o.id}" ${step.targetId===o.id?'selected':''}>🚪 ${o.name}</option>`).join('')}</select>`;
+      } else if(step.actionId === 'play_sound'){
+        const soundItems = Project.data?.sounds?.items || [];
+        fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle}">
+          <option value="">— som —</option>${soundItems.map(s=>`<option value="${s.id}" ${step.targetId===s.id?'selected':''}>${s.type==='sfx'?'🔊':'🎵'} ${s.name}</option>`).join('')}</select>`;
+      } else if(step.actionId === 'toggle_hitbox'){
+        const hbObjs = Project.data?.hitboxObjects || [];
+        fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle}">
+          <option value="">— objeto —</option>${hbObjs.map(o=>`<option value="${o.id}" ${step.targetId===o.id?'selected':''}>${o.kind==='dano'?'🔻':'🚪'} ${o.name}</option>`).join('')}</select>`;
+      } else if(step.actionId === 'open_menu' || step.actionId === 'close_menu'){
+        fields += `<input type="text" placeholder="nome do menu (livre por enquanto)" value="${step.targetId||''}" onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="flex:1;${selStyle}">`;
+      } else if(step.actionId === 'custom'){
+        fields += `<input type="text" placeholder="descrição livre" value="${step.params||''}" onchange="PROGRAM.updateStep('${rule.id}',${idx},'params',this.value)" style="flex:1;${selStyle}">`;
+      }
     }
     return `
       <div style="display:flex;gap:6px;align-items:center;background:#181818;border:1px solid #2a2a2a;border-radius:4px;padding:6px">
@@ -379,7 +572,8 @@ const PROGRAM = (() => {
   function updateStep(ruleId, idx, field, value){
     const r = Project.data?.rules?.find(r=>r.id===ruleId); if(!r || !r.steps[idx]) return;
     r.steps[idx][field] = value;
-    if(field === 'type') renderTab(); // tipo mudou -> campos mudam, precisa redesenhar a linha toda
+    // tipo ou ação mudou -> o conjunto de campos da linha muda, precisa redesenhar a linha toda
+    if(field === 'type' || field === 'actionId') renderTab();
   }
   function moveStep(ruleId, idx, dir){
     const r = Project.data?.rules?.find(r=>r.id===ruleId); if(!r) return;
@@ -394,9 +588,10 @@ const PROGRAM = (() => {
 
   return {
     init: buildHTML, setTab,
-    addVariable, deleteVariable, onVarTypeChange,
-    addHitboxObject, deleteHitboxObject, onObjKindChange,
+    addVariable, deleteVariable, onVarTypeChange, saveVariableValue,
+    addHitboxObject, deleteHitboxObject, onObjKindChange, saveObjectDamage,
     addEvent, deleteEvent, onEvCategoryChange,
+    addMenu, selectMenu, renameMenu, deleteMenu, updateMenuCursor, addMenuItem, updateMenuItem, moveMenuItem, deleteMenuItem,
     addRule, selectRule, renameRule, setRuleScope, deleteRule, addStep, updateStep, moveStep, deleteStep
   };
 })();

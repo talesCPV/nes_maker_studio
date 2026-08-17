@@ -83,6 +83,7 @@ const Project = {
       ],
       rules: [],
       hitboxObjects: [],
+      menus: [],
       gameConfig: { lives: 3, continues: 3, energy: 16 },
       sounds: this.defaultSounds()
     };
@@ -286,6 +287,7 @@ const Project = {
       if(!json.events) json.events = this.defaultData().events;
       if(!json.rules) json.rules = [];
       if(!json.hitboxObjects) json.hitboxObjects = [];
+      if(!json.menus) json.menus = [];
       this.data = json;
       this.fileName = file.name;
       this.loadIntoEditors();
