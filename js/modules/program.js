@@ -4,6 +4,7 @@
 const PROGRAM = (() => {
   let activeTab = 'vars'; // 'vars' | 'objects' | 'events' | 'menus' | 'rules'
   let selectedMenuId = null;
+  let selectedWarpEditId = null;
   let selectedRuleId = null;
 
   // Tipos de passo disponíveis dentro de uma Regra. Lista pequena e curada de primitivas -
@@ -76,7 +77,11 @@ const PROGRAM = (() => {
   function renderTab(){
     const cont = document.getElementById('progTabContent'); if(!cont) return;
     if(activeTab === 'vars') cont.innerHTML = renderVarsTab();
-    else if(activeTab === 'objects') cont.innerHTML = renderObjectsTab();
+    else if(activeTab === 'objects'){
+      cont.innerHTML = renderObjectsTab();
+      const wo = (Project.data?.hitboxObjects || []).find(o => o.id === selectedWarpEditId);
+      if(wo) drawWarpDestPreview(wo);
+    }
     else if(activeTab === 'events') cont.innerHTML = renderEventsTab();
     else if(activeTab === 'menus'){
       cont.innerHTML = renderMenusTab();
@@ -195,18 +200,28 @@ const PROGRAM = (() => {
   }
 
   // ---------------- OBJETOS (hitbox) ----------------
+  function screenLabel(o){
+    if(o.kind !== 'warp' || !o.targetScreenId) return '<span style="color:#666">sem destino</span>';
+    const arr = o.targetScreenType === 'splash' ? (Project.data?.splashScreens||[]) : (Project.data?.backgrounds||[]);
+    const s = arr.find(s => s.id === o.targetScreenId);
+    return s ? `${o.targetScreenType==='splash'?'🎬':'🗺'} ${s.name} (${o.spawnX ?? 0},${o.spawnY ?? 0})` : '<span style="color:#c0392b">tela removida</span>';
+  }
   function renderObjectsTab(){
     const objs = Project.data?.hitboxObjects || [];
-    const rows = objs.map(o => `
+    const rows = objs.map(o => {
+      let row = `
       <tr style="border-bottom:1px solid #222">
         <td style="padding:6px;color:#fff">${o.name}</td>
         <td style="padding:6px;color:#888">${o.kind === 'dano' ? '🔻 Dano' : '🚪 Warp'}</td>
         <td style="padding:6px">${o.kind === 'dano'
           ? `<input type="number" id="objDmg_${o.id}" value="${o.damage ?? 0}" min="0" max="255" style="width:60px;background:#000;color:#4ec9b0;border:1px solid #444;border-radius:3px;padding:3px;font-family:monospace">
              <button class="btn-tool" onclick="PROGRAM.saveObjectDamage('${o.id}')" style="font-size:9px;padding:2px 5px;background:#27ae60;color:#fff">💾</button>`
-          : '—'}</td>
+          : `${screenLabel(o)} <button class="btn-tool" onclick="PROGRAM.toggleWarpDestEditor('${o.id}')" style="font-size:9px;padding:2px 5px;background:#16a085;color:#fff;margin-left:4px">🎯 ${selectedWarpEditId===o.id?'Fechar':'Editar destino'}</button>`}</td>
         <td style="padding:6px;text-align:right"><button class="btn-tool" onclick="PROGRAM.deleteHitboxObject('${o.id}')" style="background:#c0392b;color:#fff;font-size:10px">🗑</button></td>
-      </tr>`).join('');
+      </tr>`;
+      if(o.kind === 'warp' && selectedWarpEditId === o.id) row += renderWarpDestinationEditor(o);
+      return row;
+    }).join('');
     return `
       <div style="max-width:700px">
         <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;margin-bottom:12px">
@@ -215,6 +230,8 @@ const PROGRAM = (() => {
             Um objeto é a "identidade" de um gatilho (dano ou warp). O mesmo metatile pode ter várias
             instâncias na tela, cada uma apontando pra um objeto diferente - ex: dois espinhos iguais
             visualmente, um tira 10 e o outro 20; ou duas portas iguais que levam pra lugares diferentes.
+            Um warp sempre aponta pra outro warp (que já é o próprio ponto de spawn) - dá pra ter um
+            warp que não é gatilho de nenhuma porta, só um ponto nomeado (ex: spawn inicial do jogo).
           </div>
           <div style="display:flex;gap:6px;align-items:center">
             <input id="objName" type="text" placeholder="nome_do_objeto" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
@@ -229,11 +246,94 @@ const PROGRAM = (() => {
         <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
           <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">OBJETOS DO PROJETO (${objs.length})</h4>
           <table style="width:100%;border-collapse:collapse;font-size:11px">
-            <thead><tr style="border-bottom:1px solid #444;color:#888;text-align:left"><th style="padding:6px">Nome</th><th style="padding:6px">Tipo</th><th style="padding:6px">Dano</th><th></th></tr></thead>
+            <thead><tr style="border-bottom:1px solid #444;color:#888;text-align:left"><th style="padding:6px">Nome</th><th style="padding:6px">Tipo</th><th style="padding:6px">Dano / Destino</th><th></th></tr></thead>
             <tbody>${rows || '<tr><td colspan="4" style="padding:10px;color:#666">Nenhum objeto ainda.</td></tr>'}</tbody>
           </table>
         </div>
       </div>`;
+  }
+
+  // Junta backgrounds + splashes numa lista só, marcada com o tipo, pra popular o select
+  // de tela de destino do warp.
+  function allScreensList(){
+    const bgs = (Project.data?.backgrounds || []).map(b => ({ ...b, _type: 'background' }));
+    const sps = (Project.data?.splashScreens || []).map(s => ({ ...s, _type: 'splash' }));
+    return [...bgs, ...sps];
+  }
+
+  function renderWarpDestinationEditor(o){
+    const screens = allScreensList();
+    const selValue = (o.targetScreenType && o.targetScreenId) ? `${o.targetScreenType}:${o.targetScreenId}` : '';
+    return `
+      <tr>
+        <td colspan="4" style="padding:10px;background:#181818;border-bottom:1px solid #333">
+          <div style="display:flex;gap:14px;align-items:flex-start">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <label style="font-size:10px;color:#888">Tela de destino (onde esse warp faz o jogador aparecer)</label>
+              <select id="warpDestScreen_${o.id}" onchange="PROGRAM.updateWarpDestPreview('${o.id}')" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px;min-width:200px">
+                <option value="">— nenhuma —</option>
+                ${screens.map(s=>`<option value="${s._type}:${s.id}" ${selValue===`${s._type}:${s.id}`?'selected':''}>${s._type==='splash'?'🎬':'🗺'} ${s.name}</option>`).join('')}
+              </select>
+              <div style="display:flex;gap:8px">
+                <div><label style="font-size:10px;color:#888">X (0-31)</label><br>
+                  <input type="number" id="warpDestX_${o.id}" min="0" max="31" value="${o.spawnX ?? 0}" onchange="PROGRAM.updateWarpDestPreview('${o.id}')" style="width:55px;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px"></div>
+                <div><label style="font-size:10px;color:#888">Y (0-29)</label><br>
+                  <input type="number" id="warpDestY_${o.id}" min="0" max="29" value="${o.spawnY ?? 0}" onchange="PROGRAM.updateWarpDestPreview('${o.id}')" style="width:55px;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px"></div>
+              </div>
+              <button class="btn-tool" onclick="PROGRAM.saveWarpDestination('${o.id}')" style="background:#27ae60;color:#fff;margin-top:4px">💾 Salvar destino</button>
+            </div>
+            <div>
+              <label style="font-size:10px;color:#888;display:block;margin-bottom:2px">Preview (ponto de spawn em vermelho)</label>
+              <canvas id="warpDestPreview_${o.id}" width="170" height="160" style="background:#000;border:1px solid #444;image-rendering:pixelated"></canvas>
+            </div>
+          </div>
+        </td>
+      </tr>`;
+  }
+
+  function toggleWarpDestEditor(id){
+    selectedWarpEditId = (selectedWarpEditId === id) ? null : id;
+    renderTab();
+  }
+
+  function drawWarpDestPreview(o){
+    const canvas = document.getElementById('warpDestPreview_'+o.id); if(!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if(o.targetScreenType && o.targetScreenId){
+      const arr = o.targetScreenType === 'splash' ? (Project.data?.splashScreens||[]) : (Project.data?.backgrounds||[]);
+      const screen = arr.find(s => s.id === o.targetScreenId);
+      if(screen) RENDER_UTILS.drawAssetThumbnail(canvas, screen);
+    }
+    const sx = o.spawnX ?? 0, sy = o.spawnY ?? 0;
+    const px = (sx/32) * canvas.width, py = (sy/30) * canvas.height;
+    ctx.fillStyle = '#ff0000';
+    ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+  }
+
+  // Atualiza só o preview (sem salvar) enquanto o usuário mexe no select/inputs.
+  function updateWarpDestPreview(id){
+    const o = Project.data?.hitboxObjects?.find(o => o.id === id); if(!o) return;
+    const screenSel = document.getElementById('warpDestScreen_'+id);
+    const xEl = document.getElementById('warpDestX_'+id);
+    const yEl = document.getElementById('warpDestY_'+id);
+    const [type, sid] = (screenSel?.value || '').split(':');
+    drawWarpDestPreview({ ...o, targetScreenType: type||null, targetScreenId: sid||null, spawnX: parseInt(xEl?.value)||0, spawnY: parseInt(yEl?.value)||0 });
+  }
+
+  function saveWarpDestination(id){
+    const o = Project.data?.hitboxObjects?.find(o => o.id === id); if(!o) return;
+    const screenSel = document.getElementById('warpDestScreen_'+id);
+    const xEl = document.getElementById('warpDestX_'+id);
+    const yEl = document.getElementById('warpDestY_'+id);
+    const [type, sid] = (screenSel?.value || '').split(':');
+    o.targetScreenType = type || null;
+    o.targetScreenId = sid || null;
+    o.spawnX = Math.max(0, Math.min(31, parseInt(xEl?.value)||0));
+    o.spawnY = Math.max(0, Math.min(29, parseInt(yEl?.value)||0));
+    Project.status(`Destino de "${o.name}" salvo`);
+    renderTab();
   }
 
   function onObjKindChange(){
@@ -590,6 +690,7 @@ const PROGRAM = (() => {
     init: buildHTML, setTab,
     addVariable, deleteVariable, onVarTypeChange, saveVariableValue,
     addHitboxObject, deleteHitboxObject, onObjKindChange, saveObjectDamage,
+    toggleWarpDestEditor, updateWarpDestPreview, saveWarpDestination,
     addEvent, deleteEvent, onEvCategoryChange,
     addMenu, selectMenu, renameMenu, deleteMenu, updateMenuCursor, addMenuItem, updateMenuItem, moveMenuItem, deleteMenuItem,
     addRule, selectRule, renameRule, setRuleScope, deleteRule, addStep, updateStep, moveStep, deleteStep

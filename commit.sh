@@ -14,11 +14,9 @@ then
     git add assets/
     git add css/
     git add js/
+    git add projetos/
     git add commit.sh
     git add index.html
-    git add hello.nms
-    git add smb.nms
-    git add claude.txt
     git add historico.txt
     
     git commit -m "by_script"
