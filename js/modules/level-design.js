@@ -1,13 +1,12 @@
 // LEVEL DESIGN MODULE v1.3.0 - Mapa amarrado à fase real do projeto (Project.data.phases[i].levelMap)
 const LEVEL_DESIGN = (() => {
   function defaultWorld(){
-    return { cols: 4, rows: 4, transitionType: "hard_cut", cells: {}, warps: [] };
+    return { cols: 4, rows: 4, transitionType: "hard_cut", cells: {} };
   }
   let currentPhaseId = null;
   let currentWorld = defaultWorld();
   let selectedAsset = { id: null, type: null }; 
-  let activeTool = 'place'; 
-  let warpSource = null;
+  let activeTool = 'place';
 
   // Carrega o levelMap salvo dentro da fase (ou cria um em branco se a fase ainda não tem um).
   // O mapa vive DENTRO da fase (Project.data.phases[i].levelMap) - não existe mais um array
@@ -61,7 +60,6 @@ const LEVEL_DESIGN = (() => {
               <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">
                 <button class="btn-tool ld-tool-btn active" data-tool="place" onclick="LEVEL_DESIGN.setTool('place')">🧩 Posicionar</button>
                 <button class="btn-tool ld-tool-btn" data-tool="erase" onclick="LEVEL_DESIGN.setTool('erase')" style="background:#c0392b;color:#fff">🧹 Apagar</button>
-                <button class="btn-tool ld-tool-btn" data-tool="warp" onclick="LEVEL_DESIGN.setTool('warp')" style="background:#8e44ad;color:#fff">🌀 Warp</button>
                 <button class="btn-tool ld-tool-btn" data-tool="hardcut" onclick="LEVEL_DESIGN.setTool('hardcut')" style="background:#d35400;color:#fff" title="Marca/desmarca uma célula como corte seco, mesmo dentro de uma fase de scroll (splash, menu, cutscene...)">🔒 Hard-Cut</button>
               </div>
               <div id="ldHelpText" style="font-size:10px;color:#888;background:#000;border:1px solid #222;border-radius:3px;padding:4px 6px">Selecione um Asset e clique no grid.</div>
@@ -84,14 +82,6 @@ const LEVEL_DESIGN = (() => {
           <div style="flex:1;background:#111;padding:16px;overflow:auto;display:flex;flex-direction:column;align-items:center">
             <div id="ldGridContainer" style="display:grid;gap:6px;background:#222;padding:10px;border:2px solid #444;border-radius:6px"></div>
           </div>
-
-          <!-- Painel Direito: Warps -->
-          <div style="width:280px;min-width:280px;background:#1e1e1e;padding:12px;border-left:1px solid #333;overflow:auto;display:flex;flex-direction:column;gap:12px">
-            <div style="background:#111;border:1px solid #665500;border-radius:6px;padding:10px">
-              <h4 style="font-size:11px;color:#ffcc00;margin-bottom:8px">⚡ WARPS CONFIGURADAS</h4>
-              <div id="ldWarpsList" style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow:auto"></div>
-            </div>
-          </div>
         </div>
       </div>
     `;
@@ -99,7 +89,6 @@ const LEVEL_DESIGN = (() => {
     document.getElementById('ldTransitionType')?.addEventListener('change', e => { currentWorld.transitionType = e.target.value; persistLevelMap(); });
     refreshAssetLists();
     renderGrid();
-    renderWarpsList();
   }
 
   function setTool(t) {
@@ -110,7 +99,6 @@ const LEVEL_DESIGN = (() => {
     if (!help) return;
     if (t === 'place') help.textContent = 'Clique em uma célula do grid para encaixar o Asset.';
     else if (t === 'erase') help.textContent = 'Clique em uma célula preenchida para removê-la.';
-    else if (t === 'warp') help.textContent = 'Modo Warp: Clique na origem e no destino.';
     else if (t === 'hardcut') help.textContent = 'Clique numa célula preenchida pra marcar/desmarcar como corte seco (ignora o eixo de scroll da fase).';
   }
 
@@ -274,18 +262,6 @@ const LEVEL_DESIGN = (() => {
     } else if (activeTool === 'erase') {
       delete currentWorld.cells[key];
       renderGrid(); persistLevelMap();
-    } else if (activeTool === 'warp') {
-      if (!warpSource) {
-        if (!currentWorld.cells[key]) { alert('A sala de origem precisa ter uma tela alocada.'); return; }
-        warpSource = { x, y };
-        alert(`Warp origem definida em (${x}, ${y}). Agora clique na sala de destino.`);
-      } else {
-        if (!currentWorld.cells[key]) { alert('A sala de destino precisa ter uma tela alocada.'); return; }
-        currentWorld.warps.push({ from: warpSource, to: { x, y } });
-        warpSource = null;
-        renderWarpsList(); persistLevelMap();
-        alert('Warp criada com sucesso!');
-      }
     } else if (activeTool === 'hardcut') {
       if (!currentWorld.cells[key]) { alert('A célula precisa ter uma tela alocada primeiro.'); return; }
       currentWorld.cells[key].hardCut = !currentWorld.cells[key].hardCut;
@@ -302,27 +278,6 @@ const LEVEL_DESIGN = (() => {
     phase.levelMap = JSON.parse(JSON.stringify(currentWorld));
   }
 
-  function renderWarpsList() {
-    const container = document.getElementById('ldWarpsList');
-    if (!container) return;
-    if (currentWorld.warps.length === 0) {
-      container.innerHTML = `<div style="font-size:10px;color:#666">Nenhuma warp cadastrada.</div>`;
-      return;
-    }
-    container.innerHTML = '';
-    currentWorld.warps.forEach((w, idx) => {
-      const d = document.createElement('div');
-      d.style.cssText = `background:#111;border:1px solid #444;border-radius:4px;padding:4px 6px;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#ccc`;
-      d.innerHTML = `<span>(${w.from.x},${w.from.y}) ➡️ (${w.to.x},${w.to.y})</span><button onclick="LEVEL_DESIGN.removeWarp(${idx})" style="background:#c33;color:#fff;border:none;border-radius:2px;cursor:pointer;padding:1px 4px">X</button>`;
-      container.appendChild(d);
-    });
-  }
-
-  function removeWarp(idx) {
-    currentWorld.warps.splice(idx, 1);
-    renderWarpsList(); persistLevelMap();
-  }
-
   function resizeGrid() {
     const colsEl = document.getElementById('ldCols');
     const rowsEl = document.getElementById('ldRows');
@@ -335,14 +290,15 @@ const LEVEL_DESIGN = (() => {
   // O mapa vive dentro da própria fase (phase.levelMap) - sem array paralelo, sem nome pra
   // dessincronizar. Se a fase for deletada no Dashboard, o mapa some junto (sem órfão).
   // Toda edição no grid já chama persistLevelMap() sozinha (ver handleCellClick,
-  // resizeGrid, removeWarp) - não existe mais um botão separado de "salvar fase": o único
+  // resizeGrid) - não existe mais um botão separado de "salvar fase": o único
   // save manual que resta é o Salvar Projeto global (topo), que grava o .nms.
+  // A ferramenta Warp saiu daqui: destino de warp agora é responsabilidade do módulo
+  // Programação (objeto de hitbox kind:'warp' + Regra "Ir para Warp"), não do mapa de fases.
 
   return {
     init: () => loadPhaseMap(currentPhaseId),
     setTool,
     resizeGrid,
-    removeWarp,
     loadPhaseMap
   };
 })();

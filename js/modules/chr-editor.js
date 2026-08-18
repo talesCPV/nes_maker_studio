@@ -6,7 +6,7 @@ const CHR = (() => {
   let currentBank = 0, gridW=2, gridH=2, selectedTiles=[0,1,16,17], activeSlotIdx=0, isDrawing=false, undoStack=[];
   let metatiles = [];
   let sheetCanvas, sheetCtx, zoomCanvas, zoomCtx, previewCanvas, previewCtx;
-  let tool='pen', toolStart=null, toolPreviewEnd=null, copyDrag=null, clipboard=null;
+  let tool='pen', toolStart=null, toolPreviewEnd=null, copyDrag=null, clipboard=null, sheetClipboardTile=null;
 
   function buildHTML(){
     const root = document.getElementById('chrModuleRoot'); if(!root) return;
@@ -54,6 +54,10 @@ const CHR = (() => {
               <button class="btn-tool tool-btn" data-tool="copy" onclick="CHR.setTool('copy')">📋 Copy</button>
               <button class="btn-tool tool-btn" data-tool="paste" onclick="CHR.setTool('paste')">📌 Paste</button>
               <div style="width:1px;height:18px;background:#444;margin:0 6px"></div>
+              <button class="btn-tool tool-btn" data-tool="sheetcopy" onclick="CHR.setTool('sheetcopy')" title="Copia um tile inteiro clicando nele na folha - funciona entre páginas/bancos diferentes">🗐 Copiar Tile</button>
+              <button class="btn-tool tool-btn" data-tool="sheetpaste" onclick="CHR.setTool('sheetpaste')" title="Cola o tile copiado em qualquer posição da folha, mesmo em outra página/banco">📥 Colar Tile</button>
+              <span style="font-size:10px;color:#888;margin-left:4px" id="lblSheetClipboard">Tile copiado: nenhum</span>
+              <div style="width:1px;height:18px;background:#444;margin:0 6px"></div>
               <button class="btn-tool" onclick="CHR.undo()" style="background:#555;color:#fff">↩️ Undo</button>
               <span style="font-size:10px;color:#888;margin-left:6px" id="lblClipboard">Clipboard: vazio</span>
             </div>
@@ -83,6 +87,7 @@ const CHR = (() => {
 
             <div style="display:flex;gap:12px;align-items:flex-start">
               <div>
+                <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:#888;margin-bottom:4px;cursor:pointer"><input type="checkbox" id="chkMetatileGrid" checked onchange="CHR.renderAll()"> grid entre tiles</label>
                 <canvas id="zoomCanvas" width="320" height="320" style="border:1px solid #555;background:#000;image-rendering:pixelated;cursor:crosshair;display:block;min-width:320px;min-height:320px"></canvas>
                 <div style="font-size:10px;color:#666;margin-top:6px">Botão esquerdo desenha, direito pega cor (teclas 1-4 troca cor)</div>
               </div>
@@ -200,7 +205,7 @@ const CHR = (() => {
   }
 
   function setGrid(w,h){ gridW=w; gridH=h; const first=selectedTiles[0]||currentBank*256; selectedTiles=[]; for(let i=0;i<w*h;i++) selectedTiles.push(first+i); activeSlotIdx=0; if(zoomCanvas){ zoomCanvas.width=w*8*16; zoomCanvas.height=h*8*16; } renderAll(); updateLabels(); }
-  function renderZoom(){ if(!zoomCtx) return; const sizeW=gridW*8, sizeH=gridH*8; zoomCanvas.width=sizeW*16; zoomCanvas.height=sizeH*16; zoomCtx.fillStyle="#000"; zoomCtx.fillRect(0,0,zoomCanvas.width,zoomCanvas.height); for(let gy=0;gy<gridH;gy++) for(let gx=0;gx<gridW;gx++){ const ti=selectedTiles[gy*gridW+gx]; if(ti!==undefined) drawTile(zoomCtx, ti, gx*8*16, gy*8*16, 16); } if((tool==='line'||tool==='rect'||tool==='circle')&&toolStart&&toolPreviewEnd){ let pts=[]; if(tool==='line') pts=bresenham(toolStart.x,toolStart.y,toolPreviewEnd.x,toolPreviewEnd.y); else if(tool==='rect') pts=getRectPoints(toolStart.x,toolStart.y,toolPreviewEnd.x,toolPreviewEnd.y); else if(tool==='circle'){ const r=Math.round(Math.hypot(toolPreviewEnd.x-toolStart.x, toolPreviewEnd.y-toolStart.y)); pts=getCirclePoints(toolStart.x,toolStart.y,r); } zoomCtx.fillStyle="rgba(255,255,0,0.9)"; pts.forEach(p=>{ if(p.x>=0&&p.x<sizeW&&p.y>=0&&p.y<sizeH) zoomCtx.fillRect(p.x*16, p.y*16, 16,16); }); } if(copyDrag&&copyDrag.active){ const x0=Math.min(copyDrag.x0, copyDrag.x1), y0=Math.min(copyDrag.y0, copyDrag.y1); const x1=Math.max(copyDrag.x0, copyDrag.x1), y1=Math.max(copyDrag.y0, copyDrag.y1); zoomCtx.fillStyle="rgba(0,150,255,0.25)"; zoomCtx.fillRect(x0*16, y0*16, (x1-x0+1)*16, (y1-y0+1)*16); } if(previewCtx){ previewCanvas.width=sizeW*2; previewCanvas.height=sizeH*2; previewCtx.fillStyle="#000"; previewCtx.fillRect(0,0,previewCanvas.width,previewCanvas.height); for(let gy=0;gy<gridH;gy++) for(let gx=0;gx<gridW;gx++){ const ti=selectedTiles[gy*gridW+gx]; if(ti!==undefined) drawTile(previewCtx, ti, gx*8*2, gy*8*2, 2); } } }
+  function renderZoom(){ if(!zoomCtx) return; const sizeW=gridW*8, sizeH=gridH*8; zoomCanvas.width=sizeW*16; zoomCanvas.height=sizeH*16; zoomCtx.fillStyle="#000"; zoomCtx.fillRect(0,0,zoomCanvas.width,zoomCanvas.height); for(let gy=0;gy<gridH;gy++) for(let gx=0;gx<gridW;gx++){ const ti=selectedTiles[gy*gridW+gx]; if(ti!==undefined) drawTile(zoomCtx, ti, gx*8*16, gy*8*16, 16); } if(document.getElementById('chkMetatileGrid')?.checked && (gridW>1 || gridH>1)){ zoomCtx.save(); zoomCtx.strokeStyle="rgba(255,255,0,0.6)"; zoomCtx.lineWidth=1; for(let gx=1; gx<gridW; gx++){ zoomCtx.beginPath(); zoomCtx.moveTo(gx*8*16+0.5, 0); zoomCtx.lineTo(gx*8*16+0.5, zoomCanvas.height); zoomCtx.stroke(); } for(let gy=1; gy<gridH; gy++){ zoomCtx.beginPath(); zoomCtx.moveTo(0, gy*8*16+0.5); zoomCtx.lineTo(zoomCanvas.width, gy*8*16+0.5); zoomCtx.stroke(); } zoomCtx.restore(); } if((tool==='line'||tool==='rect'||tool==='circle')&&toolStart&&toolPreviewEnd){ let pts=[]; if(tool==='line') pts=bresenham(toolStart.x,toolStart.y,toolPreviewEnd.x,toolPreviewEnd.y); else if(tool==='rect') pts=getRectPoints(toolStart.x,toolStart.y,toolPreviewEnd.x,toolPreviewEnd.y); else if(tool==='circle'){ const r=Math.round(Math.hypot(toolPreviewEnd.x-toolStart.x, toolPreviewEnd.y-toolStart.y)); pts=getCirclePoints(toolStart.x,toolStart.y,r); } zoomCtx.fillStyle="rgba(255,255,0,0.9)"; pts.forEach(p=>{ if(p.x>=0&&p.x<sizeW&&p.y>=0&&p.y<sizeH) zoomCtx.fillRect(p.x*16, p.y*16, 16,16); }); } if(copyDrag&&copyDrag.active){ const x0=Math.min(copyDrag.x0, copyDrag.x1), y0=Math.min(copyDrag.y0, copyDrag.y1); const x1=Math.max(copyDrag.x0, copyDrag.x1), y1=Math.max(copyDrag.y0, copyDrag.y1); zoomCtx.fillStyle="rgba(0,150,255,0.25)"; zoomCtx.fillRect(x0*16, y0*16, (x1-x0+1)*16, (y1-y0+1)*16); } if(previewCtx){ previewCanvas.width=sizeW*2; previewCanvas.height=sizeH*2; previewCtx.fillStyle="#000"; previewCtx.fillRect(0,0,previewCanvas.width,previewCanvas.height); for(let gy=0;gy<gridH;gy++) for(let gx=0;gx<gridW;gx++){ const ti=selectedTiles[gy*gridW+gx]; if(ti!==undefined) drawTile(previewCtx, ti, gx*8*2, gy*8*2, 2); } } }
   function renderAll(){ renderSheet(); renderZoom(); renderQuickTileSelector(); renderMetatilePreview(); }
 
   function doLine(x0,y0,x1,y1){ const M=getMatrix(); bresenham(x0,y0,x1,y1).forEach(p=>{ if(p.y>=0&&p.y<M.length&&p.x>=0&&p.x<M[0].length) M[p.y][p.x]=activeSlot; }); pushUndo(); setMatrix(M); }
@@ -209,6 +214,21 @@ const CHR = (() => {
   function doFill(sx,sy){ const M=getMatrix(); const H=M.length, W=M[0].length; if(sx<0||sx>=W||sy<0||sy>=H) return; const target=M[sy][sx]; if(target===activeSlot) return; const stack=[[sx,sy]]; const visited=new Set(); while(stack.length){ const [x,y]=stack.pop(); const key=y*W+x; if(visited.has(key)) continue; visited.add(key); if(x<0||x>=W||y<0||y>=H) continue; if(M[y][x]!==target) continue; M[y][x]=activeSlot; stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]); } pushUndo(); setMatrix(M); }
   function doCopy(x0,y0,x1,y1){ const M=getMatrix(); const minX=Math.max(0,Math.min(x0,x1)), maxX=Math.min(M[0].length-1, Math.max(x0,x1)); const minY=Math.max(0,Math.min(y0,y1)), maxY=Math.min(M.length-1, Math.max(y0,y1)); const w=maxX-minX+1, h=maxY-minY+1; if(w<=0||h<=0) return; const data=Array.from({length:h},(_,dy)=> Array.from({length:w},(_,dx)=> M[minY+dy][minX+dx])); clipboard={w,h,data}; const lbl=document.getElementById('lblClipboard'); if(lbl) lbl.textContent=`Clipboard: ${w}x${h}`; }
   function doPaste(px,py){ if(!clipboard) return; const M=getMatrix(); for(let dy=0;dy<clipboard.h;dy++) for(let dx=0;dx<clipboard.w;dx++){ const x=px+dx, y=py+dy; if(x<0||x>=M[0].length||y<0||y>=M.length) continue; M[y][x]=clipboard.data[dy][dx]; } pushUndo(); setMatrix(M); }
+  // Copia/cola um tile INTEIRO (16 bytes brutos) direto na folha, independente de banco/página -
+  // dá pra tirar um tile da página de sprite e colar na de background, ou de um CHR importado.
+  function copySheetTile(absIdx){
+    const off = absIdx*16; if(off+16 > chrBuffer.length) return;
+    sheetClipboardTile = Array.from(chrBuffer.slice(off, off+16));
+    const lbl = document.getElementById('lblSheetClipboard');
+    if(lbl) lbl.textContent = `Tile copiado: PT${Math.floor(absIdx/256)}:$${(absIdx%256).toString(16).padStart(2,'0').toUpperCase()}`;
+  }
+  function pasteSheetTile(absIdx){
+    if(!sheetClipboardTile) return;
+    const off = absIdx*16; if(off+16 > chrBuffer.length) return;
+    pushUndo();
+    for(let i=0;i<16;i++) chrBuffer[off+i] = sheetClipboardTile[i];
+    renderAll();
+  }
 
   function handleCHRImport(e){
     const file = e.target.files[0];
@@ -267,7 +287,14 @@ const CHR = (() => {
       importInput.onchange = handleCHRImport;
     }
     document.getElementById('chkShowGrid')?.addEventListener('change', ()=> renderSheet());
-    sheetCanvas?.addEventListener('click', e=>{ const r=sheetCanvas.getBoundingClientRect(); const x=Math.floor((e.clientX-r.left)/32), y=Math.floor((e.clientY-r.top)/32); const g=currentBank*256+y*16+x; selectedTiles[activeSlotIdx]=g; activeSlotIdx=(activeSlotIdx+1)%selectedTiles.length; renderAll(); updateLabels(); });
+    sheetCanvas?.addEventListener('click', e=>{
+      const r=sheetCanvas.getBoundingClientRect();
+      const x=Math.floor((e.clientX-r.left)/32), y=Math.floor((e.clientY-r.top)/32);
+      const g=currentBank*256+y*16+x;
+      if(tool==='sheetcopy'){ copySheetTile(g); return; }
+      if(tool==='sheetpaste'){ pasteSheetTile(g); return; }
+      selectedTiles[activeSlotIdx]=g; activeSlotIdx=(activeSlotIdx+1)%selectedTiles.length; renderAll(); updateLabels();
+    });
     zoomCanvas?.addEventListener('mousedown', e=>{
       const rect=zoomCanvas.getBoundingClientRect(); const px=Math.floor(((e.clientX-rect.left)/rect.width)*zoomCanvas.width/16), py=Math.floor(((e.clientY-rect.top)/rect.height)*zoomCanvas.height/16);
       if(e.button===2){ const gx=Math.floor(px/8), gy=Math.floor(py/8), slot=gy*gridW+gx, ti=selectedTiles[slot]; if(ti!==undefined){ const lx=px%8, ly=py%8, off=ti*16; const p0=chrBuffer[off+ly], p1=chrBuffer[off+ly+8], sh=7-lx; activeSlot=((p1>>sh&1)<<1)|(p0>>sh&1); initPalUI(); } return; }

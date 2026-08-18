@@ -1,7 +1,9 @@
-// BUILD ROM v0.8.1 - Splash/BG + Music test (sound-editor v3 → APU)
+// BUILD ROM v0.8.2 - Splash/BG + Music test (sound-editor v3 → APU)
 const BUILD = (() => {
   let lastROM = null;
   let lastASM = "";
+  let emuBrowser = null;
+  let emuScriptPromise = null;
 
   const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
   const CPU_FREQ_NTSC = 1789773;
@@ -111,10 +113,11 @@ const BUILD = (() => {
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <div style="display:flex;gap:8px;align-items:center;padding:10px 12px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
-          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.8.1 • Splash/BG + Music Test</h3>
+          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.8.2 • Splash/BG + Music Test</h3>
           <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn-tool" onclick="BUILD.buildROM()" style="background:#27ae60;color:#fff;padding:6px 14px;font-weight:bold">🔨 Build ROM</button>
             <button class="btn-tool" onclick="BUILD.downloadROM()" id="btnDownload" style="display:none;background:#2980b9;color:#fff">⬇ .nes</button>
+            <button class="btn-tool" onclick="BUILD.playEmulator()" id="btnPlayEmu" style="display:none;background:#c0392b;color:#fff;font-weight:bold">▶ Testar</button>
             <button class="btn-tool" onclick="BUILD.downloadASM()" id="btnDownloadASM" style="display:none;background:#8e44ad;color:#fff">⬇ .asm</button>
             <button class="btn-tool" onclick="BUILD.downloadCFG()" id="btnDownloadCFG" style="background:#d35400;color:#fff">⬇ nrom.cfg</button>
           </div>
@@ -160,6 +163,19 @@ const BUILD = (() => {
             <h4 style="font-size:11px;color:#ffcc00">PREVIEW</h4>
             <canvas id="buildPreviewCanvas" width="256" height="240" style="width:256px;height:240px;border:2px solid #665500;background:#000;image-rendering:pixelated;display:block"></canvas>
             <div id="buildStats" style="font-size:11px;color:#888;background:#111;border:1px solid #333;border-radius:4px;padding:8px;line-height:1.5">ROM: 0 bytes</div>
+          </div>
+        </div>
+        <div id="buildEmuModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:9999;align-items:center;justify-content:center">
+          <div style="background:#1a1a1a;border:1px solid #444;border-radius:10px;padding:16px;max-width:96vw;box-shadow:0 12px 40px rgba(0,0,0,0.6)">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <h3 style="margin:0;font-size:14px;color:#4ec9b0">▶ Emulador (jsnes)</h3>
+              <span id="buildEmuStatus" style="font-size:11px;color:#888">—</span>
+              <button class="btn-tool" onclick="BUILD.stopEmulator()" style="margin-left:auto;background:#c0392b;color:#fff">■ Parar</button>
+            </div>
+            <div id="buildEmuContainer" style="width:512px;height:480px;max-width:90vw;max-height:70vh;background:#000;margin:0 auto;image-rendering:pixelated"></div>
+            <div style="margin-top:10px;font-size:10px;color:#666;text-align:center">
+              Setas = D-pad · Z = B · X = A · Enter = Start · Right Ctrl = Select
+            </div>
           </div>
         </div>
       </div>
@@ -423,7 +439,7 @@ const BUILD = (() => {
     }
 
     const L=[];
-    L.push("; NES Game Maker - Gerado por BUILD ROM v0.8.1");
+    L.push("; NES Game Maker - Gerado por BUILD ROM v0.8.2");
     L.push(`; Imagem: [${data.type==="background"?"Background":"Splash"}] ${data.sourceName||data.name}`);
     L.push(`; CHR reempacotado: ${packed.usedCount}/256 tiles`);
     if(music && musicChans) L.push(`; Musica: ${music.name} · ${musicChans.length} canal(is) · baseFrames=${music.baseFrames||30}`);
@@ -1073,7 +1089,7 @@ const BUILD = (() => {
 
 
   function buildROM(){
-    const logEl=document.getElementById("buildLog"); if(logEl) logEl.textContent="Iniciando build v0.8.1...\n";
+    const logEl=document.getElementById("buildLog"); if(logEl) logEl.textContent="Iniciando build v0.8.2...\n";
     try{
       const chrBuf=CHR.getBuffer?CHR.getBuffer():new Uint8Array(8192);
       const data=getSelectedBuildData();
@@ -1094,9 +1110,13 @@ const BUILD = (() => {
         lastROM = generateNES();
         log("✅ ROM .nes gerada no browser: " + lastROM.length + " bytes");
         document.getElementById("btnDownload").style.display="inline-block";
+        const bp = document.getElementById("btnPlayEmu");
+        if(bp) bp.style.display="inline-block";
       }catch(ne){
         lastROM = null;
         document.getElementById("btnDownload").style.display="none";
+        const bp = document.getElementById("btnPlayEmu");
+        if(bp) bp.style.display="none";
         log("⚠ Binário .nes: " + ne.message);
         console.error(ne);
       }
@@ -1162,11 +1182,168 @@ const BUILD = (() => {
     a.click();
   }
   function copyASM(){ const ta=document.getElementById("buildASMPreview"); if(!ta) return; ta.select(); document.execCommand("copy"); }
-  function openEmulator(){}
+  function loadJSNES(){
+    if(window.jsnes) return Promise.resolve(window.jsnes);
+    if(emuScriptPromise) return emuScriptPromise;
+    emuScriptPromise = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://unpkg.com/jsnes@2/dist/jsnes.min.js";
+      s.async = true;
+      s.onload = () => {
+        if(window.jsnes) resolve(window.jsnes);
+        else reject(new Error("jsnes nao carregou"));
+      };
+      s.onerror = () => reject(new Error("Falha ao carregar jsnes (CDN)"));
+      document.head.appendChild(s);
+    });
+    return emuScriptPromise;
+  }
+
+  function stopEmulator(){
+    const modal = document.getElementById("buildEmuModal");
+    const box = document.getElementById("buildEmuContainer");
+    const st = document.getElementById("buildEmuStatus");
+    try{
+      if(emuBrowser){
+        if(typeof emuBrowser.destroy === "function") emuBrowser.destroy();
+        else if(emuBrowser.nes && typeof emuBrowser.nes.stop === "function") emuBrowser.nes.stop();
+      }
+    }catch(e){ console.warn(e); }
+    emuBrowser = null;
+    if(box) box.innerHTML = "";
+    if(modal) modal.style.display = "none";
+    if(st) st.textContent = "parado";
+  }
+
+  async function playEmulator(){
+    if(!lastROM){
+      alert("Gere a ROM primeiro (Build ROM).");
+      return;
+    }
+    const modal = document.getElementById("buildEmuModal");
+    const box = document.getElementById("buildEmuContainer");
+    const st = document.getElementById("buildEmuStatus");
+    if(!modal || !box) return;
+
+    stopEmulator();
+    modal.style.display = "flex";
+    box.innerHTML = "";
+    if(st) st.textContent = "carregando jsnes...";
+
+    try{
+      const jsnes = await loadJSNES();
+      if(st) st.textContent = "iniciando...";
+
+      // API moderna (jsnes.Browser) se existir
+      if(typeof jsnes.Browser === "function"){
+        emuBrowser = new jsnes.Browser({
+          container: box,
+          onError: function(e){ console.error(e); if(st) st.textContent = "erro: " + (e && e.message ? e.message : e); }
+        });
+        if(typeof emuBrowser.loadROM === "function"){
+          emuBrowser.loadROM(lastROM);
+        } else {
+          // algumas builds expõem nes.loadROM
+          emuBrowser.nes.loadROM(lastROM);
+        }
+        if(st) st.textContent = "rodando (" + lastROM.length + " bytes)";
+        return;
+      }
+
+      // Fallback clássico: NES + canvas manual
+      const canvas = document.createElement("canvas");
+      canvas.width = 256;
+      canvas.height = 240;
+      canvas.style.width = "100%";
+      canvas.style.height = "100%";
+      canvas.style.imageRendering = "pixelated";
+      box.appendChild(canvas);
+      const ctx = canvas.getContext("2d");
+      const img = ctx.createImageData(256, 240);
+
+      let audioCtx = null;
+      try{
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }catch(e){}
+
+      const nes = new jsnes.NES({
+        onFrame(frameBuffer){
+          for(let i=0;i<frameBuffer.length;i++){
+            const c = frameBuffer[i];
+            const j = i * 4;
+            img.data[j] = c & 0xFF;
+            img.data[j+1] = (c >> 8) & 0xFF;
+            img.data[j+2] = (c >> 16) & 0xFF;
+            img.data[j+3] = 0xFF;
+          }
+          ctx.putImageData(img, 0, 0);
+        },
+        onAudioSample(left, right){
+          // silencioso no fallback se não houver buffer stream — evita clicks complexos
+        }
+      });
+
+      // loadROM: Uint8Array ou binary string
+      try{
+        nes.loadROM(lastROM);
+      }catch(e1){
+        let bin = "";
+        for(let i=0;i<lastROM.length;i++) bin += String.fromCharCode(lastROM[i]);
+        nes.loadROM(bin);
+      }
+
+      let running = true;
+      function frame(){
+        if(!running) return;
+        nes.frame();
+        requestAnimationFrame(frame);
+      }
+      // input básico
+      const keyMap = {
+        ArrowUp: jsnes.Controller.BUTTON_UP,
+        ArrowDown: jsnes.Controller.BUTTON_DOWN,
+        ArrowLeft: jsnes.Controller.BUTTON_LEFT,
+        ArrowRight: jsnes.Controller.BUTTON_RIGHT,
+        KeyZ: jsnes.Controller.BUTTON_B,
+        KeyX: jsnes.Controller.BUTTON_A,
+        Enter: jsnes.Controller.BUTTON_START,
+        ControlRight: jsnes.Controller.BUTTON_SELECT
+      };
+      function kd(e){
+        const b = keyMap[e.code];
+        if(b != null){ nes.buttonDown(1, b); e.preventDefault(); }
+      }
+      function ku(e){
+        const b = keyMap[e.code];
+        if(b != null){ nes.buttonUp(1, b); e.preventDefault(); }
+      }
+      window.addEventListener("keydown", kd);
+      window.addEventListener("keyup", ku);
+
+      emuBrowser = {
+        nes,
+        destroy(){
+          running = false;
+          window.removeEventListener("keydown", kd);
+          window.removeEventListener("keyup", ku);
+          try{ if(audioCtx) audioCtx.close(); }catch(e){}
+        }
+      };
+      requestAnimationFrame(frame);
+      if(st) st.textContent = "rodando (" + lastROM.length + " bytes)";
+    }catch(e){
+      console.error(e);
+      if(st) st.textContent = "erro";
+      alert("Não foi possível iniciar o emulador: " + e.message);
+    }
+  }
+
+  function openEmulator(){ playEmulator(); }
 
   return {
     init(){ buildHTML(); },
     buildROM, downloadROM, downloadASM, downloadCFG, copyASM, openEmulator,
+    playEmulator, stopEmulator,
     renderPreview, getCurrentData: getSelectedBuildData, generateASM,
     refreshSelects
   };
