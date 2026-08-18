@@ -23,8 +23,46 @@ const SOUND = (() => {
     { id: "pulse1",   label: "Pulse 1",   color: "#00e5ff", wave: "square",   duty: 0.5 },
     { id: "pulse2",   label: "Pulse 2",   color: "#a78bfa", wave: "square",   duty: 0.25 },
     { id: "triangle", label: "Triangle",  color: "#34d399", wave: "triangle", duty: null },
-    { id: "noise",    label: "Noise",     color: "#fbbf24", wave: "noise",    duty: null }
+    { id: "noise",    label: "Noise",     color: "#fbbf24", wave: "noise",    duty: null },
+    { id: "none",     label: "None",      color: "#64748b", wave: null,       duty: null }
   ];
+
+
+  // General MIDI program names (para label de faixa no import)
+  const GM_PROGRAM_NAMES = [
+    "Acoustic Grand Piano","Bright Acoustic Piano","Electric Grand Piano","Honky-tonk Piano",
+    "Electric Piano 1","Electric Piano 2","Harpsichord","Clavinet",
+    "Celesta","Glockenspiel","Music Box","Vibraphone","Marimba","Xylophone","Tubular Bells","Dulcimer",
+    "Drawbar Organ","Percussive Organ","Rock Organ","Church Organ","Reed Organ","Accordion","Harmonica","Tango Accordion",
+    "Acoustic Guitar (nylon)","Acoustic Guitar (steel)","Electric Guitar (jazz)","Electric Guitar (clean)",
+    "Electric Guitar (muted)","Overdriven Guitar","Distortion Guitar","Guitar harmonics",
+    "Acoustic Bass","Electric Bass (finger)","Electric Bass (pick)","Fretless Bass",
+    "Slap Bass 1","Slap Bass 2","Synth Bass 1","Synth Bass 2",
+    "Violin","Viola","Cello","Contrabass","Tremolo Strings","Pizzicato Strings","Orchestral Harp","Timpani",
+    "String Ensemble 1","String Ensemble 2","SynthStrings 1","SynthStrings 2","Choir Aahs","Voice Oohs","Synth Voice","Orchestra Hit",
+    "Trumpet","Trombone","Tuba","Muted Trumpet","French Horn","Brass Section","SynthBrass 1","SynthBrass 2",
+    "Soprano Sax","Alto Sax","Tenor Sax","Baritone Sax","Oboe","English Horn","Bassoon","Clarinet",
+    "Piccolo","Flute","Recorder","Pan Flute","Blown Bottle","Shakuhachi","Whistle","Ocarina",
+    "Lead 1 (square)","Lead 2 (sawtooth)","Lead 3 (calliope)","Lead 4 (chiff)",
+    "Lead 5 (charang)","Lead 6 (voice)","Lead 7 (fifths)","Lead 8 (bass + lead)",
+    "Pad 1 (new age)","Pad 2 (warm)","Pad 3 (polysynth)","Pad 4 (choir)",
+    "Pad 5 (bowed)","Pad 6 (metallic)","Pad 7 (halo)","Pad 8 (sweep)",
+    "FX 1 (rain)","FX 2 (soundtrack)","FX 3 (crystal)","FX 4 (atmosphere)",
+    "FX 5 (brightness)","FX 6 (goblins)","FX 7 (echoes)","FX 8 (sci-fi)",
+    "Sitar","Banjo","Shamisen","Koto","Kalimba","Bagpipe","Fiddle","Shanai",
+    "Tinkle Bell","Agogo","Steel Drums","Woodblock","Taiko Drum","Melodic Tom","Synth Drum","Reverse Cymbal",
+    "Guitar Fret Noise","Breath Noise","Seashore","Bird Tweet","Telephone Ring","Helicopter","Applause","Gunshot"
+  ];
+
+  function decodeMidiMetaText(view, offset, len){
+    const bytes = [];
+    for(let i = 0; i < len; i++) bytes.push(view.getUint8(offset + i));
+    try{
+      return new TextDecoder("utf-8").decode(Uint8Array.from(bytes)).replace(/[\x00-\x1F]/g, "").trim();
+    }catch(e){
+      return bytes.map(b => (b >= 32 && b < 127) ? String.fromCharCode(b) : "").join("").trim();
+    }
+  }
 
   const NOTE_MAP = {};
   const PERIOD_TO_NOTE = {};
@@ -65,6 +103,11 @@ const SOUND = (() => {
   let selectionStart = null, selectionEnd = null, isSelecting = false;
   let draggedIndex = null;
   let els = {};
+  const CELL_W = 34;   // pitch fixo (alinhado regua/notas)
+  const HEADER_W = 150;
+  // Ativacao no tempo por tipo APU: { pulse1: [{ start:0, chId }, { start:38, chId }, ...] }
+  let typeActivation = {};
+  const APU_TYPES = ["pulse1", "pulse2", "triangle", "noise"];
 
   // Audio engine (reutilizado — evita travar criando AudioContext a cada nota)
   let audioCtx = null;
@@ -118,6 +161,7 @@ const SOUND = (() => {
     const it = getActiveItem();
     if(!it) return;
     it.channels = JSON.parse(JSON.stringify(channels));
+    it.typeActivation = JSON.parse(JSON.stringify(typeActivation || {}));
     it.baseFrames = getBaseFrames();
     const loopCb = document.getElementById("loop-checkbox");
     if(loopCb) it.loop = !!loopCb.checked;
@@ -131,15 +175,8 @@ const SOUND = (() => {
     if(!it) return;
     activeId = it.id;
     channels = JSON.parse(JSON.stringify(it.channels || defaultChannels(it.type === "sfx")));
-    // tipos unicos
-    const seen = new Set();
-    channels.forEach(ch=>{
-      if(seen.has(ch.type)){
-        const free = CHANNEL_TYPES.find(t => !seen.has(t.id));
-        if(free) ch.type = free.id;
-      }
-      seen.add(ch.type);
-    });
+    typeActivation = JSON.parse(JSON.stringify(it.typeActivation || {}));
+    ensureTypeActivation();
     activeChannel = 0;
     selectedIndex = 0;
     playbackIndex = 0;
@@ -160,6 +197,66 @@ const SOUND = (() => {
     return max;
   }
 
+  function columnStartFrames(idx){
+    const base = getBaseFrames();
+    let frames = 0;
+    const lim = Math.max(0, Math.min(idx, timelineLength()));
+    for(let i = 0; i < lim; i++){
+      let maxF = 1;
+      channels.forEach(ch=>{
+        const n = ch.notes[i];
+        if(n) maxF = Math.max(maxF, calculateFrames(n.figure, base));
+      });
+      frames += maxF;
+    }
+    return frames;
+  }
+
+  function formatTimelineTime(frames){
+    const sec = frames / 60;
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    if(m > 0) return m + ":" + String(s).padStart(2, "0");
+    return "0:" + String(s).padStart(2, "0");
+  }
+
+  function fillSelectedFromRange(){
+    selectedCells.clear();
+    if(selectionStart === null) return;
+    const a = selectionStart;
+    const b = selectionEnd === null ? selectionStart : selectionEnd;
+    const lo = Math.min(a, b), hi = Math.max(a, b);
+    for(let i = lo; i <= hi; i++) selectedCells.add(i);
+  }
+
+  /** Clique de selecao: 1o = inicio, 2o = fim; Shift sempre estende */
+  function applyTimelinePick(index, extend){
+    const len = timelineLength();
+    if(index < 0 || index >= len) return;
+    selectedIndex = index;
+    playbackIndex = index;
+    if(extend){
+      if(selectionStart === null) selectionStart = index;
+      selectionEnd = index;
+      fillSelectedFromRange();
+    } else if(selectionStart !== null && selectionEnd === null){
+      selectionEnd = index;
+      fillSelectedFromRange();
+    } else {
+      selectionStart = index;
+      selectionEnd = null;
+      selectedCells.clear();
+      selectedCells.add(index);
+    }
+  }
+
+  function clearTimelineSelection(){
+    selectionStart = null;
+    selectionEnd = null;
+    selectedCells.clear();
+  }
+
+
   function normalizeLengths(){
     const len = timelineLength();
     channels.forEach(ch=>{
@@ -170,18 +267,162 @@ const SOUND = (() => {
   function usedTypes(){ return new Set(channels.map(ch => ch.type)); }
 
   function availableTypesFor(channelIndex){
-    const used = usedTypes();
-    const current = channels[channelIndex]?.type;
-    return CHANNEL_TYPES.filter(t => t.id === current || !used.has(t.id));
+    // Tipos APU podem repetir (varias faixas Pulse1 para merge no tempo)
+    return CHANNEL_TYPES.slice();
   }
 
   function typeInfo(typeId){
     return CHANNEL_TYPES.find(t => t.id === typeId) || CHANNEL_TYPES[0];
   }
 
+  function isApuType(t){ return APU_TYPES.indexOf(t) >= 0; }
+
+  function typeRank(t){
+    const r = { pulse1: 0, pulse2: 1, triangle: 2, noise: 3, none: 4 };
+    return r.hasOwnProperty(t) ? r[t] : 9;
+  }
+
+  /** Reordena canais: mesmo tipo APU fica empilhado (um sob o outro), None no final */
+  function reorderChannelsGrouped(){
+    const activeId = channels[activeChannel] && channels[activeChannel].id;
+    const stamped = channels.map((ch, i) => ({ ch, i }));
+    stamped.sort((a, b)=>{
+      const ra = typeRank(a.ch.type), rb = typeRank(b.ch.type);
+      if(ra !== rb) return ra - rb;
+      return a.i - b.i; // estavel dentro do grupo
+    });
+    channels = stamped.map(x => x.ch);
+    if(activeId){
+      const ni = channels.findIndex(c => c.id === activeId);
+      activeChannel = ni >= 0 ? ni : 0;
+    }
+    ensureTypeActivation();
+  }
+
+
+  function channelsOfType(type){
+    const out = [];
+    channels.forEach((ch, i)=>{ if(ch.type === type) out.push({ ch, i }); });
+    return out;
+  }
+
+  function ensureTypeActivation(){
+    APU_TYPES.forEach(type=>{
+      const list = channelsOfType(type);
+      if(list.length < 2){
+        delete typeActivation[type];
+        return;
+      }
+      const ids = new Set(list.map(x => x.ch.id));
+      let bp = Array.isArray(typeActivation[type]) ? typeActivation[type].slice() : [];
+      bp = bp.filter(b => ids.has(b.chId)).sort((a,b)=> a.start - b.start);
+      if(!bp.length || bp[0].start !== 0){
+        bp = [{ start: 0, chId: list[0].ch.id }].concat(bp.filter(b => b.start > 0));
+      }
+      // remove entries with missing chId already filtered
+      typeActivation[type] = bp;
+    });
+  }
+
+  function getActiveChIdAt(type, col){
+    const list = channelsOfType(type);
+    if(!list.length) return null;
+    if(list.length === 1) return list[0].ch.id;
+    const bp = typeActivation[type] || [];
+    let id = list[0].ch.id;
+    for(let k = 0; k < bp.length; k++){
+      if(bp[k].start <= col) id = bp[k].chId;
+    }
+    // se id sumiu, fallback
+    if(!list.some(x => x.ch.id === id)) id = list[0].ch.id;
+    return id;
+  }
+
+  function getActiveChannelIndexAt(type, col){
+    const id = getActiveChIdAt(type, col);
+    return channels.findIndex(c => c.id === id);
+  }
+
+  function setLayerActiveFrom(type, col, chId){
+    if(!isApuType(type)) return;
+    const list = channelsOfType(type);
+    if(list.length < 2) return;
+    if(!list.some(x => x.ch.id === chId)) return;
+    pushUndo();
+    const prev = (typeActivation[type] || []).slice();
+    // breakpoints antes de col + novo em col + breakpoints depois de col
+    const before = prev.filter(b => b.start < col);
+    const after = prev.filter(b => b.start > col);
+    let bp = before.concat([{ start: col, chId }]).concat(after);
+    bp.sort((a, b) => a.start - b.start);
+    // garantir inicio em 0
+    if(!bp.length || bp[0].start > 0){
+      const fallback = before.length ? before[before.length - 1].chId : list[0].ch.id;
+      bp = [{ start: 0, chId: col === 0 ? chId : fallback }].concat(bp.filter(b => b.start > 0));
+      if(col === 0) bp = [{ start: 0, chId }].concat(after);
+    }
+    // coalescer adjacentes iguais
+    const clean = [];
+    bp.forEach(b=>{
+      if(!clean.length || clean[clean.length - 1].chId !== b.chId) clean.push({ start: b.start, chId: b.chId });
+    });
+    typeActivation[type] = clean;
+  }
+
+  /** Mescla todas as faixas com o mesmo tipo APU numa unica faixa (usa voz ativa por coluna) */
+  function mergeDuplicateTypes(){
+    ensureTypeActivation();
+    const dupTypes = APU_TYPES.filter(t => channelsOfType(t).length > 1);
+    if(!dupTypes.length){
+      alert("Nao ha tipos duplicados para mesclar.\nAtribua o mesmo canal NES a 2+ faixas (ex. 2x Pulse 1) e defina trechos ativos.");
+      return;
+    }
+    if(!confirm("Mesclar faixas duplicadas?\n\nTipos: " + dupTypes.join(", ") + "\nEm cada coluna permanece a voz ativa. As outras faixas do mesmo tipo serao removidas.")){
+      return;
+    }
+    pushUndo();
+    const len = timelineLength();
+    const used = new Set();
+    const next = [];
+
+    channels.forEach((ch, idx)=>{
+      if(used.has(idx)) return;
+      if(!isApuType(ch.type) || channelsOfType(ch.type).length < 2){
+        next.push(JSON.parse(JSON.stringify(ch)));
+        used.add(idx);
+        return;
+      }
+      // primeira ocorrencia do tipo duplicado → mescla
+      const group = channelsOfType(ch.type);
+      group.forEach(g => used.add(g.i));
+      const names = group.map(g => g.ch.name || typeInfo(ch.type).label);
+      const notes = [];
+      for(let col = 0; col < len; col++){
+        const activeId = getActiveChIdAt(ch.type, col);
+        const srcCh = channels.find(c => c.id === activeId) || group[0].ch;
+        const n = srcCh.notes[col] || { note: "REST", figure: "quarter" };
+        notes.push({ note: n.note, figure: n.figure });
+      }
+      next.push({
+        id: uid("ch"),
+        type: ch.type,
+        name: names.filter(Boolean).join(" + "),
+        muted: false,
+        notes
+      });
+    });
+
+    channels = next;
+    typeActivation = {};
+    activeChannel = Math.min(activeChannel, channels.length - 1);
+    clearTimelineSelection();
+    renderAll();
+  }
+
+
   function pushUndo(){
     undoStack.push(JSON.parse(JSON.stringify({
-      channels, activeChannel, selectedIndex
+      channels, activeChannel, selectedIndex, typeActivation
     })));
     if(undoStack.length > 40) undoStack.shift();
   }
@@ -191,7 +432,7 @@ const SOUND = (() => {
     return Math.max(1, Math.min(255, Math.round(base * fig.multiplier)));
   }
 
-  function getCellPosition(i){ return 10 + i*35 + 12.5; }
+  function getCellPosition(i){ return i * CELL_W; }
   function getIndexFromPosition(x, max){
     const cw=35, off=10+12.5;
     return Math.max(0, Math.min(max, Math.round((x-off)/cw)));
@@ -234,6 +475,27 @@ const SOUND = (() => {
       #mod-sound button.btn-song { background:#0ea5e9; color:#fff; }
       #mod-sound button.btn-sfx { background:#f59e0b; color:#0f172a; }
       #mod-sound button#btn-import-midi { background:#6366f1; color:#fff; }
+      #mod-sound .midi-modal-overlay {
+        position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:10000;
+        display:flex; align-items:center; justify-content:center; padding:16px;
+      }
+      #mod-sound .midi-modal {
+        background:#1e1e2e; border:1px solid #444; border-radius:10px; max-width:720px; width:100%;
+        max-height:90vh; overflow:auto; box-shadow:0 16px 48px rgba(0,0,0,.5); padding:16px 18px;
+      }
+      #mod-sound .midi-modal h3 { margin:0 0 6px; color:#a5b4fc; font-size:15px; }
+      #mod-sound .midi-modal .midi-meta { font-size:11px; color:#94a3b8; margin-bottom:12px; }
+      #mod-sound .midi-map-table { width:100%; border-collapse:collapse; font-size:12px; }
+      #mod-sound .midi-map-table th { text-align:left; padding:6px 8px; color:#94a3b8; border-bottom:1px solid #333; font-weight:600; }
+      #mod-sound .midi-map-table td { padding:6px 8px; border-bottom:1px solid #2a2a3a; vertical-align:middle; }
+      #mod-sound .midi-map-table select { width:100%; background:#0f172a; color:#e2e8f0; border:1px solid #444; border-radius:4px; padding:4px 6px; font-size:12px; }
+      #mod-sound .midi-map-table .trk-name { font-weight:600; color:#e2e8f0; }
+      #mod-sound .midi-map-table .trk-sub { font-size:10px; color:#64748b; }
+      #mod-sound .midi-map-table .badge-mel { color:#7dd3fc; }
+      #mod-sound .midi-map-table .badge-perc { color:#fcd34d; }
+      #mod-sound .midi-modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:14px; flex-wrap:wrap; }
+      #mod-sound .midi-modal-actions .btn-ok { background:#6366f1; color:#fff; }
+      #mod-sound .midi-hint { font-size:11px; color:#64748b; margin-top:8px; line-height:1.4; }
       #mod-sound button:disabled { opacity:.4; cursor:not-allowed; }
 
       #mod-sound .library-bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:10px 12px; background:#151525; border-bottom:1px solid var(--border); }
@@ -242,31 +504,85 @@ const SOUND = (() => {
       #mod-sound .lib-badge.song { background:#0c4a6e; color:#7dd3fc; }
       #mod-sound .lib-badge.sfx { background:#78350f; color:#fcd34d; }
 
-      #mod-sound .tracks-scroll { overflow-x:auto; padding-bottom:8px; }
-      #mod-sound .track-row { display:flex; align-items:stretch; margin-bottom:6px; min-width:max-content; }
-      #mod-sound .track-header { width:150px; min-width:150px; background:#0f172a; border:1px solid var(--border); border-radius:6px 0 0 6px; padding:6px 8px; display:flex; flex-direction:column; gap:4px; justify-content:center; }
+      #mod-sound .tracks-layout { display:flex; align-items:stretch; gap:0; margin:0; }
+      #mod-sound .tracks-headers {
+        width:150px; min-width:150px; flex-shrink:0; display:flex; flex-direction:column;
+        gap:6px; padding-top:32px; /* = altura regua 26 + margin 6 */
+        z-index:5; background:#151525;
+      }
+      #mod-sound .tracks-scroll { overflow-x:auto; padding-bottom:8px; flex:1; min-width:0; }
+      #mod-sound .track-row { display:flex; align-items:stretch; margin-bottom:6px; min-width:max-content; height:76px; }
+      #mod-sound .track-row.stack-continue { margin-bottom:2px; }
+      #mod-sound .track-row.stack-continue .track-cells { border-radius:0 0 6px 6px; }
+      #mod-sound .track-row.stack-start .track-cells { border-radius:6px 6px 0 0; }
+      #mod-sound .track-row.stack-mid .track-cells { border-radius:0; }
+      #mod-sound .tracks-headers { gap:6px; }
+      #mod-sound .tracks-headers.stacking { gap:2px; }
+      #mod-sound .track-header {
+        width:150px; min-width:150px; height:76px; min-height:76px; max-height:76px; box-sizing:border-box;
+        background:#0f172a; border:1px solid var(--border); border-radius:6px;
+        padding:4px 8px; display:flex; flex-direction:column; gap:3px; justify-content:center;
+        overflow:hidden;
+      }
       #mod-sound .track-header.active-track { border-color:var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
       #mod-sound .track-header select { width:100%; background:#1e1e2a; color:var(--text); border:1px solid var(--border); padding:3px 4px; border-radius:4px; font-size:11px; font-weight:bold; }
+      #mod-sound .track-header .trk-inst {
+        font-size:10px; font-weight:700; color:#e2e8f0; white-space:nowrap; overflow:hidden;
+        text-overflow:ellipsis; max-width:134px; line-height:1.15; flex-shrink:0;
+      }
+      #mod-sound .track-header select { flex-shrink:0; }
+      #mod-sound .track-header .track-actions { flex-shrink:0; }
+      #mod-sound .track-header.trk-none { opacity:0.75; border-style:dashed; }
+      #mod-sound .track-header.trk-inactive-layer { opacity:0.55; }
+      #mod-sound .track-cell.layer-inactive { opacity:0.32; filter:grayscale(0.35); }
+      #mod-sound .track-cell.layer-active-here { box-shadow: inset 0 2px 0 #10b981; }
+      #mod-sound .track-cell.layer-switch { outline:1px dashed #fbbf24; }
+      #mod-sound button.btn-merge { background:#f59e0b; color:#0f172a; }
       #mod-sound .track-header .track-actions { display:flex; gap:4px; }
       #mod-sound .track-header .track-actions button { padding:2px 6px; font-size:11px; min-width:28px; justify-content:center; }
-      #mod-sound .track-cells { display:flex; gap:0; align-items:flex-end; padding:4px 6px; background:#151520; border:1px solid var(--border); border-left:none; border-radius:0 6px 6px 0; min-height:56px; }
-      #mod-sound .track-cell { width:28px; height:48px; margin:0 3px; border:2px solid var(--border); border-radius:4px; background:#0f172a; cursor:grab; position:relative; flex-shrink:0; user-select:none; }
+      #mod-sound .timeline-ruler {
+        display:flex; align-items:stretch; height:26px; margin-bottom:6px; min-width:max-content;
+        border-bottom:1px solid #333; user-select:none; padding:0; gap:0;
+      }
+      #mod-sound .ruler-cell {
+        flex:0 0 34px; width:34px; min-width:34px; margin:0; box-sizing:border-box;
+        border:1px solid #333; border-radius:3px; background:#0f172a;
+        display:flex; flex-direction:column; align-items:center; justify-content:center;
+        cursor:pointer; font-size:9px; color:#64748b; line-height:1.1; padding:0;
+      }
+      #mod-sound .ruler-cell:hover { border-color:#6366f1; color:#a5b4fc; }
+      #mod-sound .ruler-cell.sel-range { background:rgba(99,102,241,.2); border-color:#6366f1; color:#c7d2fe; }
+      #mod-sound .ruler-cell.sel-anchor { background:rgba(16,185,129,.25); border-color:#10b981; color:#6ee7b7; }
+      #mod-sound .ruler-cell.playing { border-color:var(--accent); color:var(--accent); }
+      #mod-sound .ruler-cell .r-idx { font-size:8px; opacity:.7; }
+      #mod-sound .ruler-cell .r-time { font-size:9px; font-weight:600; }
+      #mod-sound .selection-hint { font-size:11px; color:#64748b; margin:4px 0 0 0; }
+
+      #mod-sound .track-cells {
+        display:flex; gap:0; align-items:center; padding:0; background:#151520; border:none;
+        border-radius:6px; height:76px; min-height:76px; max-height:76px; box-sizing:border-box;
+        box-shadow: inset 0 0 0 1px var(--border);
+      }
+      #mod-sound .track-cell {
+        flex:0 0 34px; width:34px; min-width:34px; height:68px; margin:0; box-sizing:border-box;
+        border:2px solid var(--border); border-radius:4px; background:#0f172a; cursor:grab;
+        position:relative; flex-shrink:0; user-select:none;
+      }
       #mod-sound .track-cell:active { cursor:grabbing; }
       #mod-sound .track-cell.active { border-color:#fff; box-shadow:0 0 8px rgba(255,255,255,.3); }
       #mod-sound .track-cell.selected { border-color:#10b981; background:rgba(16,185,129,.15); }
       #mod-sound .track-cell.playing { border-color:#10b981 !important; box-shadow:0 0 12px rgba(16,185,129,.55) !important; }
       #mod-sound .track-cell.dragging { opacity:.35; border-style:dashed; }
       #mod-sound .track-cell.drag-over { border-color:#10b981; background:rgba(16,185,129,.2); box-shadow:0 0 10px rgba(16,185,129,.4); }
-      #mod-sound .track-cell .cell-label { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:bold; color:#fff; pointer-events:none; text-align:center; line-height:1.1; padding:2px; word-break:break-all; }
+      #mod-sound .track-cell .cell-label { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:bold; color:#fff; pointer-events:none; text-align:center; line-height:1.1; padding:2px; word-break:break-all; }
       #mod-sound .track-cell .cell-label.rest { color:var(--rest-color); }
       #mod-sound .track-cell .cell-dur { position:absolute; bottom:2px; left:50%; transform:translateX(-50%); width:16px; height:3px; border-radius:2px; pointer-events:none; }
-      #mod-sound .cell-add-btn { width:28px; height:48px; margin:0 3px; border:2px dashed #059669; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:1.1rem; color:#fff; cursor:pointer; background:#059669; font-weight:bold; flex-shrink:0; }
+      #mod-sound .cell-add-btn { flex:0 0 34px; width:34px; height:68px; margin:0; box-sizing:border-box; border:2px dashed #059669; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:1.1rem; color:#fff; cursor:pointer; background:#059669; font-weight:bold; flex-shrink:0; }
       #mod-sound .cell-add-btn:hover { background:#047a56; }
 
-      #mod-sound .timeline-bar-container { position:relative; height:28px; margin:6px 0 0 150px; cursor:pointer; min-width:max-content; }
-      #mod-sound .timeline-bar { position:absolute; top:50%; left:0; height:6px; transform:translateY(-50%); background:#10b981; border-radius:3px; }
-      #mod-sound .timeline-cursor { position:absolute; top:-4px; width:3px; height:calc(100% + 8px); background:var(--accent); border-radius:2px; pointer-events:none; z-index:3; }
-      #mod-sound .timeline-selection-range { position:absolute; top:-3px; height:calc(100% + 6px); background:rgba(16,185,129,.25); border:1px solid rgba(16,185,129,.5); border-radius:3px; pointer-events:none; z-index:2; }
+      #mod-sound .timeline-bar-container { display:none; }
+      #mod-sound .timeline-bar { display:none; }
+
 
       #mod-sound .selection-actions { display:flex; gap:8px; margin-top:6px; padding-left:150px; align-items:center; flex-wrap:wrap; }
       #mod-sound .inspector-panel { background:#0f172a; border:1px solid var(--border); border-radius:8px; padding:14px; margin-top:8px; display:flex; flex-direction:column; gap:10px; }
@@ -333,17 +649,23 @@ const SOUND = (() => {
           </div>
           <label style="font-size:12px"><input type="checkbox" id="loop-checkbox" ${active?.loop !== false ? "checked" : ""}> Loop ($FF)</label>
           <button id="add-channel-btn" class="btn-add-ch">+ Canal</button>
+          <button id="btn-merge-layers" class="btn-merge" title="Mescla faixas com o mesmo tipo APU usando a voz ativa em cada coluna">Mesclar</button>
         </div>
 
-        <div class="tracks-scroll" id="tracks-scroll">
-          <div id="tracks-container"></div>
-          <div class="timeline-bar-container" id="timeline-bar-container">
-            <div class="timeline-bar" id="timeline-bar">
-              <div class="timeline-selection-range" id="timeline-selection-range" style="display:none"></div>
-              <div class="timeline-cursor" id="timeline-cursor"></div>
+        <div class="tracks-layout">
+          <div class="tracks-headers" id="tracks-headers"></div>
+          <div class="tracks-scroll" id="tracks-scroll">
+            <div class="timeline-ruler" id="timeline-ruler"></div>
+            <div id="tracks-container"></div>
+            <div class="timeline-bar-container" id="timeline-bar-container" style="display:none">
+              <div class="timeline-bar" id="timeline-bar">
+                <div class="timeline-selection-range" id="timeline-selection-range" style="display:none"></div>
+                <div class="timeline-cursor" id="timeline-cursor"></div>
+              </div>
             </div>
           </div>
         </div>
+        <div class="selection-hint" id="selection-hint">Selecao: 1o clique = inicio · 2o = fim · Esc limpa · Com tipos duplicados, clique numa celula inativa para ativar essa voz daqui ate a proxima troca · Mesclar consolida</div>
 
         <div class="selection-actions" id="selection-actions" style="display:none">
           <button id="clone-selected-btn" class="btn-clone">\u{1F4CB} Clonar</button>
@@ -394,6 +716,8 @@ const SOUND = (() => {
 
   function cacheEls(){
     els.tracksContainer = document.getElementById("tracks-container");
+    els.tracksHeaders = document.getElementById("tracks-headers");
+    els.timelineRuler = document.getElementById("timeline-ruler");
     els.figureRange = document.getElementById("figure-range");
     els.figureLabel = document.getElementById("figure-label");
     els.quarterInput = document.getElementById("quarter-frames");
@@ -641,24 +965,21 @@ const SOUND = (() => {
       if(parseInt(c.dataset.index, 10) === stepIndex) c.classList.add("playing");
     });
     playbackIndex = stepIndex;
-    if(els.timelineCursor){
-      els.timelineCursor.style.left = getCellPosition(stepIndex) + "px";
-    }
+    document.querySelectorAll("#mod-sound .ruler-cell.playing").forEach(c => c.classList.remove("playing"));
+    const rc = document.querySelector("#mod-sound .ruler-cell[data-index=\"" + stepIndex + "\"]");
+    if(rc) rc.classList.add("playing");
     scrollTimelineToStep(stepIndex);
   }
 
-  // Mantem a celula tocada visivel no scroll horizontal
+  // Mantem a celula tocada visivel no scroll horizontal (headers ficam fora do scroll)
   function scrollTimelineToStep(stepIndex){
     const wrap = document.getElementById("tracks-scroll");
     if(!wrap) return;
-    const headerW = 150; // .track-header
-    const cellW = 34;    // ~28px + margem
-    const cellLeft = headerW + 10 + stepIndex * cellW;
-    const cellRight = cellLeft + cellW;
+    const cellLeft = stepIndex * CELL_W;
+    const cellRight = cellLeft + CELL_W;
     const viewLeft = wrap.scrollLeft;
     const viewRight = viewLeft + wrap.clientWidth;
-    const margin = 64;
-    // So rola se a celula estiver saindo da area visivel
+    const margin = 48;
     if(cellLeft < viewLeft + margin || cellRight > viewRight - margin){
       const target = Math.max(0, cellLeft - wrap.clientWidth * 0.35);
       wrap.scrollTo({ left: target, behavior: isPlaying ? "auto" : "smooth" });
@@ -720,15 +1041,11 @@ const SOUND = (() => {
 
   // ===== CANAIS =====
   function addChannel(){
-    const used = usedTypes();
-    const free = CHANNEL_TYPES.find(t => !used.has(t.id));
-    if(!free){
-      alert("Todos os canais do APU ja estao em uso (Pulse1, Pulse2, Triangle, Noise).");
-      return;
-    }
     pushUndo();
     const len = timelineLength();
-    channels.push({ id: uid("ch"), type: free.id, muted: false, notes: emptyNotes(len) });
+    const used = usedTypes();
+    const free = ["pulse1","pulse2","triangle","noise"].find(id => !used.has(id)) || "none";
+    channels.push({ id: uid("ch"), type: free, name: "", muted: false, notes: emptyNotes(len) });
     activeChannel = channels.length - 1;
     selectedIndex = 0;
     renderAll();
@@ -740,17 +1057,18 @@ const SOUND = (() => {
     pushUndo();
     channels.splice(idx, 1);
     if(activeChannel >= channels.length) activeChannel = channels.length - 1;
+    ensureTypeActivation();
     renderAll();
   }
 
   function changeChannelType(idx, newType){
-    const used = usedTypes();
-    if(used.has(newType) && channels[idx].type !== newType){
-      alert("Este tipo de canal ja esta em uso.");
-      return;
-    }
+    if(!channels[idx] || channels[idx].type === newType) return;
     pushUndo();
     channels[idx].type = newType;
+    if(newType === "none") channels[idx].muted = true;
+    // Empilha faixas do mesmo instrumento uma sob a outra
+    activeChannel = idx;
+    reorderChannelsGrouped();
     renderAll();
   }
 
@@ -801,58 +1119,127 @@ const SOUND = (() => {
 
   function renderTracks(){
     const cont = els.tracksContainer;
+    const headersCol = els.tracksHeaders;
+    const ruler = els.timelineRuler;
     if(!cont) return;
+    ensureTypeActivation();
     cont.innerHTML = "";
+    if(headersCol){
+      headersCol.innerHTML = "";
+      const hasStack = APU_TYPES.some(t => channelsOfType(t).length > 1);
+      headersCol.classList.toggle("stacking", hasStack);
+    }
+    if(ruler) ruler.innerHTML = "";
     const len = timelineLength();
+
+    // --- Regua de tempo (celulas alinhadas) ---
+    if(ruler){
+      for(let i = 0; i < len; i++){
+        const rc = document.createElement("div");
+        rc.className = "ruler-cell";
+        rc.dataset.index = String(i);
+        const frames = columnStartFrames(i);
+        const showTime = (i === 0 || i % 4 === 0 || i === selectionStart || i === selectionEnd);
+        rc.innerHTML = '<span class="r-idx">' + i + '</span>' +
+          (showTime ? '<span class="r-time">' + formatTimelineTime(frames) + '</span>' : '');
+        if(selectionStart !== null && selectionEnd !== null){
+          const lo = Math.min(selectionStart, selectionEnd), hi = Math.max(selectionStart, selectionEnd);
+          if(i >= lo && i <= hi) rc.classList.add("sel-range");
+        } else if(selectionStart === i){
+          rc.classList.add("sel-anchor");
+        }
+        if(isPlaying && i === playbackIndex) rc.classList.add("playing");
+        rc.onclick = (e)=>{
+          if(isPlaying) return;
+          applyTimelinePick(i, e.shiftKey);
+          renderAll();
+          scrollTimelineToStep(i);
+        };
+        ruler.appendChild(rc);
+      }
+    }
 
     channels.forEach((ch, chIdx)=>{
       const info = typeInfo(ch.type);
+
+      // Header sticky (coluna esquerda)
+      if(headersCol){
+        const header = document.createElement("div");
+        header.className = "track-header" + (chIdx === activeChannel ? " active-track" : "");
+        const sel = document.createElement("select");
+        availableTypesFor(chIdx).forEach(t=>{
+          const o = document.createElement("option");
+          o.value = t.id; o.textContent = t.label;
+          if(t.id === ch.type) o.selected = true;
+          sel.appendChild(o);
+        });
+        sel.style.color = info.color;
+        sel.onchange = (e) => changeChannelType(chIdx, e.target.value);
+        sel.onclick = (e) => e.stopPropagation();
+        const actions = document.createElement("div");
+        actions.className = "track-actions";
+        const muteBtn = document.createElement("button");
+        muteBtn.className = "secondary";
+        muteBtn.textContent = ch.muted ? "\u{1F507}" : "\u{1F50A}";
+        muteBtn.onclick = (e) => { e.stopPropagation(); toggleMute(chIdx); };
+        const delBtn = document.createElement("button");
+        delBtn.className = "btn-del";
+        delBtn.textContent = "\u2716";
+        delBtn.onclick = (e) => { e.stopPropagation(); removeChannel(chIdx); };
+        if(channels.length <= 1) delBtn.disabled = true;
+        actions.appendChild(muteBtn);
+        actions.appendChild(delBtn);
+        // Nome do instrumento (MIDI) em destaque no cabeçalho
+        const nm = document.createElement("div");
+        nm.className = "trk-inst";
+        const instLabel = (ch.name && String(ch.name).trim()) || typeInfo(ch.type).label;
+        nm.title = instLabel;
+        nm.textContent = instLabel;
+        nm.style.color = info.color;
+        header.appendChild(nm);
+        header.appendChild(sel);
+        header.appendChild(actions);
+        if(ch.type === "none") header.classList.add("trk-none");
+        if(isApuType(ch.type) && channelsOfType(ch.type).length > 1){
+          if(getActiveChIdAt(ch.type, selectedIndex) !== ch.id) header.classList.add("trk-inactive-layer");
+          const same = channelsOfType(ch.type).map(x => x.i);
+          if(same.indexOf(chIdx) > 0) header.classList.add("stack-continue");
+        }
+        header.onclick = () => { activeChannel = chIdx; renderAll(); };
+        headersCol.appendChild(header);
+      }
+
       const row = document.createElement("div");
       row.className = "track-row";
-
-      const header = document.createElement("div");
-      header.className = "track-header" + (chIdx === activeChannel ? " active-track" : "");
-
-      const sel = document.createElement("select");
-      availableTypesFor(chIdx).forEach(t=>{
-        const o = document.createElement("option");
-        o.value = t.id; o.textContent = t.label;
-        if(t.id === ch.type) o.selected = true;
-        sel.appendChild(o);
-      });
-      sel.style.color = info.color;
-      sel.onchange = (e) => changeChannelType(chIdx, e.target.value);
-      sel.onclick = (e) => e.stopPropagation();
-
-      const actions = document.createElement("div");
-      actions.className = "track-actions";
-      const muteBtn = document.createElement("button");
-      muteBtn.className = "secondary";
-      muteBtn.textContent = ch.muted ? "\u{1F507}" : "\u{1F50A}";
-      muteBtn.onclick = (e) => { e.stopPropagation(); toggleMute(chIdx); };
-      const delBtn = document.createElement("button");
-      delBtn.className = "btn-del";
-      delBtn.textContent = "\u2716";
-      delBtn.onclick = (e) => { e.stopPropagation(); removeChannel(chIdx); };
-      if(channels.length <= 1) delBtn.disabled = true;
-      actions.appendChild(muteBtn);
-      actions.appendChild(delBtn);
-      header.appendChild(sel);
-      header.appendChild(actions);
-      header.onclick = () => { activeChannel = chIdx; renderAll(); };
-
+      // Empilhamento visual: faixas do mesmo tipo ficam coladas
+      if(isApuType(ch.type) && channelsOfType(ch.type).length > 1){
+        const same = channelsOfType(ch.type).map(x => x.i);
+        const pos = same.indexOf(chIdx);
+        if(pos === 0) row.classList.add("stack-start");
+        else if(pos === same.length - 1) row.classList.add("stack-continue");
+        else row.classList.add("stack-mid", "stack-continue");
+        if(pos > 0) row.classList.add("stack-continue");
+      }
       const cells = document.createElement("div");
       cells.className = "track-cells";
 
-      for(let i=0; i<len; i++){
+      for(let i = 0; i < len; i++){
         const noteObj = ch.notes[i] || { note:"REST", figure:"quarter" };
         const cell = document.createElement("div");
         cell.className = "track-cell";
         if(chIdx === activeChannel && i === selectedIndex) cell.classList.add("active");
-        if(chIdx === activeChannel && selectedCells.has(i)) cell.classList.add("selected");
+        if(selectedCells.has(i)) cell.classList.add("selected");
         if(isPlaying && i === playbackIndex) cell.classList.add("playing");
         cell.style.borderColor = (chIdx === activeChannel && i === selectedIndex) ? "#fff" : info.color + "88";
-        if(ch.muted) cell.style.opacity = "0.35";
+        const dupGroup = isApuType(ch.type) && channelsOfType(ch.type).length > 1;
+        const activeHere = !dupGroup || getActiveChIdAt(ch.type, i) === ch.id;
+        if(ch.muted || ch.type === "none") cell.style.opacity = "0.35";
+        else if(dupGroup && !activeHere) cell.classList.add("layer-inactive");
+        else if(dupGroup && activeHere) cell.classList.add("layer-active-here");
+        if(dupGroup){
+          const bp = typeActivation[ch.type] || [];
+          if(bp.some(b => b.start === i && b.chId === ch.id)) cell.classList.add("layer-switch");
+        }
 
         const label = document.createElement("div");
         label.className = "cell-label" + (noteObj.note === "REST" ? " rest" : "");
@@ -869,7 +1256,6 @@ const SOUND = (() => {
         cell.appendChild(dur);
         cell.dataset.index = String(i);
 
-        // Drag para reordenar coluna (todos os canais)
         cell.draggable = !isPlaying;
         cell.ondragstart = (e)=>{
           if(isPlaying){ e.preventDefault(); return; }
@@ -877,7 +1263,6 @@ const SOUND = (() => {
           cell.classList.add("dragging");
           e.dataTransfer.effectAllowed = "move";
           e.dataTransfer.setData("text/plain", String(i));
-          // Seleciona a coluna de origem
           activeChannel = chIdx;
           selectedIndex = i;
         };
@@ -903,13 +1288,22 @@ const SOUND = (() => {
           if(from !== to) moveColumn(from, to);
         };
 
-        cell.onclick = () => {
+        cell.onclick = (e) => {
           if(isPlaying) return;
           activeChannel = chIdx;
-          selectedIndex = i;
-          playbackIndex = i;
-          selectedCells.clear(); selectionStart=null; selectionEnd=null;
+          const dup = isApuType(ch.type) && channelsOfType(ch.type).length > 1;
+          if(dup && getActiveChIdAt(ch.type, i) !== ch.id && !e.shiftKey){
+            // Ativa esta voz a partir desta coluna
+            setLayerActiveFrom(ch.type, i, ch.id);
+            selectedIndex = i;
+            playbackIndex = i;
+            renderAll();
+            scrollTimelineToStep(i);
+            return;
+          }
+          applyTimelinePick(i, e.shiftKey);
           renderAll();
+          scrollTimelineToStep(i);
         };
         cells.appendChild(cell);
       }
@@ -933,41 +1327,30 @@ const SOUND = (() => {
           const last = channels[activeChannel].notes.length - 1;
           selectedIndex = last;
           playbackIndex = last;
+          clearTimelineSelection();
           renderAll();
+          scrollTimelineToStep(last);
         };
         cells.appendChild(addBtn);
       }
 
-      row.appendChild(header);
       row.appendChild(cells);
       cont.appendChild(row);
     });
   }
 
   function updateTimelineBar(){
-    const len = timelineLength();
-    if(!els.timelineBar || len === 0) return;
-    const total = Math.max(200, 10 + len * 35);
-    els.timelineBar.style.width = (total - 20) + "px";
-    els.timelineBarContainer.style.minWidth = total + "px";
-    els.timelineCursor.style.left = getCellPosition(playbackIndex) + "px";
-
-    if(selectionStart !== null && selectionEnd !== null){
-      const s = getCellPosition(Math.min(selectionStart, selectionEnd));
-      const e = getCellPosition(Math.max(selectionStart, selectionEnd));
-      els.timelineSelectionRange.style.display = "block";
-      els.timelineSelectionRange.style.left = s + "px";
-      els.timelineSelectionRange.style.width = (e - s) + "px";
-    } else if(els.timelineSelectionRange){
-      els.timelineSelectionRange.style.display = "none";
-    }
-
     const actions = document.getElementById("selection-actions");
     const info = document.getElementById("selection-info");
     if(actions){
       if(selectedCells.size > 0){
         actions.style.display = "flex";
-        if(info) info.textContent = selectedCells.size + " celula(s)";
+        if(info){
+          const lo = selectionStart !== null && selectionEnd !== null
+            ? Math.min(selectionStart, selectionEnd) + "–" + Math.max(selectionStart, selectionEnd)
+            : String(selectedIndex);
+          info.textContent = selectedCells.size + " colunas [" + lo + "]";
+        }
       } else actions.style.display = "none";
     }
   }
@@ -1005,22 +1388,35 @@ const SOUND = (() => {
   function scheduleStepNotes(stepIndex, when, dur){
     const ctx = getAudioCtx();
     const len = timelineLength();
+    ensureTypeActivation();
     channels.forEach(ch=>{
-      if(ch.muted) return;
+      if(ch.muted || ch.type === "none") return;
+      if(isApuType(ch.type) && channelsOfType(ch.type).length > 1){
+        if(getActiveChIdAt(ch.type, stepIndex) !== ch.id) return;
+      }
       const n = ch.notes[stepIndex];
       if(!n || n.note === "REST") return;
       const data = NOTE_MAP[n.note];
       if(!data || data.isRest) return;
       const info = typeInfo(ch.type);
+      if(!info.wave) return;
       if(info.wave !== "noise" && (!data.freq || data.freq <= 0)) return;
       const freq = (data.freq > 0) ? data.freq : 400;
       const peak = info.wave === "triangle" ? 0.11 : (info.wave === "noise" ? 0.1 : 0.13);
 
-      // Legato: proxima celula no mesmo canal continua a mesma nota (ou outra nota — fraseado)
-      const next = (stepIndex + 1 < len) ? ch.notes[stepIndex + 1] : null;
+      // Legato: usa a mesma voz ativa na proxima coluna
+      let next = null;
+      if(stepIndex + 1 < len){
+        if(isApuType(ch.type) && channelsOfType(ch.type).length > 1){
+          const nextId = getActiveChIdAt(ch.type, stepIndex + 1);
+          const nextCh = channels.find(c => c.id === nextId);
+          next = nextCh ? nextCh.notes[stepIndex + 1] : null;
+        } else {
+          next = ch.notes[stepIndex + 1];
+        }
+      }
       const nextIsRest = !next || next.note === "REST";
       const samePitch = next && next.note === n.note;
-      // mesma nota = legato forte; nota diferente ainda sustenta (release so antes de REST)
       const legato = !nextIsRest && (samePitch || info.wave !== "noise");
 
       playTone(ctx, info, freq, dur, peak, when, legato);
@@ -1198,6 +1594,9 @@ const SOUND = (() => {
       const notes = [];
       let isPercussion = false;
       let channelUsed = null;
+      let trackName = "";
+      let instrumentName = "";
+      let program = null;
 
       while(offset < trackEnd){
         const vl = readVarLen(view, offset);
@@ -1223,6 +1622,13 @@ const SOUND = (() => {
           const metaLen = ml.value;
           if(metaType === 0x51 && metaLen === 3){
             microsecondsPerQuarter = (view.getUint8(offset)<<16) | (view.getUint8(offset+1)<<8) | view.getUint8(offset+2);
+          } else if((metaType === 0x03 || metaType === 0x04) && metaLen > 0){
+            // 0x03 track/sequence name · 0x04 instrument name
+            const tn = decodeMidiMetaText(view, offset, metaLen);
+            if(tn){
+              if(metaType === 0x03) trackName = tn;
+              else instrumentName = tn;
+            }
           }
           offset += metaLen;
         } else if(status === 0xF0 || status === 0xF7){
@@ -1244,7 +1650,14 @@ const SOUND = (() => {
           }
         } else if(eventType === 0xA0 || eventType === 0xB0 || eventType === 0xE0){
           offset += 2;
-        } else if(eventType === 0xC0 || eventType === 0xD0){
+        } else if(eventType === 0xC0){
+          program = view.getUint8(offset++);
+          channelUsed = channel;
+          if(channel === 9) isPercussion = true;
+          if(!instrumentName && program >= 0 && program < GM_PROGRAM_NAMES.length){
+            instrumentName = GM_PROGRAM_NAMES[program];
+          }
+        } else if(eventType === 0xD0){
           offset += 1;
         } else {
           if(status < 0x80) offset++;
@@ -1255,7 +1668,20 @@ const SOUND = (() => {
       });
 
       if(notes.length){
-        tracks.push({ notes, isPercussion, channel: channelUsed, noteCount: notes.length });
+        // Prioridade do label: nome da trilha → instrumento meta → GM program → Track N
+        let displayName = trackName || instrumentName || "";
+        if(!displayName && program != null && program >= 0 && program < GM_PROGRAM_NAMES.length){
+          displayName = GM_PROGRAM_NAMES[program];
+        }
+        if(!displayName && isPercussion) displayName = "Drums";
+        if(!displayName) displayName = "Track " + (tracks.length + 1);
+        tracks.push({
+          notes, isPercussion, channel: channelUsed, noteCount: notes.length,
+          name: displayName,
+          instrument: instrumentName || displayName,
+          program,
+          index: tracks.length
+        });
       }
     }
 
@@ -1339,9 +1765,29 @@ const SOUND = (() => {
     return out;
   }
 
-  function midiToLibraryItem(parsed, fileName){
+  function suggestMidiMapping(tracks){
+    // Uma sugestao por tipo APU; demais ficam "none" (ainda entram no editor)
+    const map = tracks.map(() => "none");
+    const melodic = tracks
+      .map((t, i) => ({ t, i }))
+      .filter(x => !x.t.isPercussion)
+      .sort((a, b) => b.t.noteCount - a.t.noteCount);
+    const perc = tracks
+      .map((t, i) => ({ t, i }))
+      .filter(x => x.t.isPercussion)
+      .sort((a, b) => b.t.noteCount - a.t.noteCount);
+    const melTypes = ["pulse1", "pulse2", "triangle"];
+    for(let k = 0; k < melodic.length && k < melTypes.length; k++){
+      map[melodic[k].i] = melTypes[k];
+    }
+    if(perc.length) map[perc[0].i] = "noise";
+    return map;
+  }
+
+  function midiToLibraryItem(parsed, fileName, mapping){
+    // Importa TODAS as trilhas. mapping[i] = pulse1|pulse2|triangle|noise|none
+    // Tipos repetidos ficam no editor para merge manual depois.
     const tpq = parsed.ticksPerQuarter || 480;
-    // Grade em semicolcheias (1/4 da seminima)
     const stepTicks = Math.max(1, Math.round(tpq / 4));
 
     let maxTick = 0;
@@ -1349,49 +1795,52 @@ const SOUND = (() => {
       t.notes.forEach(n=>{ if(n.end > maxTick) maxTick = n.end; });
     });
 
-    // Limite de seguranca: 4096 semicolcheias (~ 1024 seminimas)
     const rawSteps = Math.ceil(maxTick / stepTicks) || 1;
     const numSteps = Math.min(rawSteps, 4096);
 
-    const melodic = parsed.tracks.filter(t => !t.isPercussion).sort((a,b)=> b.noteCount - a.noteCount);
-    const perc = parsed.tracks.filter(t => t.isPercussion).sort((a,b)=> b.noteCount - a.noteCount);
+    const orderRank = { pulse1: 0, pulse2: 1, triangle: 2, noise: 3, none: 4 };
+    const entries = [];
+    parsed.tracks.forEach((tr, trackIdx)=>{
+      let nesCh = (mapping && mapping[trackIdx]) || "none";
+      if(!orderRank.hasOwnProperty(nesCh)) nesCh = "none";
+      entries.push({
+        trackIdx,
+        type: nesCh,
+        name: tr.name || ("Track " + (trackIdx + 1)),
+        notes: rasterizeTrackToGrid(tr.notes, stepTicks, numSteps)
+      });
+    });
 
-    const typeOrder = ["pulse1", "pulse2", "triangle", "noise"];
-    const grids = [];
-    const types = [];
-
-    for(let i=0; i<melodic.length && types.length < 3; i++){
-      grids.push(rasterizeTrackToGrid(melodic[i].notes, stepTicks, numSteps));
-      types.push(typeOrder[types.length]);
-    }
-    if(perc.length && types.length < 4){
-      grids.push(rasterizeTrackToGrid(perc[0].notes, stepTicks, numSteps));
-      types.push("noise");
-    }
-    if(!grids.length && melodic.length){
-      grids.push(rasterizeTrackToGrid(melodic[0].notes, stepTicks, numSteps));
-      types.push("pulse1");
-    }
-    if(!grids.length){
-      grids.push(Array.from({length:1}, ()=>({ note:"C4", figure:"sixteenth" })));
-      types.push("pulse1");
+    if(!entries.length){
+      entries.push({
+        trackIdx: 0, type: "pulse1", name: "Melody",
+        notes: Array.from({ length: 1 }, () => ({ note: "C4", figure: "sixteenth" }))
+      });
     }
 
-    // Compacta runs alinhados entre canais (mantem sync)
+    // Ordena: tipos APU primeiro (sugeridos), none no final; estavel por trackIdx
+    entries.sort((a, b)=>{
+      const ra = orderRank[a.type] ?? 9;
+      const rb = orderRank[b.type] ?? 9;
+      if(ra !== rb) return ra - rb;
+      return a.trackIdx - b.trackIdx;
+    });
+
+    const grids = entries.map(e => e.notes);
     const compressed = compressGridChannels(grids);
-
     const channels = compressed.map((notes, idx)=>({
       id: uid("ch"),
-      type: types[idx],
-      muted: false,
+      type: entries[idx].type,
+      name: entries[idx].name,
+      muted: entries[idx].type === "none",
       notes
     }));
 
-    // baseFrames a partir do BPM: frames por seminima @ 60fps
     let baseFrames = Math.round(3600 / (parsed.bpm || 120));
     baseFrames = Math.max(8, Math.min(120, baseFrames));
-
     const baseName = (fileName || "MIDI").replace(/\.(mid|midi)$/i, "");
+
+    const mapped = channels.filter(c => c.type !== "none").map(c => c.type + (c.name ? "(" + c.name + ")" : ""));
     return {
       id: uid("song"),
       type: "song",
@@ -1403,9 +1852,134 @@ const SOUND = (() => {
         bpm: parsed.bpm,
         steps: numSteps,
         compressedLen: compressed[0]?.length || 0,
-        truncated: rawSteps > numSteps
+        truncated: rawSteps > numSteps,
+        mapped,
+        totalTracks: channels.length,
+        noneCount: channels.filter(c => c.type === "none").length
       }
     };
+  }
+
+  function closeMidiMapDialog(){
+    const el = document.getElementById("midi-map-overlay");
+    if(el) el.remove();
+  }
+
+  function showMidiMapDialog(parsed, fileName){
+    closeMidiMapDialog();
+    const tracks = parsed.tracks || [];
+    const suggested = suggestMidiMapping(tracks);
+
+    const overlay = document.createElement("div");
+    overlay.id = "midi-map-overlay";
+    overlay.className = "midi-modal-overlay";
+
+    const typeOpts = [
+      { id: "pulse1", label: "Pulse 1" },
+      { id: "pulse2", label: "Pulse 2" },
+      { id: "triangle", label: "Triangle" },
+      { id: "noise", label: "Noise" },
+      { id: "none", label: "None" }
+    ];
+
+    let rows = "";
+    tracks.forEach((t, i)=>{
+      const kind = t.isPercussion
+        ? '<span class="badge-perc">perc</span>'
+        : '<span class="badge-mel">melodica</span>';
+      const chLabel = t.channel != null ? ("ch " + (t.channel + 1)) : "—";
+      const cur = suggested[i] || "none";
+      const opts = typeOpts.map(ct =>
+        '<option value="' + ct.id + '"' + (cur === ct.id ? " selected" : "") + ">" + ct.label + "</option>"
+      ).join("");
+      rows += '<tr data-track="' + i + '">' +
+        '<td><div class="trk-name">' + (t.name || ("Track " + (i+1))).replace(/</g,"&lt;") + "</div>" +
+        '<div class="trk-sub">' + kind + " · " + chLabel + " · " + t.noteCount + " notas</div></td>" +
+        '<td><select class="midi-map-sel" data-idx="' + i + '">' + opts + "</select></td>" +
+        "</tr>";
+    });
+
+    overlay.innerHTML =
+      '<div class="midi-modal" role="dialog" aria-label="Mapear trilhas MIDI">' +
+      "<h3>Importar MIDI — mapear trilhas</h3>" +
+      '<div class="midi-meta">Arquivo: <b style="color:#e2e8f0">' + (fileName || "").replace(/</g,"&lt;") +
+      "</b> · BPM ~" + (parsed.bpm || 120) + " · " + tracks.length + " trilha(s) com notas</div>" +
+      '<table class="midi-map-table"><thead><tr><th>Instrumento / trilha</th><th>Canal NES</th></tr></thead><tbody>' +
+      rows +
+      "</tbody></table>" +
+      '<div class="midi-hint">Todas as trilhas entram no editor. Use <b>None</b> para manter a trilha ' +
+      "sem voz APU (fica no final, muda). Pode atribuir o <b>mesmo</b> canal (ex. 2x Pulse 1) " +
+      "para mesclar depois na timeline. Sugestao automatica preenche 1 trilha por tipo.</div>" +
+      '<div class="midi-modal-actions">' +
+      '<button type="button" class="secondary" id="midi-map-cancel">Cancelar</button>' +
+      '<button type="button" class="secondary" id="midi-map-auto">Sugestao automatica</button>' +
+      '<button type="button" class="btn-ok" id="midi-map-ok">Importar</button>' +
+      "</div></div>";
+
+    const host = document.getElementById("mod-sound") || document.body;
+    host.appendChild(overlay);
+
+    function readMapping(){
+      const sels = overlay.querySelectorAll(".midi-map-sel");
+      const map = [];
+      sels.forEach(sel => { map[parseInt(sel.dataset.idx, 10)] = sel.value || "none"; });
+      return map;
+    }
+
+    function validateMapping(map){
+      const assigned = map.filter(v => v && v !== "none");
+      if(!assigned.length){
+        return "Selecione pelo menos uma trilha com Pulse/Triangle/Noise (nao so None).";
+      }
+      return null;
+    }
+
+    overlay.querySelector("#midi-map-cancel").onclick = () => closeMidiMapDialog();
+    overlay.addEventListener("click", (e)=>{ if(e.target === overlay) closeMidiMapDialog(); });
+
+    overlay.querySelector("#midi-map-auto").onclick = ()=>{
+      const sug = suggestMidiMapping(tracks);
+      overlay.querySelectorAll(".midi-map-sel").forEach(sel=>{
+        const i = parseInt(sel.dataset.idx, 10);
+        sel.value = sug[i] || "none";
+      });
+    };
+
+    overlay.querySelector("#midi-map-ok").onclick = ()=>{
+      const mapping = readMapping();
+      const err = validateMapping(mapping);
+      if(err){ alert(err); return; }
+      closeMidiMapDialog();
+      finalizeMidiImport(parsed, fileName, mapping);
+    };
+  }
+
+  function finalizeMidiImport(parsed, fileName, mapping){
+    flushActiveToItem();
+    const item = midiToLibraryItem(parsed, fileName, mapping);
+    const meta = item._importMeta || {};
+    delete item._importMeta;
+    items.push(item);
+    activeId = item.id;
+    channels = JSON.parse(JSON.stringify(item.channels));
+    activeChannel = 0;
+    selectedIndex = 0;
+    playbackIndex = 0;
+    selectedCells.clear();
+    undoStack = [];
+    if(els.quarterInput) els.quarterInput.value = item.baseFrames;
+    const loopCb = document.getElementById("loop-checkbox");
+    if(loopCb) loopCb.checked = true;
+    renderLibrarySelect();
+    renderAll();
+    const mappedLabel = (meta.mapped || []).join(", ");
+    alert(
+      'MIDI importado: "' + item.name + '"\n' +
+      "BPM ~" + (meta.bpm || parsed.bpm) + " → " + item.baseFrames + " frames/seminima\n" +
+      "Canais: " + mappedLabel + "\n" +
+      "Colunas: " + (meta.compressedLen || timelineLength()) +
+      (meta.truncated ? " (grade truncada)" : "")
+    );
   }
 
   function importMidiFile(file){
@@ -1418,34 +1992,9 @@ const SOUND = (() => {
           alert("MIDI sem notas de Note On/Off.");
           return;
         }
-        flushActiveToItem();
-        const item = midiToLibraryItem(parsed, file.name);
-        const meta = item._importMeta || {};
-        delete item._importMeta;
-        items.push(item);
-        activeId = item.id;
-        channels = JSON.parse(JSON.stringify(item.channels));
-        activeChannel = 0;
-        selectedIndex = 0;
-        playbackIndex = 0;
-        selectedCells.clear();
-        undoStack = [];
-        if(els.quarterInput) els.quarterInput.value = item.baseFrames;
-        const loopCb = document.getElementById("loop-checkbox");
-        if(loopCb) loopCb.checked = true;
-        renderLibrarySelect();
-        renderAll();
-        const mel = parsed.tracks.filter(t=>!t.isPercussion).length;
-        const percN = parsed.tracks.filter(t=>t.isPercussion).length;
-        alert(
-          'MIDI importado: "' + item.name + '"\n' +
-          "BPM ~" + (meta.bpm || parsed.bpm) + " → " + item.baseFrames + " frames/seminima\n" +
-          "Tracks: " + parsed.tracks.length + " (" + mel + " melodicas, " + percN + " percussao)\n" +
-          "Canais NES: " + item.channels.length + "\n" +
-          "Grade: semicolcheia → " + (meta.compressedLen || timelineLength()) + " colunas" +
-          (meta.truncated ? " (truncado)" : "") + "\n\n" +
-          "Canais alinhados no tempo — ajuste fino no editor se necessario."
-        );
+        // Sem popup: sugestao automatica + demais em None
+        const mapping = suggestMidiMapping(parsed.tracks);
+        finalizeMidiImport(parsed, file.name, mapping);
       }catch(err){
         console.error(err);
         alert("Falha ao importar MIDI: " + (err.message || err));
@@ -1471,6 +2020,7 @@ const SOUND = (() => {
       const base = it.baseFrames || 30;
       out += `\n; ========== ${it.type.toUpperCase()}: ${it.name} (${it.id}) ==========\n`;
       (it.channels || []).forEach(ch=>{
+        if(!ch || ch.type === "none") return;
         const label = typeInfo(ch.type).label.replace(/\s+/g, "") + "_" + safeName;
         const used = ["REST"];
         (ch.notes || []).forEach(s=>{ if(!used.includes(s.note)) used.push(s.note); });
@@ -1502,6 +2052,15 @@ Time_${label}:
 
   // ===== EVENTS =====
   function attachEvents(){
+    document.addEventListener("keydown", (e)=>{
+      if(e.key === "Escape" && document.getElementById("mod-sound")){
+        if(selectedCells.size || selectionStart !== null){
+          clearTimelineSelection();
+          renderAll();
+        }
+      }
+    });
+
     document.getElementById("play-btn").onclick = ()=>{
       if(isPlaying){ stopPlayback(); return; }
       if(timelineLength() === 0) return;
@@ -1516,16 +2075,22 @@ Time_${label}:
     document.getElementById("rewind-btn").onclick = ()=>{
       if(isPlaying) stopPlayback();
       selectedIndex = 0; playbackIndex = 0;
+      clearTimelineSelection();
       renderAll();
+      scrollTimelineToStep(0);
     };
     document.getElementById("ff-btn").onclick = ()=>{
       if(isPlaying) stopPlayback();
       const last = Math.max(0, timelineLength() - 1);
       selectedIndex = last; playbackIndex = last;
+      clearTimelineSelection();
       renderAll();
+      scrollTimelineToStep(last);
     };
 
     document.getElementById("add-channel-btn").onclick = addChannel;
+    const mergeBtn = document.getElementById("btn-merge-layers");
+    if(mergeBtn) mergeBtn.onclick = mergeDuplicateTypes;
     document.getElementById("btn-new-song").onclick = addSong;
     document.getElementById("btn-new-sfx").onclick = addSfx;
     document.getElementById("btn-rename").onclick = renameItem;
@@ -1778,6 +2343,8 @@ Time_${label}:
       channels = snap.channels;
       activeChannel = snap.activeChannel;
       selectedIndex = snap.selectedIndex;
+      typeActivation = snap.typeActivation || {};
+      ensureTypeActivation();
       renderAll();
     },
 
