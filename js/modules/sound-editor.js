@@ -475,6 +475,8 @@ const SOUND = (() => {
       #mod-sound button.btn-song { background:#0ea5e9; color:#fff; }
       #mod-sound button.btn-sfx { background:#f59e0b; color:#0f172a; }
       #mod-sound button#btn-import-midi { background:#6366f1; color:#fff; }
+      #mod-sound button#btn-export-nsound { background:#0d9488; color:#fff; }
+      #mod-sound button#btn-import-nsound { background:#0f766e; color:#fff; }
       #mod-sound .midi-modal-overlay {
         position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:10000;
         display:flex; align-items:center; justify-content:center; padding:16px;
@@ -633,6 +635,9 @@ const SOUND = (() => {
         <button id="btn-new-sfx" class="btn-sfx">+ SFX</button>
         <button id="btn-import-midi" class="secondary" title="Importar arquivo MIDI">Import MIDI</button>
         <input type="file" id="midi-file-input" accept=".mid,.midi,audio/midi,audio/x-midi" style="display:none">
+        <button id="btn-export-nsound" class="secondary" title="Exportar peca ativa como .nsound">Export .nsound</button>
+        <button id="btn-import-nsound" class="secondary" title="Importar .nsound para a biblioteca">Import .nsound</button>
+        <input type="file" id="nsound-file-input" accept=".nsound,application/json,.json" style="display:none">
         <button id="btn-rename" class="secondary">Renomear</button>
         <button id="btn-delete-item" class="btn-del">Apagar</button>
         <span id="sound-status" style="font-size:11px;color:#888;margin-left:auto"></span>
@@ -2004,6 +2009,135 @@ const SOUND = (() => {
     reader.readAsArrayBuffer(file);
   }
 
+
+  function normalizeChannel(ch){
+    return {
+      id: ch.id || uid("ch"),
+      type: ch.type || "pulse1",
+      name: ch.name || "",
+      muted: !!ch.muted,
+      notes: Array.isArray(ch.notes) && ch.notes.length
+        ? ch.notes.map(n => ({ note: n.note || "REST", figure: n.figure || "quarter" }))
+        : [{ note: "C4", figure: "quarter" }]
+    };
+  }
+
+  function normalizeItem(it){
+    return {
+      id: it.id || uid(it.type === "sfx" ? "sfx" : "song"),
+      type: it.type === "sfx" ? "sfx" : "song",
+      name: it.name || "Sem nome",
+      loop: it.loop !== false,
+      baseFrames: it.baseFrames || 30,
+      typeActivation: it.typeActivation && typeof it.typeActivation === "object"
+        ? JSON.parse(JSON.stringify(it.typeActivation))
+        : {},
+      channels: Array.isArray(it.channels) && it.channels.length
+        ? it.channels.map(normalizeChannel)
+        : defaultChannels(it.type === "sfx")
+    };
+  }
+
+  /** Exporta a peca ativa (ou biblioteca inteira se opts.all) como .nsound */
+  function exportNSound(opts){
+    flushActiveToItem();
+    const all = !!(opts && opts.all);
+    let payloadItems;
+    if(all){
+      payloadItems = items.map(normalizeItem);
+    } else {
+      const it = getActiveItem();
+      if(!it){ alert("Nenhuma peca ativa."); return; }
+      // inclui typeActivation do estado atual
+      const snap = normalizeItem(it);
+      snap.typeActivation = JSON.parse(JSON.stringify(typeActivation || {}));
+      payloadItems = [snap];
+    }
+    const doc = {
+      format: "nsound",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      app: "NES Maker Studio Sound Editor",
+      items: payloadItems
+    };
+    const blob = new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    const base = (payloadItems[0] && payloadItems[0].name) || "sound";
+    const safe = String(base).replace(/[^a-zA-Z0-9_\-]+/g, "_").slice(0, 40);
+    a.href = URL.createObjectURL(blob);
+    a.download = (all ? "library" : safe) + ".nsound";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    const st = document.getElementById("sound-status");
+    if(st) st.textContent = "Exportado " + payloadItems.length + " peca(s) → " + a.download;
+  }
+
+  function importNSoundFile(file){
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const raw = JSON.parse(reader.result);
+        let list = [];
+        if(raw && raw.format === "nsound" && Array.isArray(raw.items)){
+          list = raw.items;
+        } else if(raw && raw.format === "nsound" && raw.item){
+          list = [raw.item];
+        } else if(raw && raw.version === 3 && Array.isArray(raw.items)){
+          // biblioteca sounds do .nms colada
+          list = raw.items;
+        } else if(raw && (raw.channels || raw.type === "song" || raw.type === "sfx")){
+          // peca unica solta
+          list = [raw];
+        } else {
+          throw new Error("Arquivo .nsound invalido (esperado format: nsound).");
+        }
+        if(!list.length) throw new Error("Arquivo sem pecas de som.");
+
+        flushActiveToItem();
+        const added = [];
+        list.forEach(srcIt=>{
+          const it = normalizeItem(srcIt);
+          // novos ids para nao colidir na biblioteca
+          it.id = uid(it.type === "sfx" ? "sfx" : "song");
+          it.channels = (it.channels || []).map(ch=>{
+            ch.id = uid("ch");
+            return ch;
+          });
+          // remap typeActivation chIds se necessario — apos novos ids, limpa (vozes recomeçam)
+          it.typeActivation = {};
+          items.push(it);
+          added.push(it);
+        });
+        const last = added[added.length - 1];
+        activeId = last.id;
+        channels = JSON.parse(JSON.stringify(last.channels));
+        typeActivation = {};
+        ensureTypeActivation();
+        activeChannel = 0;
+        selectedIndex = 0;
+        playbackIndex = 0;
+        selectedCells.clear();
+        selectionStart = null;
+        selectionEnd = null;
+        undoStack = [];
+        if(els.quarterInput) els.quarterInput.value = last.baseFrames || 30;
+        const loopCb = document.getElementById("loop-checkbox");
+        if(loopCb) loopCb.checked = last.loop !== false;
+        renderLibrarySelect();
+        renderAll();
+        const st = document.getElementById("sound-status");
+        if(st) st.textContent = "Importado " + added.length + " peca(s) de .nsound";
+      }catch(err){
+        console.error(err);
+        alert("Falha ao importar .nsound: " + (err.message || err));
+      }
+    };
+    reader.onerror = ()=> alert("Nao foi possivel ler o arquivo.");
+    reader.readAsText(file);
+  }
+
   // ===== ASM (biblioteca inteira) =====
   function generateASM(){
     flushActiveToItem();
@@ -2099,6 +2233,19 @@ Time_${label}:
     document.getElementById("midi-file-input").onchange = (e)=>{
       const f = e.target.files && e.target.files[0];
       if(f) importMidiFile(f);
+      e.target.value = "";
+    };
+    const expNs = document.getElementById("btn-export-nsound");
+    if(expNs) expNs.onclick = (e)=>{
+      // Shift+click = biblioteca inteira
+      exportNSound({ all: !!(e && e.shiftKey) });
+    };
+    const impNs = document.getElementById("btn-import-nsound");
+    if(impNs) impNs.onclick = ()=> document.getElementById("nsound-file-input").click();
+    const nsInput = document.getElementById("nsound-file-input");
+    if(nsInput) nsInput.onchange = (e)=>{
+      const f = e.target.files && e.target.files[0];
+      if(f) importNSoundFile(f);
       e.target.value = "";
     };
 
@@ -2264,28 +2411,14 @@ Time_${label}:
     loadData(data){
       // v3 biblioteca
       if(data && data.version === 3 && Array.isArray(data.items) && data.items.length){
-        items = data.items.map(it => ({
-          id: it.id || uid(it.type === "sfx" ? "sfx" : "song"),
-          type: it.type === "sfx" ? "sfx" : "song",
-          name: it.name || "Sem nome",
-          loop: it.loop !== false,
-          baseFrames: it.baseFrames || 30,
-          channels: Array.isArray(it.channels) && it.channels.length
-            ? it.channels.map(ch => ({
-                id: ch.id || uid("ch"),
-                type: ch.type || "pulse1",
-                muted: !!ch.muted,
-                notes: Array.isArray(ch.notes) && ch.notes.length
-                  ? ch.notes.map(n => ({ note: n.note || "REST", figure: n.figure || "quarter" }))
-                  : [{ note:"C4", figure:"quarter" }]
-              }))
-            : defaultChannels(it.type === "sfx")
-        }));
+        items = data.items.map(normalizeItem);
         activeId = data.activeId && items.find(i => i.id === data.activeId)
           ? data.activeId
           : items[0].id;
         const it = getActiveItem();
         channels = JSON.parse(JSON.stringify(it.channels));
+        typeActivation = JSON.parse(JSON.stringify(it.typeActivation || {}));
+        ensureTypeActivation();
         activeChannel = 0;
         selectedIndex = 0;
         playbackIndex = 0;
