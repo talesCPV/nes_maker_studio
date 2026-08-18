@@ -117,6 +117,8 @@ const SOUND = (() => {
   let schedStep = 0;
   let schedNextTime = 0;            // audioCtx.currentTime da proxima coluna
   let schedTimer = null;
+  let playRangeStart = 0;
+  let playRangeEnd = null;  // inclusive; null = fim
 
   function uid(prefix){
     return (prefix || "id") + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
@@ -587,6 +589,13 @@ const SOUND = (() => {
 
 
       #mod-sound .selection-actions { display:flex; gap:8px; margin-top:6px; padding-left:150px; align-items:center; flex-wrap:wrap; }
+      #mod-sound .selection-actions #fig-up-selected-btn,
+      #mod-sound .selection-actions #fig-down-selected-btn {
+        min-width:34px; font-size:16px; font-weight:800; justify-content:center;
+        background:#334155; color:#e2e8f0;
+      }
+      #mod-sound .selection-actions #fig-up-selected-btn:hover,
+      #mod-sound .selection-actions #fig-down-selected-btn:hover { background:#475569; }
       #mod-sound .inspector-panel { background:#0f172a; border:1px solid var(--border); border-radius:8px; padding:14px; margin-top:8px; display:flex; flex-direction:column; gap:10px; }
       #mod-sound .inspector-header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
       #mod-sound .inspector-title { font-weight:bold; color:var(--accent); font-size:13px; }
@@ -675,6 +684,8 @@ const SOUND = (() => {
         <div class="selection-actions" id="selection-actions" style="display:none">
           <button id="clone-selected-btn" class="btn-clone">\u{1F4CB} Clonar</button>
           <button id="delete-selected-btn" class="btn-del">\u2716 Remover</button>
+          <button id="fig-down-selected-btn" class="secondary" title="Diminuir duracao em todas as colunas selecionadas (todos os canais)">-</button>
+          <button id="fig-up-selected-btn" class="secondary" title="Aumentar duracao em todas as colunas selecionadas (todos os canais)">+</button>
           <button id="clear-selection-btn" class="secondary">Limpar Selecao</button>
           <span id="selection-info" style="font-size:11px;color:#888"></span>
         </div>
@@ -1428,22 +1439,44 @@ const SOUND = (() => {
     });
   }
 
+  function getPlayBoundsFromSelection(){
+    const len = timelineLength();
+    if(len <= 0) return { start: 0, end: -1 };
+    // Varias colunas selecionadas → so o intervalo
+    if(selectedCells.size > 1){
+      const sorted = Array.from(selectedCells).sort((a,b)=>a-b);
+      return {
+        start: Math.max(0, sorted[0]),
+        end: Math.min(len - 1, sorted[sorted.length - 1])
+      };
+    }
+    // Uma celula → daquela pra frente
+    if(selectedCells.size === 1){
+      const only = Array.from(selectedCells)[0];
+      return { start: Math.max(0, Math.min(only, len - 1)), end: len - 1 };
+    }
+    // Sem selecao → do cursor ate o fim
+    const start = Math.max(0, Math.min(playbackIndex, len - 1));
+    return { start, end: len - 1 };
+  }
+
   function schedulerTick(){
     if(!isPlaying) return;
     const ctx = getAudioCtx();
     const len = timelineLength();
     if(len <= 0){ stopPlayback(); return; }
 
-    // Agenda ~120ms a frente (look-ahead)
+    const rangeEnd = (playRangeEnd == null) ? (len - 1) : playRangeEnd;
+    const rangeStart = Math.max(0, Math.min(playRangeStart, len - 1));
+
     const horizon = ctx.currentTime + 0.12;
     let guard = 0;
     while(schedNextTime < horizon && guard < 32){
       guard++;
-      if(schedStep >= len){
+      if(schedStep > rangeEnd || schedStep >= len){
         if(document.getElementById("loop-checkbox")?.checked){
-          schedStep = 0;
+          schedStep = rangeStart;
         } else {
-          // agenda stop quando o ultimo som acabar
           const remain = Math.max(0, (schedNextTime - ctx.currentTime) * 1000);
           schedTimer = setTimeout(()=> stopPlayback(), remain + 30);
           return;
@@ -1451,7 +1484,6 @@ const SOUND = (() => {
       }
       const dur = stepDurationSec(schedStep);
       scheduleStepNotes(schedStep, schedNextTime, dur);
-      // UI: mostra o step que esta "agora" (nao o look-ahead)
       const uiStep = schedStep;
       const delayUI = Math.max(0, (schedNextTime - ctx.currentTime) * 1000);
       setTimeout(()=>{ if(isPlaying) updatePlayingHighlight(uiStep); }, delayUI);
@@ -1463,7 +1495,7 @@ const SOUND = (() => {
     schedTimer = setTimeout(schedulerTick, 25);
   }
 
-  function playFromIndex(start){
+  function playFromIndex(start, endInclusive){
     const len = timelineLength();
     if(len <= 0) return;
     const ctx = getAudioCtx();
@@ -1472,9 +1504,14 @@ const SOUND = (() => {
     if(playbackTimeout){ clearTimeout(playbackTimeout); playbackTimeout = null; }
 
     isPlaying = true;
-    schedStep = Math.max(0, Math.min(start, len - 1));
+    playRangeStart = Math.max(0, Math.min(start == null ? 0 : start, len - 1));
+    if(endInclusive == null || endInclusive < 0){
+      playRangeEnd = len - 1;
+    } else {
+      playRangeEnd = Math.max(playRangeStart, Math.min(endInclusive, len - 1));
+    }
+    schedStep = playRangeStart;
     playbackIndex = schedStep;
-    // pequena folga para o audio thread
     schedNextTime = ctx.currentTime + 0.06;
     updatePlayingHighlight(schedStep);
     schedulerTick();
@@ -1543,6 +1580,28 @@ const SOUND = (() => {
     updateTimelineBar();
     renderTracks();
   }
+
+  /** delta < 0 = figura mais longa (subir na lista RHYTHM); delta > 0 = mais curta */
+  function shiftSelectedFigures(delta){
+    if(selectedCells.size === 0) return;
+    pushUndo();
+    const indices = Array.from(selectedCells);
+    indices.forEach(col=>{
+      channels.forEach(ch=>{
+        const n = ch.notes[col];
+        if(!n) return;
+        let idx = RHYTHM_FIGURES.findIndex(f => f.id === n.figure);
+        if(idx < 0) idx = 2; // quarter
+        // + botao = aumentar duracao = indice menor
+        // - botao = diminuir duracao = indice maior
+        const next = Math.max(0, Math.min(RHYTHM_FIGURES.length - 1, idx + delta));
+        n.figure = RHYTHM_FIGURES[next].id;
+      });
+    });
+    renderAll();
+  }
+
+
 
 
 
@@ -2198,12 +2257,11 @@ Time_${label}:
     document.getElementById("play-btn").onclick = ()=>{
       if(isPlaying){ stopPlayback(); return; }
       if(timelineLength() === 0) return;
-      isPlaying = true;
       const btn = document.getElementById("play-btn");
       btn.textContent = "\u23F8"; btn.title = "Pause"; btn.classList.add("playing");
-      // quarter-frames pode ficar travado; figura continua editavel
       if(els.quarterInput) els.quarterInput.disabled = true;
-      playFromIndex(playbackIndex);
+      const bounds = getPlayBoundsFromSelection();
+      playFromIndex(bounds.start, bounds.end);
     };
 
     document.getElementById("rewind-btn").onclick = ()=>{
@@ -2311,6 +2369,12 @@ Time_${label}:
 
     document.getElementById("clone-selected-btn").onclick = cloneSelectedCells;
     document.getElementById("delete-selected-btn").onclick = deleteSelectedCells;
+    const figDown = document.getElementById("fig-down-selected-btn");
+    const figUp = document.getElementById("fig-up-selected-btn");
+    // + aumenta duracao (indice menor na lista breve→…→semifusa)
+    // - diminui duracao
+    if(figUp) figUp.onclick = () => shiftSelectedFigures(-1);
+    if(figDown) figDown.onclick = () => shiftSelectedFigures(1);
     document.getElementById("clear-selection-btn").onclick = clearSelection;
 
     els.quarterInput.onchange = ()=>{
