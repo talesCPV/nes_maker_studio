@@ -25983,7 +25983,27 @@
           ]
         }
       ],
-      "created": 1786573969547
+      "created": 1786573969547,
+      "hitboxes": [
+        {
+          "id": "hb_body",
+          "name": "Corpo",
+          "type": "body",
+          "x": 3,
+          "y": 1,
+          "w": 10,
+          "h": 29
+        },
+        {
+          "id": "hb_1787100870298",
+          "name": "pisada",
+          "type": "attack",
+          "x": 3,
+          "y": 30,
+          "w": 10,
+          "h": 2
+        }
+      ]
     },
     {
       "id": "char_1786930119750",
@@ -26015,7 +26035,18 @@
           ]
         }
       ],
-      "created": 1786930119750
+      "created": 1786930119750,
+      "hitboxes": [
+        {
+          "id": "hb_body",
+          "name": "Corpo",
+          "type": "body",
+          "x": 2,
+          "y": 3,
+          "w": 11,
+          "h": 9
+        }
+      ]
     }
   ],
   "cheats": [],
@@ -26034,10 +26065,12 @@
         "name": "Musica 1",
         "loop": true,
         "baseFrames": 30,
+        "typeActivation": {},
         "channels": [
           {
             "id": "ch_pulse1",
             "type": "pulse1",
+            "name": "",
             "muted": false,
             "notes": [
               {
@@ -26090,10 +26123,12 @@
         "name": "overworld",
         "loop": true,
         "baseFrames": 34,
+        "typeActivation": {},
         "channels": [
           {
             "id": "ch_msval1q3f5xq",
             "type": "pulse1",
+            "name": "",
             "muted": false,
             "notes": [
               {
@@ -28301,6 +28336,7 @@
           {
             "id": "ch_msval1q3atzq",
             "type": "pulse2",
+            "name": "",
             "muted": false,
             "notes": [
               {
@@ -30508,6 +30544,7 @@
           {
             "id": "ch_msval1q3339q",
             "type": "triangle",
+            "name": "",
             "muted": false,
             "notes": [
               {
@@ -32712,13 +32749,12 @@
               }
             ]
           }
-        ],
-        "typeActivation": {}
+        ]
       }
     ],
     "asm": ""
   },
-  "savedAt": 1787049172625,
+  "savedAt": 1787101139895,
   "variables": [
     {
       "id": "var_1786923731580",
