@@ -1,6 +1,6 @@
 // ==========================================
 // MÓDULO DASHBOARD E GERENCIAMENTO DE TRUQUES
-// v0.7.1 - Bank Switch selector por fase + Tabelas de Física
+// v0.7.1 - Bank Switch selector por fase
 // ==========================================
 
 const DASHBOARD = (() => {
@@ -83,30 +83,6 @@ const DASHBOARD = (() => {
                 <div style="font-size:9px;color:#666;margin-top:4px;line-height:1.4">
                   Mirroring agora é definido <b style="color:#aaa">por fase</b>, conforme o tipo de scroll.
                 </div>
-              </div>
-            </div>
-
-            <!-- TABELAS DE FÍSICA (PULO E VELOCIDADE) -->
-            <div style="background:#111;border:1px solid #004422;border-radius:8px;padding:12px">
-              <h3 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">🏃 TABELAS DE FÍSICA (Global)</h3>
-              <div style="font-size:9px;color:#666;margin-bottom:8px;line-height:1.3">
-                Usado nas Ações do módulo Programação. Você cria as forças aqui e linka nos passos das regras.
-              </div>
-              
-              <div style="margin-bottom:10px">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                  <b style="font-size:10px;color:#ffcc00">Forças de Pulo</b>
-                  <button class="btn-tool" onclick="DASHBOARD.addPhysicsRow('jumps')" style="font-size:9px;padding:2px 6px;background:#27ae60;color:#fff">+ Força</button>
-                </div>
-                <div id="dashJumpTable" style="display:flex;flex-direction:column;gap:3px;max-height:100px;overflow:auto"></div>
-              </div>
-
-              <div>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                  <b style="font-size:10px;color:#ffcc00">Níveis de Velocidade</b>
-                  <button class="btn-tool" onclick="DASHBOARD.addPhysicsRow('speeds')" style="font-size:9px;padding:2px 6px;background:#27ae60;color:#fff">+ Nível</button>
-                </div>
-                <div id="dashSpeedTable" style="display:flex;flex-direction:column;gap:3px;max-height:100px;overflow:auto"></div>
               </div>
             </div>
 
@@ -261,7 +237,6 @@ const DASHBOARD = (() => {
     // Agora o mirroring vive em cada fase e é derivado do tipo de scroll.
     migratePhasesMirroring();
     updateStats();
-    renderPhysicsTables();
   }
 
   // Derive mirroring a partir do scroll da fase (regra de hardware NES)
@@ -304,54 +279,6 @@ const DASHBOARD = (() => {
     const chrLen = Project.data?.chr?.length || 8192;
     // Cada banco CHR no CNROM é de 8KB (2 páginas de 4KB)
     return Math.max(1, Math.ceil(chrLen / 8192));
-  }
-
-  function renderPhysicsTables(){
-    if(!Project.data.physicsTables) {
-      Project.data.physicsTables = {
-        jumps: [
-          { id: 'j1', name: 'Pulo Fraco', value: 4 }, 
-          { id: 'j2', name: 'Pulo Normal', value: 7 }, 
-          { id: 'j3', name: 'Pulo Super', value: 12 }
-        ],
-        speeds: [
-          { id: 's1', name: 'Lento', value: 1 }, 
-          { id: 's2', name: 'Normal', value: 2 }, 
-          { id: 's3', name: 'Rápido', value: 3 }
-        ]
-      };
-    }
-    renderPhysicsList('dashJumpTable', Project.data.physicsTables.jumps, 'jumps');
-    renderPhysicsList('dashSpeedTable', Project.data.physicsTables.speeds, 'speeds');
-  }
-
-  function renderPhysicsList(elId, list, type){
-    const el = document.getElementById(elId); if(!el) return;
-    el.innerHTML = list.map((item, i) => `
-      <div style="display:flex;gap:4px;align-items:center;background:#000;border:1px solid #222;border-radius:3px;padding:3px">
-        <input value="${item.name}" onchange="DASHBOARD.updatePhysics('${type}',${i},'name',this.value)" style="flex:1;background:#111;color:#fff;border:1px solid #333;border-radius:2px;padding:2px;font-size:9px">
-        <input type="number" value="${item.value}" min="0" max="16" onchange="DASHBOARD.updatePhysics('${type}',${i},'value',parseInt(this.value)||0)" style="width:40px;background:#111;color:#4ec9b0;border:1px solid #333;border-radius:2px;padding:2px;font-size:9px;text-align:center" title="Valor bruto pro 6502">
-        <button class="btn-tool" onclick="DASHBOARD.deletePhysics('${type}',${i})" style="background:#c0392b;color:#fff;font-size:8px;padding:1px 4px;cursor:pointer">🗑</button>
-      </div>
-    `).join('');
-  }
-
-  function addPhysicsRow(type){
-    if(!Project.data.physicsTables) Project.data.physicsTables = { jumps: [], speeds: [] };
-    const id = type === 'jumps' ? 'j_'+Date.now() : 's_'+Date.now();
-    Project.data.physicsTables[type].push({ id, name: 'Novo', value: 1 });
-    renderPhysicsTables();
-  }
-
-  function updatePhysics(type, idx, field, value){
-    if(!Project.data.physicsTables?.[type]?.[idx]) return;
-    Project.data.physicsTables[type][idx][field] = value;
-  }
-
-  function deletePhysics(type, idx){
-    if(!confirm('Remover essa linha?')) return;
-    Project.data.physicsTables[type].splice(idx, 1);
-    renderPhysicsTables();
   }
 
   function renderCheats(){
@@ -720,10 +647,6 @@ const DASHBOARD = (() => {
     updateCheatProp,
     appendCheatBtn,
     clearCheatBtns,
-    addPhysicsRow,
-    updatePhysics,
-    deletePhysics,
-    renderPhysicsTables,
     getPhases(){ return Project.data?.phases||[]; }, 
     loadPhases(arr){ if(Project.data){ Project.data.phases=arr||[]; migratePhasesMirroring(); } renderPhases(); }, 
     get selectedPhase(){ return selectedPhase; },

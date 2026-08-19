@@ -45,6 +45,8 @@ O que falta fazer:
 ai ficaria assim: "Se hitbox" [heroi] tocar [inimigo] -> ai  vai pra linha de baixo com uma ação, o mesmo serve para gravidade, se hitbox [heroi] tocar [plataforma] gravidade pause
 * Gravidade é outro ponto que precisamos mexer, como ja decidimos no dashboard a força da gravidade por fase, ela deve ser aplicada a todos characters, até que uma regra diga o contrário
 * Pulo, precisamos implementar isso junto com a gravidade, seria uma "regra" meio que geral para todos personagens, a força do pulo pode ser configurada em dashboard, uma tabelinha com algumas forças e depois linkamos cada personagem com essa tabela, podendo até evoluir durante o jogo via power-up
+* Velocidade, mesmo esquema do pulo, uma tabela no dashborad com niveis de velocidade, ligamos os characters a ela.
+* A tabela de pulo no dash já poderia gerar uma ação em regras de program.js, depois o usuario linka do jeito que ele quiser, o power-up seria só mudar uma variavel, ficaria assim: Se evento -> botão A, Se variavel -> forçapulo === 1, ação -> [pulo fraco] -> [personagem]
 
 /* MÓDULO characters.js */
 

@@ -13,7 +13,6 @@ const PROGRAM = (() => {
   const STEP_TYPES = {
     if_event:  { label: 'SE evento...' },
     if_var:    { label: 'SE variável...' },
-    if_hitbox: { label: 'SE hitbox...' }, // NOVO: Regra dedicada a colisão
     set_var:   { label: 'DEFINIR variável' },
     add_var:   { label: 'SOMAR variável' },
     sub_var:   { label: 'SUBTRAIR variável' },
@@ -27,11 +26,6 @@ const PROGRAM = (() => {
     open_menu:   { label: 'Abrir Menu' },
     close_menu:  { label: 'Fechar Menu' },
     toggle_hitbox: { label: 'Ligar/Desligar Hitbox' },
-    // NOVAS AÇÕES DE FÍSICA
-    apply_jump:  { label: 'Aplicar Pulo' },
-    set_speed:   { label: 'Definir Velocidade X' },
-    pause_gravity: { label: 'Pausar Gravidade (no alvo)' },
-    resume_gravity:{ label: 'Retomar Gravidade (no alvo)' },
     custom:      { label: 'Personalizada (nome livre)' }
   };
   const OPS = ['==','!=','>','<','>=','<='];
@@ -658,21 +652,6 @@ const PROGRAM = (() => {
     `;
   }
 
-  // Gera lista de todos os hitboxes disponíveis (personagens e cenário)
-  function getHitboxOptions(){
-    let opts = [];
-    (Project.data?.characters || []).forEach(c => {
-      (c.hitboxes || []).forEach(hb => {
-        opts.push({ id: `char_${c.id}_${hb.id}`, label: `🦸 ${c.name} > ${hb.name}` });
-      });
-    });
-    (Project.data?.hitboxObjects || []).forEach(o => {
-      const icon = o.kind === 'dano' ? '🔻' : (o.kind === 'warp' ? '🚪' : '🐣');
-      opts.push({ id: `obj_${o.id}`, label: `${icon} [Cenário] ${o.name}` });
-    });
-    return opts;
-  }
-
   function renderStepRow(rule, step, idx, vars, events){
     const typeOptions = Object.entries(STEP_TYPES).map(([k,v]) => `<option value="${k}" ${step.type===k?'selected':''}>${v.label}</option>`).join('');
     let fields = '';
@@ -685,19 +664,6 @@ const PROGRAM = (() => {
         <select onchange="PROGRAM.updateStep('${rule.id}',${idx},'op',this.value)" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:10px">
         ${OPS.map(o=>`<option value="${o}" ${step.op===o?'selected':''}>${o}</option>`).join('')}</select>
         <input type="number" value="${step.value ?? 0}" onchange="PROGRAM.updateStep('${rule.id}',${idx},'value',parseInt(this.value)||0)" style="width:60px;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:10px">`;
-    } else if(step.type === 'if_hitbox'){
-      const hbOpts = getHitboxOptions();
-      const selStyle = "background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:10px";
-      fields = `
-        <select onchange="PROGRAM.updateStep('${rule.id}',${idx},'hitboxA',this.value)" style="${selStyle};min-width:140px">
-          <option value="">— Hitbox A —</option>
-          ${hbOpts.map(o=>`<option value="${o.id}" ${step.hitboxA===o.id?'selected':''}>${o.label}</option>`).join('')}
-        </select>
-        <span style="color:#ffcc00;font-size:10px;padding:0 4px">TOCAR</span>
-        <select onchange="PROGRAM.updateStep('${rule.id}',${idx},'hitboxB',this.value)" style="${selStyle};min-width:140px">
-          <option value="">— Hitbox B —</option>
-          ${hbOpts.map(o=>`<option value="${o.id}" ${step.hitboxB===o.id?'selected':''}>${o.label}</option>`).join('')}
-        </select>`;
     } else if(step.type === 'set_var' || step.type === 'add_var' || step.type === 'sub_var'){
       fields = `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'varId',this.value)" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:10px">
         <option value="">— variável —</option>${vars.map(v=>`<option value="${v.id}" ${step.varId===v.id?'selected':''}>${v.name}</option>`).join('')}</select>
@@ -725,31 +691,6 @@ const PROGRAM = (() => {
         const iconFor = k => k==='dano' ? '🔻' : (k==='warp' ? '🚪' : '🐣');
         fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle}">
           <option value="">— objeto —</option>${hbObjs.map(o=>`<option value="${o.id}" ${step.targetId===o.id?'selected':''}>${iconFor(o.kind)} ${o.name}</option>`).join('')}</select>`;
-      } else if(step.actionId === 'apply_jump'){
-        const jumpTable = Project.data?.physicsTables?.jumps || [];
-        fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle};min-width:120px">
-          <option value="">— Força de Pulo —</option>
-          ${jumpTable.map(j=>`<option value="${j.id}" ${step.targetId===j.id?'selected':''}>🦘 ${j.name} (${j.value})</option>`).join('')}
-        </select>
-        <select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetCharId',this.value)" style="${selStyle};min-width:120px">
-          <option value="">— Personagem —</option>
-          ${(Project.data?.characters || []).map(c=>`<option value="${c.id}" ${step.targetCharId===c.id?'selected':''}>🦸 ${c.name}</option>`).join('')}
-        </select>`;
-      } else if(step.actionId === 'set_speed'){
-        const speedTable = Project.data?.physicsTables?.speeds || [];
-        fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle};min-width:120px">
-          <option value="">— Nível Velocidade —</option>
-          ${speedTable.map(s=>`<option value="${s.id}" ${step.targetId===s.id?'selected':''}>🏃 ${s.name} (${s.value})</option>`).join('')}
-        </select>
-        <select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetCharId',this.value)" style="${selStyle};min-width:120px">
-          <option value="">— Personagem —</option>
-          ${(Project.data?.characters || []).map(c=>`<option value="${c.id}" ${step.targetCharId===c.id?'selected':''}>🦸 ${c.name}</option>`).join('')}
-        </select>`;
-      } else if(step.actionId === 'pause_gravity' || step.actionId === 'resume_gravity'){
-        fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetCharId',this.value)" style="${selStyle}">
-          <option value="">— personagem afetado —</option>
-          ${(Project.data?.characters || []).map(c=>`<option value="${c.id}" ${step.targetCharId===c.id?'selected':''}>🦸 ${c.name}</option>`).join('')}
-        </select>`;
       } else if(step.actionId === 'open_menu' || step.actionId === 'close_menu'){
         fields += `<input type="text" placeholder="nome do menu (livre por enquanto)" value="${step.targetId||''}" onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="flex:1;${selStyle}">`;
       } else if(step.actionId === 'custom'){
