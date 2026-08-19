@@ -3,9 +3,9 @@
 /* MÓDULO sound-editor */
 
 O que foi feito:
-Importa todas a faixas do Midi, deixa o usuário faer o merge das faixas nos canais
-Regua de tempo clicável 
-Ferramentas de edição de tempos multiplos
+* Importa todas a faixas do Midi, deixa o usuário faer o merge das faixas nos canais
+* Regua de tempo clicável 
+* Ferramentas de edição de tempos multiplos
 
 O que falta:
 
@@ -13,40 +13,49 @@ O que falta:
 /* MÓDULO chr-editor */
 
 O que foi feito:
-Copia e cola tiles em posições diferentes
-Grid no editor de tiles
+* Copia e cola tiles em posições diferentes
+* Grid no editor de tiles
 
 O que falta:
-poder girar apenas um tile dentro de um metatile
+* Poder girar apenas um tile dentro de um metatile
 
 
 
 /* MÓDULO backgrounds */
 
 O que foi feito:
-
+* Hitbox de spaw
 
 
 O que falta fazer:
-Botão "renomear" ao lado de "novo"
-Ferramenta "display", exibe um texto na tela, este texto fica fixo em uma posição determinada da tela e nunca se mexe, nem com o scroll
-Dentro desta ferramente ter a opção de escrever um texto (ex: "VIDAS:"), ou linkar uma variável já criada (ex: variável vidas, deve acompanhar sempre o valor atual da variável em decimal)
+* Botão "renomear" ao lado de "novo", pede um nome pro usuario e renomeia a tela atual sem mexer no status
+* Botões "salvar como backgrounds" e "salvar como splash", pedir um nome pro usuario e salvar a tela atual em cima de novo objeto
+* Botão "save" salva em cima da tela selecionada, sem mexer no status (background ou splash), não precisa pedir nome pro usuario
+* Ferramenta "display", exibe um texto na tela, este texto fica fixo em uma posição determinada da tela e nunca se mexe, nem com o scroll
+* Dentro desta ferramente ter a opção de escrever um texto (ex: "VIDAS:"), ou linkar uma variável já criada (ex: variável vidas, deve acompanhar sempre o valor atual da variável em decimal)
 
 
 /* MÓDULO Program */
 
 O que foi feito:
-
+Adicionado objeto spaw
 
 O que falta fazer:
-
+* Tirar os hitbox da regras "se evento" e criar uma regra "se hitbox", ai abrem 2 campos select com todos os hitbox criados, tanto os padrões(backgrounds) quanto os personagens(characters)
+ai ficaria assim: "Se hitbox" [heroi] tocar [inimigo] -> ai  vai pra linha de baixo com uma ação, o mesmo serve para gravidade, se hitbox [heroi] tocar [plataforma] gravidade pause
+* Gravidade é outro ponto que precisamos mexer, como ja decidimos no dashboard a força da gravidade por fase, ela deve ser aplicada a todos characters, até que uma regra diga o contrário
+* Pulo, precisamos implementar isso junto com a gravidade, seria uma "regra" meio que geral para todos personagens, a força do pulo pode ser configurada em dashboard, uma tabelinha com algumas forças e depois linkamos cada personagem com essa tabela, podendo até evoluir durante o jogo via power-up
 
 /* MÓDULO characters.js */
 
 O que foi feito:
-
+implementado hitbox de personagens
 
 O que falta fazer:
 
-Ideia a se implementar no futuro:
-Em computação não existem numeros randômicos, mas pode-se implementar um contador não a nivel de ciclo de maquina mas a nivel de scan de tela que espera a primeira interação do usuario, esta variável pode ser usada para mudar a dinâmica dos inimigos
+
+
+
+/* Ideias a se implementar no futuro: */
+* Juntar Hitbox|spaw(backgrounds.js) + objeto(backgrounds.js) + objetos|spaw(program.js) tudo em uma ferramenta só de spaw em backgrounds.js.O usuário clica num ponto da tela, ele já marca o ponto como spaw, cria o objeto e já pede pro usuario selecionar um personagem para ele
+* Em computação não existem numeros randômicos, mas pode-se implementar um contador não a nivel de ciclo de maquina mas a nivel de scan de tela que espera a primeira interação do usuario, esta variável pode ser usada para mudar a dinâmica dos inimigos
