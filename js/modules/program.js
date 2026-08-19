@@ -21,6 +21,7 @@ const PROGRAM = (() => {
   // Catálogo pequeno de ações primitivas (cresce com o tempo, não é por gênero de jogo).
   const ACTION_CATALOG = {
     goto_warp:   { label: 'Ir para Warp' },
+    spawn_character: { label: 'Spawnar Personagem' },
     play_sound:  { label: 'Tocar Som' },
     open_menu:   { label: 'Abrir Menu' },
     close_menu:  { label: 'Fechar Menu' },
@@ -32,24 +33,44 @@ const PROGRAM = (() => {
   // Calcula o endereço/bit de cada variável a partir da ORDEM do array - nunca fica
   // guardado, é sempre recalculado, então não tem como desalinhar com deleções/reordenações.
   // Bools são empacotados 8 por byte; byte/word abrem endereço próprio (word usa 2 bytes).
+  // Os primeiros endereços da zero page são RESERVADOS pro pool de instâncias (X/Y de cada
+  // slot - player, inimigos, itens, tiros compartilham a mesma estrutura de slot). Variáveis
+  // marcadas "zero page" começam DEPOIS desse bloco reservado; as demais vão pra RAM comum
+  // (a partir de $0300, convenção já usada no resto do projeto).
   function computeAllocation(vars){
-    let byteIndex = 0, bitCursor = 0, boolByteOpen = false;
+    const maxInstances = Project.data?.maxInstances ?? 10;
+    const instancePoolBytes = maxInstances * 2; // 2 bytes por slot: X e Y
+    let zpByte = instancePoolBytes, zpBit = 0, zpBoolOpen = false;
+    let ramByte = 0, ramBit = 0, ramBoolOpen = false;
     const list = [];
     for(const v of vars){
+      const isZP = !!v.zeroPage;
       if(v.type === 'bool'){
-        if(!boolByteOpen){ boolByteOpen = true; bitCursor = 0; }
-        list.push({ ...v, byteIndex, bitIndex: bitCursor, sizeBytes: 0 });
-        bitCursor++;
-        if(bitCursor >= 8){ boolByteOpen = false; byteIndex++; }
+        if(isZP){
+          if(!zpBoolOpen){ zpBoolOpen = true; zpBit = 0; }
+          list.push({ ...v, byteIndex: zpByte, bitIndex: zpBit, sizeBytes: 0 });
+          zpBit++; if(zpBit >= 8){ zpBoolOpen = false; zpByte++; }
+        } else {
+          if(!ramBoolOpen){ ramBoolOpen = true; ramBit = 0; }
+          list.push({ ...v, byteIndex: ramByte, bitIndex: ramBit, sizeBytes: 0 });
+          ramBit++; if(ramBit >= 8){ ramBoolOpen = false; ramByte++; }
+        }
       } else {
-        if(boolByteOpen){ boolByteOpen = false; byteIndex++; }
         const size = v.type === 'word' ? 2 : 1;
-        list.push({ ...v, byteIndex, bitIndex: null, sizeBytes: size });
-        byteIndex += size;
+        if(isZP){
+          if(zpBoolOpen){ zpBoolOpen = false; zpByte++; }
+          list.push({ ...v, byteIndex: zpByte, bitIndex: null, sizeBytes: size });
+          zpByte += size;
+        } else {
+          if(ramBoolOpen){ ramBoolOpen = false; ramByte++; }
+          list.push({ ...v, byteIndex: ramByte, bitIndex: null, sizeBytes: size });
+          ramByte += size;
+        }
       }
     }
-    const totalBytes = byteIndex + (boolByteOpen ? 1 : 0);
-    return { list, totalBytes };
+    const zpTotal = zpByte + (zpBoolOpen ? 1 : 0);
+    const ramTotal = ramByte + (ramBoolOpen ? 1 : 0);
+    return { list, instancePoolBytes, maxInstances, zpTotal, ramTotal };
   }
 
   function buildHTML(){
@@ -119,22 +140,29 @@ const PROGRAM = (() => {
 
   function renderVarsTab(){
     const vars = Project.data?.variables || [];
-    const { list, totalBytes } = computeAllocation(vars);
-    const rows = list.map(v => `
+    const { list, instancePoolBytes, maxInstances, zpTotal, ramTotal } = computeAllocation(vars);
+    const rows = list.map(v => {
+      const addr = v.byteIndex.toString(16).padStart(2,'0').toUpperCase();
+      const location = v.zeroPage ? `$00${addr} (zp)` : `$${(0x0300+v.byteIndex).toString(16).toUpperCase()} (ram)`;
+      const bitPart = v.type==='bool' ? ` bit ${v.bitIndex}` : ` (${v.sizeBytes} byte${v.sizeBytes>1?'s':''})`;
+      return `
       <tr style="border-bottom:1px solid #222">
         <td style="padding:6px;color:#fff">${v.name}</td>
         <td style="padding:6px;color:#888">${v.type}${v.zeroPage?' <span style="color:#4ec9b0">(zero page)</span>':''}</td>
-        <td style="padding:6px;color:#ffcc00;font-family:monospace">
-          ${v.type==='bool' ? `$${(v.zeroPage?0:0x0300+v.byteIndex).toString(16).padStart(v.zeroPage?2:4,'0')} bit ${v.bitIndex}` : `$${(v.zeroPage?0:0x0300)+v.byteIndex} (${v.sizeBytes} byte${v.sizeBytes>1?'s':''})`}
-        </td>
+        <td style="padding:6px;color:#ffcc00;font-family:monospace">${location}${bitPart}</td>
         <td style="padding:6px">
           <input type="number" id="varVal_${v.id}" value="${v.initialValue ?? 0}" min="0" max="${maxForType(v.type)}" style="width:65px;background:#000;color:#4ec9b0;border:1px solid #444;border-radius:3px;padding:3px;font-family:monospace">
           <button class="btn-tool" onclick="PROGRAM.saveVariableValue('${v.id}')" style="font-size:9px;padding:2px 5px;background:#27ae60;color:#fff">💾</button>
         </td>
         <td style="padding:6px;text-align:right"><button class="btn-tool" onclick="PROGRAM.deleteVariable('${v.id}')" style="background:#c0392b;color:#fff;font-size:10px">🗑</button></td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
     return `
       <div style="max-width:760px">
+        <div style="background:#111;border:1px solid #665500;border-radius:6px;padding:10px;margin-bottom:12px;font-size:10px;color:#aaa;line-height:1.5">
+          🎯 <b style="color:#ffcc00">Pool de instâncias:</b> ${maxInstances} slot(s) × 2 bytes (X,Y) = <b style="color:#4ec9b0">${instancePoolBytes} bytes</b> reservados no início da zero page ($00-$${(instancePoolBytes-1).toString(16).padStart(2,'0').toUpperCase()}).
+          Configurável em Dashboard. Variáveis "zero page" começam depois disso.
+        </div>
         <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;margin-bottom:12px">
           <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">NOVA VARIÁVEL</h4>
           <div style="display:flex;gap:6px;align-items:center">
@@ -152,7 +180,7 @@ const PROGRAM = (() => {
           </div>
         </div>
         <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
-          <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">VARIÁVEIS DO PROJETO (${list.length}) - ${totalBytes} byte(s) usados</h4>
+          <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">VARIÁVEIS DO PROJETO (${list.length}) - ${zpTotal} byte(s) zp + ${ramTotal} byte(s) ram</h4>
           <table style="width:100%;border-collapse:collapse;font-size:11px">
             <thead><tr style="border-bottom:1px solid #444;color:#888;text-align:left"><th style="padding:6px">Nome</th><th style="padding:6px">Tipo</th><th style="padding:6px">Endereço</th><th style="padding:6px">Valor inicial</th><th></th></tr></thead>
             <tbody>${rows || '<tr><td colspan="5" style="padding:10px;color:#666">Nenhuma variável ainda.</td></tr>'}</tbody>
@@ -208,15 +236,22 @@ const PROGRAM = (() => {
   }
   function renderObjectsTab(){
     const objs = Project.data?.hitboxObjects || [];
+    const kindLabel = k => k === 'dano' ? '🔻 Dano' : (k === 'warp' ? '🚪 Warp' : '🐣 Spawn');
     const rows = objs.map(o => {
+      let thirdCol;
+      if(o.kind === 'dano'){
+        thirdCol = `<input type="number" id="objDmg_${o.id}" value="${o.damage ?? 0}" min="0" max="255" style="width:60px;background:#000;color:#4ec9b0;border:1px solid #444;border-radius:3px;padding:3px;font-family:monospace">
+             <button class="btn-tool" onclick="PROGRAM.saveObjectDamage('${o.id}')" style="font-size:9px;padding:2px 5px;background:#27ae60;color:#fff">💾</button>`;
+      } else if(o.kind === 'warp'){
+        thirdCol = `${screenLabel(o)} <button class="btn-tool" onclick="PROGRAM.toggleWarpDestEditor('${o.id}')" style="font-size:9px;padding:2px 5px;background:#16a085;color:#fff;margin-left:4px">🎯 ${selectedWarpEditId===o.id?'Fechar':'Editar destino'}</button>`;
+      } else {
+        thirdCol = spawnCharacterField(o);
+      }
       let row = `
       <tr style="border-bottom:1px solid #222">
         <td style="padding:6px;color:#fff">${o.name}</td>
-        <td style="padding:6px;color:#888">${o.kind === 'dano' ? '🔻 Dano' : '🚪 Warp'}</td>
-        <td style="padding:6px">${o.kind === 'dano'
-          ? `<input type="number" id="objDmg_${o.id}" value="${o.damage ?? 0}" min="0" max="255" style="width:60px;background:#000;color:#4ec9b0;border:1px solid #444;border-radius:3px;padding:3px;font-family:monospace">
-             <button class="btn-tool" onclick="PROGRAM.saveObjectDamage('${o.id}')" style="font-size:9px;padding:2px 5px;background:#27ae60;color:#fff">💾</button>`
-          : `${screenLabel(o)} <button class="btn-tool" onclick="PROGRAM.toggleWarpDestEditor('${o.id}')" style="font-size:9px;padding:2px 5px;background:#16a085;color:#fff;margin-left:4px">🎯 ${selectedWarpEditId===o.id?'Fechar':'Editar destino'}</button>`}</td>
+        <td style="padding:6px;color:#888">${kindLabel(o.kind)}</td>
+        <td style="padding:6px">${thirdCol}</td>
         <td style="padding:6px;text-align:right"><button class="btn-tool" onclick="PROGRAM.deleteHitboxObject('${o.id}')" style="background:#c0392b;color:#fff;font-size:10px">🗑</button></td>
       </tr>`;
       if(o.kind === 'warp' && selectedWarpEditId === o.id) row += renderWarpDestinationEditor(o);
@@ -227,17 +262,20 @@ const PROGRAM = (() => {
         <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;margin-bottom:12px">
           <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">NOVO OBJETO DE HITBOX</h4>
           <div style="font-size:9px;color:#666;margin-bottom:8px;line-height:1.4">
-            Um objeto é a "identidade" de um gatilho (dano ou warp). O mesmo metatile pode ter várias
-            instâncias na tela, cada uma apontando pra um objeto diferente - ex: dois espinhos iguais
-            visualmente, um tira 10 e o outro 20; ou duas portas iguais que levam pra lugares diferentes.
-            Um warp sempre aponta pra outro warp (que já é o próprio ponto de spawn) - dá pra ter um
-            warp que não é gatilho de nenhuma porta, só um ponto nomeado (ex: spawn inicial do jogo).
+            Um objeto é a "identidade" de um gatilho (dano, warp ou spawn). O mesmo metatile pode ter
+            várias instâncias na tela, cada uma apontando pra um objeto diferente - ex: dois espinhos
+            iguais visualmente, um tira 10 e o outro 20; ou duas portas iguais que levam pra lugares
+            diferentes. Um warp sempre aponta pra outro warp (que já é o próprio ponto de spawn de
+            teleporte) - dá pra ter um warp que não é gatilho de porta nenhuma, só um ponto nomeado
+            (ex: spawn inicial do jogo). Um Spawn marca onde um personagem (inimigo, item, tiro...)
+            nasce - referenciado depois em Regras (Ação: Spawnar Personagem).
           </div>
           <div style="display:flex;gap:6px;align-items:center">
             <input id="objName" type="text" placeholder="nome_do_objeto" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
             <select id="objKind" onchange="PROGRAM.onObjKindChange()" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
               <option value="dano">Dano</option>
               <option value="warp">Warp</option>
+              <option value="spawn">Spawn</option>
             </select>
             <input id="objDamage" type="number" min="0" max="255" value="10" placeholder="dano" style="width:70px;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
             <button class="btn-tool" onclick="PROGRAM.addHitboxObject()" style="background:#27ae60;color:#fff">+ Adicionar</button>
@@ -342,6 +380,23 @@ const PROGRAM = (() => {
     dmgEl.style.display = kindEl.value === 'dano' ? 'inline-block' : 'none';
   }
 
+  function spawnCharacterField(o){
+    const chars = Project.data?.characters || [];
+    return `<select id="objChar_${o.id}" style="background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:10px">
+      <option value="">— nenhum —</option>
+      ${chars.map(c=>`<option value="${c.id}" ${o.characterId===c.id?'selected':''}>${c.name}</option>`).join('')}
+      </select>
+      <button class="btn-tool" onclick="PROGRAM.saveObjectCharacter('${o.id}')" style="font-size:9px;padding:2px 5px;background:#27ae60;color:#fff">💾</button>`;
+  }
+  function saveObjectCharacter(id){
+    const o = Project.data?.hitboxObjects?.find(o => o.id === id); if(!o || o.kind !== 'spawn') return;
+    const sel = document.getElementById('objChar_'+id); if(!sel) return;
+    o.characterId = sel.value || null;
+    const c = (Project.data?.characters||[]).find(c => c.id === o.characterId);
+    Project.status(`"${o.name}" agora spawna: ${c ? c.name : 'nenhum'}`);
+    renderTab();
+  }
+
   function addHitboxObject(){
     const nameEl = document.getElementById('objName'); const kindEl = document.getElementById('objKind'); const dmgEl = document.getElementById('objDamage');
     const name = nameEl.value.trim(); if(!name) return;
@@ -349,6 +404,7 @@ const PROGRAM = (() => {
     if(!Project.data.hitboxObjects) Project.data.hitboxObjects = [];
     const obj = { id: 'hb_'+Date.now(), name, kind };
     if(kind === 'dano'){ let d = parseInt(dmgEl.value); if(isNaN(d)) d = 0; obj.damage = Math.max(0, Math.min(255, d)); }
+    if(kind === 'spawn'){ obj.characterId = null; }
     Project.data.hitboxObjects.push(obj);
     renderTab();
   }
@@ -622,14 +678,19 @@ const PROGRAM = (() => {
         const warpObjs = (Project.data?.hitboxObjects || []).filter(o => o.kind === 'warp');
         fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle}">
           <option value="">— warp —</option>${warpObjs.map(o=>`<option value="${o.id}" ${step.targetId===o.id?'selected':''}>🚪 ${o.name}</option>`).join('')}</select>`;
+      } else if(step.actionId === 'spawn_character'){
+        const spawnObjs = (Project.data?.hitboxObjects || []).filter(o => o.kind === 'spawn');
+        fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle}">
+          <option value="">— spawn —</option>${spawnObjs.map(o=>`<option value="${o.id}" ${step.targetId===o.id?'selected':''}>🐣 ${o.name}</option>`).join('')}</select>`;
       } else if(step.actionId === 'play_sound'){
         const soundItems = Project.data?.sounds?.items || [];
         fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle}">
           <option value="">— som —</option>${soundItems.map(s=>`<option value="${s.id}" ${step.targetId===s.id?'selected':''}>${s.type==='sfx'?'🔊':'🎵'} ${s.name}</option>`).join('')}</select>`;
       } else if(step.actionId === 'toggle_hitbox'){
         const hbObjs = Project.data?.hitboxObjects || [];
+        const iconFor = k => k==='dano' ? '🔻' : (k==='warp' ? '🚪' : '🐣');
         fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle}">
-          <option value="">— objeto —</option>${hbObjs.map(o=>`<option value="${o.id}" ${step.targetId===o.id?'selected':''}>${o.kind==='dano'?'🔻':'🚪'} ${o.name}</option>`).join('')}</select>`;
+          <option value="">— objeto —</option>${hbObjs.map(o=>`<option value="${o.id}" ${step.targetId===o.id?'selected':''}>${iconFor(o.kind)} ${o.name}</option>`).join('')}</select>`;
       } else if(step.actionId === 'open_menu' || step.actionId === 'close_menu'){
         fields += `<input type="text" placeholder="nome do menu (livre por enquanto)" value="${step.targetId||''}" onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="flex:1;${selStyle}">`;
       } else if(step.actionId === 'custom'){
@@ -689,7 +750,7 @@ const PROGRAM = (() => {
   return {
     init: buildHTML, setTab,
     addVariable, deleteVariable, onVarTypeChange, saveVariableValue,
-    addHitboxObject, deleteHitboxObject, onObjKindChange, saveObjectDamage,
+    addHitboxObject, deleteHitboxObject, onObjKindChange, saveObjectDamage, saveObjectCharacter,
     toggleWarpDestEditor, updateWarpDestPreview, saveWarpDestination,
     addEvent, deleteEvent, onEvCategoryChange,
     addMenu, selectMenu, renameMenu, deleteMenu, updateMenuCursor, addMenuItem, updateMenuItem, moveMenuItem, deleteMenuItem,

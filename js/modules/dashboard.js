@@ -58,6 +58,15 @@ const DASHBOARD = (() => {
                 </div>
               </div>
 
+              <div style="margin:4px 0 10px">
+                <label style="font-size:10px;color:#888">Pool de Instâncias (player + inimigos + itens + tiros)</label>
+                <input id="dashMaxInstances" type="number" min="1" max="20" value="10" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px">
+                <div style="font-size:9px;color:#666;margin-top:4px;line-height:1.4">
+                  Reserva <b style="color:#ffcc00" id="dashMaxInstancesBytes">20</b> bytes no início da zero page (2 por slot: X e Y).
+                  Mais slots = mais objetos simultâneos na tela, mas menos memória sobra pra variáveis.
+                </div>
+              </div>
+
               <label style="font-size:11px;color:#888">Descrição</label>
               <textarea id="dashDesc" style="width:100%;height:60px;background:#000;color:#ccc;border:1px solid #444;border-radius:4px;padding:6px;margin:4px 0;font-size:11px;resize:vertical" placeholder="Sobre o jogo..."></textarea>
 
@@ -165,6 +174,7 @@ const DASHBOARD = (() => {
     const livesEl = document.getElementById('dashLives');
     const continuesEl = document.getElementById('dashContinues');
     const energyEl = document.getElementById('dashEnergy');
+    const maxInstEl = document.getElementById('dashMaxInstances');
 
     if(nameEl) nameEl.addEventListener('input', e=>{ if(Project.data){ Project.data.name=e.target.value; Project.updateUI(); } });
     if(authorEl) authorEl.addEventListener('input', e=>{ if(Project.data) Project.data.author=e.target.value; });
@@ -183,6 +193,15 @@ const DASHBOARD = (() => {
     if(livesEl) livesEl.addEventListener('input', updateConfig);
     if(continuesEl) continuesEl.addEventListener('input', updateConfig);
     if(energyEl) energyEl.addEventListener('input', updateConfig);
+
+    if(maxInstEl) maxInstEl.addEventListener('input', () => {
+      if(!Project.data) return;
+      let n = parseInt(maxInstEl.value); if(isNaN(n)) n = 10;
+      n = Math.max(1, Math.min(20, n));
+      Project.data.maxInstances = n;
+      const bytesEl = document.getElementById('dashMaxInstancesBytes');
+      if(bytesEl) bytesEl.textContent = n*2;
+    });
   }
 
   function loadData(){
@@ -195,6 +214,7 @@ const DASHBOARD = (() => {
     const livesEl=document.getElementById('dashLives');
     const continuesEl=document.getElementById('dashContinues');
     const energyEl=document.getElementById('dashEnergy');
+    const maxInstEl=document.getElementById('dashMaxInstances');
 
     if(nameEl) nameEl.value=Project.data.name||'Meu Jogo';
     if(authorEl) authorEl.value=Project.data.author||'';
@@ -207,6 +227,11 @@ const DASHBOARD = (() => {
       if(continuesEl) continuesEl.value = Project.data.gameConfig.continues || 3;
       if(energyEl) energyEl.value = Project.data.gameConfig.energy || 16;
     }
+
+    const maxInst = Project.data.maxInstances || 10;
+    if(maxInstEl) maxInstEl.value = maxInst;
+    const bytesEl = document.getElementById('dashMaxInstancesBytes');
+    if(bytesEl) bytesEl.textContent = maxInst*2;
 
     // Migração: .nms antigos tinham mirroring no nível do projeto.
     // Agora o mirroring vive em cada fase e é derivado do tipo de scroll.

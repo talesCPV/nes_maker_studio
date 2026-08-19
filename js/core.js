@@ -85,6 +85,9 @@ const Project = {
       hitboxObjects: [],
       menus: [],
       gameConfig: { lives: 3, continues: 3, energy: 16 },
+      // Pool de instâncias em memória (player + inimigos + itens + tiros compartilham a
+      // mesma estrutura de slot). Reservado no início da zero page - ver Programação > Variáveis.
+      maxInstances: 10,
       sounds: this.defaultSounds()
     };
   },
@@ -120,6 +123,25 @@ const Project = {
     // Qualquer coisa antiga ou invalida → biblioteca limpa
     return this.defaultSounds();
   },
+  // Carimba os tiles utilitários padrão nos 4 últimos slots da pg1 (índices 508-511):
+  // 508 = cursor (triângulo apontando pra direita, cor índice 3), 509/510/511 = preenchimento
+  // sólido cor índice 1/2/3 (útil pra "pintar" céu/grama direto no background sem metatile).
+  // Só entra em projeto NOVO - nunca sobrescreve um .nms carregado que já tenha algo ali.
+  // O usuário pode editar/trocar isso à vontade no CHR Editor depois, não é travado.
+  stampDefaultUtilityTiles(chrArr){
+    const rowCounts = [1,2,3,4,4,3,2,1];
+    const cursorRow = rowCounts.map(c => c===0 ? 0 : (0xFF << (8-c)) & 0xFF);
+    const writeTile = (idx, plane0, plane1) => {
+      const off = idx*16;
+      if(off+16 > chrArr.length) return;
+      for(let i=0;i<8;i++){ chrArr[off+i] = plane0[i]; chrArr[off+8+i] = plane1[i]; }
+    };
+    const solid = v => new Array(8).fill(v);
+    writeTile(508, cursorRow, cursorRow);           // cursor (▶), cor índice 3
+    writeTile(509, solid(0xFF), solid(0x00));        // fill cor índice 1
+    writeTile(510, solid(0x00), solid(0xFF));        // fill cor índice 2
+    writeTile(511, solid(0xFF), solid(0xFF));        // fill cor índice 3
+  },
   async newProject(silent=false){
     if(!silent && !confirm("Criar novo projeto? Progresso não salvo será perdido.")) return;
     this.data = this.defaultData();
@@ -137,6 +159,7 @@ const Project = {
         }
       }
     }catch(e){}
+    this.stampDefaultUtilityTiles(this.data.chr);
     this.loadIntoEditors();
     this.updateUI();
     this.status("novo projeto v0.7.1");
@@ -288,6 +311,8 @@ const Project = {
       if(!json.rules) json.rules = [];
       if(!json.hitboxObjects) json.hitboxObjects = [];
       if(!json.menus) json.menus = [];
+      if(json.maxInstances == null) json.maxInstances = 10;
+      json.maxInstances = Math.max(1, Math.min(20, parseInt(json.maxInstances) || 10));
       this.data = json;
       this.fileName = file.name;
       this.loadIntoEditors();
