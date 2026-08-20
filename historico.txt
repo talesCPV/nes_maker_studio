@@ -75,4 +75,6 @@ O que falta fazer:
 * Criar uma Ação "Matar" -> seleciona [personagens]
 * Em regras poderiamos ter +3 hitbox nativos: Out Of Bounds, On Ground e Enter Screen. Esses só apareceriam na programação e seus nomes já são auto explicativos.
 * Adicionar em "Ação" a opção "Mover", abrir um select [personagens], um select com as opções [cima,baixo, esq... pulo] e mais um select com as animações do personagem selecionado.
-* Juntar Hitbox|spaw(backgrounds.js) + objeto(backgrounds.js) + objetos|spaw(program.js) tudo em uma ferramenta só de spaw em backgrounds.js.O usuário clica num ponto da tela, ele já marca o ponto como spaw, cria o objeto e já pede pro usuario selecionar um personagem para ele
+
+Em backgrounds.js:
+* Juntar Hitbox|spaw(backgrounds.js) + objeto(backgrounds.js) + objetos|spaw(program.js) tudo em uma ferramenta só de spaw.O usuário clica num ponto da tela, ele já marca o ponto como spaw, cria o objeto e já pede pro usuario selecionar um personagem para ele
