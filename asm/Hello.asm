@@ -1,4 +1,4 @@
-; NES Maker Studio - BUILD v0.9.8
+; NES Maker Studio - BUILD v0.9.9
 ; NROM-256 | inimigos (spawn fixo garantido) + patrol + hit
 ; Telas: 7 · CHR tiles: 32/256
 ;   [0] splash · Splash 1
@@ -7,7 +7,7 @@
 ;   [3] play · Tela 3
 ;   [4] play · Tela 4
 ;   [5] play · tela final fase 1
-;   [6] gameover · Game Over
+;   [6] play · Game Over
 ; Musica: dr-wily-stage-1 · 3 canal(is)
 
 .segment "HEADER"
@@ -410,7 +410,7 @@ goto_play_screen:
 
 try_screen_right:
   LDA play_idx
-  CMP #4
+  CMP #5
   BCS tsr_done
   INC play_idx
   LDA play_idx
@@ -443,23 +443,74 @@ clear_enemies:
 
 spawn_enemies:
   JSR clear_enemies
-  ; fallback fixo: 2 inimigos sempre na tela de play
-  LDA #176
+  ; play_idx → EnemySpawnPtr (word table) → count,x,y,...
+  LDA play_idx
+  ASL A
+  TAX
+  LDA EnemySpawnPtr,X
+  STA tmp0
+  LDA EnemySpawnPtr+1,X
+  STA tmp1
+  LDY #0
+  LDA (tmp0),Y
+  BEQ se_done
+  STA en_tmp
+  INY
+  ; en0
+  LDA en_tmp
+  BEQ se_done
+  LDA (tmp0),Y
   STA en0_x
-  LDA #160
+  INY
+  LDA (tmp0),Y
   STA en0_y
+  INY
   LDA #1
   STA en0_on
   LDA #0
   STA en0_dir
-  LDA #120
+  DEC en_tmp
+  ; en1
+  LDA en_tmp
+  BEQ se_done
+  LDA (tmp0),Y
   STA en1_x
-  LDA #160
+  INY
+  LDA (tmp0),Y
   STA en1_y
+  INY
   LDA #1
   STA en1_on
   LDA #1
   STA en1_dir
+  DEC en_tmp
+  ; en2
+  LDA en_tmp
+  BEQ se_done
+  LDA (tmp0),Y
+  STA en2_x
+  INY
+  LDA (tmp0),Y
+  STA en2_y
+  INY
+  LDA #1
+  STA en2_on
+  LDA #0
+  STA en2_dir
+  DEC en_tmp
+  ; en3
+  LDA en_tmp
+  BEQ se_done
+  LDA (tmp0),Y
+  STA en3_x
+  INY
+  LDA (tmp0),Y
+  STA en3_y
+  LDA #1
+  STA en3_on
+  LDA #1
+  STA en3_dir
+se_done:
   JSR update_enemy_oam
   RTS
 
@@ -1164,24 +1215,27 @@ ScreenColHi:
   .byte >Collision_5
   .byte >Collision_6
 PlayScreenTable:  ; indices globais das telas de jogo (em ordem)
-  .byte 1, 2, 3, 4, 5
+  .byte 1, 2, 3, 4, 5, 6
 
 EnemyData_0:
-  .byte 1, 160, 152
+  .byte 1, 147, 128
 EnemyData_1:
-  .byte 1, 180, 152
+  .byte 0
 EnemyData_2:
-  .byte 1, 200, 152
+  .byte 1, 100, 100
 EnemyData_3:
-  .byte 1, 160, 152
+  .byte 0
 EnemyData_4:
-  .byte 1, 180, 152
+  .byte 0
+EnemyData_5:
+  .byte 0
 EnemySpawnPtr:
   .word EnemyData_0
   .word EnemyData_1
   .word EnemyData_2
   .word EnemyData_3
   .word EnemyData_4
+  .word EnemyData_5
 
 Nametable_0:  ; Splash 1 (splash)
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
@@ -1591,7 +1645,7 @@ Collision_5:
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
 
-Nametable_6:  ; Game Over (gameover)
+Nametable_6:  ; Game Over (play)
   .byte $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17
   .byte $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01

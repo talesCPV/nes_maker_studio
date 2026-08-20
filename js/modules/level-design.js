@@ -1,4 +1,4 @@
-// LEVEL DESIGN MODULE v1.3.0 - Mapa amarrado à fase real do projeto (Project.data.phases[i].levelMap)
+// LEVEL DESIGN MODULE v1.4.0 - Spawns de inimigos por tela (hitboxInstances)
 const LEVEL_DESIGN = (() => {
   function defaultWorld(){
     return { cols: 4, rows: 4, transitionType: "hard_cut", cells: {} };
@@ -7,6 +7,8 @@ const LEVEL_DESIGN = (() => {
   let currentWorld = defaultWorld();
   let selectedAsset = { id: null, type: null }; 
   let activeTool = 'place';
+  // célula selecionada para editar spawns: { x, y, bgId, type }
+  let selectedCell = null;
 
   // Carrega o levelMap salvo dentro da fase (ou cria um em branco se a fase ainda não tem um).
   // O mapa vive DENTRO da fase (Project.data.phases[i].levelMap) - não existe mais um array
@@ -61,8 +63,27 @@ const LEVEL_DESIGN = (() => {
                 <button class="btn-tool ld-tool-btn active" data-tool="place" onclick="LEVEL_DESIGN.setTool('place')">🧩 Posicionar</button>
                 <button class="btn-tool ld-tool-btn" data-tool="erase" onclick="LEVEL_DESIGN.setTool('erase')" style="background:#c0392b;color:#fff">🧹 Apagar</button>
                 <button class="btn-tool ld-tool-btn" data-tool="hardcut" onclick="LEVEL_DESIGN.setTool('hardcut')" style="background:#d35400;color:#fff" title="Marca/desmarca uma célula como corte seco, mesmo dentro de uma fase de scroll (splash, menu, cutscene...)">🔒 Hard-Cut</button>
+                <button class="btn-tool ld-tool-btn" data-tool="spawns" onclick="LEVEL_DESIGN.setTool('spawns')" style="background:#8e44ad;color:#fff" title="Clique numa tela do grid para editar spawns de inimigos">👾 Spawns</button>
               </div>
               <div id="ldHelpText" style="font-size:10px;color:#888;background:#000;border:1px solid #222;border-radius:3px;padding:4px 6px">Selecione um Asset e clique no grid.</div>
+            </div>
+
+            <!-- Painel de spawns da célula selecionada -->
+            <div id="ldSpawnPanel" style="background:#111;border:1px solid #5a2d82;border-radius:6px;padding:10px;display:none;flex-direction:column;gap:8px">
+              <h4 style="font-size:11px;color:#c39bd3;margin:0">👾 SPAWNS DA TELA</h4>
+              <div id="ldSpawnScreenLabel" style="font-size:10px;color:#aaa"></div>
+              <div id="ldSpawnList" style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto"></div>
+              <div style="border-top:1px solid #333;padding-top:8px;display:flex;flex-direction:column;gap:6px">
+                <div style="font-size:10px;color:#888">Adicionar spawn</div>
+                <select id="ldSpawnChar" style="background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:4px;font-size:11px"></select>
+                <div style="display:flex;gap:6px;align-items:center">
+                  <label style="font-size:10px;color:#888">X</label>
+                  <input id="ldSpawnX" type="number" min="0" max="248" value="160" style="width:52px;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:11px">
+                  <label style="font-size:10px;color:#888">Y</label>
+                  <input id="ldSpawnY" type="number" min="0" max="232" value="160" style="width:52px;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:11px">
+                </div>
+                <button class="btn-tool" onclick="LEVEL_DESIGN.addSpawn()" style="background:#8e44ad;color:#fff;padding:5px 8px">+ Adicionar</button>
+              </div>
             </div>
 
             <!-- Lista de Splash Screens -->
@@ -100,6 +121,126 @@ const LEVEL_DESIGN = (() => {
     if (t === 'place') help.textContent = 'Clique em uma célula do grid para encaixar o Asset.';
     else if (t === 'erase') help.textContent = 'Clique em uma célula preenchida para removê-la.';
     else if (t === 'hardcut') help.textContent = 'Clique numa célula preenchida pra marcar/desmarcar como corte seco (ignora o eixo de scroll da fase).';
+    else if (t === 'spawns') help.textContent = 'Clique numa tela do grid para editar spawns de inimigos (personagem + X,Y).';
+    if (t !== 'spawns') {
+      selectedCell = null;
+      renderSpawnPanel();
+    }
+  }
+
+  function ensureHitboxInstances(){
+    if (!Project.data) return [];
+    if (!Array.isArray(Project.data.hitboxInstances)) Project.data.hitboxInstances = [];
+    return Project.data.hitboxInstances;
+  }
+
+  function getOrCreateSpawnObject(characterId){
+    if (!Project.data) return null;
+    if (!Array.isArray(Project.data.hitboxObjects)) Project.data.hitboxObjects = [];
+    let obj = Project.data.hitboxObjects.find(o => o.kind === 'spawn' && o.characterId === characterId);
+    if (obj) return obj;
+    const chars = Project.data.characters || [];
+    const ch = chars.find(c => c.id === characterId);
+    obj = {
+      id: 'hb_' + Date.now() + Math.floor(Math.random()*1000),
+      name: 'Spawn ' + (ch?.name || characterId),
+      kind: 'spawn',
+      characterId
+    };
+    Project.data.hitboxObjects.push(obj);
+    return obj;
+  }
+
+  function instancesForScreen(screenId){
+    return ensureHitboxInstances().filter(i => i.screenId === screenId);
+  }
+
+  function populateSpawnCharSelect(){
+    const sel = document.getElementById('ldSpawnChar');
+    if (!sel) return;
+    const chars = (Project.data?.characters || []).filter(c => {
+      const n = (c.name || '').toLowerCase();
+      const t = (c.type || '').toLowerCase();
+      // exclui o hero principal; aceita enemy / npc / outros
+      if (n === 'hero' || t === 'player' && n.includes('hero')) return false;
+      if (t === 'enemy' || n.includes('enemy') || n.includes('inimigo')) return true;
+      // se type=player mas nome não é hero, ainda permite (caso do .nms atual)
+      if (t === 'player' && !n.includes('hero')) return true;
+      return t !== 'player';
+    });
+    if (!chars.length) {
+      // fallback: todos menos o primeiro player chamado Hero
+      const all = Project.data?.characters || [];
+      sel.innerHTML = all.filter(c => !(c.name||'').toLowerCase().includes('hero'))
+        .map(c => `<option value="${c.id}">${c.name || c.id}</option>`).join('')
+        || '<option value="">Nenhum personagem</option>';
+      return;
+    }
+    sel.innerHTML = chars.map(c => `<option value="${c.id}">${c.name || c.id}</option>`).join('');
+  }
+
+  function renderSpawnPanel(){
+    const panel = document.getElementById('ldSpawnPanel');
+    if (!panel) return;
+    if (!selectedCell || !selectedCell.bgId) {
+      panel.style.display = 'none';
+      return;
+    }
+    panel.style.display = 'flex';
+    const label = document.getElementById('ldSpawnScreenLabel');
+    const bgs = Project.data?.backgrounds || [];
+    const sps = Project.data?.splashScreens || [];
+    const asset = selectedCell.type === 'splash'
+      ? sps.find(s => s.id === selectedCell.bgId)
+      : bgs.find(b => b.id === selectedCell.bgId);
+    if (label) label.textContent = `${asset?.name || selectedCell.bgId} · célula (${selectedCell.x},${selectedCell.y})`;
+
+    populateSpawnCharSelect();
+
+    const list = document.getElementById('ldSpawnList');
+    if (!list) return;
+    const insts = instancesForScreen(selectedCell.bgId);
+    if (!insts.length) {
+      list.innerHTML = '<div style="font-size:10px;color:#666">Nenhum spawn nesta tela.</div>';
+      return;
+    }
+    const chars = Project.data?.characters || [];
+    list.innerHTML = insts.map(inst => {
+      const ch = chars.find(c => c.id === inst.characterId);
+      const name = ch?.name || inst.characterId || '?';
+      return `<div style="display:flex;align-items:center;gap:6px;background:#1a1a1a;border:1px solid #333;border-radius:4px;padding:4px 6px;font-size:11px;color:#ddd">
+        <span style="flex:1">👾 ${name} · (${inst.x},${inst.y})</span>
+        <button onclick="LEVEL_DESIGN.removeSpawn('${inst.id}')" style="background:#c0392b;color:#fff;border:none;border-radius:3px;padding:2px 6px;cursor:pointer;font-size:10px">×</button>
+      </div>`;
+    }).join('');
+  }
+
+  function addSpawn(){
+    if (!selectedCell?.bgId) { alert('Selecione uma tela no grid (ferramenta Spawns).'); return; }
+    const charId = document.getElementById('ldSpawnChar')?.value;
+    if (!charId) { alert('Escolha um personagem.'); return; }
+    const x = Math.max(0, Math.min(248, parseInt(document.getElementById('ldSpawnX')?.value, 10) || 160));
+    const y = Math.max(0, Math.min(232, parseInt(document.getElementById('ldSpawnY')?.value, 10) || 160));
+    const obj = getOrCreateSpawnObject(charId);
+    const inst = {
+      id: 'inst_' + Date.now() + Math.floor(Math.random()*1000),
+      screenId: selectedCell.bgId,
+      hitboxObjectId: obj?.id || null,
+      characterId: charId,
+      x, y
+    };
+    ensureHitboxInstances().push(inst);
+    renderSpawnPanel();
+    renderGrid();
+    Project.status?.(`Spawn adicionado em ${selectedCell.bgId} (${x},${y})`);
+  }
+
+  function removeSpawn(instId){
+    const arr = ensureHitboxInstances();
+    const idx = arr.findIndex(i => i.id === instId);
+    if (idx >= 0) arr.splice(idx, 1);
+    renderSpawnPanel();
+    renderGrid();
   }
 
   // Detecção de cor de fundo e desenho de nametable agora centralizados em RENDER_UTILS
@@ -220,6 +361,20 @@ const LEVEL_DESIGN = (() => {
             cellDiv.appendChild(badge);
           }
 
+          // badge de quantidade de spawns nesta tela
+          const nSpawns = (Project.data?.hitboxInstances || []).filter(i => i.screenId === cellData.bgId).length;
+          if (nSpawns > 0) {
+            const sb = document.createElement('span');
+            sb.textContent = `👾${nSpawns}`;
+            sb.style.cssText = `position:absolute;top:2px;right:2px;font-size:8px;color:#fff;background:#8e44ad;padding:1px 4px;border-radius:3px;line-height:1.4`;
+            cellDiv.appendChild(sb);
+          }
+
+          // destaque se célula selecionada no modo spawns
+          if (selectedCell && selectedCell.x === x && selectedCell.y === y && activeTool === 'spawns') {
+            cellDiv.style.boxShadow = 'inset 0 0 0 2px #c39bd3';
+          }
+
           const canvas = document.createElement('canvas');
           canvas.width = 64;
           canvas.height = 48;
@@ -266,6 +421,12 @@ const LEVEL_DESIGN = (() => {
       if (!currentWorld.cells[key]) { alert('A célula precisa ter uma tela alocada primeiro.'); return; }
       currentWorld.cells[key].hardCut = !currentWorld.cells[key].hardCut;
       renderGrid(); persistLevelMap();
+    } else if (activeTool === 'spawns') {
+      if (!currentWorld.cells[key]) { alert('A célula precisa ter uma tela alocada primeiro.'); return; }
+      const cell = currentWorld.cells[key];
+      selectedCell = { x, y, bgId: cell.bgId, type: cell.type };
+      renderGrid();
+      renderSpawnPanel();
     }
   }
 
@@ -299,6 +460,9 @@ const LEVEL_DESIGN = (() => {
     init: () => loadPhaseMap(currentPhaseId),
     setTool,
     resizeGrid,
-    loadPhaseMap
+    loadPhaseMap,
+    addSpawn,
+    removeSpawn,
+    renderSpawnPanel
   };
 })();

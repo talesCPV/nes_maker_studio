@@ -20707,6 +20707,33 @@
         }
       },
       "created": 1787142538003
+    },
+    {
+      "id": "phase_1787259375992",
+      "name": "Game Over",
+      "description": "",
+      "mapper": 0,
+      "bank": 0,
+      "gravity": "down",
+      "gravityStrength": 4,
+      "scroll": "static",
+      "mirroring": "vertical",
+      "background": "",
+      "splash": "",
+      "levelMap": {
+        "cols": 1,
+        "rows": 1,
+        "transitionType": "hard_cut",
+        "cells": {
+          "0,0": {
+            "bgId": "scr_1787253050136",
+            "type": "splash",
+            "x": 0,
+            "y": 0
+          }
+        }
+      },
+      "created": 1787259375992
     }
   ],
   "characters": [
@@ -26116,7 +26143,7 @@
     ],
     "asm": ""
   },
-  "savedAt": 1787258972218,
+  "savedAt": 1787259733458,
   "physicsTables": {
     "jumps": [
       {
@@ -26165,6 +26192,24 @@
       "id": "sp_1787249791876",
       "name": "walk",
       "value": 10
+    }
+  ],
+  "hitboxInstances": [
+    {
+      "id": "inst_1787259616972781",
+      "screenId": "scr_1787144379503",
+      "hitboxObjectId": "hb_1787148369304",
+      "characterId": "char_1787148214942",
+      "x": 147,
+      "y": 128
+    },
+    {
+      "id": "inst_1787259726669727",
+      "screenId": "scr_1787144420490",
+      "hitboxObjectId": "hb_1787148369304",
+      "characterId": "char_1787148214942",
+      "x": 100,
+      "y": 100
     }
   ]
 }

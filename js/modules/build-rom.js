@@ -114,7 +114,7 @@ const BUILD = (() => {
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <div style="display:flex;gap:8px;align-items:center;padding:10px 12px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
-          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.9.8 • inimigos fix</h3>
+          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.9.9 • spawns level-design</h3>
           <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             <select id="buildModeSelect" onchange="BUILD.setBuildMode(this.value)" style="background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:4px;font-size:11px">
               <option value="game" selected>🎮 Jogo completo (Camada 1)</option>
@@ -558,7 +558,7 @@ const BUILD = (() => {
     }
 
     const L=[];
-    L.push("; NES Maker Studio - BUILD v0.9.8");
+    L.push("; NES Maker Studio - BUILD v0.9.9");
     L.push("; NROM-256 | inimigos (spawn fixo garantido) + patrol + hit");
     L.push(`; Telas: ${screens.length} · CHR tiles: ${packed.usedCount}/256` + (packed.overflowCount?` · overflow ${packed.overflowCount}`:""));
     screens.forEach((s,i) => L.push(`;   [${i}] ${s.role} · ${s.name}`));
@@ -946,23 +946,74 @@ const BUILD = (() => {
 
     L.push("spawn_enemies:");
     L.push("  JSR clear_enemies");
-    L.push("  ; fallback fixo: 2 inimigos sempre na tela de play");
-    L.push("  LDA #176");
+    L.push("  ; play_idx → EnemySpawnPtr (word table) → count,x,y,...");
+    L.push("  LDA play_idx");
+    L.push("  ASL A");
+    L.push("  TAX");
+    L.push("  LDA EnemySpawnPtr,X");
+    L.push("  STA tmp0");
+    L.push("  LDA EnemySpawnPtr+1,X");
+    L.push("  STA tmp1");
+    L.push("  LDY #0");
+    L.push("  LDA (tmp0),Y");
+    L.push("  BEQ se_done");
+    L.push("  STA en_tmp");
+    L.push("  INY");
+    L.push("  ; en0");
+    L.push("  LDA en_tmp");
+    L.push("  BEQ se_done");
+    L.push("  LDA (tmp0),Y");
     L.push("  STA en0_x");
-    L.push("  LDA #160");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
     L.push("  STA en0_y");
+    L.push("  INY");
     L.push("  LDA #1");
     L.push("  STA en0_on");
     L.push("  LDA #0");
     L.push("  STA en0_dir");
-    L.push("  LDA #120");
+    L.push("  DEC en_tmp");
+    L.push("  ; en1");
+    L.push("  LDA en_tmp");
+    L.push("  BEQ se_done");
+    L.push("  LDA (tmp0),Y");
     L.push("  STA en1_x");
-    L.push("  LDA #160");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
     L.push("  STA en1_y");
+    L.push("  INY");
     L.push("  LDA #1");
     L.push("  STA en1_on");
     L.push("  LDA #1");
     L.push("  STA en1_dir");
+    L.push("  DEC en_tmp");
+    L.push("  ; en2");
+    L.push("  LDA en_tmp");
+    L.push("  BEQ se_done");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA en2_x");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA en2_y");
+    L.push("  INY");
+    L.push("  LDA #1");
+    L.push("  STA en2_on");
+    L.push("  LDA #0");
+    L.push("  STA en2_dir");
+    L.push("  DEC en_tmp");
+    L.push("  ; en3");
+    L.push("  LDA en_tmp");
+    L.push("  BEQ se_done");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA en3_x");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA en3_y");
+    L.push("  LDA #1");
+    L.push("  STA en3_on");
+    L.push("  LDA #1");
+    L.push("  STA en3_dir");
+    L.push("se_done:");
     L.push("  JSR update_enemy_oam");
     L.push("  RTS");
     L.push("");
@@ -1668,30 +1719,25 @@ const BUILD = (() => {
     L.push("  .byte " + playIdxs.map(i => i & 0xFF).join(", "));
     L.push("");
 
-    // Enemy spawn tables — 1 inimigo por tela de play (fallback; hitboxInstances vazio no .nms)
+    // Enemy spawn tables a partir de hitboxInstances (level-design)
     // Formato por tela: count, x0,y0, x1,y1, ...
-    const enemySpawns = playIdxs.map((gi, pi) => {
-      // posicoes variadas por tela
-      const x = 160 + (pi % 3) * 20;
-      const y = 152;
-      return { count: 1, points: [[x, y]] };
+    const instances = Project?.data?.hitboxInstances || [];
+    const objs = Project?.data?.hitboxObjects || [];
+    const heroIds = new Set((Project?.data?.characters || []).filter(c => (c.name||"").toLowerCase().includes("hero")).map(c => c.id));
+    const enemySpawns = playIdxs.map((gi) => {
+      const scr = screens[gi];
+      const pts = instances.filter(inst => {
+        if (!scr || inst.screenId !== scr.id) return false;
+        if (inst.characterId && heroIds.has(inst.characterId)) return false;
+        // spawn de objeto kind spawn (inimigo) ou qualquer instance com characterId nao-hero
+        if (inst.characterId) return true;
+        const oid = inst.objectId || inst.hitboxObjectId;
+        const o = objs.find(x => x.id === oid);
+        if (o && o.kind === "spawn" && o.characterId && !heroIds.has(o.characterId)) return true;
+        return false;
+      }).map(inst => [inst.x|0, inst.y|0]);
+      return { count: Math.min(4, pts.length), points: pts.slice(0, 4) };
     });
-    // se existir hitboxInstances no projeto, usar
-    try {
-      const instances = Project?.data?.hitboxInstances || [];
-      const objs = Project?.data?.hitboxObjects || [];
-      const enemyObjIds = new Set(objs.filter(o => o.kind === "spawn" && o.characterId && o.characterId !== "char_1787145214756").map(o => o.id));
-      if(instances.length && enemyObjIds.size){
-        playIdxs.forEach((gi, pi) => {
-          const scr = screens[gi];
-          const pts = instances.filter(inst => {
-            if(inst.screenId && scr && inst.screenId !== scr.id) return false;
-            return enemyObjIds.has(inst.objectId || inst.hitboxObjectId);
-          }).map(inst => [inst.x|0, inst.y|0]);
-          if(pts.length) enemySpawns[pi] = { count: Math.min(4, pts.length), points: pts.slice(0,4) };
-        });
-      }
-    } catch(e){}
 
     enemySpawns.forEach((es, pi) => {
       L.push(`EnemyData_${pi}:`);

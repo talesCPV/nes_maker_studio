@@ -83,6 +83,7 @@ const Project = {
       // em Regras (permite dizer QUAL hitbox toca QUAL, não só "algum hitbox de dano tocou").
       rules: [],
       hitboxObjects: [],
+      hitboxInstances: [], // spawns colocados (level-design / backgrounds): {id,screenId,characterId,x,y,hitboxObjectId}
       menus: [],
       // Tabelas de força de pulo/velocidade - o usuário monta níveis nomeados aqui (ex:
       // "Pulo Fraco"=20, "Pulo Forte"=40) e vincula cada personagem a um nível padrão em
@@ -315,6 +316,7 @@ const Project = {
       if(!json.events) json.events = this.defaultData().events;
       if(!json.rules) json.rules = [];
       if(!json.hitboxObjects) json.hitboxObjects = [];
+      if(!json.hitboxInstances) json.hitboxInstances = [];
       if(!json.menus) json.menus = [];
       if(!json.jumpForces) json.jumpForces = [];
       if(!json.speedLevels) json.speedLevels = [];
