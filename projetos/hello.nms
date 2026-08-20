@@ -14856,15 +14856,15 @@
         256,
         256,
         256,
-        256,
-        256,
-        256,
-        256,
-        256,
-        256,
-        256,
-        256,
-        256,
+        258,
+        261,
+        261,
+        261,
+        261,
+        261,
+        261,
+        261,
+        261,
         261,
         261,
         256,
@@ -14888,15 +14888,15 @@
         256,
         256,
         256,
-        256,
-        256,
-        256,
-        256,
-        256,
-        256,
-        256,
-        256,
-        256,
+        258,
+        261,
+        261,
+        261,
+        261,
+        261,
+        261,
+        261,
+        261,
         261,
         261,
         256,
@@ -14921,16 +14921,16 @@
         261,
         261,
         261,
-        261,
-        261,
-        261,
-        261,
-        261,
-        261,
-        261,
-        261,
-        261,
-        261,
+        259,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
         256,
         256,
         256,
@@ -14953,39 +14953,7 @@
         261,
         261,
         261,
-        261,
-        261,
-        261,
-        261,
-        261,
-        261,
-        261,
-        261,
-        261,
-        261,
-        256,
-        256,
-        256,
-        256,
-        256,
-        256,
-        256,
-        256,
-        256,
-        258,
         259,
-        256,
-        256,
-        256,
-        256,
-        258,
-        259,
-        256,
-        256,
-        256,
-        256,
-        256,
-        256,
         256,
         256,
         256,
@@ -15063,10 +15031,10 @@
         256,
         256,
         256,
-        261,
-        261,
-        261,
-        261,
+        256,
+        256,
+        256,
+        256,
         256,
         258,
         259,
@@ -15123,10 +15091,10 @@
         256,
         256,
         256,
-        261,
-        261,
-        261,
-        261,
+        256,
+        256,
+        256,
+        256,
         261,
         261,
         261,
@@ -15181,10 +15149,42 @@
         256,
         256,
         256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
         261,
         261,
         261,
         261,
+        261,
+        261,
+        261,
+        261,
+        256,
+        258,
+        259,
+        256,
+        256,
+        256,
+        256,
+        258,
+        259,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        256,
+        261,
+        261,
+        256,
+        256,
         261,
         261,
         261,
@@ -15215,8 +15215,8 @@
         256,
         261,
         261,
-        261,
-        261,
+        256,
+        256,
         261,
         261,
         261,
@@ -15247,8 +15247,8 @@
         261,
         261,
         261,
-        261,
-        261,
+        256,
+        256,
         261,
         261,
         261,
@@ -15279,8 +15279,8 @@
         261,
         261,
         261,
-        261,
-        261,
+        256,
+        256,
         261,
         261,
         261,
@@ -15311,8 +15311,8 @@
         261,
         261,
         261,
-        261,
-        261,
+        256,
+        256,
         261,
         261,
         261,
@@ -15343,6 +15343,8 @@
         261,
         261,
         261,
+        256,
+        256,
         261,
         261,
         261,
@@ -15373,6 +15375,8 @@
         261,
         261,
         261,
+        256,
+        256,
         261,
         261,
         261,
@@ -15403,6 +15407,8 @@
         261,
         261,
         261,
+        256,
+        256,
         261,
         261,
         261,
@@ -15433,6 +15439,8 @@
         261,
         261,
         261,
+        256,
+        256,
         261,
         261,
         261,
@@ -15463,16 +15471,8 @@
         261,
         261,
         261,
-        261,
-        261,
-        261,
-        261,
-        261,
-        261,
-        261,
-        261,
-        261,
-        261,
+        256,
+        256,
         261,
         261,
         261,
@@ -15553,7 +15553,7 @@
       "textLayers": [],
       "hitboxInstances": [],
       "chrPage": 1,
-      "created": 1787144968094,
+      "created": 1787248706800,
       "collisionMap": [
         0,
         0,
@@ -15888,26 +15888,17 @@
         0,
         0,
         0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
         1,
         1,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
         0,
         0,
         0,
@@ -15929,8 +15920,17 @@
         0,
         0,
         0,
+        1,
         1,
         1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
         0,
         0,
         0,
@@ -15946,12 +15946,6 @@
         0,
         0,
         0,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
         1,
         1,
         1,
@@ -15960,9 +15954,6 @@
         1,
         1,
         1,
-        1,
-        1,
-        1,
         0,
         0,
         0,
@@ -15972,21 +15963,21 @@
         0,
         0,
         0,
-        1,
-        1,
         0,
         0,
         0,
         0,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
+        0,
+        0,
+        0,
+        0,
+        0,
         1,
         1,
+        0,
+        0,
+        0,
+        0,
         1,
         1,
         1,
@@ -15995,6 +15986,13 @@
         1,
         1,
         1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
         0,
         0,
         0,
@@ -16004,6 +16002,8 @@
         0,
         0,
         0,
+        0,
+        0,
         1,
         1,
         0,
@@ -16213,10 +16213,10 @@
         0,
         0,
         0,
-        1,
         1,
         1,
-        1,
+        0,
+        0,
         1,
         1,
         1,
@@ -16245,10 +16245,10 @@
         0,
         0,
         0,
-        1,
         1,
         1,
-        1,
+        0,
+        0,
         1,
         1,
         1,
@@ -16279,8 +16279,8 @@
         1,
         1,
         1,
-        1,
-        1,
+        0,
+        0,
         1,
         1,
         1,
@@ -16311,8 +16311,8 @@
         1,
         1,
         1,
-        1,
-        1,
+        0,
+        0,
         1,
         1,
         1,
@@ -16335,7 +16335,6 @@
         0,
         0,
         0,
-        1,
         1,
         1,
         1,
@@ -16344,7 +16343,8 @@
         1,
         1,
         1,
-        1,
+        0,
+        0,
         1,
         1,
         1,
@@ -16367,12 +16367,6 @@
         0,
         0,
         0,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
         1,
         1,
         1,
@@ -16381,10 +16375,8 @@
         1,
         1,
         1,
-        1,
-        1,
-        1,
-        1,
+        0,
+        0,
         1,
         1,
         1,
@@ -16415,6 +16407,8 @@
         1,
         1,
         1,
+        0,
+        0,
         1,
         1,
         1,
@@ -16445,6 +16439,8 @@
         1,
         1,
         1,
+        0,
+        0,
         1,
         1,
         1,
@@ -16475,6 +16471,8 @@
         1,
         1,
         1,
+        0,
+        0,
         1,
         1,
         1,
@@ -16505,6 +16503,8 @@
         1,
         1,
         1,
+        0,
+        0,
         1,
         1,
         1,
@@ -19723,7 +19723,9 @@
           ]
         }
       ],
-      "created": 1787145214756
+      "created": 1787145214756,
+      "jumpForceId": "jf_1787249781892",
+      "speedId": "sp_1787249791876"
     },
     {
       "id": "char_1787148214942",
@@ -19772,7 +19774,7 @@
         {
           "id": "idle",
           "name": "Idle",
-          "fps": 7,
+          "fps": 8,
           "loop": true,
           "frames": [
             {
@@ -19802,7 +19804,9 @@
           ]
         }
       ],
-      "created": 1787148214942
+      "created": 1787148214942,
+      "jumpForceId": "jf_1787249781892",
+      "speedId": "sp_1787249791876"
     }
   ],
   "cheats": [],
@@ -19865,30 +19869,6 @@
       "builtin": true
     },
     {
-      "id": "ev_hit_solido",
-      "name": "Hitbox: Sólido",
-      "category": "hitbox",
-      "builtin": true
-    },
-    {
-      "id": "ev_hit_plataforma",
-      "name": "Hitbox: Plataforma",
-      "category": "hitbox",
-      "builtin": true
-    },
-    {
-      "id": "ev_hit_dano",
-      "name": "Hitbox: Dano",
-      "category": "hitbox",
-      "builtin": true
-    },
-    {
-      "id": "ev_hit_warp",
-      "name": "Hitbox: Warp",
-      "category": "hitbox",
-      "builtin": true
-    },
-    {
       "id": "ev_1787146398356",
       "name": "start: Press Start",
       "category": "menu",
@@ -19902,8 +19882,10 @@
       "scope": "phase_1787142538003",
       "steps": [
         {
-          "type": "if_event",
-          "eventId": "ev_hit_dano"
+          "type": "if_hitbox",
+          "eventId": "ev_hit_dano",
+          "hitboxA": "char_char_1787145214756_hb_1787148543664",
+          "hitboxB": "obj_hb_1787145574004"
         },
         {
           "type": "sub_var",
@@ -19916,6 +19898,17 @@
           "eventId": "",
           "actionId": "spawn_character",
           "targetId": "hb_1787145612650"
+        },
+        {
+          "type": "action",
+          "eventId": "",
+          "actionId": "play_sound",
+          "targetId": "song_mt04mdzzcaol"
+        },
+        {
+          "type": "if_hitbox",
+          "eventId": "",
+          "hitboxA": "char_char_1787145214756_hb_body"
         }
       ]
     },
@@ -20025,6 +20018,7 @@
         "name": "dr-wily-stage-1",
         "loop": true,
         "baseFrames": 21,
+        "typeActivation": {},
         "channels": [
           {
             "id": "ch_mt04mdzzycg9",
@@ -21659,474 +21653,6 @@
               {
                 "note": "C#3",
                 "figure": "quarter"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "quarter"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "quarter"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "quarter"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "quarter"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "quarter"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "quarter"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "sixteenth"
-              },
-              {
-                "note": "C#3",
-                "figure": "sixteenth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "quarter"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "quarter"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "quarter"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "quarter"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "eighth"
-              },
-              {
-                "note": "A2",
-                "figure": "quarter"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "quarter"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "quarter"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "sixteenth"
-              },
-              {
-                "note": "C#3",
-                "figure": "sixteenth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
-              },
-              {
-                "note": "B2",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#3",
-                "figure": "eighth"
               }
             ]
           },
@@ -23309,19 +22835,19 @@
                 "figure": "eighth"
               },
               {
-                "note": "REST",
+                "note": "C#6",
                 "figure": "eighth"
               },
               {
-                "note": "REST",
+                "note": "C#6",
                 "figure": "quarter"
               },
               {
-                "note": "REST",
+                "note": "C#6",
                 "figure": "quarter"
               },
               {
-                "note": "REST",
+                "note": "C#6",
                 "figure": "quarter"
               },
               {
@@ -23763,474 +23289,6 @@
               {
                 "note": "REST",
                 "figure": "quarter"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "E4",
-                "figure": "eighth"
-              },
-              {
-                "note": "E4",
-                "figure": "quarter"
-              },
-              {
-                "note": "E4",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "E4",
-                "figure": "quarter"
-              },
-              {
-                "note": "E4",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "G#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "F#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "G#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "E4",
-                "figure": "eighth"
-              },
-              {
-                "note": "E4",
-                "figure": "quarter"
-              },
-              {
-                "note": "E4",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "G#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "F#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "E4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "F#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "quarter"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "F#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "F#4",
-                "figure": "quarter"
-              },
-              {
-                "note": "F#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "D#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "G#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "F#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "E4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "D#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#5",
-                "figure": "eighth"
-              },
-              {
-                "note": "G#5",
-                "figure": "eighth"
-              },
-              {
-                "note": "B5",
-                "figure": "eighth"
-              },
-              {
-                "note": "A#5",
-                "figure": "quarter"
-              },
-              {
-                "note": "A#5",
-                "figure": "eighth"
-              },
-              {
-                "note": "A#5",
-                "figure": "sixteenth"
-              },
-              {
-                "note": "REST",
-                "figure": "sixteenth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#5",
-                "figure": "eighth"
-              },
-              {
-                "note": "G#5",
-                "figure": "eighth"
-              },
-              {
-                "note": "B5",
-                "figure": "eighth"
-              },
-              {
-                "note": "A#5",
-                "figure": "quarter"
-              },
-              {
-                "note": "B5",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#6",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "E4",
-                "figure": "eighth"
-              },
-              {
-                "note": "E4",
-                "figure": "quarter"
-              },
-              {
-                "note": "E4",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "E4",
-                "figure": "quarter"
-              },
-              {
-                "note": "E4",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "G#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "F#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "G#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "E4",
-                "figure": "eighth"
-              },
-              {
-                "note": "E4",
-                "figure": "quarter"
-              },
-              {
-                "note": "E4",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "G#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "F#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "E4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "F#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "quarter"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "F#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "F#4",
-                "figure": "quarter"
-              },
-              {
-                "note": "F#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "D#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "G#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "F#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "E4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "D#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#4",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#5",
-                "figure": "eighth"
-              },
-              {
-                "note": "G#5",
-                "figure": "eighth"
-              },
-              {
-                "note": "B5",
-                "figure": "eighth"
-              },
-              {
-                "note": "A#5",
-                "figure": "quarter"
-              },
-              {
-                "note": "A#5",
-                "figure": "eighth"
-              },
-              {
-                "note": "A#5",
-                "figure": "sixteenth"
-              },
-              {
-                "note": "REST",
-                "figure": "sixteenth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#5",
-                "figure": "eighth"
-              },
-              {
-                "note": "G#5",
-                "figure": "eighth"
-              },
-              {
-                "note": "B5",
-                "figure": "eighth"
-              },
-              {
-                "note": "A#5",
-                "figure": "eighth"
-              },
-              {
-                "note": "A#5",
-                "figure": "eighth"
-              },
-              {
-                "note": "B5",
-                "figure": "eighth"
-              },
-              {
-                "note": "C#6",
-                "figure": "eighth"
               }
             ]
           },
@@ -25867,482 +24925,63 @@
               {
                 "note": "REST",
                 "figure": "quarter"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "quarter"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "quarter"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "quarter"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "quarter"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "quarter"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "quarter"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "sixteenth"
-              },
-              {
-                "note": "REST",
-                "figure": "sixteenth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "quarter"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "quarter"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "quarter"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "quarter"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "quarter"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "quarter"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "quarter"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "sixteenth"
-              },
-              {
-                "note": "REST",
-                "figure": "sixteenth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
-              },
-              {
-                "note": "REST",
-                "figure": "eighth"
               }
             ]
           }
-        ],
-        "typeActivation": {}
+        ]
       }
     ],
-    "asm": "; ==========================================\n; DATA.ASM - NES Sound Library\n; Pecas: 1 (1 songs, 0 sfx)\n; ==========================================\n\n.segment \"RODATA\"\n\n; ========== SONG: dr-wily-stage-1 (song_mt04mdzzcaol) ==========\n\n; --- Pulse 1 ---\nPitchTableLo_Pulse1_dr_wily_stage_1:\n    .byte $00, $26, $F8, $89, $F9, $56, $4D, $9D, $4C\n\nPitchTableHi_Pulse1_dr_wily_stage_1:\n    .byte $00, $03, $03, $03, $02, $03, $06, $05, $05\n\nScale_Pulse1_dr_wily_stage_1:\n    .byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3, 5, 5, 5, 5, 5, 5, 5, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 6, 6, 6, 7, 7, 8, 8, 7, 6, 6, 6, 7, 7, 8, 8, 7, 7, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 1, $FF\n\nTime_Pulse1_dr_wily_stage_1:\n    .byte 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 21, 11, 11, 21, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11, 21, 21, 11, 5, 5, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 21, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 21, 11, 11, 21, 21, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 21, 11, 5, 5, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 21, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 5, 5, 21, 21, 21, 21, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11\n\n; --- Pulse 2 ---\nPitchTableLo_Pulse2_dr_wily_stage_1:\n    .byte $00, $52, $93, $0C, $2D, $67, $C9, $86, $70, $77, $64, $54\n    .byte $7E, $A9, $6A, $59, $42, $E1, $FD\n\nPitchTableHi_Pulse2_dr_wily_stage_1:\n    .byte $00, $01, $01, $01, $01, $01, $00, $00, $00, $00, $00, $00\n    .byte $00, $00, $00, $00, $00, $00, $00\n\nScale_Pulse2_dr_wily_stage_1:\n    .byte 0, 1, 1, 1, 2, 0, 2, 1, 1, 2, 0, 3, 4, 3, 0, 1, 1, 1, 2, 0, 3, 0, 4, 0, 1, 0, 4, 0, 0, 4, 4, 4, 5, 0, 3, 0, 4, 0, 1, 0, 5, 0, 2, 0, 6, 7, 8, 9, 9, 9, 0, 0, 6, 7, 8, 9, 8, 10, 0, 1, 1, 1, 2, 0, 2, 1, 1, 2, 0, 3, 4, 3, 0, 1, 1, 1, 2, 0, 3, 0, 4, 0, 1, 0, 4, 0, 0, 4, 4, 4, 5, 0, 3, 0, 4, 0, 1, 0, 5, 0, 2, 0, 6, 7, 8, 9, 9, 9, 0, 0, 6, 7, 8, 9, 8, 10, 10, 10, 10, 10, 0, 8, 11, 11, 10, 10, 8, 8, 10, 10, 8, 8, 8, 0, 8, 10, 10, 7, 12, 7, 13, 13, 7, 8, 10, 10, 10, 10, 0, 8, 11, 11, 10, 10, 8, 8, 10, 10, 8, 8, 8, 8, 0, 8, 7, 8, 0, 0, 14, 14, 15, 16, 16, 16, 0, 0, 1, 1, 1, 2, 0, 2, 1, 1, 1, 2, 0, 3, 4, 3, 0, 1, 1, 1, 2, 0, 3, 0, 4, 0, 1, 0, 4, 0, 0, 0, 4, 4, 4, 5, 0, 3, 0, 4, 0, 1, 0, 5, 0, 2, 0, 6, 7, 8, 9, 9, 9, 0, 0, 6, 7, 8, 9, 8, 10, 0, 1, 1, 1, 2, 0, 2, 1, 1, 1, 2, 0, 3, 4, 3, 0, 1, 1, 1, 2, 0, 3, 0, 4, 0, 1, 0, 4, 0, 0, 4, 4, 4, 5, 0, 3, 0, 4, 0, 1, 0, 5, 0, 2, 0, 6, 7, 8, 9, 9, 9, 0, 0, 6, 7, 8, 9, 8, 0, 0, 0, 0, 8, 11, 11, 10, 10, 8, 8, 10, 10, 8, 8, 8, 0, 8, 10, 10, 7, 12, 7, 13, 13, 7, 8, 10, 10, 10, 10, 0, 8, 11, 11, 10, 10, 8, 8, 10, 10, 8, 8, 8, 8, 0, 8, 7, 8, 0, 0, 14, 14, 15, 16, 16, 1, 0, 5, 1, 5, 1, 6, 17, 17, 18, 18, 3, 3, 4, 4, 4, 0, 3, 3, 0, 3, 0, 0, 4, 0, 3, 3, 0, 3, 0, 4, 1, 0, 1, 1, 5, 1, 6, 17, 17, 18, 18, 3, 3, 4, 4, 5, 1, 5, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2, 0, 2, 1, 1, 2, 0, 3, 4, 3, 0, 1, 1, 1, 2, 0, 3, 0, 4, 0, 1, 0, 4, 0, 0, 4, 4, 4, 5, 0, 3, 0, 4, 0, 1, 0, 5, 0, 2, 0, 6, 7, 8, 9, 9, 9, 0, 0, 6, 7, 8, 9, 8, 10, 0, 1, 1, 1, 2, 0, 2, 1, 1, 2, 0, 3, 4, 3, 0, 1, 1, 1, 2, 0, 3, 0, 4, 0, 1, 0, 4, 0, 0, 4, 4, 4, 5, 0, 3, 0, 4, 0, 1, 0, 5, 0, 2, 0, 6, 7, 8, 9, 9, 9, 0, 0, 6, 7, 8, 9, 9, 8, 10, $FF\n\nTime_Pulse2_dr_wily_stage_1:\n    .byte 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 21, 11, 11, 21, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11, 21, 21, 11, 5, 5, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 21, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 21, 11, 11, 21, 21, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 21, 11, 5, 5, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 21, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 5, 5, 21, 21, 21, 21, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11\n\n; --- Triangle ---\nPitchTableLo_Triangle_dr_wily_stage_1:\n    .byte $00, $1A, $5C, $C4, $FB, $A6, $CE, $93, $52, $0C, $2D, $67\n\nPitchTableHi_Triangle_dr_wily_stage_1:\n    .byte $00, $02, $02, $01, $01, $02, $02, $01, $01, $01, $01, $01\n\nScale_Triangle_dr_wily_stage_1:\n    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 3, 3, 4, 4, 1, 1, 4, 4, 1, 1, 1, 1, 1, 1, 2, 3, 3, 4, 4, 1, 1, 4, 4, 5, 5, 5, 5, 5, 2, 1, 6, 6, 6, 6, 6, 6, 6, 6, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7, 7, 7, 7, 3, 7, 0, 8, 8, 8, 9, 10, 8, 11, 7, 7, 7, 7, 7, 3, 7, 0, 8, 8, 8, 8, 10, 8, 11, 11, 11, 11, 7, 3, 9, 9, 9, 10, 10, 8, 8, 11, 11, 11, 8, 11, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, $FF\n\nTime_Triangle_dr_wily_stage_1:\n    .byte 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 21, 11, 11, 21, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11, 21, 21, 11, 5, 5, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 21, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 21, 11, 11, 21, 21, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 21, 11, 5, 5, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 21, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 5, 5, 21, 21, 21, 21, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 11, 21, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 21, 11, 5, 5, 11, 11, 11, 11, 11, 11, 11, 11\n"
+    "asm": ""
   },
-  "savedAt": 1787149094150
+  "savedAt": 1787249835945,
+  "physicsTables": {
+    "jumps": [
+      {
+        "id": "j1",
+        "name": "Pulo Fraco",
+        "value": 4
+      },
+      {
+        "id": "j2",
+        "name": "Pulo Normal",
+        "value": 7
+      },
+      {
+        "id": "j3",
+        "name": "Pulo Super",
+        "value": 12
+      }
+    ],
+    "speeds": [
+      {
+        "id": "s1",
+        "name": "Lento",
+        "value": 1
+      },
+      {
+        "id": "s2",
+        "name": "Normal",
+        "value": 2
+      },
+      {
+        "id": "s3",
+        "name": "Rápido",
+        "value": 3
+      }
+    ]
+  },
+  "jumpForces": [
+    {
+      "id": "jf_1787249781892",
+      "name": "Pulo",
+      "value": 20
+    }
+  ],
+  "speedLevels": [
+    {
+      "id": "sp_1787249791876",
+      "name": "walk",
+      "value": 10
+    }
+  ]
 }

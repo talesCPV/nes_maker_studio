@@ -75,15 +75,18 @@ const Project = {
         { id:'ev_a', name:'Botão A', category:'input', builtin:true },
         { id:'ev_b', name:'Botão B', category:'input', builtin:true },
         { id:'ev_start', name:'Start', category:'input', builtin:true },
-        { id:'ev_select', name:'Select', category:'input', builtin:true },
-        { id:'ev_hit_solido', name:'Hitbox: Sólido', category:'hitbox', builtin:true },
-        { id:'ev_hit_plataforma', name:'Hitbox: Plataforma', category:'hitbox', builtin:true },
-        { id:'ev_hit_dano', name:'Hitbox: Dano', category:'hitbox', builtin:true },
-        { id:'ev_hit_warp', name:'Hitbox: Warp', category:'hitbox', builtin:true }
+        { id:'ev_select', name:'Select', category:'input', builtin:true }
       ],
+      // A categoria 'hitbox' em Eventos foi substituída pelo passo dedicado "Se hitbox"
+      // em Regras (permite dizer QUAL hitbox toca QUAL, não só "algum hitbox de dano tocou").
       rules: [],
       hitboxObjects: [],
       menus: [],
+      // Tabelas de força de pulo/velocidade - o usuário monta níveis nomeados aqui (ex:
+      // "Pulo Fraco"=20, "Pulo Forte"=40) e vincula cada personagem a um nível padrão em
+      // Personagens; Regras pode trocar o nível em tempo real (power-up), via Ação.
+      jumpForces: [],
+      speedLevels: [],
       gameConfig: { lives: 3, continues: 3, energy: 16 },
       // Pool de instâncias em memória (player + inimigos + itens + tiros compartilham a
       // mesma estrutura de slot). Reservado no início da zero page - ver Programação > Variáveis.
@@ -311,6 +314,24 @@ const Project = {
       if(!json.rules) json.rules = [];
       if(!json.hitboxObjects) json.hitboxObjects = [];
       if(!json.menus) json.menus = [];
+      if(!json.jumpForces) json.jumpForces = [];
+      if(!json.speedLevels) json.speedLevels = [];
+      // Migração: categoria 'hitbox' em Eventos foi substituída pelo passo dedicado
+      // "Se hitbox" em Regras (dois seletores: qual hitbox toca qual). Passos antigos
+      // que checavam "SE evento = Hitbox: X" viram "SE hitbox [vazio] toca [vazio]" -
+      // a checagem específica (qual toca qual) não existia no formato antigo, então o
+      // usuário precisa escolher o par depois de carregar, mas a regra não se perde.
+      const hitboxEventIds = new Set((json.events||[]).filter(e=>e.category==='hitbox').map(e=>e.id));
+      if(hitboxEventIds.size > 0){
+        (json.rules||[]).forEach(r=>{
+          (r.steps||[]).forEach(s=>{
+            if(s.type==='if_event' && hitboxEventIds.has(s.eventId)){
+              s.type='if_hitbox'; s.hitboxA=''; s.hitboxB=''; delete s.eventId;
+            }
+          });
+        });
+        json.events = (json.events||[]).filter(e=>e.category!=='hitbox');
+      }
       if(json.maxInstances == null) json.maxInstances = 10;
       json.maxInstances = Math.max(1, Math.min(20, parseInt(json.maxInstances) || 10));
       this.data = json;

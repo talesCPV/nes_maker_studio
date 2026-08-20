@@ -74,6 +74,7 @@ const CHAR = (() => {
     const name=prompt('Nome do personagem:',`Personagem ${data().length+1}`); if(!name)return;
     const c={id:'char_'+Date.now(),name:name.trim(),type:'player',origin:{x:0,y:0},hitbox:{x:0,y:0,w:8,h:16},
       hitboxes:[{id:'hb_body',name:'Corpo',type:'body',x:0,y:0,w:8,h:16}],
+      jumpForceId:null, speedId:null,
       animations:[{id:'idle',name:'Idle',fps:8,loop:true,frames:[]}],created:Date.now()};
     data().push(c); selectedId=c.id; selectedAnim=0; selectedFrame=0; render();
   }
@@ -111,6 +112,8 @@ const CHAR = (() => {
     const c=current(); if(!c)return;
     if(path==='name')c.name=val;
     if(path==='type')c.type=val;
+    if(path==='jumpForceId')c.jumpForceId=val||null;
+    if(path==='speedId')c.speedId=val||null;
     if(path==='fps')anim().fps=Math.max(1,Math.min(60,+val||8));
     if(path==='loop')anim().loop=!!val;
     renderList();
@@ -196,6 +199,19 @@ const CHAR = (() => {
       <label style="font-size:10px;color:#777">Nome</label><input value="${esc(c.name)}" oninput="CHAR.setField('name',this.value)" style="width:100%;box-sizing:border-box;background:#000;color:#fff;border:1px solid #444;padding:6px;margin:3px 0 8px">
       <label style="font-size:10px;color:#777">Tipo</label><select onchange="CHAR.setField('type',this.value)" style="width:100%;background:#000;color:#fff;border:1px solid #444;padding:6px;margin:3px 0 10px">
         ${['player','enemy','item','npc','boss'].map(t=>`<option ${c.type===t?'selected':''} value="${t}">${t}</option>`).join('')}</select>
+      <div style="display:flex;gap:7px;margin-bottom:10px">
+        <div style="flex:1"><label style="font-size:10px;color:#777">Força de Pulo</label>
+          <select onchange="CHAR.setField('jumpForceId',this.value)" style="width:100%;background:#000;color:#fff;border:1px solid #444;padding:6px;box-sizing:border-box">
+            <option value="">— nenhuma —</option>
+            ${(Project.data.jumpForces||[]).map(f=>`<option value="${f.id}" ${c.jumpForceId===f.id?'selected':''}>${esc(f.name)} (${f.value})</option>`).join('')}
+          </select></div>
+        <div style="flex:1"><label style="font-size:10px;color:#777">Velocidade</label>
+          <select onchange="CHAR.setField('speedId',this.value)" style="width:100%;background:#000;color:#fff;border:1px solid #444;padding:6px;box-sizing:border-box">
+            <option value="">— nenhuma —</option>
+            ${(Project.data.speedLevels||[]).map(f=>`<option value="${f.id}" ${c.speedId===f.id?'selected':''}>${esc(f.name)} (${f.value})</option>`).join('')}
+          </select></div>
+      </div>
+      ${(!Project.data.jumpForces?.length && !Project.data.speedLevels?.length) ? '<div style="font-size:9px;color:#666;margin:-6px 0 10px">Cadastre níveis em Dashboard pra aparecerem aqui.</div>' : ''}
       <div style="font-size:10px;color:#4ec9b0;margin:10px 0 5px">HITBOXES <span style="color:#666">(desenhadas no preview)</span></div>
       ${ensureHitboxes(c).map(hb=>`
         <div style="background:#111;border:1px solid #333;border-radius:5px;padding:6px;margin-bottom:6px">

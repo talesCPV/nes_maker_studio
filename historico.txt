@@ -62,7 +62,17 @@ O que falta fazer:
 * Em program.js-> eventos->input colocar as opções P1-IDLE e P2-IDLE
 * Como já definimos, o pool de instâncias e a fisica em dashboard, poderiamos ter dentro de program.js-> "Ação" a opção "Mover", abrir um select [personagens], um select com as opções [cima,baixo, esq... pulo] e mais um select com as animações do personagem selecionado.
 * Juntar Hitbox|spaw(backgrounds.js) + objeto(backgrounds.js) + objetos|spaw(program.js) tudo em uma ferramenta só de spaw em backgrounds.js.O usuário clica num ponto da tela, ele já marca o ponto como spaw, cria o objeto e já pede pro usuario selecionar um personagem para ele
-
+* Em regras poderiamos ter +3 hitbox nativos: out of bounds, on ground e enter screen. Esses só apareceriam na programação e seus nomes já são auto explicativos.
+* Criar uma Ação "Matar" -> seleciona [personagens]
 
 /* Ideias futuras */
 * Em computação não existem numeros randômicos, mas pode-se implementar um contador não a nivel de ciclo de maquina mas a nivel de scan de tela que espera a primeira interação do usuario, esta variável pode ser usada para mudar a dinâmica dos inimigos
+
+
+/* Ações imediatas */
+ Em program.js:
+* Em eventos->input colocar as opções P1-IDLE e P2-IDLE
+* Criar uma Ação "Matar" -> seleciona [personagens]
+* Em regras poderiamos ter +3 hitbox nativos: Out Of Bounds, On Ground e Enter Screen. Esses só apareceriam na programação e seus nomes já são auto explicativos.
+* Adicionar em "Ação" a opção "Mover", abrir um select [personagens], um select com as opções [cima,baixo, esq... pulo] e mais um select com as animações do personagem selecionado.
+* Juntar Hitbox|spaw(backgrounds.js) + objeto(backgrounds.js) + objetos|spaw(program.js) tudo em uma ferramenta só de spaw em backgrounds.js.O usuário clica num ponto da tela, ele já marca o ponto como spaw, cria o objeto e já pede pro usuario selecionar um personagem para ele

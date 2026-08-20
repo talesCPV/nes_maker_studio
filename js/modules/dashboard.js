@@ -1,6 +1,6 @@
 // ==========================================
 // MÓDULO DASHBOARD E GERENCIAMENTO DE TRUQUES
-// v0.7.1 - Bank Switch selector por fase + Tabelas de Física
+// v0.7.1 - Bank Switch selector por fase
 // ==========================================
 
 const DASHBOARD = (() => {
@@ -67,6 +67,33 @@ const DASHBOARD = (() => {
                 </div>
               </div>
 
+              <div style="margin:10px 0;padding:10px;background:#111;border:1px solid #333;border-radius:6px">
+                <label style="font-size:10px;color:#888;display:block;margin-bottom:6px">Tabela de Força de Pulo</label>
+                <div style="font-size:9px;color:#666;margin-bottom:6px;line-height:1.4">
+                  Níveis nomeados de força de pulo (0-255). Vincule um nível padrão a cada personagem em
+                  Personagens; Programação pode trocar o nível em tempo real via Ação (ex: power-up).
+                </div>
+                <div id="dashJumpForcesList" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px"></div>
+                <div style="display:flex;gap:5px">
+                  <input id="dashJumpForceName" type="text" placeholder="nome (ex: Pulo Fraco)" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px">
+                  <input id="dashJumpForceValue" type="number" min="0" max="255" value="20" placeholder="valor" style="width:70px;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px">
+                  <button class="btn-tool" onclick="DASHBOARD.addJumpForce()" style="background:#27ae60;color:#fff">+ Adicionar</button>
+                </div>
+              </div>
+
+              <div style="margin:10px 0;padding:10px;background:#111;border:1px solid #333;border-radius:6px">
+                <label style="font-size:10px;color:#888;display:block;margin-bottom:6px">Tabela de Velocidade</label>
+                <div style="font-size:9px;color:#666;margin-bottom:6px;line-height:1.4">
+                  Mesma ideia da força de pulo, mas pra velocidade de movimento (0-255).
+                </div>
+                <div id="dashSpeedLevelsList" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px"></div>
+                <div style="display:flex;gap:5px">
+                  <input id="dashSpeedLevelName" type="text" placeholder="nome (ex: Andando)" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px">
+                  <input id="dashSpeedLevelValue" type="number" min="0" max="255" value="10" placeholder="valor" style="width:70px;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px">
+                  <button class="btn-tool" onclick="DASHBOARD.addSpeedLevel()" style="background:#27ae60;color:#fff">+ Adicionar</button>
+                </div>
+              </div>
+
               <label style="font-size:11px;color:#888">Descrição</label>
               <textarea id="dashDesc" style="width:100%;height:60px;background:#000;color:#ccc;border:1px solid #444;border-radius:4px;padding:6px;margin:4px 0;font-size:11px;resize:vertical" placeholder="Sobre o jogo..."></textarea>
 
@@ -83,30 +110,6 @@ const DASHBOARD = (() => {
                 <div style="font-size:9px;color:#666;margin-top:4px;line-height:1.4">
                   Mirroring agora é definido <b style="color:#aaa">por fase</b>, conforme o tipo de scroll.
                 </div>
-              </div>
-            </div>
-
-            <!-- TABELAS DE FÍSICA (PULO E VELOCIDADE) -->
-            <div style="background:#111;border:1px solid #004422;border-radius:8px;padding:12px">
-              <h3 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">🏃 TABELAS DE FÍSICA (Global)</h3>
-              <div style="font-size:9px;color:#666;margin-bottom:8px;line-height:1.3">
-                Usado nas Ações do módulo Programação. Você cria as forças aqui e linka nos passos das regras.
-              </div>
-              
-              <div style="margin-bottom:10px">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                  <b style="font-size:10px;color:#ffcc00">Forças de Pulo</b>
-                  <button class="btn-tool" onclick="DASHBOARD.addPhysicsRow('jumps')" style="font-size:9px;padding:2px 6px;background:#27ae60;color:#fff">+ Força</button>
-                </div>
-                <div id="dashJumpTable" style="display:flex;flex-direction:column;gap:3px;max-height:100px;overflow:auto"></div>
-              </div>
-
-              <div>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                  <b style="font-size:10px;color:#ffcc00">Níveis de Velocidade</b>
-                  <button class="btn-tool" onclick="DASHBOARD.addPhysicsRow('speeds')" style="font-size:9px;padding:2px 6px;background:#27ae60;color:#fff">+ Nível</button>
-                </div>
-                <div id="dashSpeedTable" style="display:flex;flex-direction:column;gap:3px;max-height:100px;overflow:auto"></div>
               </div>
             </div>
 
@@ -228,6 +231,58 @@ const DASHBOARD = (() => {
     });
   }
 
+  // Tabelas de força de pulo/velocidade - mesmo padrão simples de lista+add usado em outros
+  // lugares do projeto (Programação: Variáveis, Objetos...).
+  function renderJumpForces(){
+    const el = document.getElementById('dashJumpForcesList'); if(!el || !Project.data) return;
+    const list = Project.data.jumpForces || [];
+    el.innerHTML = list.map(f => `
+      <div style="display:flex;gap:6px;align-items:center;background:#000;border:1px solid #333;border-radius:4px;padding:4px 6px">
+        <span style="flex:1;color:#fff;font-size:11px">${f.name}</span>
+        <span style="color:#4ec9b0;font-size:10px;font-family:monospace">${f.value}</span>
+        <button class="btn-tool" onclick="DASHBOARD.deleteJumpForce('${f.id}')" style="background:#7d2525;color:#fff;font-size:9px;padding:2px 5px">🗑</button>
+      </div>`).join('') || '<div style="color:#666;font-size:10px">Nenhum nível ainda.</div>';
+  }
+  function addJumpForce(){
+    const nameEl = document.getElementById('dashJumpForceName'); const valEl = document.getElementById('dashJumpForceValue');
+    const name = nameEl.value.trim(); if(!name || !Project.data) return;
+    if(!Project.data.jumpForces) Project.data.jumpForces = [];
+    let v = parseInt(valEl.value); if(isNaN(v)) v = 0; v = Math.max(0, Math.min(255, v));
+    Project.data.jumpForces.push({ id:'jf_'+Date.now(), name, value: v });
+    nameEl.value = ''; renderJumpForces();
+  }
+  function deleteJumpForce(id){
+    if(!Project.data?.jumpForces) return;
+    if(!confirm('Remover esse nível de pulo? Personagens/Regras que o usam ficam com referência quebrada.')) return;
+    Project.data.jumpForces = Project.data.jumpForces.filter(f=>f.id!==id);
+    renderJumpForces();
+  }
+
+  function renderSpeedLevels(){
+    const el = document.getElementById('dashSpeedLevelsList'); if(!el || !Project.data) return;
+    const list = Project.data.speedLevels || [];
+    el.innerHTML = list.map(f => `
+      <div style="display:flex;gap:6px;align-items:center;background:#000;border:1px solid #333;border-radius:4px;padding:4px 6px">
+        <span style="flex:1;color:#fff;font-size:11px">${f.name}</span>
+        <span style="color:#4ec9b0;font-size:10px;font-family:monospace">${f.value}</span>
+        <button class="btn-tool" onclick="DASHBOARD.deleteSpeedLevel('${f.id}')" style="background:#7d2525;color:#fff;font-size:9px;padding:2px 5px">🗑</button>
+      </div>`).join('') || '<div style="color:#666;font-size:10px">Nenhum nível ainda.</div>';
+  }
+  function addSpeedLevel(){
+    const nameEl = document.getElementById('dashSpeedLevelName'); const valEl = document.getElementById('dashSpeedLevelValue');
+    const name = nameEl.value.trim(); if(!name || !Project.data) return;
+    if(!Project.data.speedLevels) Project.data.speedLevels = [];
+    let v = parseInt(valEl.value); if(isNaN(v)) v = 0; v = Math.max(0, Math.min(255, v));
+    Project.data.speedLevels.push({ id:'sp_'+Date.now(), name, value: v });
+    nameEl.value = ''; renderSpeedLevels();
+  }
+  function deleteSpeedLevel(id){
+    if(!Project.data?.speedLevels) return;
+    if(!confirm('Remover esse nível de velocidade? Personagens/Regras que o usam ficam com referência quebrada.')) return;
+    Project.data.speedLevels = Project.data.speedLevels.filter(f=>f.id!==id);
+    renderSpeedLevels();
+  }
+
   function loadData(){
     if(!Project.data) return;
     const nameEl=document.getElementById('dashProjName');
@@ -257,11 +312,13 @@ const DASHBOARD = (() => {
     const bytesEl = document.getElementById('dashMaxInstancesBytes');
     if(bytesEl) bytesEl.textContent = maxInst*2;
 
+    renderJumpForces();
+    renderSpeedLevels();
+
     // Migração: .nms antigos tinham mirroring no nível do projeto.
     // Agora o mirroring vive em cada fase e é derivado do tipo de scroll.
     migratePhasesMirroring();
     updateStats();
-    renderPhysicsTables();
   }
 
   // Derive mirroring a partir do scroll da fase (regra de hardware NES)
@@ -304,54 +361,6 @@ const DASHBOARD = (() => {
     const chrLen = Project.data?.chr?.length || 8192;
     // Cada banco CHR no CNROM é de 8KB (2 páginas de 4KB)
     return Math.max(1, Math.ceil(chrLen / 8192));
-  }
-
-  function renderPhysicsTables(){
-    if(!Project.data.physicsTables) {
-      Project.data.physicsTables = {
-        jumps: [
-          { id: 'j1', name: 'Pulo Fraco', value: 4 }, 
-          { id: 'j2', name: 'Pulo Normal', value: 7 }, 
-          { id: 'j3', name: 'Pulo Super', value: 12 }
-        ],
-        speeds: [
-          { id: 's1', name: 'Lento', value: 1 }, 
-          { id: 's2', name: 'Normal', value: 2 }, 
-          { id: 's3', name: 'Rápido', value: 3 }
-        ]
-      };
-    }
-    renderPhysicsList('dashJumpTable', Project.data.physicsTables.jumps, 'jumps');
-    renderPhysicsList('dashSpeedTable', Project.data.physicsTables.speeds, 'speeds');
-  }
-
-  function renderPhysicsList(elId, list, type){
-    const el = document.getElementById(elId); if(!el) return;
-    el.innerHTML = list.map((item, i) => `
-      <div style="display:flex;gap:4px;align-items:center;background:#000;border:1px solid #222;border-radius:3px;padding:3px">
-        <input value="${item.name}" onchange="DASHBOARD.updatePhysics('${type}',${i},'name',this.value)" style="flex:1;background:#111;color:#fff;border:1px solid #333;border-radius:2px;padding:2px;font-size:9px">
-        <input type="number" value="${item.value}" min="0" max="16" onchange="DASHBOARD.updatePhysics('${type}',${i},'value',parseInt(this.value)||0)" style="width:40px;background:#111;color:#4ec9b0;border:1px solid #333;border-radius:2px;padding:2px;font-size:9px;text-align:center" title="Valor bruto pro 6502">
-        <button class="btn-tool" onclick="DASHBOARD.deletePhysics('${type}',${i})" style="background:#c0392b;color:#fff;font-size:8px;padding:1px 4px;cursor:pointer">🗑</button>
-      </div>
-    `).join('');
-  }
-
-  function addPhysicsRow(type){
-    if(!Project.data.physicsTables) Project.data.physicsTables = { jumps: [], speeds: [] };
-    const id = type === 'jumps' ? 'j_'+Date.now() : 's_'+Date.now();
-    Project.data.physicsTables[type].push({ id, name: 'Novo', value: 1 });
-    renderPhysicsTables();
-  }
-
-  function updatePhysics(type, idx, field, value){
-    if(!Project.data.physicsTables?.[type]?.[idx]) return;
-    Project.data.physicsTables[type][idx][field] = value;
-  }
-
-  function deletePhysics(type, idx){
-    if(!confirm('Remover essa linha?')) return;
-    Project.data.physicsTables[type].splice(idx, 1);
-    renderPhysicsTables();
   }
 
   function renderCheats(){
@@ -720,14 +729,11 @@ const DASHBOARD = (() => {
     updateCheatProp,
     appendCheatBtn,
     clearCheatBtns,
-    addPhysicsRow,
-    updatePhysics,
-    deletePhysics,
-    renderPhysicsTables,
     getPhases(){ return Project.data?.phases||[]; }, 
     loadPhases(arr){ if(Project.data){ Project.data.phases=arr||[]; migratePhasesMirroring(); } renderPhases(); }, 
     get selectedPhase(){ return selectedPhase; },
     getAvailableBanks,
-    mirroringFromScroll
+    mirroringFromScroll,
+    addJumpForce, deleteJumpForce, addSpeedLevel, deleteSpeedLevel
   };
 })();
