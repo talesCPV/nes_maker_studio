@@ -114,7 +114,7 @@ const BUILD = (() => {
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <div style="display:flex;gap:8px;align-items:center;padding:10px 12px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
-          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.9.5 • troca de tela</h3>
+          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.9.6 • paredes sólidas</h3>
           <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             <select id="buildModeSelect" onchange="BUILD.setBuildMode(this.value)" style="background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:4px;font-size:11px">
               <option value="game" selected>🎮 Jogo completo (Camada 1)</option>
@@ -558,8 +558,8 @@ const BUILD = (() => {
     }
 
     const L=[];
-    L.push("; NES Maker Studio - BUILD v0.9.5");
-    L.push("; NROM-256 | fisica | troca de tela nas bordas (hard cut)");
+    L.push("; NES Maker Studio - BUILD v0.9.6");
+    L.push("; NROM-256 | fisica + paredes | troca de tela nas bordas");
     L.push(`; Telas: ${screens.length} · CHR tiles: ${packed.usedCount}/256` + (packed.overflowCount?` · overflow ${packed.overflowCount}`:""));
     screens.forEach((s,i) => L.push(`;   [${i}] ${s.role} · ${s.name}`));
     if(music && musicChans) L.push(`; Musica: ${music.name} · ${musicChans.length} canal(is)`);
@@ -1016,23 +1016,85 @@ const BUILD = (() => {
     L.push("  RTS");
     L.push("");
 
-    // ---- update_player: input + gravidade + pulo (Camada 2) ----
+    // ---- is_solid: col_result em A → Z=1 se solido (tipo 1 ou 2) ----
+    L.push("is_solid:");
+    L.push("  CMP #1");
+    L.push("  BEQ is_yes");
+    L.push("  CMP #2");
+    L.push("  BEQ is_yes");
+    L.push("  LDA #0");
+    L.push("  RTS");
+    L.push("is_yes:");
+    L.push("  LDA #1");
+    L.push("  RTS");
+    L.push("");
+
+    // ---- check_wall_at: col_x ja setado; testa 2 pontos verticais no corpo ----
+    // retorna col_result=1 se QUALQUER ponto for solido
+    L.push("check_wall_at:");
+    L.push("  ; ponto superior (player_y + 4)");
+    L.push("  LDA player_y");
+    L.push("  CLC");
+    L.push("  ADC #4");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  STA col_y");
+    L.push("  JSR get_collision");
+    L.push("  LDA col_result");
+    L.push("  JSR is_solid");
+    L.push("  BNE cw_hit");
+    L.push("  ; ponto medio (player_y + 12)");
+    L.push("  LDA player_y");
+    L.push("  CLC");
+    L.push("  ADC #12");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  STA col_y");
+    L.push("  JSR get_collision");
+    L.push("  LDA col_result");
+    L.push("  JSR is_solid");
+    L.push("  BNE cw_hit");
+    L.push("  LDA #0");
+    L.push("  STA col_result");
+    L.push("  RTS");
+    L.push("cw_hit:");
+    L.push("  LDA #1");
+    L.push("  STA col_result");
+    L.push("  RTS");
+    L.push("");
+
+    // ---- update_player: input + gravidade + pulo + paredes ----
     L.push("update_player:");
     L.push("  LDA player_on");
     L.push("  BNE up_go");
     L.push("  RTS");
     L.push("up_go:");
-    L.push("  ; --- horizontal (pad level, nao so edge) ---");
+    L.push("  ; --- horizontal + colisao lateral ---");
     L.push("  LDA pad1");
     L.push("  AND #%01000000      ; Left bit6");
     L.push("  BEQ up_right");
     L.push("  LDA player_x");
     L.push("  CMP #8");
     L.push("  BCS up_left_move");
-    L.push("  ; borda esquerda → tela anterior");
     L.push("  JSR try_screen_left");
     L.push("  JMP up_jump");
     L.push("up_left_move:");
+    L.push("  ; tile X na borda esquerda proposta (x-3+2)");
+    L.push("  LDA player_x");
+    L.push("  SEC");
+    L.push("  SBC #3");
+    L.push("  CLC");
+    L.push("  ADC #2");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  STA col_x");
+    L.push("  JSR check_wall_at");
+    L.push("  LDA col_result");
+    L.push("  BNE up_right           ; bloqueado");
+    L.push("  LDA player_x");
     L.push("  SEC");
     L.push("  SBC #3");
     L.push("  STA player_x");
@@ -1045,10 +1107,23 @@ const BUILD = (() => {
     L.push("  LDA player_x");
     L.push("  CMP #232");
     L.push("  BCC up_right_move");
-    L.push("  ; borda direita → proxima tela");
     L.push("  JSR try_screen_right");
     L.push("  JMP up_jump");
     L.push("up_right_move:");
+    L.push("  ; tile X na borda direita proposta (x+3+13)");
+    L.push("  LDA player_x");
+    L.push("  CLC");
+    L.push("  ADC #3");
+    L.push("  CLC");
+    L.push("  ADC #13");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  STA col_x");
+    L.push("  JSR check_wall_at");
+    L.push("  LDA col_result");
+    L.push("  BNE up_jump            ; bloqueado");
+    L.push("  LDA player_x");
     L.push("  CLC");
     L.push("  ADC #3");
     L.push("  STA player_x");

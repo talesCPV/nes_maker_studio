@@ -1,5 +1,5 @@
-; NES Maker Studio - BUILD v0.9.5
-; NROM-256 | fisica | troca de tela nas bordas (hard cut)
+; NES Maker Studio - BUILD v0.9.6
+; NROM-256 | fisica + paredes | troca de tela nas bordas
 ; Telas: 7 · CHR tiles: 32/256
 ;   [0] splash · Splash 1
 ;   [1] play · Tela 1
@@ -511,22 +511,79 @@ cg_yes:
   STA player_y
   RTS
 
+is_solid:
+  CMP #1
+  BEQ is_yes
+  CMP #2
+  BEQ is_yes
+  LDA #0
+  RTS
+is_yes:
+  LDA #1
+  RTS
+
+check_wall_at:
+  ; ponto superior (player_y + 4)
+  LDA player_y
+  CLC
+  ADC #4
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  JSR get_collision
+  LDA col_result
+  JSR is_solid
+  BNE cw_hit
+  ; ponto medio (player_y + 12)
+  LDA player_y
+  CLC
+  ADC #12
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  JSR get_collision
+  LDA col_result
+  JSR is_solid
+  BNE cw_hit
+  LDA #0
+  STA col_result
+  RTS
+cw_hit:
+  LDA #1
+  STA col_result
+  RTS
+
 update_player:
   LDA player_on
   BNE up_go
   RTS
 up_go:
-  ; --- horizontal (pad level, nao so edge) ---
+  ; --- horizontal + colisao lateral ---
   LDA pad1
   AND #%01000000      ; Left bit6
   BEQ up_right
   LDA player_x
   CMP #8
   BCS up_left_move
-  ; borda esquerda → tela anterior
   JSR try_screen_left
   JMP up_jump
 up_left_move:
+  ; tile X na borda esquerda proposta (x-3+2)
+  LDA player_x
+  SEC
+  SBC #3
+  CLC
+  ADC #2
+  LSR A
+  LSR A
+  LSR A
+  STA col_x
+  JSR check_wall_at
+  LDA col_result
+  BNE up_right           ; bloqueado
+  LDA player_x
   SEC
   SBC #3
   STA player_x
@@ -539,10 +596,23 @@ up_right:
   LDA player_x
   CMP #232
   BCC up_right_move
-  ; borda direita → proxima tela
   JSR try_screen_right
   JMP up_jump
 up_right_move:
+  ; tile X na borda direita proposta (x+3+13)
+  LDA player_x
+  CLC
+  ADC #3
+  CLC
+  ADC #13
+  LSR A
+  LSR A
+  LSR A
+  STA col_x
+  JSR check_wall_at
+  LDA col_result
+  BNE up_jump            ; bloqueado
+  LDA player_x
   CLC
   ADC #3
   STA player_x
