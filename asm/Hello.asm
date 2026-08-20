@@ -1218,15 +1218,15 @@ PlayScreenTable:  ; indices globais das telas de jogo (em ordem)
   .byte 1, 2, 3, 4, 5, 6
 
 EnemyData_0:
-  .byte 1, 147, 128
+  .byte 1, 216, 198
 EnemyData_1:
   .byte 0
 EnemyData_2:
-  .byte 1, 100, 100
+  .byte 2, 100, 100, 117, 34
 EnemyData_3:
-  .byte 0
+  .byte 1, 147, 67
 EnemyData_4:
-  .byte 0
+  .byte 2, 214, 209, 106, 204
 EnemyData_5:
   .byte 0
 EnemySpawnPtr:

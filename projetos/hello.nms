@@ -26143,7 +26143,7 @@
     ],
     "asm": ""
   },
-  "savedAt": 1787259733458,
+  "savedAt": 1787260312968,
   "physicsTables": {
     "jumps": [
       {
@@ -26196,20 +26196,60 @@
   ],
   "hitboxInstances": [
     {
-      "id": "inst_1787259616972781",
-      "screenId": "scr_1787144379503",
-      "hitboxObjectId": "hb_1787148369304",
-      "characterId": "char_1787148214942",
-      "x": 147,
-      "y": 128
-    },
-    {
       "id": "inst_1787259726669727",
       "screenId": "scr_1787144420490",
       "hitboxObjectId": "hb_1787148369304",
       "characterId": "char_1787148214942",
       "x": 100,
       "y": 100
+    },
+    {
+      "id": "inst_1787259871743578",
+      "screenId": "scr_1787144420490",
+      "hitboxObjectId": "hb_1787148369304",
+      "characterId": "char_1787148214942",
+      "x": 117,
+      "y": 34
+    },
+    {
+      "id": "inst_1787259907551125",
+      "screenId": "scr_1787144379503",
+      "hitboxObjectId": "hb_1787148369304",
+      "characterId": "char_1787148214942",
+      "x": 216,
+      "y": 198
+    },
+    {
+      "id": "inst_1787259920496608",
+      "screenId": "scr_1787144451744",
+      "hitboxObjectId": "hb_1787148369304",
+      "characterId": "char_1787148214942",
+      "x": 214,
+      "y": 209
+    },
+    {
+      "id": "inst_1787259925200243",
+      "screenId": "scr_1787144451744",
+      "hitboxObjectId": "hb_1787148369304",
+      "characterId": "char_1787148214942",
+      "x": 106,
+      "y": 204
+    },
+    {
+      "id": "inst_1787259944407848",
+      "screenId": "scr_1787144430768",
+      "hitboxObjectId": "hb_1787148369304",
+      "characterId": "char_1787148214942",
+      "x": 147,
+      "y": 67
+    },
+    {
+      "id": "inst_1787260301203328",
+      "screenId": "scr_1787144430768",
+      "hitboxObjectId": "hb_1787148369304",
+      "characterId": "char_1787148214942",
+      "x": 207,
+      "y": 127
     }
   ]
 }

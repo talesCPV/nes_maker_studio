@@ -68,19 +68,24 @@ const LEVEL_DESIGN = (() => {
               <div id="ldHelpText" style="font-size:10px;color:#888;background:#000;border:1px solid #222;border-radius:3px;padding:4px 6px">Selecione um Asset e clique no grid.</div>
             </div>
 
-            <!-- Painel de spawns da célula selecionada -->
+            <!-- Painel de spawns: preview em cima, lista + form embaixo (vertical) -->
             <div id="ldSpawnPanel" style="background:#111;border:1px solid #5a2d82;border-radius:6px;padding:10px;display:none;flex-direction:column;gap:8px">
               <h4 style="font-size:11px;color:#c39bd3;margin:0">👾 SPAWNS DA TELA</h4>
               <div id="ldSpawnScreenLabel" style="font-size:10px;color:#aaa"></div>
-              <div id="ldSpawnList" style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto"></div>
-              <div style="border-top:1px solid #333;padding-top:8px;display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <label style="font-size:10px;color:#888">Preview (clique para posicionar)</label>
+                <canvas id="ldSpawnPreview" width="256" height="150" style="width:100%;background:#000;border:1px solid #555;image-rendering:pixelated;cursor:crosshair;border-radius:3px"></canvas>
+                <div style="font-size:9px;color:#666">🟡 próximo spawn · 🔴 já salvos</div>
+              </div>
+              <div id="ldSpawnList" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow:auto;border-top:1px solid #333;padding-top:6px"></div>
+              <div style="border-top:1px solid #333;padding-top:6px;display:flex;flex-direction:column;gap:5px">
                 <div style="font-size:10px;color:#888">Adicionar spawn</div>
-                <select id="ldSpawnChar" style="background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:4px;font-size:11px"></select>
+                <select id="ldSpawnChar" style="background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:4px;font-size:11px;width:100%"></select>
                 <div style="display:flex;gap:6px;align-items:center">
                   <label style="font-size:10px;color:#888">X</label>
-                  <input id="ldSpawnX" type="number" min="0" max="248" value="160" style="width:52px;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:11px">
+                  <input id="ldSpawnX" type="number" min="0" max="248" value="160" oninput="LEVEL_DESIGN.updateSpawnPreview()" style="width:52px;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:11px">
                   <label style="font-size:10px;color:#888">Y</label>
-                  <input id="ldSpawnY" type="number" min="0" max="232" value="160" style="width:52px;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:11px">
+                  <input id="ldSpawnY" type="number" min="0" max="232" value="160" oninput="LEVEL_DESIGN.updateSpawnPreview()" style="width:52px;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:11px">
                 </div>
                 <button class="btn-tool" onclick="LEVEL_DESIGN.addSpawn()" style="background:#8e44ad;color:#fff;padding:5px 8px">+ Adicionar</button>
               </div>
@@ -179,6 +184,83 @@ const LEVEL_DESIGN = (() => {
     sel.innerHTML = chars.map(c => `<option value="${c.id}">${c.name || c.id}</option>`).join('');
   }
 
+  function getSelectedScreenAsset(){
+    if (!selectedCell?.bgId) return null;
+    const bgs = Project.data?.backgrounds || [];
+    const sps = Project.data?.splashScreens || [];
+    return selectedCell.type === 'splash'
+      ? sps.find(s => s.id === selectedCell.bgId)
+      : bgs.find(b => b.id === selectedCell.bgId);
+  }
+
+  function drawSpawnPreview(){
+    const canvas = document.getElementById('ldSpawnPreview');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const asset = getSelectedScreenAsset();
+    if (asset && typeof RENDER_UTILS !== 'undefined' && RENDER_UTILS.drawAssetThumbnail) {
+      RENDER_UTILS.drawAssetThumbnail(canvas, asset);
+    }
+
+    // spawns salvos (vermelho)
+    if (selectedCell?.bgId) {
+      instancesForScreen(selectedCell.bgId).forEach(inst => {
+        const px = ((inst.x || 0) / 256) * canvas.width;
+        const py = ((inst.y || 0) / 240) * canvas.height;
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.arc(px, py, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // cruz pequena
+        ctx.strokeStyle = '#ffcccc';
+        ctx.beginPath();
+        ctx.moveTo(px - 7, py); ctx.lineTo(px + 7, py);
+        ctx.moveTo(px, py - 7); ctx.lineTo(px, py + 7);
+        ctx.stroke();
+      });
+    }
+
+    // posição atual dos inputs (amarelo) — onde o próximo spawn vai
+    const x = Math.max(0, Math.min(248, parseInt(document.getElementById('ldSpawnX')?.value, 10) || 0));
+    const y = Math.max(0, Math.min(232, parseInt(document.getElementById('ldSpawnY')?.value, 10) || 0));
+    const cx = (x / 256) * canvas.width;
+    const cy = (y / 240) * canvas.height;
+    ctx.fillStyle = '#f1c40f';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  function updateSpawnPreview(){
+    drawSpawnPreview();
+  }
+
+  function onSpawnPreviewClick(ev){
+    const canvas = document.getElementById('ldSpawnPreview');
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const cx = (ev.clientX - rect.left) * scaleX;
+    const cy = (ev.clientY - rect.top) * scaleY;
+    const x = Math.max(0, Math.min(248, Math.round((cx / canvas.width) * 256)));
+    const y = Math.max(0, Math.min(232, Math.round((cy / canvas.height) * 240)));
+    const xEl = document.getElementById('ldSpawnX');
+    const yEl = document.getElementById('ldSpawnY');
+    if (xEl) xEl.value = x;
+    if (yEl) yEl.value = y;
+    drawSpawnPreview();
+  }
+
   function renderSpawnPanel(){
     const panel = document.getElementById('ldSpawnPanel');
     if (!panel) return;
@@ -188,31 +270,38 @@ const LEVEL_DESIGN = (() => {
     }
     panel.style.display = 'flex';
     const label = document.getElementById('ldSpawnScreenLabel');
-    const bgs = Project.data?.backgrounds || [];
-    const sps = Project.data?.splashScreens || [];
-    const asset = selectedCell.type === 'splash'
-      ? sps.find(s => s.id === selectedCell.bgId)
-      : bgs.find(b => b.id === selectedCell.bgId);
+    const asset = getSelectedScreenAsset();
     if (label) label.textContent = `${asset?.name || selectedCell.bgId} · célula (${selectedCell.x},${selectedCell.y})`;
 
     populateSpawnCharSelect();
 
     const list = document.getElementById('ldSpawnList');
-    if (!list) return;
-    const insts = instancesForScreen(selectedCell.bgId);
-    if (!insts.length) {
-      list.innerHTML = '<div style="font-size:10px;color:#666">Nenhum spawn nesta tela.</div>';
-      return;
+    if (list) {
+      const insts = instancesForScreen(selectedCell.bgId);
+      if (!insts.length) {
+        list.innerHTML = '<div style="font-size:10px;color:#666">Nenhum spawn nesta tela.</div>';
+      } else {
+        const chars = Project.data?.characters || [];
+        list.innerHTML = insts.map(inst => {
+          const ch = chars.find(c => c.id === inst.characterId);
+          const name = ch?.name || inst.characterId || '?';
+          return `<div style="display:flex;align-items:center;gap:6px;background:#1a1a1a;border:1px solid #333;border-radius:4px;padding:4px 6px;font-size:11px;color:#ddd">
+            <span style="flex:1">👾 ${name} · (${inst.x},${inst.y})</span>
+            <button onclick="LEVEL_DESIGN.removeSpawn('${inst.id}')" style="background:#c0392b;color:#fff;border:none;border-radius:3px;padding:2px 6px;cursor:pointer;font-size:10px">×</button>
+          </div>`;
+        }).join('');
+      }
     }
-    const chars = Project.data?.characters || [];
-    list.innerHTML = insts.map(inst => {
-      const ch = chars.find(c => c.id === inst.characterId);
-      const name = ch?.name || inst.characterId || '?';
-      return `<div style="display:flex;align-items:center;gap:6px;background:#1a1a1a;border:1px solid #333;border-radius:4px;padding:4px 6px;font-size:11px;color:#ddd">
-        <span style="flex:1">👾 ${name} · (${inst.x},${inst.y})</span>
-        <button onclick="LEVEL_DESIGN.removeSpawn('${inst.id}')" style="background:#c0392b;color:#fff;border:none;border-radius:3px;padding:2px 6px;cursor:pointer;font-size:10px">×</button>
-      </div>`;
-    }).join('');
+
+    // preview + click-to-place
+    requestAnimationFrame(() => {
+      drawSpawnPreview();
+      const canvas = document.getElementById('ldSpawnPreview');
+      if (canvas && !canvas._ldSpawnBound) {
+        canvas._ldSpawnBound = true;
+        canvas.addEventListener('click', onSpawnPreviewClick);
+      }
+    });
   }
 
   function addSpawn(){
@@ -232,6 +321,7 @@ const LEVEL_DESIGN = (() => {
     ensureHitboxInstances().push(inst);
     renderSpawnPanel();
     renderGrid();
+    drawSpawnPreview();
     Project.status?.(`Spawn adicionado em ${selectedCell.bgId} (${x},${y})`);
   }
 
@@ -463,6 +553,8 @@ const LEVEL_DESIGN = (() => {
     loadPhaseMap,
     addSpawn,
     removeSpawn,
-    renderSpawnPanel
+    renderSpawnPanel,
+    updateSpawnPreview,
+    drawSpawnPreview
   };
 })();
