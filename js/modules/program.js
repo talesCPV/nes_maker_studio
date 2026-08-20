@@ -13,7 +13,7 @@ const PROGRAM = (() => {
   const STEP_TYPES = {
     if_event:  { label: 'SE evento...' },
     if_var:    { label: 'SE variável...' },
-    if_hitbox: { label: 'SE hitbox...' }, // NOVO: Regra dedicada a colisão
+    if_hitbox: { label: 'SE hitbox...' }, // Regra dedicada a colisão
     set_var:   { label: 'DEFINIR variável' },
     add_var:   { label: 'SOMAR variável' },
     sub_var:   { label: 'SUBTRAIR variável' },
@@ -27,25 +27,21 @@ const PROGRAM = (() => {
     open_menu:   { label: 'Abrir Menu' },
     close_menu:  { label: 'Fechar Menu' },
     toggle_hitbox: { label: 'Ligar/Desligar Hitbox' },
-    // NOVAS AÇÕES DE FÍSICA
+    // AÇÕES DE FÍSICA
     apply_jump:  { label: 'Aplicar Pulo' },
     set_speed:   { label: 'Definir Velocidade X' },
     pause_gravity: { label: 'Pausar Gravidade (no alvo)' },
     resume_gravity:{ label: 'Retomar Gravidade (no alvo)' },
+    // AÇÕES DE SCRIPT / MOVIMENTO
+    move_character: { label: 'Mover Personagem (Script)' },
     custom:      { label: 'Personalizada (nome livre)' }
   };
   const OPS = ['==','!=','>','<','>=','<='];
 
-  // Calcula o endereço/bit de cada variável a partir da ORDEM do array - nunca fica
-  // guardado, é sempre recalculado, então não tem como desalinhar com deleções/reordenações.
-  // Bools são empacotados 8 por byte; byte/word abrem endereço próprio (word usa 2 bytes).
-  // Os primeiros endereços da zero page são RESERVADOS pro pool de instâncias (X/Y de cada
-  // slot - player, inimigos, itens, tiros compartilham a mesma estrutura de slot). Variáveis
-  // marcadas "zero page" começam DEPOIS desse bloco reservado; as demais vão pra RAM comum
-  // (a partir de $0300, convenção já usada no resto do projeto).
+  // Calcula o endereço/bit de cada variável a partir da ORDEM do array
   function computeAllocation(vars){
     const maxInstances = Project.data?.maxInstances ?? 10;
-    const instancePoolBytes = maxInstances * 2; // 2 bytes por slot: X e Y
+    const instancePoolBytes = maxInstances * 2; 
     let zpByte = instancePoolBytes, zpBit = 0, zpBoolOpen = false;
     let ramByte = 0, ramBit = 0, ramBoolOpen = false;
     const list = [];
@@ -118,8 +114,6 @@ const PROGRAM = (() => {
     else cont.innerHTML = renderRulesTab();
   }
 
-  // Preview simples de um único tile do CHR (usado pra mostrar o glifo escolhido como
-  // cursor do menu, sem precisar de um seletor visual completo por enquanto).
   function renderSingleTilePreview(canvas, tileIdx, palIdx){
     if(!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -220,8 +214,6 @@ const PROGRAM = (() => {
     Project.data.variables = Project.data.variables.filter(v => v.id !== id);
     renderTab();
   }
-  // Edita o valor inicial de uma variável já criada, sem precisar recriá-la.
-  // Não re-renderiza a aba inteira (só corrige o próprio input) pra não perder foco/scroll.
   function saveVariableValue(id){
     const v = Project.data?.variables?.find(v => v.id === id); if(!v) return;
     const input = document.getElementById('varVal_'+id); if(!input) return;
@@ -268,13 +260,7 @@ const PROGRAM = (() => {
         <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;margin-bottom:12px">
           <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">NOVO OBJETO DE HITBOX</h4>
           <div style="font-size:9px;color:#666;margin-bottom:8px;line-height:1.4">
-            Um objeto é a "identidade" de um gatilho (dano, warp ou spawn). O mesmo metatile pode ter
-            várias instâncias na tela, cada uma apontando pra um objeto diferente - ex: dois espinhos
-            iguais visualmente, um tira 10 e o outro 20; ou duas portas iguais que levam pra lugares
-            diferentes. Um warp sempre aponta pra outro warp (que já é o próprio ponto de spawn de
-            teleporte) - dá pra ter um warp que não é gatilho de porta nenhuma, só um ponto nomeado
-            (ex: spawn inicial do jogo). Um Spawn marca onde um personagem (inimigo, item, tiro...)
-            nasce - referenciado depois em Regras (Ação: Spawnar Personagem).
+            Um objeto é a "identidade" de um gatilho. O mesmo metatile pode ter várias instâncias na tela, cada uma apontando pra um objeto diferente.
           </div>
           <div style="display:flex;gap:6px;align-items:center">
             <input id="objName" type="text" placeholder="nome_do_objeto" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
@@ -297,8 +283,6 @@ const PROGRAM = (() => {
       </div>`;
   }
 
-  // Junta backgrounds + splashes numa lista só, marcada com o tipo, pra popular o select
-  // de tela de destino do warp.
   function allScreensList(){
     const bgs = (Project.data?.backgrounds || []).map(b => ({ ...b, _type: 'background' }));
     const sps = (Project.data?.splashScreens || []).map(s => ({ ...s, _type: 'splash' }));
@@ -313,7 +297,7 @@ const PROGRAM = (() => {
         <td colspan="4" style="padding:10px;background:#181818;border-bottom:1px solid #333">
           <div style="display:flex;gap:14px;align-items:flex-start">
             <div style="display:flex;flex-direction:column;gap:6px">
-              <label style="font-size:10px;color:#888">Tela de destino (onde esse warp faz o jogador aparecer)</label>
+              <label style="font-size:10px;color:#888">Tela de destino</label>
               <select id="warpDestScreen_${o.id}" onchange="PROGRAM.updateWarpDestPreview('${o.id}')" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px;min-width:200px">
                 <option value="">— nenhuma —</option>
                 ${screens.map(s=>`<option value="${s._type}:${s.id}" ${selValue===`${s._type}:${s.id}`?'selected':''}>${s._type==='splash'?'🎬':'🗺'} ${s.name}</option>`).join('')}
@@ -327,7 +311,7 @@ const PROGRAM = (() => {
               <button class="btn-tool" onclick="PROGRAM.saveWarpDestination('${o.id}')" style="background:#27ae60;color:#fff;margin-top:4px">💾 Salvar destino</button>
             </div>
             <div>
-              <label style="font-size:10px;color:#888;display:block;margin-bottom:2px">Preview (ponto de spawn em vermelho)</label>
+              <label style="font-size:10px;color:#888;display:block;margin-bottom:2px">Preview</label>
               <canvas id="warpDestPreview_${o.id}" width="170" height="160" style="background:#000;border:1px solid #444;image-rendering:pixelated"></canvas>
             </div>
           </div>
@@ -356,7 +340,6 @@ const PROGRAM = (() => {
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
   }
 
-  // Atualiza só o preview (sem salvar) enquanto o usuário mexe no select/inputs.
   function updateWarpDestPreview(id){
     const o = Project.data?.hitboxObjects?.find(o => o.id === id); if(!o) return;
     const screenSel = document.getElementById('warpDestScreen_'+id);
@@ -416,7 +399,7 @@ const PROGRAM = (() => {
   }
   function deleteHitboxObject(id){
     if(!Project.data?.hitboxObjects) return;
-    if(!confirm('Remover esse objeto? Instâncias que o usam nas telas ficarão com referência quebrada.')) return;
+    if(!confirm('Remover esse objeto?')) return;
     Project.data.hitboxObjects = Project.data.hitboxObjects.filter(o => o.id !== id);
     renderTab();
   }
@@ -431,7 +414,11 @@ const PROGRAM = (() => {
   }
 
   // ---------------- EVENTOS ----------------
-  const INPUT_BUTTONS = ["P1-UP","P1-DOWN","P1-LEFT","P1-RIGHT","P1-A","P1-B","P1-START","P1-SELECT","P2-UP","P2-DOWN","P2-LEFT","P2-RIGHT","P2-A","P2-B","P2-START","P2-SELECT"];
+  const INPUT_BUTTONS = [
+    "P1-UP","P1-DOWN","P1-LEFT","P1-RIGHT","P1-A","P1-B","P1-START","P1-SELECT",
+    "P2-UP","P2-DOWN","P2-LEFT","P2-RIGHT","P2-A","P2-B","P2-START","P2-SELECT",
+    "P1-IDLE", "P2-IDLE"
+  ];
 
   function renderEventsTab(){
     const events = Project.data?.events || [];
@@ -496,18 +483,13 @@ const PROGRAM = (() => {
     if(!Project.data?.events) return;
     const ev = Project.data.events.find(e => e.id === id);
     const msg = ev?.builtin
-      ? `"${ev.name}" é um evento nativo do sistema. Remover mesmo assim? Qualquer Regra que o use vai ficar com referência quebrada.`
-      : 'Remover esse evento? Qualquer Regra que o use vai ficar com referência quebrada.';
+      ? `"${ev.name}" é nativo. Remover mesmo assim?` : 'Remover esse evento?';
     if(!confirm(msg)) return;
     Project.data.events = Project.data.events.filter(e => e.id !== id);
     renderTab();
   }
 
   // ---------------- MENUS ----------------
-  // Cada menu define nome, tile do cursor e uma lista ordenada de itens. Cada item, ao ser
-  // criado, já ganha um evento próprio (categoria 'menu') automaticamente - o que acontece
-  // quando o item é selecionado se define em Regras, não aqui. A posição do menu na tela
-  // fica pro Backgrounds decidir depois (o mesmo menu pode ser usado em telas diferentes).
   function renderMenusTab(){
     const menus = Project.data?.menus || [];
     const listHtml = menus.map(m => `
@@ -533,7 +515,7 @@ const PROGRAM = (() => {
       <div style="display:flex;gap:6px;align-items:center;background:#181818;border:1px solid #2a2a2a;border-radius:4px;padding:6px">
         <span style="color:#666;font-size:9px;width:16px">${i+1}</span>
         <input value="${it.label}" onchange="PROGRAM.updateMenuItem('${menu.id}',${i},'label',this.value)" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px">
-        <span style="font-size:9px;color:#4ec9b0;font-family:monospace">${it.eventId ? '⚡ evento vinculado' : '—'}</span>
+        <span style="font-size:9px;color:#4ec9b0;font-family:monospace">${it.eventId ? '⚡ evento' : '—'}</span>
         <button class="btn-tool" onclick="PROGRAM.moveMenuItem('${menu.id}',${i},-1)" style="font-size:9px;padding:2px 5px">↑</button>
         <button class="btn-tool" onclick="PROGRAM.moveMenuItem('${menu.id}',${i},1)" style="font-size:9px;padding:2px 5px">↓</button>
         <button class="btn-tool" onclick="PROGRAM.deleteMenuItem('${menu.id}',${i})" style="font-size:9px;padding:2px 5px;background:#c0392b;color:#fff">🗑</button>
@@ -545,18 +527,14 @@ const PROGRAM = (() => {
       </div>
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;background:#181818;border:1px solid #2a2a2a;border-radius:4px;padding:8px">
         <div>
-          <label style="font-size:10px;color:#888;display:block;margin-bottom:2px">Tile do cursor (índice CHR)</label>
+          <label style="font-size:10px;color:#888;display:block;margin-bottom:2px">Tile do cursor</label>
           <input type="number" min="0" value="${menu.cursorTile ?? 0}" onchange="PROGRAM.updateMenuCursor('${menu.id}', parseInt(this.value)||0)" style="width:70px;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px">
         </div>
         <canvas id="menuCursorPreview_${menu.id}" width="32" height="32" style="background:#000;border:1px solid #444;image-rendering:pixelated"></canvas>
-        <div style="font-size:9px;color:#666;line-height:1.3;max-width:260px">
-          Escolha o tile da fonte que serve de cursor (ex: um ">" ou uma mãozinha). No build, esse
-          desenho é copiado pra página de sprites - o cursor sempre vira um sprite de verdade,
-          nunca redesenha o fundo.
-        </div>
+        <div style="font-size:9px;color:#666;line-height:1.3;max-width:260px">Cursor vira sprite.</div>
       </div>
       <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">ITENS DO MENU</h4>
-      <div style="display:flex;flex-direction:column;gap:6px">${itemsHtml || '<div style="color:#666;font-size:11px">Nenhum item ainda.</div>'}</div>
+      <div style="display:flex;flex-direction:column;gap:6px">${itemsHtml || '<div style="color:#666;font-size:11px">Nenhum item.</div>'}</div>
       <button class="btn-tool" onclick="PROGRAM.addMenuItem('${menu.id}')" style="margin-top:10px;background:#2980b9;color:#fff">+ Item</button>
     `;
   }
@@ -575,7 +553,7 @@ const PROGRAM = (() => {
   }
   function deleteMenu(id){
     const m = Project.data?.menus?.find(m => m.id === id); if(!m) return;
-    if(!confirm(`Deletar o menu "${m.name}"? Os eventos dos itens dele também serão removidos.`)) return;
+    if(!confirm(`Deletar o menu "${m.name}"?`)) return;
     const eventIds = m.items.map(it => it.eventId).filter(Boolean);
     Project.data.events = (Project.data.events || []).filter(e => !eventIds.includes(e.id));
     Project.data.menus = Project.data.menus.filter(m => m.id !== id);
@@ -658,7 +636,6 @@ const PROGRAM = (() => {
     `;
   }
 
-  // Gera lista de todos os hitboxes disponíveis (personagens e cenário)
   function getHitboxOptions(){
     let opts = [];
     (Project.data?.characters || []).forEach(c => {
@@ -706,8 +683,7 @@ const PROGRAM = (() => {
       const selStyle = "background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:10px";
       fields = `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'actionId',this.value)" style="${selStyle}">
         <option value="">— ação —</option>${Object.entries(ACTION_CATALOG).map(([k,v])=>`<option value="${k}" ${step.actionId===k?'selected':''}>${v.label}</option>`).join('')}</select>`;
-      // Segundo select, populado de acordo com a ação escolhida - cada ação referencia um
-      // catálogo diferente já existente no projeto (warps, sons, objetos de hitbox...).
+      
       if(step.actionId === 'goto_warp'){
         const warpObjs = (Project.data?.hitboxObjects || []).filter(o => o.kind === 'warp');
         fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle}">
@@ -750,8 +726,23 @@ const PROGRAM = (() => {
           <option value="">— personagem afetado —</option>
           ${(Project.data?.characters || []).map(c=>`<option value="${c.id}" ${step.targetCharId===c.id?'selected':''}>🦸 ${c.name}</option>`).join('')}
         </select>`;
+      } else if(step.actionId === 'move_character'){
+        const chars = Project.data?.characters || [];
+        fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetCharId',this.value)" style="${selStyle};min-width:120px">
+          <option value="">— Personagem —</option>
+          ${chars.map(c=>`<option value="${c.id}" ${step.targetCharId===c.id?'selected':''}>🦸 ${c.name}</option>`).join('')}
+        </select>
+        <select onchange="PROGRAM.updateStep('${rule.id}',${idx},'params',this.value)" style="${selStyle};min-width:90px">
+          <option value="stop" ${step.params==='stop'?'selected':''}>⏹ Parar</option>
+          <option value="left" ${step.params==='left'?'selected':''}>⬅ Esquerda</option>
+          <option value="right" ${step.params==='right'?'selected':''}>➡ Direita</option>
+          <option value="up" ${step.params==='up'?'selected':''}>⬆ Cima</option>
+          <option value="down" ${step.params==='down'?'selected':''}>⬇ Baixo</option>
+        </select>
+        <input type="text" placeholder="Anim (ex: walk)" value="${step.targetId||''}" onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="flex:1;${selStyle}" title="Nome/ID da animação ao mover">
+        `;
       } else if(step.actionId === 'open_menu' || step.actionId === 'close_menu'){
-        fields += `<input type="text" placeholder="nome do menu (livre por enquanto)" value="${step.targetId||''}" onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="flex:1;${selStyle}">`;
+        fields += `<input type="text" placeholder="nome do menu" value="${step.targetId||''}" onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="flex:1;${selStyle}">`;
       } else if(step.actionId === 'custom'){
         fields += `<input type="text" placeholder="descrição livre" value="${step.params||''}" onchange="PROGRAM.updateStep('${rule.id}',${idx},'params',this.value)" style="flex:1;${selStyle}">`;
       }
@@ -792,7 +783,6 @@ const PROGRAM = (() => {
   function updateStep(ruleId, idx, field, value){
     const r = Project.data?.rules?.find(r=>r.id===ruleId); if(!r || !r.steps[idx]) return;
     r.steps[idx][field] = value;
-    // tipo ou ação mudou -> o conjunto de campos da linha muda, precisa redesenhar a linha toda
     if(field === 'type' || field === 'actionId') renderTab();
   }
   function moveStep(ruleId, idx, dir){

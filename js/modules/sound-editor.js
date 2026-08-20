@@ -339,12 +339,12 @@ const SOUND = (() => {
     if(!list.some(x => x.ch.id === id)) id = list[0].ch.id;
     return id;
   }
-
+/*
   function getActiveChannelIndexAt(type, col){
     const id = getActiveChIdAt(type, col);
     return channels.findIndex(c => c.id === id);
   }
-
+*/
   function setLayerActiveFrom(type, col, chId){
     if(!isApuType(type)) return;
     const list = channelsOfType(type);
@@ -421,7 +421,6 @@ const SOUND = (() => {
     renderAll();
   }
 
-
   function pushUndo(){
     undoStack.push(JSON.parse(JSON.stringify({
       channels, activeChannel, selectedIndex, typeActivation
@@ -434,7 +433,7 @@ const SOUND = (() => {
     return Math.max(1, Math.min(255, Math.round(base * fig.multiplier)));
   }
 
-  function getCellPosition(i){ return i * CELL_W; }
+//  function getCellPosition(i){ return i * CELL_W; }
   function getIndexFromPosition(x, max){
     const cw=35, off=10+12.5;
     return Math.max(0, Math.min(max, Math.round((x-off)/cw)));
@@ -452,176 +451,8 @@ const SOUND = (() => {
     return parseInt(els.quarterInput?.value) || getActiveItem()?.baseFrames || 30;
   }
 
-  // ===== CSS =====
-  function injectCSS(){
-    if(document.getElementById("sound-module-style")) return;
-    const style = document.createElement("style");
-    style.id = "sound-module-style";
-    style.textContent = `
-      #mod-sound { --bg:#121218; --panel:#1e1e2a; --accent:#00e5ff; --accent-hover:#00b8d4; --text:#e2e8f0; --border:#334155; --rest-color:#ffb703; background:var(--bg); color:var(--text); overflow:auto; height:100%; }
-      #mod-sound .sound-header { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:2px solid var(--border); background:#1a1a2e; flex-wrap:wrap; gap:8px; }
-      #mod-sound .sound-header h2 { margin:0; color:var(--accent); font-size:1.15rem; }
-      #mod-sound .sound-header .subtitle { color:#94a3b8; font-size:.78rem; }
-      #mod-sound .sound-card { background:var(--panel); padding:14px; border-radius:8px; border:1px solid var(--border); margin:10px 12px; }
-      #mod-sound .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
-      #mod-sound .transport-btn { width:34px; height:34px; padding:0; display:flex; align-items:center; justify-content:center; font-size:15px; border-radius:6px; }
-      #mod-sound #play-btn.playing { background:#10b981; color:#fff; }
-      #mod-sound .tempo-box { display:flex; align-items:center; gap:6px; background:#0f172a; padding:5px 10px; border-radius:6px; border:1px solid var(--border); font-size:12px; }
-      #mod-sound .tempo-box input { width:52px; text-align:center; padding:3px; font-weight:bold; color:var(--accent); background:#0f172a; border:1px solid var(--border); border-radius:4px; }
-      #mod-sound button { background:var(--accent); color:#0f172a; border:none; padding:6px 11px; border-radius:6px; font-weight:700; cursor:pointer; font-size:12px; display:inline-flex; align-items:center; gap:5px; }
-      #mod-sound button:hover { background:var(--accent-hover); }
-      #mod-sound button.secondary { background:#334155; color:#fff; }
-      #mod-sound button.btn-clone { background:#10b981; color:#0f172a; }
-      #mod-sound button.btn-del { background:#ef4444; color:#fff; }
-      #mod-sound button.btn-add-ch { background:#8b5cf6; color:#fff; }
-      #mod-sound button.btn-song { background:#0ea5e9; color:#fff; }
-      #mod-sound button.btn-sfx { background:#f59e0b; color:#0f172a; }
-      #mod-sound button#btn-import-midi { background:#6366f1; color:#fff; }
-      #mod-sound button#btn-export-nsound { background:#0d9488; color:#fff; }
-      #mod-sound button#btn-import-nsound { background:#0f766e; color:#fff; }
-      #mod-sound .midi-modal-overlay {
-        position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:10000;
-        display:flex; align-items:center; justify-content:center; padding:16px;
-      }
-      #mod-sound .midi-modal {
-        background:#1e1e2e; border:1px solid #444; border-radius:10px; max-width:720px; width:100%;
-        max-height:90vh; overflow:auto; box-shadow:0 16px 48px rgba(0,0,0,.5); padding:16px 18px;
-      }
-      #mod-sound .midi-modal h3 { margin:0 0 6px; color:#a5b4fc; font-size:15px; }
-      #mod-sound .midi-modal .midi-meta { font-size:11px; color:#94a3b8; margin-bottom:12px; }
-      #mod-sound .midi-map-table { width:100%; border-collapse:collapse; font-size:12px; }
-      #mod-sound .midi-map-table th { text-align:left; padding:6px 8px; color:#94a3b8; border-bottom:1px solid #333; font-weight:600; }
-      #mod-sound .midi-map-table td { padding:6px 8px; border-bottom:1px solid #2a2a3a; vertical-align:middle; }
-      #mod-sound .midi-map-table select { width:100%; background:#0f172a; color:#e2e8f0; border:1px solid #444; border-radius:4px; padding:4px 6px; font-size:12px; }
-      #mod-sound .midi-map-table .trk-name { font-weight:600; color:#e2e8f0; }
-      #mod-sound .midi-map-table .trk-sub { font-size:10px; color:#64748b; }
-      #mod-sound .midi-map-table .badge-mel { color:#7dd3fc; }
-      #mod-sound .midi-map-table .badge-perc { color:#fcd34d; }
-      #mod-sound .midi-modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:14px; flex-wrap:wrap; }
-      #mod-sound .midi-modal-actions .btn-ok { background:#6366f1; color:#fff; }
-      #mod-sound .midi-hint { font-size:11px; color:#64748b; margin-top:8px; line-height:1.4; }
-      #mod-sound button:disabled { opacity:.4; cursor:not-allowed; }
-
-      #mod-sound .library-bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:10px 12px; background:#151525; border-bottom:1px solid var(--border); }
-      #mod-sound .library-bar select { min-width:220px; background:#0f172a; color:var(--text); border:1px solid var(--border); padding:6px 8px; border-radius:6px; font-size:12px; font-weight:bold; }
-      #mod-sound .lib-badge { font-size:10px; font-weight:bold; padding:2px 7px; border-radius:4px; }
-      #mod-sound .lib-badge.song { background:#0c4a6e; color:#7dd3fc; }
-      #mod-sound .lib-badge.sfx { background:#78350f; color:#fcd34d; }
-
-      #mod-sound .tracks-layout { display:flex; align-items:stretch; gap:0; margin:0; }
-      #mod-sound .tracks-headers {
-        width:150px; min-width:150px; flex-shrink:0; display:flex; flex-direction:column;
-        gap:6px; padding-top:32px; /* = altura regua 26 + margin 6 */
-        z-index:5; background:#151525;
-      }
-      #mod-sound .tracks-scroll { overflow-x:auto; padding-bottom:8px; flex:1; min-width:0; }
-      #mod-sound .track-row { display:flex; align-items:stretch; margin-bottom:6px; min-width:max-content; height:76px; }
-      #mod-sound .track-row.stack-continue { margin-bottom:2px; }
-      #mod-sound .track-row.stack-continue .track-cells { border-radius:0 0 6px 6px; }
-      #mod-sound .track-row.stack-start .track-cells { border-radius:6px 6px 0 0; }
-      #mod-sound .track-row.stack-mid .track-cells { border-radius:0; }
-      #mod-sound .tracks-headers { gap:6px; }
-      #mod-sound .tracks-headers.stacking { gap:2px; }
-      #mod-sound .track-header {
-        width:150px; min-width:150px; height:76px; min-height:76px; max-height:76px; box-sizing:border-box;
-        background:#0f172a; border:1px solid var(--border); border-radius:6px;
-        padding:4px 8px; display:flex; flex-direction:column; gap:3px; justify-content:center;
-        overflow:hidden;
-      }
-      #mod-sound .track-header.active-track { border-color:var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
-      #mod-sound .track-header select { width:100%; background:#1e1e2a; color:var(--text); border:1px solid var(--border); padding:3px 4px; border-radius:4px; font-size:11px; font-weight:bold; }
-      #mod-sound .track-header .trk-inst {
-        font-size:10px; font-weight:700; color:#e2e8f0; white-space:nowrap; overflow:hidden;
-        text-overflow:ellipsis; max-width:134px; line-height:1.15; flex-shrink:0;
-      }
-      #mod-sound .track-header select { flex-shrink:0; }
-      #mod-sound .track-header .track-actions { flex-shrink:0; }
-      #mod-sound .track-header.trk-none { opacity:0.75; border-style:dashed; }
-      #mod-sound .track-header.trk-inactive-layer { opacity:0.55; }
-      #mod-sound .track-cell.layer-inactive { opacity:0.32; filter:grayscale(0.35); }
-      #mod-sound .track-cell.layer-active-here { box-shadow: inset 0 2px 0 #10b981; }
-      #mod-sound .track-cell.layer-switch { outline:1px dashed #fbbf24; }
-      #mod-sound button.btn-merge { background:#f59e0b; color:#0f172a; }
-      #mod-sound .track-header .track-actions { display:flex; gap:4px; }
-      #mod-sound .track-header .track-actions button { padding:2px 6px; font-size:11px; min-width:28px; justify-content:center; }
-      #mod-sound .timeline-ruler {
-        display:flex; align-items:stretch; height:26px; margin-bottom:6px; min-width:max-content;
-        border-bottom:1px solid #333; user-select:none; padding:0; gap:0;
-      }
-      #mod-sound .ruler-cell {
-        flex:0 0 34px; width:34px; min-width:34px; margin:0; box-sizing:border-box;
-        border:1px solid #333; border-radius:3px; background:#0f172a;
-        display:flex; flex-direction:column; align-items:center; justify-content:center;
-        cursor:pointer; font-size:9px; color:#64748b; line-height:1.1; padding:0;
-      }
-      #mod-sound .ruler-cell:hover { border-color:#6366f1; color:#a5b4fc; }
-      #mod-sound .ruler-cell.sel-range { background:rgba(99,102,241,.2); border-color:#6366f1; color:#c7d2fe; }
-      #mod-sound .ruler-cell.sel-anchor { background:rgba(16,185,129,.25); border-color:#10b981; color:#6ee7b7; }
-      #mod-sound .ruler-cell.playing { border-color:var(--accent); color:var(--accent); }
-      #mod-sound .ruler-cell .r-idx { font-size:8px; opacity:.7; }
-      #mod-sound .ruler-cell .r-time { font-size:9px; font-weight:600; }
-      #mod-sound .selection-hint { font-size:11px; color:#64748b; margin:4px 0 0 0; }
-
-      #mod-sound .track-cells {
-        display:flex; gap:0; align-items:center; padding:0; background:#151520; border:none;
-        border-radius:6px; height:76px; min-height:76px; max-height:76px; box-sizing:border-box;
-        box-shadow: inset 0 0 0 1px var(--border);
-      }
-      #mod-sound .track-cell {
-        flex:0 0 34px; width:34px; min-width:34px; height:68px; margin:0; box-sizing:border-box;
-        border:2px solid var(--border); border-radius:4px; background:#0f172a; cursor:grab;
-        position:relative; flex-shrink:0; user-select:none;
-      }
-      #mod-sound .track-cell:active { cursor:grabbing; }
-      #mod-sound .track-cell.active { border-color:#fff; box-shadow:0 0 8px rgba(255,255,255,.3); }
-      #mod-sound .track-cell.selected { border-color:#10b981; background:rgba(16,185,129,.15); }
-      #mod-sound .track-cell.playing { border-color:#10b981 !important; box-shadow:0 0 12px rgba(16,185,129,.55) !important; }
-      #mod-sound .track-cell.dragging { opacity:.35; border-style:dashed; }
-      #mod-sound .track-cell.drag-over { border-color:#10b981; background:rgba(16,185,129,.2); box-shadow:0 0 10px rgba(16,185,129,.4); }
-      #mod-sound .track-cell .cell-label { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:bold; color:#fff; pointer-events:none; text-align:center; line-height:1.1; padding:2px; word-break:break-all; }
-      #mod-sound .track-cell .cell-label.rest { color:var(--rest-color); }
-      #mod-sound .track-cell .cell-dur { position:absolute; bottom:2px; left:50%; transform:translateX(-50%); width:16px; height:3px; border-radius:2px; pointer-events:none; }
-      #mod-sound .cell-add-btn { flex:0 0 34px; width:34px; height:68px; margin:0; box-sizing:border-box; border:2px dashed #059669; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:1.1rem; color:#fff; cursor:pointer; background:#059669; font-weight:bold; flex-shrink:0; }
-      #mod-sound .cell-add-btn:hover { background:#047a56; }
-
-      #mod-sound .timeline-bar-container { display:none; }
-      #mod-sound .timeline-bar { display:none; }
-
-
-      #mod-sound .selection-actions { display:flex; gap:8px; margin-top:6px; padding-left:150px; align-items:center; flex-wrap:wrap; }
-      #mod-sound .selection-actions #fig-up-selected-btn,
-      #mod-sound .selection-actions #fig-down-selected-btn {
-        min-width:34px; font-size:16px; font-weight:800; justify-content:center;
-        background:#334155; color:#e2e8f0;
-      }
-      #mod-sound .selection-actions #fig-up-selected-btn:hover,
-      #mod-sound .selection-actions #fig-down-selected-btn:hover { background:#475569; }
-      #mod-sound .inspector-panel { background:#0f172a; border:1px solid var(--border); border-radius:8px; padding:14px; margin-top:8px; display:flex; flex-direction:column; gap:10px; }
-      #mod-sound .inspector-header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
-      #mod-sound .inspector-title { font-weight:bold; color:var(--accent); font-size:13px; }
-      #mod-sound .piano-container { display:flex; flex-direction:column; gap:8px; background:#181824; padding:10px; border-radius:8px; border:1px solid var(--border); }
-      #mod-sound .piano-scroll-wrapper { width:100%; overflow-x:auto; padding-bottom:6px; }
-      #mod-sound .piano-keyboard { position:relative; display:inline-flex; height:90px; user-select:none; }
-      #mod-sound .piano-key { cursor:pointer; display:flex; align-items:flex-end; justify-content:center; padding-bottom:5px; font-size:.6rem; font-weight:bold; box-sizing:border-box; border-radius:0 0 3px 3px; }
-      #mod-sound .piano-key.white { width:26px; height:100%; background:#f8fafc; color:#0f172a; border:1px solid #cbd5e1; z-index:1; flex-shrink:0; }
-      #mod-sound .piano-key.white.active { background:var(--accent)!important; }
-      #mod-sound .piano-key.black { width:16px; height:55%; background:#0f172a; color:#fff; position:absolute; top:0; z-index:2; border-radius:0 0 3px 3px; border:1px solid #334155; font-size:.5rem; }
-      #mod-sound .piano-key.black.active { background:var(--accent)!important; color:#0f172a; }
-      #mod-sound .rest-btn { background:var(--rest-color); color:#0f172a; padding:5px 12px; font-size:.8rem; border-radius:4px; border:none; font-weight:bold; cursor:pointer; align-self:flex-start; }
-      #mod-sound .rest-btn.active { outline:2px solid #fff; box-shadow:0 0 8px var(--rest-color); }
-      #mod-sound textarea { width:100%; height:200px; background:#090d16; color:#38edf8; font-family:Consolas,monospace; padding:10px; border:1px solid var(--border); border-radius:6px; box-sizing:border-box; font-size:.8rem; }
-      #mod-sound select { background:#1e1e2a; color:var(--text); border:1px solid var(--border); padding:5px 8px; border-radius:6px; font-size:.85rem; }
-      #mod-sound .figure-range-wrap { display:flex; align-items:center; gap:8px; background:#0f172a; border:1px solid var(--border); border-radius:6px; padding:4px 10px; min-width:200px; }
-      #mod-sound .figure-range-wrap label { font-size:11px; color:#94a3b8; white-space:nowrap; }
-      #mod-sound .figure-range-wrap input[type=range] { flex:1; accent-color:var(--accent); cursor:pointer; height:6px; }
-      #mod-sound .figure-range-wrap #figure-label { font-size:12px; font-weight:bold; color:var(--accent); min-width:110px; text-align:right; }
-    `;
-    document.head.appendChild(style);
-  }
-
   // ===== HTML =====
   function buildHTML(){
-    injectCSS();
     const mod = document.getElementById("mod-sound");
     if(!mod) return;
     const active = getActiveItem();

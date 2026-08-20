@@ -18,6 +18,7 @@ then
     git add commit.sh
     git add index.html
     git add historico.txt
+    git add backup.zip
     
     git commit -m "by_script"
 

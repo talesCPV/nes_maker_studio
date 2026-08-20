@@ -55,9 +55,14 @@ implementado hitbox de personagens
 
 O que falta fazer:
 
+/* DÚVIDAS */
+* Se eu inicio com uma splash de 1pg, crio uma regra de press start para spawnar na fase 1, automatcamente ele já irá carregar a fase 1? A mesma lógica serve pro personagem chegar em goal da fase 1, como eu carrego a fase 2?
 
-
-
-/* Ideias a se implementar no futuro: */
+/* Ações imediatas */
+* Em program.js-> eventos->input colocar as opções P1-IDLE e P2-IDLE
+* Como já definimos, o pool de instâncias e a fisica em dashboard, poderiamos ter dentro de program.js-> "Ação" a opção "Mover", abrir um select [personagens], um select com as opções [cima,baixo, esq... pulo] e mais um select com as animações do personagem selecionado.
 * Juntar Hitbox|spaw(backgrounds.js) + objeto(backgrounds.js) + objetos|spaw(program.js) tudo em uma ferramenta só de spaw em backgrounds.js.O usuário clica num ponto da tela, ele já marca o ponto como spaw, cria o objeto e já pede pro usuario selecionar um personagem para ele
+
+
+/* Ideias futuras */
 * Em computação não existem numeros randômicos, mas pode-se implementar um contador não a nivel de ciclo de maquina mas a nivel de scan de tela que espera a primeira interação do usuario, esta variável pode ser usada para mudar a dinâmica dos inimigos
