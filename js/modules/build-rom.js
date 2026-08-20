@@ -114,7 +114,7 @@ const BUILD = (() => {
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <div style="display:flex;gap:8px;align-items:center;padding:10px 12px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
-          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.9.6 • paredes sólidas</h3>
+          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.9.8 • inimigos fix</h3>
           <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             <select id="buildModeSelect" onchange="BUILD.setBuildMode(this.value)" style="background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:4px;font-size:11px">
               <option value="game" selected>🎮 Jogo completo (Camada 1)</option>
@@ -558,8 +558,8 @@ const BUILD = (() => {
     }
 
     const L=[];
-    L.push("; NES Maker Studio - BUILD v0.9.6");
-    L.push("; NROM-256 | fisica + paredes | troca de tela nas bordas");
+    L.push("; NES Maker Studio - BUILD v0.9.8");
+    L.push("; NROM-256 | inimigos (spawn fixo garantido) + patrol + hit");
     L.push(`; Telas: ${screens.length} · CHR tiles: ${packed.usedCount}/256` + (packed.overflowCount?` · overflow ${packed.overflowCount}`:""));
     screens.forEach((s,i) => L.push(`;   [${i}] ${s.role} · ${s.name}`));
     if(music && musicChans) L.push(`; Musica: ${music.name} · ${musicChans.length} canal(is)`);
@@ -588,6 +588,24 @@ const BUILD = (() => {
     L.push("col_result: .res 1");
     L.push("ls_count:   .res 1    ; contador load_screen (nao reusa pad)");
     L.push("play_idx:   .res 1    ; indice 0..playCount-1 na sequencia da fase");
+    // ate 4 inimigos (x,y,on,dir) — dir: 0=dir 1=esq
+    L.push("en0_x:      .res 1");
+    L.push("en0_y:      .res 1");
+    L.push("en0_on:     .res 1");
+    L.push("en0_dir:    .res 1");
+    L.push("en1_x:      .res 1");
+    L.push("en1_y:      .res 1");
+    L.push("en1_on:     .res 1");
+    L.push("en1_dir:    .res 1");
+    L.push("en2_x:      .res 1");
+    L.push("en2_y:      .res 1");
+    L.push("en2_on:     .res 1");
+    L.push("en2_dir:    .res 1");
+    L.push("en3_x:      .res 1");
+    L.push("en3_y:      .res 1");
+    L.push("en3_on:     .res 1");
+    L.push("en3_dir:    .res 1");
+    L.push("en_tmp:     .res 1");
     if(musicChans){
       L.push("music_on:   .res 1");
       musicChans.forEach((_,i)=>{
@@ -898,6 +916,7 @@ const BUILD = (() => {
     L.push("  JSR goto_play_screen");
     L.push("  LDA #12             ; entra pela esquerda");
     L.push("  STA player_x");
+    L.push("  JSR spawn_enemies");
     L.push("tsr_done:");
     L.push("  RTS");
     L.push("");
@@ -910,7 +929,323 @@ const BUILD = (() => {
     L.push("  JSR goto_play_screen");
     L.push("  LDA #230            ; entra pela direita");
     L.push("  STA player_x");
+    L.push("  JSR spawn_enemies");
     L.push("tsl_done:");
+    L.push("  RTS");
+    L.push("");
+
+    // ---- inimigos ----
+    L.push("clear_enemies:");
+    L.push("  LDA #0");
+    L.push("  STA en0_on");
+    L.push("  STA en1_on");
+    L.push("  STA en2_on");
+    L.push("  STA en3_on");
+    L.push("  RTS");
+    L.push("");
+
+    L.push("spawn_enemies:");
+    L.push("  JSR clear_enemies");
+    L.push("  ; fallback fixo: 2 inimigos sempre na tela de play");
+    L.push("  LDA #176");
+    L.push("  STA en0_x");
+    L.push("  LDA #160");
+    L.push("  STA en0_y");
+    L.push("  LDA #1");
+    L.push("  STA en0_on");
+    L.push("  LDA #0");
+    L.push("  STA en0_dir");
+    L.push("  LDA #120");
+    L.push("  STA en1_x");
+    L.push("  LDA #160");
+    L.push("  STA en1_y");
+    L.push("  LDA #1");
+    L.push("  STA en1_on");
+    L.push("  LDA #1");
+    L.push("  STA en1_dir");
+    L.push("  JSR update_enemy_oam");
+    L.push("  RTS");
+    L.push("");
+
+    // X=OAM base, tmp0=x, tmp1=y, en_tmp=attr — desenha 2x2 tiles 2,3 / 4,19
+    L.push("draw_en_2x2:");
+    L.push("  LDA tmp1");
+    L.push("  STA $0200,X");
+    L.push("  LDA #2");
+    L.push("  STA $0201,X");
+    L.push("  LDA en_tmp");
+    L.push("  STA $0202,X");
+    L.push("  LDA tmp0");
+    L.push("  STA $0203,X");
+    L.push("  LDA tmp1");
+    L.push("  STA $0204,X");
+    L.push("  LDA #3");
+    L.push("  STA $0205,X");
+    L.push("  LDA en_tmp");
+    L.push("  STA $0206,X");
+    L.push("  LDA tmp0");
+    L.push("  CLC");
+    L.push("  ADC #8");
+    L.push("  STA $0207,X");
+    L.push("  LDA tmp1");
+    L.push("  CLC");
+    L.push("  ADC #8");
+    L.push("  STA $0208,X");
+    L.push("  LDA #4");
+    L.push("  STA $0209,X");
+    L.push("  LDA en_tmp");
+    L.push("  STA $020A,X");
+    L.push("  LDA tmp0");
+    L.push("  STA $020B,X");
+    L.push("  LDA tmp1");
+    L.push("  CLC");
+    L.push("  ADC #8");
+    L.push("  STA $020C,X");
+    L.push("  LDA #19");
+    L.push("  STA $020D,X");
+    L.push("  LDA en_tmp");
+    L.push("  STA $020E,X");
+    L.push("  LDA tmp0");
+    L.push("  CLC");
+    L.push("  ADC #8");
+    L.push("  STA $020F,X");
+    L.push("  RTS");
+    L.push("");
+
+    L.push("update_enemy_oam:");
+    L.push("  LDA #$FF");
+    L.push("  STA $0210");
+    L.push("  STA $0214");
+    L.push("  STA $0218");
+    L.push("  STA $021C");
+    L.push("  STA $0220");
+    L.push("  STA $0224");
+    L.push("  STA $0228");
+    L.push("  STA $022C");
+    L.push("  LDA en0_on");
+    L.push("  BEQ ueo1");
+    L.push("  LDA en0_x");
+    L.push("  STA tmp0");
+    L.push("  LDA en0_y");
+    L.push("  STA tmp1");
+    L.push("  LDA en0_dir");
+    L.push("  BEQ ueo0a");
+    L.push("  LDA #%01000001");
+    L.push("  JMP ueo0b");
+    L.push("ueo0a:");
+    L.push("  LDA #%00000001");
+    L.push("ueo0b:");
+    L.push("  STA en_tmp");
+    L.push("  LDX #$10");
+    L.push("  JSR draw_en_2x2");
+    L.push("ueo1:");
+    L.push("  LDA en1_on");
+    L.push("  BEQ ueo_done");
+    L.push("  LDA en1_x");
+    L.push("  STA tmp0");
+    L.push("  LDA en1_y");
+    L.push("  STA tmp1");
+    L.push("  LDA en1_dir");
+    L.push("  BEQ ueo1a");
+    L.push("  LDA #%01000001");
+    L.push("  JMP ueo1b");
+    L.push("ueo1a:");
+    L.push("  LDA #%00000001");
+    L.push("ueo1b:");
+    L.push("  STA en_tmp");
+    L.push("  LDX #$20");
+    L.push("  JSR draw_en_2x2");
+    L.push("ueo_done:");
+    L.push("  RTS");
+    L.push("");
+
+    L.push("update_enemies:");
+    // patrol en0
+    L.push("  LDA en0_on");
+    L.push("  BEQ ue_1");
+    L.push("  LDA en0_dir");
+    L.push("  BNE ue0_left");
+    L.push("  LDA en0_x");
+    L.push("  CLC");
+    L.push("  ADC #1");
+    L.push("  STA en0_x");
+    L.push("  CMP #220");
+    L.push("  BCC ue_1");
+    L.push("  LDA #1");
+    L.push("  STA en0_dir");
+    L.push("  JMP ue_1");
+    L.push("ue0_left:");
+    L.push("  LDA en0_x");
+    L.push("  SEC");
+    L.push("  SBC #1");
+    L.push("  STA en0_x");
+    L.push("  CMP #20");
+    L.push("  BCS ue_1");
+    L.push("  LDA #0");
+    L.push("  STA en0_dir");
+    L.push("ue_1:");
+    L.push("  LDA en1_on");
+    L.push("  BEQ ue_2");
+    L.push("  LDA en1_dir");
+    L.push("  BNE ue1_left");
+    L.push("  LDA en1_x");
+    L.push("  CLC");
+    L.push("  ADC #1");
+    L.push("  STA en1_x");
+    L.push("  CMP #220");
+    L.push("  BCC ue_2");
+    L.push("  LDA #1");
+    L.push("  STA en1_dir");
+    L.push("  JMP ue_2");
+    L.push("ue1_left:");
+    L.push("  LDA en1_x");
+    L.push("  SEC");
+    L.push("  SBC #1");
+    L.push("  STA en1_x");
+    L.push("  CMP #20");
+    L.push("  BCS ue_2");
+    L.push("  LDA #0");
+    L.push("  STA en1_dir");
+    L.push("ue_2:");
+    L.push("  LDA en2_on");
+    L.push("  BEQ ue_3");
+    L.push("  LDA en2_x");
+    L.push("  CLC");
+    L.push("  ADC #1");
+    L.push("  STA en2_x");
+    L.push("  CMP #200");
+    L.push("  BCC ue_3");
+    L.push("  LDA #40");
+    L.push("  STA en2_x");
+    L.push("ue_3:");
+    L.push("  LDA en3_on");
+    L.push("  BEQ ue_col");
+    L.push("  LDA en3_x");
+    L.push("  SEC");
+    L.push("  SBC #1");
+    L.push("  STA en3_x");
+    L.push("  CMP #20");
+    L.push("  BCS ue_col");
+    L.push("  LDA #200");
+    L.push("  STA en3_x");
+    L.push("ue_col:");
+    // collision player vs enemies
+    L.push("  JSR check_player_enemy_hit");
+    L.push("  JSR update_enemy_oam");
+    L.push("  RTS");
+    L.push("");
+
+    L.push("check_player_enemy_hit:");
+    L.push("  LDA player_on");
+    L.push("  BEQ cpe_done");
+    // macro-like for en0
+    L.push("  LDA en0_on");
+    L.push("  BEQ cpe1");
+    L.push("  LDA player_x");
+    L.push("  CLC");
+    L.push("  ADC #12");
+    L.push("  CMP en0_x");
+    L.push("  BCC cpe1");
+    L.push("  LDA en0_x");
+    L.push("  CLC");
+    L.push("  ADC #12");
+    L.push("  CMP player_x");
+    L.push("  BCC cpe1");
+    L.push("  LDA player_y");
+    L.push("  CLC");
+    L.push("  ADC #14");
+    L.push("  CMP en0_y");
+    L.push("  BCC cpe1");
+    L.push("  LDA en0_y");
+    L.push("  CLC");
+    L.push("  ADC #14");
+    L.push("  CMP player_y");
+    L.push("  BCC cpe1");
+    L.push("  JMP player_hurt");
+    L.push("cpe1:");
+    L.push("  LDA en1_on");
+    L.push("  BEQ cpe2");
+    L.push("  LDA player_x");
+    L.push("  CLC");
+    L.push("  ADC #12");
+    L.push("  CMP en1_x");
+    L.push("  BCC cpe2");
+    L.push("  LDA en1_x");
+    L.push("  CLC");
+    L.push("  ADC #12");
+    L.push("  CMP player_x");
+    L.push("  BCC cpe2");
+    L.push("  LDA player_y");
+    L.push("  CLC");
+    L.push("  ADC #14");
+    L.push("  CMP en1_y");
+    L.push("  BCC cpe2");
+    L.push("  LDA en1_y");
+    L.push("  CLC");
+    L.push("  ADC #14");
+    L.push("  CMP player_y");
+    L.push("  BCC cpe2");
+    L.push("  JMP player_hurt");
+    L.push("cpe2:");
+    L.push("  LDA en2_on");
+    L.push("  BEQ cpe3");
+    L.push("  LDA player_x");
+    L.push("  CLC");
+    L.push("  ADC #12");
+    L.push("  CMP en2_x");
+    L.push("  BCC cpe3");
+    L.push("  LDA en2_x");
+    L.push("  CLC");
+    L.push("  ADC #12");
+    L.push("  CMP player_x");
+    L.push("  BCC cpe3");
+    L.push("  LDA player_y");
+    L.push("  CLC");
+    L.push("  ADC #14");
+    L.push("  CMP en2_y");
+    L.push("  BCC cpe3");
+    L.push("  LDA en2_y");
+    L.push("  CLC");
+    L.push("  ADC #14");
+    L.push("  CMP player_y");
+    L.push("  BCC cpe3");
+    L.push("  JMP player_hurt");
+    L.push("cpe3:");
+    L.push("  LDA en3_on");
+    L.push("  BEQ cpe_done");
+    L.push("  LDA player_x");
+    L.push("  CLC");
+    L.push("  ADC #12");
+    L.push("  CMP en3_x");
+    L.push("  BCC cpe_done");
+    L.push("  LDA en3_x");
+    L.push("  CLC");
+    L.push("  ADC #12");
+    L.push("  CMP player_x");
+    L.push("  BCC cpe_done");
+    L.push("  LDA player_y");
+    L.push("  CLC");
+    L.push("  ADC #14");
+    L.push("  CMP en3_y");
+    L.push("  BCC cpe_done");
+    L.push("  LDA en3_y");
+    L.push("  CLC");
+    L.push("  ADC #14");
+    L.push("  CMP player_y");
+    L.push("  BCC cpe_done");
+    L.push("  JMP player_hurt");
+    L.push("cpe_done:");
+    L.push("  RTS");
+    L.push("");
+
+    L.push("player_hurt:");
+    L.push("  ; respawn simples na tela atual");
+    L.push("  LDA #40");
+    L.push("  STA player_x");
+    L.push("  LDA #160");
+    L.push("  STA player_y");
+    L.push("  LDA #0");
+    L.push("  STA jump_cnt");
     L.push("  RTS");
     L.push("");
 
@@ -1272,14 +1607,16 @@ const BUILD = (() => {
     L.push(`  LDA #${playStart}`);
     L.push("  JSR load_screen");
     L.push("  JSR spawn_player");
+    L.push("  JSR spawn_enemies");
     if(musicChans){
       L.push("  JSR music_init");
     }
     L.push("  JMP MainLoop");
     L.push("");
     L.push("st_play:");
-    L.push("  ; fisica + input todo frame (Camada 2)");
+    L.push("  ; fisica + input + inimigos");
     L.push("  JSR update_player");
+    L.push("  JSR update_enemies");
     L.push("  ; SELECT → Game Over (teste)");
     L.push("  LDA pad1_edge");
     L.push("  AND #%00000100");
@@ -1326,11 +1663,46 @@ const BUILD = (() => {
     L.push("ScreenColHi:");
     screens.forEach((_,i) => L.push(`  .byte >Collision_${i}`));
     L.push("PlayScreenTable:  ; indices globais das telas de jogo (em ordem)");
-    (() => {
-      const playIdxs = screens.map((s,i) => s.role === "play" ? i : -1).filter(i => i >= 0);
-      if(!playIdxs.length) playIdxs.push(playStart);
-      L.push("  .byte " + playIdxs.map(i => i & 0xFF).join(", "));
-    })();
+    const playIdxs = screens.map((s,i) => s.role === "play" ? i : -1).filter(i => i >= 0);
+    if(!playIdxs.length) playIdxs.push(playStart);
+    L.push("  .byte " + playIdxs.map(i => i & 0xFF).join(", "));
+    L.push("");
+
+    // Enemy spawn tables — 1 inimigo por tela de play (fallback; hitboxInstances vazio no .nms)
+    // Formato por tela: count, x0,y0, x1,y1, ...
+    const enemySpawns = playIdxs.map((gi, pi) => {
+      // posicoes variadas por tela
+      const x = 160 + (pi % 3) * 20;
+      const y = 152;
+      return { count: 1, points: [[x, y]] };
+    });
+    // se existir hitboxInstances no projeto, usar
+    try {
+      const instances = Project?.data?.hitboxInstances || [];
+      const objs = Project?.data?.hitboxObjects || [];
+      const enemyObjIds = new Set(objs.filter(o => o.kind === "spawn" && o.characterId && o.characterId !== "char_1787145214756").map(o => o.id));
+      if(instances.length && enemyObjIds.size){
+        playIdxs.forEach((gi, pi) => {
+          const scr = screens[gi];
+          const pts = instances.filter(inst => {
+            if(inst.screenId && scr && inst.screenId !== scr.id) return false;
+            return enemyObjIds.has(inst.objectId || inst.hitboxObjectId);
+          }).map(inst => [inst.x|0, inst.y|0]);
+          if(pts.length) enemySpawns[pi] = { count: Math.min(4, pts.length), points: pts.slice(0,4) };
+        });
+      }
+    } catch(e){}
+
+    enemySpawns.forEach((es, pi) => {
+      L.push(`EnemyData_${pi}:`);
+      const bytes = [es.count];
+      es.points.forEach(([x,y]) => { bytes.push(x & 0xFF, y & 0xFF); });
+      L.push("  .byte " + bytes.join(", "));
+    });
+    L.push("EnemySpawnPtr:");
+    enemySpawns.forEach((_, pi) => {
+      L.push(`  .word EnemyData_${pi}`);
+    });
     L.push("");
 
     screens.forEach((sc, i) => {

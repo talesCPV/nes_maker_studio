@@ -1,5 +1,5 @@
-; NES Maker Studio - BUILD v0.9.6
-; NROM-256 | fisica + paredes | troca de tela nas bordas
+; NES Maker Studio - BUILD v0.9.8
+; NROM-256 | inimigos (spawn fixo garantido) + patrol + hit
 ; Telas: 7 · CHR tiles: 32/256
 ;   [0] splash · Splash 1
 ;   [1] play · Tela 1
@@ -33,6 +33,23 @@ col_y:      .res 1    ; tile Y para consulta
 col_result: .res 1
 ls_count:   .res 1    ; contador load_screen (nao reusa pad)
 play_idx:   .res 1    ; indice 0..playCount-1 na sequencia da fase
+en0_x:      .res 1
+en0_y:      .res 1
+en0_on:     .res 1
+en0_dir:    .res 1
+en1_x:      .res 1
+en1_y:      .res 1
+en1_on:     .res 1
+en1_dir:    .res 1
+en2_x:      .res 1
+en2_y:      .res 1
+en2_on:     .res 1
+en2_dir:    .res 1
+en3_x:      .res 1
+en3_y:      .res 1
+en3_on:     .res 1
+en3_dir:    .res 1
+en_tmp:     .res 1
 music_on:   .res 1
 ch0_timer: .res 1
 ch0_pos:   .res 1
@@ -400,6 +417,7 @@ try_screen_right:
   JSR goto_play_screen
   LDA #12             ; entra pela esquerda
   STA player_x
+  JSR spawn_enemies
 tsr_done:
   RTS
 
@@ -411,7 +429,311 @@ try_screen_left:
   JSR goto_play_screen
   LDA #230            ; entra pela direita
   STA player_x
+  JSR spawn_enemies
 tsl_done:
+  RTS
+
+clear_enemies:
+  LDA #0
+  STA en0_on
+  STA en1_on
+  STA en2_on
+  STA en3_on
+  RTS
+
+spawn_enemies:
+  JSR clear_enemies
+  ; fallback fixo: 2 inimigos sempre na tela de play
+  LDA #176
+  STA en0_x
+  LDA #160
+  STA en0_y
+  LDA #1
+  STA en0_on
+  LDA #0
+  STA en0_dir
+  LDA #120
+  STA en1_x
+  LDA #160
+  STA en1_y
+  LDA #1
+  STA en1_on
+  LDA #1
+  STA en1_dir
+  JSR update_enemy_oam
+  RTS
+
+draw_en_2x2:
+  LDA tmp1
+  STA $0200,X
+  LDA #2
+  STA $0201,X
+  LDA en_tmp
+  STA $0202,X
+  LDA tmp0
+  STA $0203,X
+  LDA tmp1
+  STA $0204,X
+  LDA #3
+  STA $0205,X
+  LDA en_tmp
+  STA $0206,X
+  LDA tmp0
+  CLC
+  ADC #8
+  STA $0207,X
+  LDA tmp1
+  CLC
+  ADC #8
+  STA $0208,X
+  LDA #4
+  STA $0209,X
+  LDA en_tmp
+  STA $020A,X
+  LDA tmp0
+  STA $020B,X
+  LDA tmp1
+  CLC
+  ADC #8
+  STA $020C,X
+  LDA #19
+  STA $020D,X
+  LDA en_tmp
+  STA $020E,X
+  LDA tmp0
+  CLC
+  ADC #8
+  STA $020F,X
+  RTS
+
+update_enemy_oam:
+  LDA #$FF
+  STA $0210
+  STA $0214
+  STA $0218
+  STA $021C
+  STA $0220
+  STA $0224
+  STA $0228
+  STA $022C
+  LDA en0_on
+  BEQ ueo1
+  LDA en0_x
+  STA tmp0
+  LDA en0_y
+  STA tmp1
+  LDA en0_dir
+  BEQ ueo0a
+  LDA #%01000001
+  JMP ueo0b
+ueo0a:
+  LDA #%00000001
+ueo0b:
+  STA en_tmp
+  LDX #$10
+  JSR draw_en_2x2
+ueo1:
+  LDA en1_on
+  BEQ ueo_done
+  LDA en1_x
+  STA tmp0
+  LDA en1_y
+  STA tmp1
+  LDA en1_dir
+  BEQ ueo1a
+  LDA #%01000001
+  JMP ueo1b
+ueo1a:
+  LDA #%00000001
+ueo1b:
+  STA en_tmp
+  LDX #$20
+  JSR draw_en_2x2
+ueo_done:
+  RTS
+
+update_enemies:
+  LDA en0_on
+  BEQ ue_1
+  LDA en0_dir
+  BNE ue0_left
+  LDA en0_x
+  CLC
+  ADC #1
+  STA en0_x
+  CMP #220
+  BCC ue_1
+  LDA #1
+  STA en0_dir
+  JMP ue_1
+ue0_left:
+  LDA en0_x
+  SEC
+  SBC #1
+  STA en0_x
+  CMP #20
+  BCS ue_1
+  LDA #0
+  STA en0_dir
+ue_1:
+  LDA en1_on
+  BEQ ue_2
+  LDA en1_dir
+  BNE ue1_left
+  LDA en1_x
+  CLC
+  ADC #1
+  STA en1_x
+  CMP #220
+  BCC ue_2
+  LDA #1
+  STA en1_dir
+  JMP ue_2
+ue1_left:
+  LDA en1_x
+  SEC
+  SBC #1
+  STA en1_x
+  CMP #20
+  BCS ue_2
+  LDA #0
+  STA en1_dir
+ue_2:
+  LDA en2_on
+  BEQ ue_3
+  LDA en2_x
+  CLC
+  ADC #1
+  STA en2_x
+  CMP #200
+  BCC ue_3
+  LDA #40
+  STA en2_x
+ue_3:
+  LDA en3_on
+  BEQ ue_col
+  LDA en3_x
+  SEC
+  SBC #1
+  STA en3_x
+  CMP #20
+  BCS ue_col
+  LDA #200
+  STA en3_x
+ue_col:
+  JSR check_player_enemy_hit
+  JSR update_enemy_oam
+  RTS
+
+check_player_enemy_hit:
+  LDA player_on
+  BEQ cpe_done
+  LDA en0_on
+  BEQ cpe1
+  LDA player_x
+  CLC
+  ADC #12
+  CMP en0_x
+  BCC cpe1
+  LDA en0_x
+  CLC
+  ADC #12
+  CMP player_x
+  BCC cpe1
+  LDA player_y
+  CLC
+  ADC #14
+  CMP en0_y
+  BCC cpe1
+  LDA en0_y
+  CLC
+  ADC #14
+  CMP player_y
+  BCC cpe1
+  JMP player_hurt
+cpe1:
+  LDA en1_on
+  BEQ cpe2
+  LDA player_x
+  CLC
+  ADC #12
+  CMP en1_x
+  BCC cpe2
+  LDA en1_x
+  CLC
+  ADC #12
+  CMP player_x
+  BCC cpe2
+  LDA player_y
+  CLC
+  ADC #14
+  CMP en1_y
+  BCC cpe2
+  LDA en1_y
+  CLC
+  ADC #14
+  CMP player_y
+  BCC cpe2
+  JMP player_hurt
+cpe2:
+  LDA en2_on
+  BEQ cpe3
+  LDA player_x
+  CLC
+  ADC #12
+  CMP en2_x
+  BCC cpe3
+  LDA en2_x
+  CLC
+  ADC #12
+  CMP player_x
+  BCC cpe3
+  LDA player_y
+  CLC
+  ADC #14
+  CMP en2_y
+  BCC cpe3
+  LDA en2_y
+  CLC
+  ADC #14
+  CMP player_y
+  BCC cpe3
+  JMP player_hurt
+cpe3:
+  LDA en3_on
+  BEQ cpe_done
+  LDA player_x
+  CLC
+  ADC #12
+  CMP en3_x
+  BCC cpe_done
+  LDA en3_x
+  CLC
+  ADC #12
+  CMP player_x
+  BCC cpe_done
+  LDA player_y
+  CLC
+  ADC #14
+  CMP en3_y
+  BCC cpe_done
+  LDA en3_y
+  CLC
+  ADC #14
+  CMP player_y
+  BCC cpe_done
+  JMP player_hurt
+cpe_done:
+  RTS
+
+player_hurt:
+  ; respawn simples na tela atual
+  LDA #40
+  STA player_x
+  LDA #160
+  STA player_y
+  LDA #0
+  STA jump_cnt
   RTS
 
 hide_player:
@@ -757,12 +1079,14 @@ st_splash:
   LDA #1
   JSR load_screen
   JSR spawn_player
+  JSR spawn_enemies
   JSR music_init
   JMP MainLoop
 
 st_play:
-  ; fisica + input todo frame (Camada 2)
+  ; fisica + input + inimigos
   JSR update_player
+  JSR update_enemies
   ; SELECT → Game Over (teste)
   LDA pad1_edge
   AND #%00000100
@@ -841,6 +1165,23 @@ ScreenColHi:
   .byte >Collision_6
 PlayScreenTable:  ; indices globais das telas de jogo (em ordem)
   .byte 1, 2, 3, 4, 5
+
+EnemyData_0:
+  .byte 1, 160, 152
+EnemyData_1:
+  .byte 1, 180, 152
+EnemyData_2:
+  .byte 1, 200, 152
+EnemyData_3:
+  .byte 1, 160, 152
+EnemyData_4:
+  .byte 1, 180, 152
+EnemySpawnPtr:
+  .word EnemyData_0
+  .word EnemyData_1
+  .word EnemyData_2
+  .word EnemyData_3
+  .word EnemyData_4
 
 Nametable_0:  ; Splash 1 (splash)
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
