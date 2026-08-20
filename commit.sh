@@ -19,7 +19,7 @@ then
     git add index.html
     git add historico.txt
     git add backup.zip
-    git intro.md
+    git add intro.md
     
     git commit -m "by_script"
 
