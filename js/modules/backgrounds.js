@@ -84,7 +84,8 @@ const BG = (() => {
                 <button class="btn-tool tool-btn" data-bg-tool="flood" onclick="BG.setTool('flood')" style="background:#8e44ad;color:#fff;border:1px solid #9b59b6">🌊 Flood</button>
                 <button class="btn-tool tool-btn" data-bg-tool="attr" onclick="BG.setTool('attr')" style="background:#2980b9;color:#fff;border:1px solid #3498db">🖌 Paleta</button>
                 <button class="btn-tool tool-btn" data-bg-tool="hitbox" onclick="BG.setTool('hitbox')" style="background:#c0392b;color:#fff;border:1px solid #e74c3c">🛡 Hitbox</button>
-                <button class="btn-tool tool-btn" data-bg-tool="assign" onclick="BG.setTool('assign')" style="background:#16a085;color:#fff;border:1px solid #1abc9c" title="Clique numa instância de Dano/Warp já pintada pra trocar qual objeto ela usa">🎯 Objeto</button>
+                <button class="btn-tool tool-btn" data-bg-tool="spawn" onclick="BG.setTool('spawn')" style="background:#16a085;color:#fff;border:1px solid #1abc9c" title="Clique num ponto: marca Spawn, cria o objeto e pede o personagem">🐣 Spawn</button>
+                <button class="btn-tool tool-btn" data-bg-tool="assign" onclick="BG.setTool('assign')" style="background:#2980b9;color:#fff;border:1px solid #3498db" title="Clique numa instância de Dano/Warp/Spawn já pintada pra trocar qual objeto ela usa">🎯 Objeto</button>
                 <button class="btn-tool tool-btn" data-bg-tool="erase" onclick="BG.setTool('erase')" style="background:#555;color:#fff;border:1px solid #777">🧽 Borracha</button>
                 <button class="btn-tool tool-btn" data-bg-tool="text" onclick="BG.setTool('text')" style="background:#ffcc00;color:#000">🔤 Texto</button>
                 <button class="btn-tool tool-btn" data-bg-tool="fill" onclick="BG.setTool('fill')">🪣 Auto-Fill</button>
@@ -213,6 +214,7 @@ const BG = (() => {
     if(t === 'flood') { label.textContent = 'Modo: Flood Fill'; help.textContent = 'Preenche área contígua com o metatile selecionado.'; }
     else if(t === 'attr') { label.textContent = 'Modo: Pincel de Atributo'; help.textContent = 'Pinta a paleta mantendo as estampas.'; }
     else if(t === 'hitbox') { label.textContent = 'Modo: Hitbox Manual'; help.textContent = 'Pinta colisão individualmente (inclui Warp). Shift+clique apaga.'; }
+    else if(t === 'spawn') { label.textContent = 'Modo: Spawn Rápido'; help.textContent = 'Clique num ponto: marca como Spawn, cria o objeto e pede o personagem. Shift+clique remove.'; }
     else if(t === 'assign') { label.textContent = 'Modo: Atribuir Objeto'; help.textContent = 'Clique num tile de Dano/Warp/Spawn - todos os vizinhos conectados do mesmo tipo são atribuídos juntos.'; }
     else if(t === 'fill') { label.textContent = 'Modo: Auto-Fill'; help.textContent = 'Preenchimento em massa.'; }
     else if(t === 'erase') { label.textContent = 'Modo: Borracha'; help.textContent = 'Clique (ou arraste) num tile para apagá-lo, tile por tile.'; }
@@ -486,6 +488,42 @@ const BG = (() => {
     Project.status(`${region.length} tile(s) agora usa(m) "${objs[n-1].name}"`);
   }
 
+  // Ferramenta Spawn unificada: um clique marca colisão 5, cria o hitboxObject do tipo
+  // spawn e já pede o personagem. Shift+clique remove o spawn daquele ponto.
+  function placeSpawnAt(tx, ty, erasing){
+    if(erasing){
+      collisionMap[ty * 32 + tx] = 0;
+      clearHitboxInstanceAt(tx, ty);
+      render();
+      Project.status(`Spawn removido em (${tx},${ty})`);
+      return;
+    }
+    const chars = Project.data?.characters || [];
+    if(chars.length === 0){
+      alert('Nenhum personagem cadastrado ainda. Crie um em Personagens antes de colocar spawns.');
+      return;
+    }
+    const listStr = chars.map((c,i) => `${i+1}. ${c.name}`).join('\n');
+    const answer = prompt(`Spawn em (${tx},${ty})\nEscolha o personagem:\n${listStr}\n\nDigite o número:`, '1');
+    if(answer === null) return;
+    const n = parseInt(answer);
+    if(isNaN(n) || n < 1 || n > chars.length) return;
+    const char = chars[n-1];
+    if(!Project.data.hitboxObjects) Project.data.hitboxObjects = [];
+    const objId = 'hb_'+Date.now();
+    const objName = `spawn_${tx}_${ty}`;
+    Project.data.hitboxObjects.push({
+      id: objId,
+      name: objName,
+      kind: 'spawn',
+      characterId: char.id
+    });
+    collisionMap[ty * 32 + tx] = 5;
+    setHitboxInstanceAt(tx, ty, 5, objId);
+    render();
+    Project.status(`Spawn "${objName}" → ${char.name} em (${tx},${ty})`);
+  }
+
   function paintAt(mx, my, erasing = false, isAlt = false, isInitialClick = false) {
     if(!bgCanvas) return;
     const rect = bgCanvas.getBoundingClientRect();
@@ -523,6 +561,10 @@ const BG = (() => {
     if(isAlt) { if(isInitialClick) pickMetatileAt(tx, ty); return; }
 
     if(currentTool === 'assign') { if(isInitialClick) assignHitboxObjectAt(tx, ty); return; }
+    if(currentTool === 'spawn') {
+      if(isInitialClick) placeSpawnAt(tx, ty, erasing);
+      return;
+    }
     if(currentTool === 'hitbox') {
       const isHitboxFlood = document.getElementById('chkHitboxFlood')?.checked;
       if(isHitboxFlood) { if(isInitialClick) floodFillHitbox(tx, ty, erasing ? 0 : selectedCollisionType); }

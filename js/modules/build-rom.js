@@ -1,9 +1,10 @@
-// BUILD ROM v0.8.2 - Splash/BG + Music test (sound-editor v3 → APU)
+// BUILD ROM v0.9.1 - Camada 2: movimento + gravidade + colisão sólida + pulo
 const BUILD = (() => {
   let lastROM = null;
   let lastASM = "";
   let emuBrowser = null;
   let emuScriptPromise = null;
+  let buildMode = "game"; // "game" | "single"
 
   const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
   const CPU_FREQ_NTSC = 1789773;
@@ -113,8 +114,12 @@ const BUILD = (() => {
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <div style="display:flex;gap:8px;align-items:center;padding:10px 12px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
-          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.8.2 • Splash/BG + Music Test</h3>
-          <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.9.4 • STABLE (NROM-256)</h3>
+          <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <select id="buildModeSelect" onchange="BUILD.setBuildMode(this.value)" style="background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:4px;font-size:11px">
+              <option value="game" selected>🎮 Jogo completo (Camada 1)</option>
+              <option value="single">🖼 Tela única (legado)</option>
+            </select>
             <button class="btn-tool" onclick="BUILD.buildROM()" style="background:#27ae60;color:#fff;padding:6px 14px;font-weight:bold">🔨 Build ROM</button>
             <button class="btn-tool" onclick="BUILD.downloadROM()" id="btnDownload" style="display:none;background:#2980b9;color:#fff">⬇ .nes</button>
             <button class="btn-tool" onclick="BUILD.playEmulator()" id="btnPlayEmu" style="display:none;background:#c0392b;color:#fff;font-weight:bold">▶ Testar</button>
@@ -372,6 +377,112 @@ const BUILD = (() => {
     return { bgChr, remappedNt, usedCount: usedTiles.length, overflowCount: overflow.size };
   }
 
+  // ---- Camada 1: coleta telas na ordem das fases (levelMap) + splashes restantes (ex: Game Over)
+  function collectGameScreens(){
+    const screens = [];
+    const seen = new Set();
+    const bgs = Project.data?.backgrounds || [];
+    const splashes = Project.data?.splashScreens || [];
+    const findAsset = (id, type) => {
+      if(type === "splash") return splashes.find(s => s.id === id);
+      return bgs.find(b => b.id === id);
+    };
+    const phases = Project.data?.phases || [];
+    phases.forEach(ph => {
+      const lm = ph.levelMap;
+      if(!lm || !lm.cells) return;
+      const cols = lm.cols || 1, rows = lm.rows || 1;
+      for(let y=0; y<rows; y++){
+        for(let x=0; x<cols; x++){
+          const cell = lm.cells[`${x},${y}`];
+          if(!cell || !cell.bgId || seen.has(cell.bgId)) continue;
+          const asset = findAsset(cell.bgId, cell.type === "splash" ? "splash" : "background");
+          if(!asset) continue;
+          seen.add(cell.bgId);
+          screens.push({
+            id: asset.id,
+            name: asset.name || cell.bgId,
+            type: cell.type === "splash" ? "splash" : "background",
+            phaseId: ph.id,
+            phaseName: ph.name,
+            nametable: asset.nametable || new Array(960).fill(0),
+            attributes: asset.attributes || new Array(64).fill(0),
+            collisionMap: asset.collisionMap || new Array(960).fill(0),
+            role: screens.length === 0 ? "splash" : "play"
+          });
+        }
+      }
+    });
+    // Splashes não referenciadas nas fases (ex: Game Over via warp)
+    splashes.forEach(s => {
+      if(seen.has(s.id)) return;
+      seen.add(s.id);
+      screens.push({
+        id: s.id,
+        name: s.name || s.id,
+        type: "splash",
+        phaseId: null,
+        phaseName: null,
+        nametable: s.nametable || new Array(960).fill(0),
+        attributes: s.attributes || new Array(64).fill(0),
+        collisionMap: s.collisionMap || new Array(960).fill(0),
+        role: "gameover"
+      });
+    });
+    if(screens.length === 0){
+      // fallback: qualquer BG/splash do projeto
+      (splashes.length ? splashes : bgs).forEach((s,i) => {
+        screens.push({
+          id: s.id, name: s.name, type: splashes.length ? "splash" : "background",
+          phaseId: null, phaseName: null,
+          nametable: s.nametable || new Array(960).fill(0),
+          attributes: s.attributes || new Array(64).fill(0),
+          collisionMap: s.collisionMap || new Array(960).fill(0),
+          role: i === 0 ? "splash" : "play"
+        });
+      });
+    }
+    // índices úteis
+    const splashIdx = screens.findIndex(s => s.role === "splash");
+    const gameoverIdx = screens.findIndex(s => s.role === "gameover");
+    const playIdxs = screens.map((s,i) => s.role === "play" ? i : -1).filter(i => i >= 0);
+    return {
+      screens,
+      splashIdx: splashIdx >= 0 ? splashIdx : 0,
+      playStartIdx: playIdxs.length ? playIdxs[0] : 0,
+      playCount: playIdxs.length || 1,
+      gameoverIdx: gameoverIdx >= 0 ? gameoverIdx : (screens.length - 1)
+    };
+  }
+
+  // Empacota CHR de várias nametables num único banco de 256 tiles ($1000)
+  function packMultiScreenCHR(chrBuf, screens){
+    const mapping = new Map();
+    const usedTiles = [];
+    mapping.set(0, 0); usedTiles.push(0);
+    const overflow = new Set();
+    screens.forEach(sc => {
+      (sc.nametable || []).forEach(raw => {
+        const orig = raw || 0;
+        if(mapping.has(orig)) return;
+        if(usedTiles.length >= 256){ overflow.add(orig); return; }
+        mapping.set(orig, usedTiles.length);
+        usedTiles.push(orig);
+      });
+    });
+    const bgChr = new Uint8Array(4096);
+    for(let i=0; i<usedTiles.length; i++){
+      const srcIdx = usedTiles[i];
+      const srcOff = (srcIdx % 512) * 16;
+      if(srcOff + 16 <= chrBuf.length) bgChr.set(chrBuf.slice(srcOff, srcOff + 16), i * 16);
+    }
+    const remapped = screens.map(sc => ({
+      ...sc,
+      remappedNt: (sc.nametable || []).map(t => mapping.has(t||0) ? mapping.get(t||0) : 0)
+    }));
+    return { bgChr, screens: remapped, usedCount: usedTiles.length, overflowCount: overflow.size };
+  }
+
   // ---- Music engine ASM helpers ----
   const CH_ORDER = ["pulse1", "pulse2", "triangle", "noise"];
   const CH_META = {
@@ -407,7 +518,750 @@ const BUILD = (() => {
     return used;
   }
 
+  // ===== CAMADA 1: jogo multi-tela (Splash → Play → Game Over) =====
+  function generateASMGame(){
+    const chrBuf=CHR.getBuffer?CHR.getBuffer():new Uint8Array(8192);
+    const pals=CHR.getPalettes?CHR.getPalettes():[[15,0,16,48],[15,6,22,38],[15,10,26,42],[15,2,18,34],[15,22,48,15],[15,25,41,57],[15,3,19,35],[15,9,25,41]];
+    const music = getSelectedMusic();
+    const collected = collectGameScreens();
+    const packed = packMultiScreenCHR(chrBuf, collected.screens);
+    const screens = packed.screens;
+    const splashIdx = collected.splashIdx;
+    const playStart = collected.playStartIdx;
+    const gameoverIdx = collected.gameoverIdx;
+
+    // paletas
+    const paletteBytes=[]; for(let p=0;p<8;p++){ const pal=pals[p]||[15,0,16,48]; for(let c=0;c<4;c++) paletteBytes.push(pal[c]||0); }
+    const firstNt = screens[0]?.remappedNt || new Array(960).fill(0);
+    const firstAt = screens[0]?.attributes || new Array(64).fill(0);
+    const backdrop = computeBackdropColor(firstNt, firstAt, pals, chrBuf);
+    const universalBackdrop = backdrop.color;
+    paletteBytes[0] = universalBackdrop;
+    [4,8,12,16,20,24,28].forEach(i => { paletteBytes[i] = universalBackdrop; });
+
+    // música
+    let musicChans = null;
+    if(music){
+      const baseFrames = music.baseFrames || 30;
+      const loop = music.loop !== false;
+      musicChans = [];
+      CH_ORDER.forEach(type=>{
+        const ch = (music.channels || []).find(c => c.type === type);
+        if(ch) musicChans.push({ type, enc: encodeChannel(ch.notes || [], baseFrames, loop) });
+      });
+      (music.channels || []).forEach(ch=>{
+        if(musicChans.some(u => u.type === ch.type)) return;
+        const free = CH_ORDER.find(t => !musicChans.some(u => u.type === t));
+        if(free) musicChans.push({ type: free, enc: encodeChannel(ch.notes || [], baseFrames, loop) });
+      });
+      if(!musicChans.length) musicChans = null;
+    }
+
+    const L=[];
+    L.push("; NES Maker Studio - BUILD v0.9.4 STABLE");
+    L.push("; NROM-256 | ponteiros 1-byte | movimento+fisica | init classico");
+    L.push(`; Telas: ${screens.length} · CHR tiles: ${packed.usedCount}/256` + (packed.overflowCount?` · overflow ${packed.overflowCount}`:""));
+    screens.forEach((s,i) => L.push(`;   [${i}] ${s.role} · ${s.name}`));
+    if(music && musicChans) L.push(`; Musica: ${music.name} · ${musicChans.length} canal(is)`);
+    else L.push("; Musica: (nenhuma)");
+    L.push("");
+    L.push('.segment "HEADER"');
+    L.push("  .byte $4E,$45,$53,$1A,2,1,$01,0,0,0,0,0,0,0,0,0  ; NROM-256 (32KB PRG), vertical mirroring");
+    L.push("");
+    L.push('.segment "ZEROPAGE"');
+    L.push("pad1:       .res 1");
+    L.push("pad1_old:   .res 1");
+    L.push("pad1_edge:  .res 1");
+    L.push("game_state: .res 1    ; 0=splash 1=play 2=gameover");
+    L.push("cur_screen: .res 1");
+    L.push("nmi_flag:   .res 1");
+    L.push("tmp0:       .res 1");
+    L.push("tmp1:       .res 1");
+    L.push("player_x:   .res 1");
+    L.push("player_y:   .res 1");
+    L.push("player_on:  .res 1    ; 0=oculto 1=visivel");
+    L.push("player_flip:.res 1    ; 0=normal !=0 flip H");
+    L.push("on_ground:  .res 1");
+    L.push("jump_cnt:   .res 1    ; frames restantes de impulso de pulo");
+    L.push("col_x:      .res 1    ; tile X para consulta");
+    L.push("col_y:      .res 1    ; tile Y para consulta");
+    L.push("col_result: .res 1");
+    L.push("ls_count:   .res 1    ; contador load_screen (nao reusa pad)");
+    if(musicChans){
+      L.push("music_on:   .res 1");
+      musicChans.forEach((_,i)=>{
+        L.push(`ch${i}_timer: .res 1`);
+        L.push(`ch${i}_pos:   .res 1`);
+      });
+    }
+    L.push("");
+    L.push('.segment "CODE"');
+    L.push("");
+
+    // ---- NMI ----
+    L.push("NMI:");
+    L.push("  PHA");
+    L.push("  TXA");
+    L.push("  PHA");
+    L.push("  TYA");
+    L.push("  PHA");
+    L.push("  ; OAM DMA");
+    L.push("  LDA #0");
+    L.push("  STA $2003");
+    L.push("  LDA #$02");
+    L.push("  STA $4014");
+    if(musicChans){
+      L.push("  JSR music_update");
+    }
+    L.push("  LDA #1");
+    L.push("  STA nmi_flag");
+    L.push("  PLA");
+    L.push("  TAY");
+    L.push("  PLA");
+    L.push("  TAX");
+    L.push("  PLA");
+    L.push("  RTI");
+    L.push("");
+    L.push("IRQ:");
+    L.push("  RTI");
+    L.push("");
+
+    // ---- music (reuse same pattern as single-screen) ----
+    if(musicChans){
+      L.push("music_update:");
+      L.push("  LDA music_on");
+      L.push("  BNE mu_run");
+      L.push("  RTS");
+      L.push("mu_run:");
+      musicChans.forEach((mc, i)=>{
+        const meta = CH_META[mc.type];
+        const lbl = `mu_ch${i}`;
+        L.push(`${lbl}:`);
+        L.push(`  LDA ch${i}_timer`);
+        L.push(`  BEQ ${lbl}_next`);
+        L.push(`  DEC ch${i}_timer`);
+        L.push(`  JMP ${lbl}_end`);
+        L.push(`${lbl}_next:`);
+        L.push(`  LDY ch${i}_pos`);
+        L.push(`  LDA Scale_ch${i},Y`);
+        L.push(`  CMP #$FF`);
+        L.push(`  BNE ${lbl}_nof`);
+        L.push(`  LDA #0`);
+        L.push(`  STA ch${i}_pos`);
+        L.push(`  LDY #0`);
+        L.push(`  LDA Scale_ch${i},Y`);
+        L.push(`${lbl}_nof:`);
+        L.push(`  CMP #$FE`);
+        L.push(`  BNE ${lbl}_play`);
+        L.push(`  LDA #${meta.silence}`);
+        L.push(`  STA ${meta.regVol}`);
+        L.push(`  JMP ${lbl}_end`);
+        L.push(`${lbl}_play:`);
+        L.push(`  TAX`);
+        L.push(`  LDA Time_ch${i},Y`);
+        L.push(`  STA ch${i}_timer`);
+        L.push(`  INY`);
+        L.push(`  STY ch${i}_pos`);
+        L.push(`  CPX #0`);
+        L.push(`  BNE ${lbl}_tone`);
+        L.push(`  LDA #${meta.silence}`);
+        L.push(`  STA ${meta.regVol}`);
+        L.push(`  JMP ${lbl}_end`);
+        L.push(`${lbl}_tone:`);
+        L.push(`  LDA #${meta.dutyVol}`);
+        L.push(`  STA ${meta.regVol}`);
+        L.push(`  LDA PitchLo_ch${i},X`);
+        L.push(`  STA ${meta.regLo}`);
+        L.push(`  LDA PitchHi_ch${i},X`);
+        L.push(`  STA ${meta.regHi}`);
+        L.push(`${lbl}_end:`);
+      });
+      L.push("  RTS");
+      L.push("");
+      L.push("music_init:");
+      L.push("  LDA #0");
+      musicChans.forEach((_,i)=>{
+        L.push(`  STA ch${i}_timer`);
+        L.push(`  STA ch${i}_pos`);
+      });
+      L.push("  LDA #$0F");
+      L.push("  STA $4015");
+      L.push("  LDA #1");
+      L.push("  STA music_on");
+      L.push("  RTS");
+      L.push("");
+    }
+
+    // ---- read controller ----
+    L.push("; Leitura do controle P1 (strobe padrão NES)");
+    L.push("read_pad:");
+    L.push("  LDA pad1");
+    L.push("  STA pad1_old");
+    L.push("  LDA #1");
+    L.push("  STA $4016");
+    L.push("  LDA #0");
+    L.push("  STA $4016");
+    L.push("  LDX #8");
+    L.push("  LDA #0");
+    L.push("  STA pad1");
+    L.push("rp_loop:");
+    L.push("  LDA $4016");
+    L.push("  AND #1");
+    L.push("  LSR A");
+    L.push("  ROR pad1");
+    L.push("  DEX");
+    L.push("  BNE rp_loop");
+    L.push("  ; edge = pad1 & ~pad1_old");
+    L.push("  LDA pad1_old");
+    L.push("  EOR #$FF");
+    L.push("  AND pad1");
+    L.push("  STA pad1_edge");
+    L.push("  RTS");
+    L.push("");
+
+    // ---- load_screen: A = índice da tela ----
+    L.push("; Carrega nametable+attrs da tela A (hard cut, rendering off)");
+    L.push("load_screen:");
+    L.push("  STA cur_screen");
+    L.push("  ; desliga rendering");
+    L.push("  LDA #0");
+    L.push("  STA $2001");
+    L.push("  ; ponteiro da nametable (tabela de 1 byte por tela — SEM ASL)");
+    L.push("  LDX cur_screen");
+    L.push("  LDA ScreenNtLo,X");
+    L.push("  STA tmp0");
+    L.push("  LDA ScreenNtHi,X");
+    L.push("  STA tmp1");
+    L.push("  BIT $2002");
+    L.push("  LDA #$20");
+    L.push("  STA $2006");
+    L.push("  LDA #$00");
+    L.push("  STA $2006");
+    L.push("  LDY #0");
+    L.push("  LDX #4          ; 4×240 = 960 tiles");
+    L.push("ls_nt_outer:");
+    L.push("  LDA #240");
+    L.push("  STA ls_count");
+    L.push("ls_nt_inner:");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA $2007");
+    L.push("  INY");
+    L.push("  BNE ls_nt_noinc");
+    L.push("  INC tmp1");
+    L.push("ls_nt_noinc:");
+    L.push("  DEC ls_count");
+    L.push("  BNE ls_nt_inner");
+    L.push("  DEX");
+    L.push("  BNE ls_nt_outer");
+    L.push("  ; attributes");
+    L.push("  LDX cur_screen");
+    L.push("  LDA ScreenAtLo,X");
+    L.push("  STA tmp0");
+    L.push("  LDA ScreenAtHi,X");
+    L.push("  STA tmp1");
+    L.push("  BIT $2002");
+    L.push("  LDA #$23");
+    L.push("  STA $2006");
+    L.push("  LDA #$C0");
+    L.push("  STA $2006");
+    L.push("  LDY #0");
+    L.push("ls_at:");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA $2007");
+    L.push("  INY");
+    L.push("  CPY #64");
+    L.push("  BNE ls_at");
+    L.push("  ; scroll zerado");
+    L.push("  BIT $2002");
+    L.push("  LDA #0");
+    L.push("  STA $2005");
+    L.push("  STA $2005");
+    L.push("  ; religa rendering (bg + sprites)");
+    L.push("  LDA #%00011110");
+    L.push("  STA $2001");
+    L.push("  RTS");
+    L.push("");
+
+    // ---- update_player_oam: grava 4 sprites 8x8 (metatile 2x2) em $0200 ----
+    // tiles padrão do Hero Idle: 0,1 / 16,17 (CHR page 0)
+    L.push("update_player_oam:");
+    L.push("  LDA player_on");
+    L.push("  BNE upo_draw");
+    L.push("  ; esconde: Y=$FF nos 4 slots");
+    L.push("  LDA #$FF");
+    L.push("  STA $0200");
+    L.push("  STA $0204");
+    L.push("  STA $0208");
+    L.push("  STA $020C");
+    L.push("  RTS");
+    L.push("upo_draw:");
+    L.push("  LDA player_flip");
+    L.push("  BEQ upo_noflip");
+    L.push("  LDA #%01000000     ; flip H");
+    L.push("  STA tmp0");
+    L.push("  JMP upo_attr");
+    L.push("upo_noflip:");
+    L.push("  LDA #0");
+    L.push("  STA tmp0");
+    L.push("upo_attr:");
+    L.push("  ; sprite 0: topo-esq");
+    L.push("  LDA player_y");
+    L.push("  STA $0200");
+    L.push("  LDA #0              ; tile 0");
+    L.push("  STA $0201");
+    L.push("  LDA tmp0");
+    L.push("  STA $0202");
+    L.push("  LDA player_x");
+    L.push("  STA $0203");
+    L.push("  ; sprite 1: topo-dir");
+    L.push("  LDA player_y");
+    L.push("  STA $0204");
+    L.push("  LDA #1              ; tile 1");
+    L.push("  STA $0205");
+    L.push("  LDA tmp0");
+    L.push("  STA $0206");
+    L.push("  LDA player_x");
+    L.push("  CLC");
+    L.push("  ADC #8");
+    L.push("  STA $0207");
+    L.push("  ; sprite 2: baixo-esq");
+    L.push("  LDA player_y");
+    L.push("  CLC");
+    L.push("  ADC #8");
+    L.push("  STA $0208");
+    L.push("  LDA #16             ; tile 16");
+    L.push("  STA $0209");
+    L.push("  LDA tmp0");
+    L.push("  STA $020A");
+    L.push("  LDA player_x");
+    L.push("  STA $020B");
+    L.push("  ; sprite 3: baixo-dir");
+    L.push("  LDA player_y");
+    L.push("  CLC");
+    L.push("  ADC #8");
+    L.push("  STA $020C");
+    L.push("  LDA #17             ; tile 17");
+    L.push("  STA $020D");
+    L.push("  LDA tmp0");
+    L.push("  STA $020E");
+    L.push("  LDA player_x");
+    L.push("  CLC");
+    L.push("  ADC #8");
+    L.push("  STA $020F");
+    L.push("  ; se flip H, troca tiles L/R para o personagem não ficar invertido só no eixo");
+    L.push("  LDA player_flip");
+    L.push("  BEQ upo_done");
+    L.push("  LDA #1");
+    L.push("  STA $0201");
+    L.push("  LDA #0");
+    L.push("  STA $0205");
+    L.push("  LDA #17");
+    L.push("  STA $0209");
+    L.push("  LDA #16");
+    L.push("  STA $020D");
+    L.push("upo_done:");
+    L.push("  RTS");
+    L.push("");
+
+    L.push("spawn_player:");
+    L.push("  LDA #40             ; X inicial");
+    L.push("  STA player_x");
+    L.push("  LDA #160            ; Y inicial");
+    L.push("  STA player_y");
+    L.push("  LDA #0");
+    L.push("  STA player_flip");
+    L.push("  STA jump_cnt");
+    L.push("  STA on_ground");
+    L.push("  LDA #1");
+    L.push("  STA player_on");
+    L.push("  JSR update_player_oam");
+    L.push("  RTS");
+    L.push("");
+
+    L.push("hide_player:");
+    L.push("  LDA #0");
+    L.push("  STA player_on");
+    L.push("  JSR update_player_oam");
+    L.push("  RTS");
+    L.push("");
+
+    // ---- get_collision: col_x (0-31), col_y (0-29) → col_result (tipo 0-5) ----
+    L.push("get_collision:");
+    L.push("  LDA col_y");
+    L.push("  CMP #30");
+    L.push("  BCS gc_oob");
+    L.push("  LDA col_x");
+    L.push("  CMP #32");
+    L.push("  BCS gc_oob");
+    L.push("  ; offset low = (col_y & 7)*32 + col_x ; page = col_y >> 3");
+    L.push("  LDA col_y");
+    L.push("  AND #7");
+    L.push("  ASL A");
+    L.push("  ASL A");
+    L.push("  ASL A");
+    L.push("  ASL A");
+    L.push("  ASL A");
+    L.push("  CLC");
+    L.push("  ADC col_x");
+    L.push("  TAY");
+    L.push("  LDX cur_screen");
+    L.push("  LDA ScreenColLo,X");
+    L.push("  STA tmp0");
+    L.push("  LDA ScreenColHi,X");
+    L.push("  STA tmp1");
+    L.push("  LDA col_y");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  CLC");
+    L.push("  ADC tmp1");
+    L.push("  STA tmp1");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA col_result");
+    L.push("  RTS");
+    L.push("gc_oob:");
+    L.push("  LDA #0");
+    L.push("  STA col_result");
+    L.push("  RTS");
+    L.push("");
+
+    // ---- solid_at_feet: verifica 2 tiles sob os pés (player 16x16) ----
+    L.push("check_ground:");
+    L.push("  LDA #0");
+    L.push("  STA on_ground");
+    L.push("  ; tile Y = (player_y + 16) / 8");
+    L.push("  LDA player_y");
+    L.push("  CLC");
+    L.push("  ADC #16");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  STA col_y");
+    L.push("  ; tile X esquerdo");
+    L.push("  LDA player_x");
+    L.push("  CLC");
+    L.push("  ADC #2");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  STA col_x");
+    L.push("  JSR get_collision");
+    L.push("  LDA col_result");
+    L.push("  CMP #1");
+    L.push("  BEQ cg_yes");
+    L.push("  CMP #2");
+    L.push("  BEQ cg_yes");
+    L.push("  ; tile X direito");
+    L.push("  LDA player_x");
+    L.push("  CLC");
+    L.push("  ADC #13");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  STA col_x");
+    L.push("  JSR get_collision");
+    L.push("  LDA col_result");
+    L.push("  CMP #1");
+    L.push("  BEQ cg_yes");
+    L.push("  CMP #2");
+    L.push("  BEQ cg_yes");
+    L.push("  RTS");
+    L.push("cg_yes:");
+    L.push("  LDA #1");
+    L.push("  STA on_ground");
+    L.push("  ; snap Y ao topo do tile");
+    L.push("  LDA col_y");
+    L.push("  ASL A");
+    L.push("  ASL A");
+    L.push("  ASL A");
+    L.push("  SEC");
+    L.push("  SBC #16");
+    L.push("  STA player_y");
+    L.push("  RTS");
+    L.push("");
+
+    // ---- update_player: input + gravidade + pulo (Camada 2) ----
+    L.push("update_player:");
+    L.push("  LDA player_on");
+    L.push("  BNE up_go");
+    L.push("  RTS");
+    L.push("up_go:");
+    L.push("  ; --- horizontal (pad level, nao so edge) ---");
+    L.push("  LDA pad1");
+    L.push("  AND #%01000000      ; Left bit6");
+    L.push("  BEQ up_right");
+    L.push("  LDA player_x");
+    L.push("  CMP #3");
+    L.push("  BCC up_right");
+    L.push("  SEC");
+    L.push("  SBC #3");
+    L.push("  STA player_x");
+    L.push("  LDA #1");
+    L.push("  STA player_flip");
+    L.push("up_right:");
+    L.push("  LDA pad1");
+    L.push("  AND #%10000000      ; Right bit7");
+    L.push("  BEQ up_jump");
+    L.push("  LDA player_x");
+    L.push("  CMP #237");
+    L.push("  BCS up_jump");
+    L.push("  CLC");
+    L.push("  ADC #3");
+    L.push("  STA player_x");
+    L.push("  LDA #0");
+    L.push("  STA player_flip");
+    L.push("up_jump:");
+    L.push("  ; B ou A (edge) + on_ground → pulo");
+    L.push("  LDA pad1_edge");
+    L.push("  AND #%00000011      ; A ou B");
+    L.push("  BEQ up_vert");
+    L.push("  LDA on_ground");
+    L.push("  BEQ up_vert");
+    L.push("  LDA #14");
+    L.push("  STA jump_cnt");
+    L.push("  LDA #0");
+    L.push("  STA on_ground");
+    L.push("up_vert:");
+    L.push("  LDA jump_cnt");
+    L.push("  BEQ up_fall");
+    L.push("  DEC jump_cnt");
+    L.push("  LDA player_y");
+    L.push("  SEC");
+    L.push("  SBC #4");
+    L.push("  BCS up_jok");
+    L.push("  LDA #0");
+    L.push("up_jok:");
+    L.push("  STA player_y");
+    L.push("  JMP up_done");
+    L.push("up_fall:");
+    L.push("  JSR check_ground");
+    L.push("  LDA on_ground");
+    L.push("  BNE up_done");
+    L.push("  LDA player_y");
+    L.push("  CLC");
+    L.push("  ADC #4");
+    L.push("  STA player_y");
+    L.push("  CMP #240");
+    L.push("  BCC up_done");
+    L.push("  ; caiu → respawn");
+    L.push("  LDA #40");
+    L.push("  STA player_x");
+    L.push("  LDA #32");
+    L.push("  STA player_y");
+    L.push("  LDA #0");
+    L.push("  STA jump_cnt");
+    L.push("up_done:");
+    L.push("  JSR update_player_oam");
+    L.push("  RTS");
+    L.push("");
+
+    // ---- Reset ----
+    L.push("Reset:");
+    L.push("  SEI");
+    L.push("  CLD");
+    L.push("  LDX #$40");
+    L.push("  STX $4017");
+    L.push("  LDX #$FF");
+    L.push("  TXS");
+    L.push("  INX                ; X=0");
+    L.push("  STX $2000");
+    L.push("  STX $2001");
+    L.push("  STX $4010");
+    L.push("vblankwait1:");
+    L.push("  BIT $2002");
+    L.push("  BPL vblankwait1");
+    L.push("  ; clear RAM $0000-$07FF");
+    L.push("  LDA #0");
+    L.push("  TAX");
+    L.push("clrram:");
+    L.push("  STA $0000,X");
+    L.push("  STA $0100,X");
+    L.push("  STA $0200,X");
+    L.push("  STA $0300,X");
+    L.push("  STA $0400,X");
+    L.push("  STA $0500,X");
+    L.push("  STA $0600,X");
+    L.push("  STA $0700,X");
+    L.push("  INX");
+    L.push("  BNE clrram");
+    L.push("vblankwait2:");
+    L.push("  BIT $2002");
+    L.push("  BPL vblankwait2");
+    L.push("  ; paletas");
+    L.push("  BIT $2002");
+    L.push("  LDA #$3F");
+    L.push("  STA $2006");
+    L.push("  LDA #$00");
+    L.push("  STA $2006");
+    L.push("  LDX #0");
+    L.push("loadpal:");
+    L.push("  LDA PaletteData,X");
+    L.push("  STA $2007");
+    L.push("  INX");
+    L.push("  CPX #32");
+    L.push("  BNE loadpal");
+    L.push("  ; OAM off-screen");
+    L.push("  LDX #0");
+    L.push("  LDA #$FF");
+    L.push("clroam:");
+    L.push("  STA $0200,X");
+    L.push("  INX");
+    L.push("  BNE clroam");
+    L.push(`  ; splash = tela ${splashIdx}`);
+    L.push("  LDA #0");
+    L.push("  STA game_state");
+    L.push("  STA player_on");
+    L.push(`  LDA #${splashIdx}`);
+    L.push("  JSR load_screen");
+    if(musicChans){
+      L.push("  JSR music_init");
+    }
+    L.push("  ; scroll 0,0");
+    L.push("  LDA #0");
+    L.push("  STA $2005");
+    L.push("  STA $2005");
+    L.push("  ; NMI on, bg @$1000, sprites @$0000");
+    L.push("  LDA #%10010000");
+    L.push("  STA $2000");
+    L.push("  LDA #%00011110");
+    L.push("  STA $2001");
+    L.push("");
+    L.push("; ---- Main loop ----");
+    L.push("; Bits do pad (após ROR x8): A=0 B=1 Select=2 Start=3 Up=4 Down=5 Left=6 Right=7");
+    L.push("; START no splash → Fase 1 + spawn Hero");
+    L.push("; SELECT no play → Game Over (atalho de teste)");
+    L.push("MainLoop:");
+    L.push("  LDA nmi_flag");
+    L.push("  BEQ MainLoop");
+    L.push("  LDA #0");
+    L.push("  STA nmi_flag");
+    L.push("  JSR read_pad");
+    L.push("  LDA game_state");
+    L.push("  CMP #0");
+    L.push("  BEQ st_splash");
+    L.push("  CMP #1");
+    L.push("  BEQ st_play");
+    L.push("  JMP st_gameover");
+    L.push("");
+    L.push("st_splash:");
+    L.push("  ; bit 3 = START");
+    L.push("  LDA pad1_edge");
+    L.push("  AND #%00001000");
+    L.push("  BEQ MainLoop");
+    L.push("  LDA #1");
+    L.push("  STA game_state");
+    L.push(`  LDA #${playStart}`);
+    L.push("  JSR load_screen");
+    L.push("  JSR spawn_player");
+    if(musicChans){
+      L.push("  JSR music_init");
+    }
+    L.push("  JMP MainLoop");
+    L.push("");
+    L.push("st_play:");
+    L.push("  ; fisica + input todo frame (Camada 2)");
+    L.push("  JSR update_player");
+    L.push("  ; SELECT → Game Over (teste)");
+    L.push("  LDA pad1_edge");
+    L.push("  AND #%00000100");
+    L.push("  BEQ st_play_done");
+    L.push("  LDA #2");
+    L.push("  STA game_state");
+    L.push("  JSR hide_player");
+    L.push(`  LDA #${gameoverIdx}`);
+    L.push("  JSR load_screen");
+    L.push("st_play_done:");
+    L.push("  JMP MainLoop");
+    L.push("");
+    L.push("st_gameover:");
+    L.push("  ; START no game over → volta pro splash");
+    L.push("  LDA pad1_edge");
+    L.push("  AND #%00001000");
+    L.push("  BEQ MainLoop");
+    L.push("  LDA #0");
+    L.push("  STA game_state");
+    L.push("  JSR hide_player");
+    L.push(`  LDA #${splashIdx}`);
+    L.push("  JSR load_screen");
+    L.push("  JMP MainLoop");
+    L.push("");
+
+    // ---- Data ----
+    L.push("PaletteData:");
+    for (let i = 0; i < paletteBytes.length; i += 16) {
+      L.push("  .byte " + paletteBytes.slice(i, i + 16).map(b => hexByte(b)).join(", "));
+    }
+    L.push("");
+
+    // pointer tables
+    L.push("ScreenNtLo:");
+    screens.forEach((_,i) => L.push(`  .byte <Nametable_${i}`));
+    L.push("ScreenNtHi:");
+    screens.forEach((_,i) => L.push(`  .byte >Nametable_${i}`));
+    L.push("ScreenAtLo:");
+    screens.forEach((_,i) => L.push(`  .byte <Attr_${i}`));
+    L.push("ScreenAtHi:");
+    screens.forEach((_,i) => L.push(`  .byte >Attr_${i}`));
+    L.push("ScreenColLo:");
+    screens.forEach((_,i) => L.push(`  .byte <Collision_${i}`));
+    L.push("ScreenColHi:");
+    screens.forEach((_,i) => L.push(`  .byte >Collision_${i}`));
+    L.push("");
+
+    screens.forEach((sc, i) => {
+      L.push(`Nametable_${i}:  ; ${sc.name} (${sc.role})`);
+      const nt = sc.remappedNt;
+      for (let j = 0; j < 960; j += 32) {
+        L.push("  .byte " + nt.slice(j, j + 32).map(b => hexByte(b % 256)).join(", "));
+      }
+      L.push(`Attr_${i}:`);
+      const at = sc.attributes || new Array(64).fill(0);
+      for (let j = 0; j < 64; j += 16) {
+        L.push("  .byte " + at.slice(j, j + 16).map(b => hexByte(b % 256)).join(", "));
+      }
+      L.push(`Collision_${i}:`);
+      const col = sc.collisionMap || new Array(960).fill(0);
+      for (let j = 0; j < 960; j += 32) {
+        L.push("  .byte " + col.slice(j, j + 32).map(b => hexByte((b || 0) % 256)).join(", "));
+      }
+      L.push("");
+    });
+
+    if(musicChans){
+      L.push("; --- Music data ---");
+      musicChans.forEach((mc, i)=>{
+        L.push(`; canal ${i}: ${mc.type}`);
+        L.push(`PitchLo_ch${i}:`);
+        formatBytes(mc.enc.lo).forEach(line => L.push(line));
+        L.push(`PitchHi_ch${i}:`);
+        formatBytes(mc.enc.hi).forEach(line => L.push(line));
+        L.push(`Scale_ch${i}:`);
+        formatBytes(mc.enc.scale).forEach(line => L.push(line));
+        L.push(`Time_ch${i}:`);
+        formatBytes(mc.enc.time).forEach(line => L.push(line));
+        L.push("");
+      });
+    }
+
+    L.push('.segment "VECTORS"');
+    L.push("  .word NMI");
+    L.push("  .word Reset");
+    L.push("  .word IRQ");
+    L.push("");
+    L.push('.segment "CHARS"');
+    L.push("  ; pg0 sprites (vazio na camada 1) / pg1 background empacotado");
+    const chrFinal = new Uint8Array(8192);
+    chrFinal.set(chrBuf.slice(0, 4096), 0);
+    chrFinal.set(packed.bgChr, 4096);
+    for (let i = 0; i < chrFinal.length; i += 16) {
+      if (i === 4096) L.push("  ; $1000 background");
+      L.push("  .byte " + Array.from(chrFinal.slice(i, i + 16)).map(b => hexByte(b)).join(", "));
+    }
+    return L.join("\n");
+  }
+
   function generateASM(){
+    if(buildMode === "game") return generateASMGame();
     const chrBuf=CHR.getBuffer?CHR.getBuffer():new Uint8Array(8192);
     const pals=CHR.getPalettes?CHR.getPalettes():[[15,0,16,48],[15,6,22,38],[15,10,26,42],[15,2,18,34],[15,22,48,15],[15,25,41,57],[15,3,19,35],[15,9,25,41]];
     const data=getSelectedBuildData(); const nt=data.nametable; const at=data.attributes;
@@ -1088,30 +1942,53 @@ const BUILD = (() => {
   }
 
 
+  function setBuildMode(m){ buildMode = (m === "single") ? "single" : "game"; }
+
   function buildROM(){
-    const logEl=document.getElementById("buildLog"); if(logEl) logEl.textContent="Iniciando build v0.8.2...\n";
+    const logEl=document.getElementById("buildLog"); if(logEl) logEl.textContent="Iniciando build v0.9.0...\n";
     try{
       const chrBuf=CHR.getBuffer?CHR.getBuffer():new Uint8Array(8192);
-      const data=getSelectedBuildData();
-      const packed=packBackgroundCHR(chrBuf, data.nametable);
       const music = getSelectedMusic();
-      log("Imagem: " + (data.sourceName||data.name) + " (" + data.filled + " tiles)");
-      log("CHR empacotado: " + packed.usedCount + "/256");
+      if(buildMode === "game"){
+        const collected = collectGameScreens();
+        const packed = packMultiScreenCHR(chrBuf, collected.screens);
+        log("Modo: JOGO COMPLETO (Camada 1)");
+        log("Telas: " + collected.screens.length + " · splash=" + collected.splashIdx + " play=" + collected.playStartIdx + "… gameover=" + collected.gameoverIdx);
+        collected.screens.forEach((s,i) => log("  [" + i + "] " + s.role + " · " + s.name));
+        log("CHR empacotado: " + packed.usedCount + "/256" + (packed.overflowCount ? " (overflow " + packed.overflowCount + ")" : ""));
+        log("Controles: START no splash→fase · SELECT na fase→game over · START no GO→splash");
+      } else {
+        const data=getSelectedBuildData();
+        const packed=packBackgroundCHR(chrBuf, data.nametable);
+        log("Modo: TELA ÚNICA (legado)");
+        log("Imagem: " + (data.sourceName||data.name) + " (" + data.filled + " tiles)");
+        log("CHR empacotado: " + packed.usedCount + "/256");
+      }
       if(music) log("Música: " + music.name + " · " + (music.channels||[]).length + " canal(is)");
       else log("Música: (nenhuma)");
 
       const asm=generateASM(); lastASM=asm;
-      log("ASM gerado (" + asm.length + " chars) — opção ca65 local.");
+      log("ASM gerado (" + asm.length + " chars) — ca65 + nrom.cfg");
       const asmEl=document.getElementById("buildASMPreview"); if(asmEl) asmEl.value=asm;
       document.getElementById("btnDownloadASM").style.display="inline-block";
       document.getElementById("btnDownloadCFG").style.display="inline-block";
 
       try{
-        lastROM = generateNES();
-        log("✅ ROM .nes gerada no browser: " + lastROM.length + " bytes");
-        document.getElementById("btnDownload").style.display="inline-block";
-        const bp = document.getElementById("btnPlayEmu");
-        if(bp) bp.style.display="inline-block";
+        if(buildMode === "game"){
+          // Camada 1: .nes no browser ainda usa gerador legado parcial —
+          // o fluxo principal de teste é ca65. Tentamos mesmo assim se single path.
+          lastROM = null;
+          log("ℹ Camada 1: baixe o .asm e compile com ca65 (binário .nes no browser na próxima sub-camada).");
+          document.getElementById("btnDownload").style.display="none";
+          const bp = document.getElementById("btnPlayEmu");
+          if(bp) bp.style.display="none";
+        } else {
+          lastROM = generateNES();
+          log("✅ ROM .nes gerada no browser: " + lastROM.length + " bytes");
+          document.getElementById("btnDownload").style.display="inline-block";
+          const bp = document.getElementById("btnPlayEmu");
+          if(bp) bp.style.display="inline-block";
+        }
       }catch(ne){
         lastROM = null;
         document.getElementById("btnDownload").style.display="none";
@@ -1123,7 +2000,7 @@ const BUILD = (() => {
 
       const stats=document.getElementById("buildStats");
       if(stats){
-        stats.innerHTML = "ASM: " + asm.length + " chars<br>ROM: " + (lastROM? lastROM.length+" bytes" : "—") +
+        stats.innerHTML = "Modo: " + buildMode + "<br>ASM: " + asm.length + " chars<br>ROM: " + (lastROM? lastROM.length+" bytes" : "— (use ca65)") +
           "<br>Música: " + (music?music.name:"—");
       }
     }catch(e){
@@ -1143,17 +2020,18 @@ const BUILD = (() => {
   function generateCFG(){
     const name = (Project?.data?.name || "projeto").replace(/\s+/g, "_");
     const mapper = Project?.data?.mapper != null ? Project.data.mapper : 0;
+    // Camada 2: NROM-256 (32KB PRG @ $8000) — cabe código + várias telas + collision
     // IMPORTANTE: ld65 so aceita # como comentario no .cfg (nao ;)
     return [
       "# nrom.cfg gerado pelo NES Maker Studio",
       "# Projeto: " + name,
-      "# Mapper: " + mapper + " (NROM) | PRG 16KB @ $C000 | CHR 8KB",
-      "# Deve acompanhar o .asm do Build (header PRG banks = 1)",
+      "# Mapper: " + mapper + " (NROM) | PRG 32KB @ $8000 | CHR 8KB",
+      "# Header PRG banks = 2 (NROM-256)",
       "MEMORY {",
       "  ZP:     start = $0000, size = $0100, type = rw, define = yes;",
       "  RAM:    start = $0300, size = $0500, type = rw, define = yes;",
       "  HDR:    start = $0000, size = $0010, type = ro, file = %O, fill = yes;",
-      "  PRG:    start = $C000, size = $4000, type = ro, file = %O, fill = yes, define = yes;",
+      "  PRG:    start = $8000, size = $8000, type = ro, file = %O, fill = yes, define = yes;",
       "  CHR:    start = $0000, size = $2000, type = ro, file = %O, fill = yes;",
       "}",
       "SEGMENTS {",
@@ -1161,7 +2039,7 @@ const BUILD = (() => {
       "  ZEROPAGE: load = ZP,  type = zp;",
       "  CODE:     load = PRG, type = ro;",
       "  RODATA:   load = PRG, type = ro, optional = yes;",
-      "  VECTORS:  load = PRG, type = ro, offset = $3FFA;",
+      "  VECTORS:  load = PRG, type = ro, offset = $7FFA;",
       "  CHARS:    load = CHR, type = ro;",
       "}",
       ""
@@ -1342,7 +2220,7 @@ const BUILD = (() => {
 
   return {
     init(){ buildHTML(); },
-    buildROM, downloadROM, downloadASM, downloadCFG, copyASM, openEmulator,
+    buildROM, setBuildMode, downloadROM, downloadASM, downloadCFG, copyASM, openEmulator,
     playEmulator, stopEmulator,
     renderPreview, getCurrentData: getSelectedBuildData, generateASM,
     refreshSelects

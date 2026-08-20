@@ -75,7 +75,9 @@ const Project = {
         { id:'ev_a', name:'Botão A', category:'input', builtin:true },
         { id:'ev_b', name:'Botão B', category:'input', builtin:true },
         { id:'ev_start', name:'Start', category:'input', builtin:true },
-        { id:'ev_select', name:'Select', category:'input', builtin:true }
+        { id:'ev_select', name:'Select', category:'input', builtin:true },
+        { id:'ev_p1_idle', name:'P1 Idle', category:'input', button:'P1-IDLE', builtin:true },
+        { id:'ev_p2_idle', name:'P2 Idle', category:'input', button:'P2-IDLE', builtin:true }
       ],
       // A categoria 'hitbox' em Eventos foi substituída pelo passo dedicado "Se hitbox"
       // em Regras (permite dizer QUAL hitbox toca QUAL, não só "algum hitbox de dano tocou").
@@ -316,6 +318,14 @@ const Project = {
       if(!json.menus) json.menus = [];
       if(!json.jumpForces) json.jumpForces = [];
       if(!json.speedLevels) json.speedLevels = [];
+      // Garante eventos nativos P1-IDLE / P2-IDLE em projetos antigos
+      const ensureIdle = (id, name, button) => {
+        if(!(json.events||[]).some(e => e.id === id || e.button === button)){
+          json.events.push({ id, name, category:'input', button, builtin:true });
+        }
+      };
+      ensureIdle('ev_p1_idle', 'P1 Idle', 'P1-IDLE');
+      ensureIdle('ev_p2_idle', 'P2 Idle', 'P2-IDLE');
       // Migração: categoria 'hitbox' em Eventos foi substituída pelo passo dedicado
       // "Se hitbox" em Regras (dois seletores: qual hitbox toca qual). Passos antigos
       // que checavam "SE evento = Hitbox: X" viram "SE hitbox [vazio] toca [vazio]" -
