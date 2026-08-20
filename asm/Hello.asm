@@ -1,4 +1,4 @@
-; NES Maker Studio - BUILD v0.9.11
+; NES Maker Studio - BUILD v0.9.12
 ; NROM-256 | inimigos (spawn fixo garantido) + patrol + hit
 ; Telas: 7 · CHR tiles: 32/256
 ;   [0] splash · Splash 1
@@ -512,93 +512,109 @@ se_done:
   JSR update_enemy_oam
   RTS
 
-draw_en_2x2:
-  LDA tmp1
-  STA $0200,X
-  LDA #2
-  STA $0201,X
-  LDA en_tmp
-  STA $0202,X
-  LDA tmp0
-  STA $0203,X
-  LDA tmp1
-  STA $0204,X
-  LDA #3
-  STA $0205,X
-  LDA en_tmp
-  STA $0206,X
-  LDA tmp0
-  CLC
-  ADC #8
-  STA $0207,X
-  LDA tmp1
-  CLC
-  ADC #8
-  STA $0208,X
-  LDA #4
-  STA $0209,X
-  LDA en_tmp
-  STA $020A,X
-  LDA tmp0
-  STA $020B,X
-  LDA tmp1
-  CLC
-  ADC #8
-  STA $020C,X
-  LDA #19
-  STA $020D,X
-  LDA en_tmp
-  STA $020E,X
-  LDA tmp0
-  CLC
-  ADC #8
-  STA $020F,X
-  RTS
-
 update_enemy_oam:
+  ; --- en0 ---
+  LDA en0_on
+  BNE ueo0_draw
   LDA #$FF
   STA $0210
   STA $0214
   STA $0218
   STA $021C
+  JMP ueo1
+ueo0_draw:
+  LDA en0_y
+  STA $0210
+  LDA #0              ; tile hero TL (sempre visivel)
+  STA $0211
+  LDA #%00000001      ; pal 1
+  STA $0212
+  LDA en0_x
+  STA $0213
+  LDA en0_y
+  STA $0214
+  LDA #1
+  STA $0215
+  LDA #%00000001
+  STA $0216
+  LDA en0_x
+  CLC
+  ADC #8
+  STA $0217
+  LDA en0_y
+  CLC
+  ADC #8
+  STA $0218
+  LDA #16
+  STA $0219
+  LDA #%00000001
+  STA $021A
+  LDA en0_x
+  STA $021B
+  LDA en0_y
+  CLC
+  ADC #8
+  STA $021C
+  LDA #17
+  STA $021D
+  LDA #%00000001
+  STA $021E
+  LDA en0_x
+  CLC
+  ADC #8
+  STA $021F
+ueo1:
+  ; --- en1 ---
+  LDA en1_on
+  BNE ueo1_draw
+  LDA #$FF
   STA $0220
   STA $0224
   STA $0228
   STA $022C
-  LDA en0_on
-  BEQ ueo1
-  LDA en0_x
-  STA tmp0
-  LDA en0_y
-  STA tmp1
-  LDA en0_dir
-  BEQ ueo0a
-  LDA #%01000001
-  JMP ueo0b
-ueo0a:
-  LDA #%00000001
-ueo0b:
-  STA en_tmp
-  LDX #$10
-  JSR draw_en_2x2
-ueo1:
-  LDA en1_on
-  BEQ ueo_done
-  LDA en1_x
-  STA tmp0
+  JMP ueo2
+ueo1_draw:
   LDA en1_y
-  STA tmp1
-  LDA en1_dir
-  BEQ ueo1a
-  LDA #%01000001
-  JMP ueo1b
-ueo1a:
+  STA $0220
+  LDA #0
+  STA $0221
   LDA #%00000001
-ueo1b:
-  STA en_tmp
-  LDX #$20
-  JSR draw_en_2x2
-ueo_done:
+  STA $0222
+  LDA en1_x
+  STA $0223
+  LDA en1_y
+  STA $0224
+  LDA #1
+  STA $0225
+  LDA #%00000001
+  STA $0226
+  LDA en1_x
+  CLC
+  ADC #8
+  STA $0227
+  LDA en1_y
+  CLC
+  ADC #8
+  STA $0228
+  LDA #16
+  STA $0229
+  LDA #%00000001
+  STA $022A
+  LDA en1_x
+  STA $022B
+  LDA en1_y
+  CLC
+  ADC #8
+  STA $022C
+  LDA #17
+  STA $022D
+  LDA #%00000001
+  STA $022E
+  LDA en1_x
+  CLC
+  ADC #8
+  STA $022F
+ueo2:
   RTS
 
 update_enemies:
