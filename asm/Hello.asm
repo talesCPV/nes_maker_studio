@@ -1,5 +1,5 @@
-; NES Maker Studio - BUILD v0.9.4 STABLE
-; NROM-256 | ponteiros 1-byte | movimento+fisica | init classico
+; NES Maker Studio - BUILD v0.9.5
+; NROM-256 | fisica | troca de tela nas bordas (hard cut)
 ; Telas: 7 · CHR tiles: 32/256
 ;   [0] splash · Splash 1
 ;   [1] play · Tela 1
@@ -32,6 +32,7 @@ col_x:      .res 1    ; tile X para consulta
 col_y:      .res 1    ; tile Y para consulta
 col_result: .res 1
 ls_count:   .res 1    ; contador load_screen (nao reusa pad)
+play_idx:   .res 1    ; indice 0..playCount-1 na sequencia da fase
 music_on:   .res 1
 ch0_timer: .res 1
 ch0_pos:   .res 1
@@ -377,9 +378,40 @@ spawn_player:
   STA player_flip
   STA jump_cnt
   STA on_ground
+  STA play_idx       ; primeira tela da fase
   LDA #1
   STA player_on
   JSR update_player_oam
+  RTS
+
+goto_play_screen:
+  ; A = play_idx → carrega PlayScreenTable[A]
+  TAX
+  LDA PlayScreenTable,X
+  JSR load_screen
+  RTS
+
+try_screen_right:
+  LDA play_idx
+  CMP #4
+  BCS tsr_done
+  INC play_idx
+  LDA play_idx
+  JSR goto_play_screen
+  LDA #12             ; entra pela esquerda
+  STA player_x
+tsr_done:
+  RTS
+
+try_screen_left:
+  LDA play_idx
+  BEQ tsl_done
+  DEC play_idx
+  LDA play_idx
+  JSR goto_play_screen
+  LDA #230            ; entra pela direita
+  STA player_x
+tsl_done:
   RTS
 
 hide_player:
@@ -489,8 +521,12 @@ up_go:
   AND #%01000000      ; Left bit6
   BEQ up_right
   LDA player_x
-  CMP #3
-  BCC up_right
+  CMP #8
+  BCS up_left_move
+  ; borda esquerda → tela anterior
+  JSR try_screen_left
+  JMP up_jump
+up_left_move:
   SEC
   SBC #3
   STA player_x
@@ -501,8 +537,12 @@ up_right:
   AND #%10000000      ; Right bit7
   BEQ up_jump
   LDA player_x
-  CMP #237
-  BCS up_jump
+  CMP #232
+  BCC up_right_move
+  ; borda direita → proxima tela
+  JSR try_screen_right
+  JMP up_jump
+up_right_move:
   CLC
   ADC #3
   STA player_x
@@ -729,6 +769,8 @@ ScreenColHi:
   .byte >Collision_4
   .byte >Collision_5
   .byte >Collision_6
+PlayScreenTable:  ; indices globais das telas de jogo (em ordem)
+  .byte 1, 2, 3, 4, 5
 
 Nametable_0:  ; Splash 1 (splash)
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01

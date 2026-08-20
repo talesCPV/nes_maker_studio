@@ -114,7 +114,7 @@ const BUILD = (() => {
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <div style="display:flex;gap:8px;align-items:center;padding:10px 12px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
-          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.9.4 • STABLE (NROM-256)</h3>
+          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.9.5 • troca de tela</h3>
           <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             <select id="buildModeSelect" onchange="BUILD.setBuildMode(this.value)" style="background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:4px;font-size:11px">
               <option value="game" selected>🎮 Jogo completo (Camada 1)</option>
@@ -558,8 +558,8 @@ const BUILD = (() => {
     }
 
     const L=[];
-    L.push("; NES Maker Studio - BUILD v0.9.4 STABLE");
-    L.push("; NROM-256 | ponteiros 1-byte | movimento+fisica | init classico");
+    L.push("; NES Maker Studio - BUILD v0.9.5");
+    L.push("; NROM-256 | fisica | troca de tela nas bordas (hard cut)");
     L.push(`; Telas: ${screens.length} · CHR tiles: ${packed.usedCount}/256` + (packed.overflowCount?` · overflow ${packed.overflowCount}`:""));
     screens.forEach((s,i) => L.push(`;   [${i}] ${s.role} · ${s.name}`));
     if(music && musicChans) L.push(`; Musica: ${music.name} · ${musicChans.length} canal(is)`);
@@ -587,6 +587,7 @@ const BUILD = (() => {
     L.push("col_y:      .res 1    ; tile Y para consulta");
     L.push("col_result: .res 1");
     L.push("ls_count:   .res 1    ; contador load_screen (nao reusa pad)");
+    L.push("play_idx:   .res 1    ; indice 0..playCount-1 na sequencia da fase");
     if(musicChans){
       L.push("music_on:   .res 1");
       musicChans.forEach((_,i)=>{
@@ -872,9 +873,44 @@ const BUILD = (() => {
     L.push("  STA player_flip");
     L.push("  STA jump_cnt");
     L.push("  STA on_ground");
+    L.push("  STA play_idx       ; primeira tela da fase");
     L.push("  LDA #1");
     L.push("  STA player_on");
     L.push("  JSR update_player_oam");
+    L.push("  RTS");
+    L.push("");
+
+    // ---- troca de tela da fase (hard cut nas bordas) ----
+    L.push("goto_play_screen:");
+    L.push("  ; A = play_idx → carrega PlayScreenTable[A]");
+    L.push("  TAX");
+    L.push("  LDA PlayScreenTable,X");
+    L.push("  JSR load_screen");
+    L.push("  RTS");
+    L.push("");
+
+    L.push("try_screen_right:");
+    L.push(`  LDA play_idx`);
+    L.push(`  CMP #${Math.max(0, (collected.playCount || 1) - 1)}`);
+    L.push("  BCS tsr_done");
+    L.push("  INC play_idx");
+    L.push("  LDA play_idx");
+    L.push("  JSR goto_play_screen");
+    L.push("  LDA #12             ; entra pela esquerda");
+    L.push("  STA player_x");
+    L.push("tsr_done:");
+    L.push("  RTS");
+    L.push("");
+
+    L.push("try_screen_left:");
+    L.push("  LDA play_idx");
+    L.push("  BEQ tsl_done");
+    L.push("  DEC play_idx");
+    L.push("  LDA play_idx");
+    L.push("  JSR goto_play_screen");
+    L.push("  LDA #230            ; entra pela direita");
+    L.push("  STA player_x");
+    L.push("tsl_done:");
     L.push("  RTS");
     L.push("");
 
@@ -991,8 +1027,12 @@ const BUILD = (() => {
     L.push("  AND #%01000000      ; Left bit6");
     L.push("  BEQ up_right");
     L.push("  LDA player_x");
-    L.push("  CMP #3");
-    L.push("  BCC up_right");
+    L.push("  CMP #8");
+    L.push("  BCS up_left_move");
+    L.push("  ; borda esquerda → tela anterior");
+    L.push("  JSR try_screen_left");
+    L.push("  JMP up_jump");
+    L.push("up_left_move:");
     L.push("  SEC");
     L.push("  SBC #3");
     L.push("  STA player_x");
@@ -1003,8 +1043,12 @@ const BUILD = (() => {
     L.push("  AND #%10000000      ; Right bit7");
     L.push("  BEQ up_jump");
     L.push("  LDA player_x");
-    L.push("  CMP #237");
-    L.push("  BCS up_jump");
+    L.push("  CMP #232");
+    L.push("  BCC up_right_move");
+    L.push("  ; borda direita → proxima tela");
+    L.push("  JSR try_screen_right");
+    L.push("  JMP up_jump");
+    L.push("up_right_move:");
     L.push("  CLC");
     L.push("  ADC #3");
     L.push("  STA player_x");
@@ -1206,6 +1250,12 @@ const BUILD = (() => {
     screens.forEach((_,i) => L.push(`  .byte <Collision_${i}`));
     L.push("ScreenColHi:");
     screens.forEach((_,i) => L.push(`  .byte >Collision_${i}`));
+    L.push("PlayScreenTable:  ; indices globais das telas de jogo (em ordem)");
+    (() => {
+      const playIdxs = screens.map((s,i) => s.role === "play" ? i : -1).filter(i => i >= 0);
+      if(!playIdxs.length) playIdxs.push(playStart);
+      L.push("  .byte " + playIdxs.map(i => i & 0xFF).join(", "));
+    })();
     L.push("");
 
     screens.forEach((sc, i) => {
