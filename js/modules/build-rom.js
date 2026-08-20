@@ -114,7 +114,7 @@ const BUILD = (() => {
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <div style="display:flex;gap:8px;align-items:center;padding:10px 12px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
-          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.9.9 • spawns level-design</h3>
+          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.9.11 • EnemySpawn Lo/Hi</h3>
           <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             <select id="buildModeSelect" onchange="BUILD.setBuildMode(this.value)" style="background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:4px;font-size:11px">
               <option value="game" selected>🎮 Jogo completo (Camada 1)</option>
@@ -399,16 +399,17 @@ const BUILD = (() => {
           const asset = findAsset(cell.bgId, cell.type === "splash" ? "splash" : "background");
           if(!asset) continue;
           seen.add(cell.bgId);
+          const isSplash = cell.type === "splash";
           screens.push({
             id: asset.id,
             name: asset.name || cell.bgId,
-            type: cell.type === "splash" ? "splash" : "background",
+            type: isSplash ? "splash" : "background",
             phaseId: ph.id,
             phaseName: ph.name,
             nametable: asset.nametable || new Array(960).fill(0),
             attributes: asset.attributes || new Array(64).fill(0),
             collisionMap: asset.collisionMap || new Array(960).fill(0),
-            role: screens.length === 0 ? "splash" : "play"
+            role: isSplash ? "splash" : "play"
           });
         }
       }
@@ -445,7 +446,7 @@ const BUILD = (() => {
     // índices úteis
     const splashIdx = screens.findIndex(s => s.role === "splash");
     const gameoverIdx = screens.findIndex(s => s.role === "gameover");
-    const playIdxs = screens.map((s,i) => s.role === "play" ? i : -1).filter(i => i >= 0);
+    const playIdxs = screens.map((s,i) => (s.role === "play" || s.type === "background") ? i : -1).filter(i => i >= 0);
     return {
       screens,
       splashIdx: splashIdx >= 0 ? splashIdx : 0,
@@ -558,7 +559,7 @@ const BUILD = (() => {
     }
 
     const L=[];
-    L.push("; NES Maker Studio - BUILD v0.9.9");
+    L.push("; NES Maker Studio - BUILD v0.9.11");
     L.push("; NROM-256 | inimigos (spawn fixo garantido) + patrol + hit");
     L.push(`; Telas: ${screens.length} · CHR tiles: ${packed.usedCount}/256` + (packed.overflowCount?` · overflow ${packed.overflowCount}`:""));
     screens.forEach((s,i) => L.push(`;   [${i}] ${s.role} · ${s.name}`));
@@ -946,13 +947,11 @@ const BUILD = (() => {
 
     L.push("spawn_enemies:");
     L.push("  JSR clear_enemies");
-    L.push("  ; play_idx → EnemySpawnPtr (word table) → count,x,y,...");
-    L.push("  LDA play_idx");
-    L.push("  ASL A");
-    L.push("  TAX");
-    L.push("  LDA EnemySpawnPtr,X");
+    L.push("  ; play_idx → EnemySpawnLo/Hi (1 byte index) → count,x,y,...");
+    L.push("  LDX play_idx");
+    L.push("  LDA EnemySpawnLo,X");
     L.push("  STA tmp0");
-    L.push("  LDA EnemySpawnPtr+1,X");
+    L.push("  LDA EnemySpawnHi,X");
     L.push("  STA tmp1");
     L.push("  LDY #0");
     L.push("  LDA (tmp0),Y");
@@ -1714,41 +1713,62 @@ const BUILD = (() => {
     L.push("ScreenColHi:");
     screens.forEach((_,i) => L.push(`  .byte >Collision_${i}`));
     L.push("PlayScreenTable:  ; indices globais das telas de jogo (em ordem)");
-    const playIdxs = screens.map((s,i) => s.role === "play" ? i : -1).filter(i => i >= 0);
+    const playIdxs = screens.map((s,i) => (s.role === "play" || s.type === "background") ? i : -1).filter(i => i >= 0);
     if(!playIdxs.length) playIdxs.push(playStart);
     L.push("  .byte " + playIdxs.map(i => i & 0xFF).join(", "));
     L.push("");
 
     // Enemy spawn tables a partir de hitboxInstances (level-design)
     // Formato por tela: count, x0,y0, x1,y1, ...
-    const instances = Project?.data?.hitboxInstances || [];
+    const instances = (Project?.data?.hitboxInstances || []).slice();
     const objs = Project?.data?.hitboxObjects || [];
-    const heroIds = new Set((Project?.data?.characters || []).filter(c => (c.name||"").toLowerCase().includes("hero")).map(c => c.id));
+    const heroIds = new Set((Project?.data?.characters || [])
+      .filter(c => {
+        const n = (c.name||"").toLowerCase();
+        return n === "hero" || n.includes("hero");
+      }).map(c => String(c.id)));
+    // mapa id → screen (string)
+    const idOf = (s) => s && s.id != null ? String(s.id) : "";
     const enemySpawns = playIdxs.map((gi) => {
       const scr = screens[gi];
+      const sid = idOf(scr);
       const pts = instances.filter(inst => {
-        if (!scr || inst.screenId !== scr.id) return false;
-        if (inst.characterId && heroIds.has(inst.characterId)) return false;
-        // spawn de objeto kind spawn (inimigo) ou qualquer instance com characterId nao-hero
-        if (inst.characterId) return true;
+        if (!scr) return false;
+        const iscreen = inst.screenId != null ? String(inst.screenId) : "";
+        if (iscreen !== sid) return false;
+        const cid = inst.characterId != null ? String(inst.characterId) : "";
+        if (cid && heroIds.has(cid)) return false;
+        if (cid) return true;
         const oid = inst.objectId || inst.hitboxObjectId;
-        const o = objs.find(x => x.id === oid);
-        if (o && o.kind === "spawn" && o.characterId && !heroIds.has(o.characterId)) return true;
-        return false;
+        const o = objs.find(x => String(x.id) === String(oid));
+        if (o && o.kind === "spawn") {
+          const oc = o.characterId != null ? String(o.characterId) : "";
+          if (oc && heroIds.has(oc)) return false;
+          return true;
+        }
+        // instance sem characterId mas na tela certa → ainda conta (spawn cru)
+        return true;
       }).map(inst => [inst.x|0, inst.y|0]);
       return { count: Math.min(4, pts.length), points: pts.slice(0, 4) };
+    });
+    // diagnostico no ASM
+    L.push("; hitboxInstances total=" + instances.length);
+    enemySpawns.forEach((es, pi) => {
+      const scr = screens[playIdxs[pi]];
+      L.push("; play[" + pi + "] screen=" + (scr && scr.name) + " id=" + idOf(scr) + " spawns=" + es.count);
     });
 
     enemySpawns.forEach((es, pi) => {
       L.push(`EnemyData_${pi}:`);
-      const bytes = [es.count];
+      const bytes = [es.count & 0xFF];
       es.points.forEach(([x,y]) => { bytes.push(x & 0xFF, y & 0xFF); });
-      L.push("  .byte " + bytes.join(", "));
+      if (bytes.length === 1) bytes.push(0, 0); // garante pelo menos 1 par dummy se count=0
+      L.push("  .byte " + bytes.map(b => "$" + (b&0xFF).toString(16).padStart(2,"0").toUpperCase()).join(", "));
     });
-    L.push("EnemySpawnPtr:");
-    enemySpawns.forEach((_, pi) => {
-      L.push(`  .word EnemyData_${pi}`);
-    });
+    L.push("EnemySpawnLo:");
+    enemySpawns.forEach((_, pi) => L.push(`  .byte <EnemyData_${pi}`));
+    L.push("EnemySpawnHi:");
+    enemySpawns.forEach((_, pi) => L.push(`  .byte >EnemyData_${pi}`));
     L.push("");
 
     screens.forEach((sc, i) => {
@@ -2500,6 +2520,19 @@ const BUILD = (() => {
         collected.screens.forEach((s,i) => log("  [" + i + "] " + s.role + " · " + s.name));
         log("CHR empacotado: " + packed.usedCount + "/256" + (packed.overflowCount ? " (overflow " + packed.overflowCount + ")" : ""));
         log("Controles: START no splash→fase · SELECT na fase→game over · START no GO→splash");
+        const instAll = Project?.data?.hitboxInstances || [];
+        log("Spawns (hitboxInstances): " + instAll.length);
+        instAll.forEach(inst => log("  · screen=" + inst.screenId + " char=" + (inst.characterId||"?") + " @(" + inst.x + "," + inst.y + ")"));
+        // re-simula contagem por tela de play (mesma lógica do ASM)
+        try {
+          const col = collectGameScreens();
+          const playI = col.screens.map((s,i) => (s.role==="play"||s.type==="background")?i:-1).filter(i=>i>=0);
+          playI.forEach((gi, pi) => {
+            const scr = col.screens[gi];
+            const n = instAll.filter(inst => String(inst.screenId)===String(scr.id)).length;
+            log("  → EnemyData_" + pi + " (" + scr.name + "): " + n + " inimigo(s)");
+          });
+        } catch(e) { log("  (diag spawns: " + e.message + ")"); }
       } else {
         const data=getSelectedBuildData();
         const packed=packBackgroundCHR(chrBuf, data.nametable);
