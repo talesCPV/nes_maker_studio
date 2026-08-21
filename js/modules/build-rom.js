@@ -582,15 +582,21 @@ const BUILD = (() => {
     const playStart = collected.playStartIdx;
     const gameoverIdx = collected.gameoverIdx;
 
-    // ---- Camada 3: pool de instâncias (inimigos) + sprites reais ----
-    // Herói(is) ficam de fora da tabela de sprites de instância - o player continua com seu
-    // próprio caminho de desenho (fora de escopo desta camada). "Não-herói" = qualquer
-    // personagem cujo nome não contém "hero" (mesma heurística já usada no spawn table).
+    // ---- Camada 3/4-fix: pool de instâncias (inimigos) + sprites reais - agora inclui o(s)
+    // herói(is) no MESMO empacotador, senão a página $0000 fica sem a arte do player quando
+    // remontada só com os inimigos (bug encontrado em teste real: hero saía com tile errado).
+    // "Herói" = qualquer personagem cujo nome contém "hero" (heurística já usada no spawn table).
     const allChars = Project.data?.characters || [];
     const heroIdSet = new Set(allChars.filter(c => (c.name||"").toLowerCase().includes("hero")).map(c => String(c.id)));
     const enemyChars = allChars.filter(c => !heroIdSet.has(String(c.id)));
-    const spritePack = packSpriteCHR(chrBuf, enemyChars);
-    const charIndexById = new Map(enemyChars.map((c,i) => [String(c.id), i]));
+    const spritePack = packSpriteCHR(chrBuf, allChars);
+    const charIndexById = new Map(allChars.map((c,i) => [String(c.id), i]));
+    const heroChar = allChars.find(c => heroIdSet.has(String(c.id)));
+    const heroCharIdx = heroChar ? charIndexById.get(String(heroChar.id)) : 0;
+    const heroFrameCount = (spritePack.charData[heroCharIdx] && spritePack.charData[heroCharIdx].frames.length) || 1;
+    // (sem herói cadastrado -> heroCharIdx cai no índice 0, que sempre existe - se for um
+    // inimigo real ele "empresta" a arte por engano; se não houver personagem nenhum, cai no
+    // placeholder $FF/oculto emitido por packSpriteCHR. Avisamos no log de qualquer forma.)
     // orçamento de OAM: player fixo usa 4 sprites ($0200-$020F); cada instância usa até 4
     // ($0210 em diante). 64 sprites totais / 4 = 16 metasprites - 1 do player = 15 no máximo.
     const MAX_OAM_INSTANCES = 15;
@@ -626,13 +632,15 @@ const BUILD = (() => {
     }
 
     const L=[];
-    L.push("; NES Maker Studio - BUILD v0.9.16 - Camada 4: instancias com gravidade + colisao solida");
-    L.push("; NROM-256 | inimigos caem/andam respeitando o collisionMap (chao+parede), sem beirada");
+    L.push("; NES Maker Studio - BUILD v0.9.17 - fix: sprite do herói volta a usar arte real (pool unificado)");
+    L.push("; NROM-256 | player e inimigos compartilham o mesmo empacotador de CHR $0000");
     L.push(`; Telas: ${screens.length} · CHR tiles (fundo): ${packed.usedCount}/256` + (packed.overflowCount?` · overflow ${packed.overflowCount}`:""));
     L.push(`; CHR tiles (sprites): ${spritePack.usedCount}/256` + (spritePack.overflowCount?` · overflow ${spritePack.overflowCount}`:""));
     L.push(`; Instâncias: ${NUM_INSTANCES}` + (instanceOverflow ? ` (maxInstances=${requestedInstances} excede o orçamento de OAM, limitado a ${MAX_OAM_INSTANCES})` : ""));
     if(spritePack.truncated.length) spritePack.truncated.forEach(t => L.push(`; AVISO: frame maior que 2x2 truncado - ${t}`));
     if(enemyChars.length === 0) L.push("; AVISO: nenhum personagem não-herói cadastrado - nenhuma instância vai renderizar sprite.");
+    if(!heroChar) L.push("; AVISO: nenhum personagem com \"hero\" no nome - o player vai desenhar o placeholder (oculto).");
+    else L.push(`; Herói: "${heroChar.name}" (charIdx ${heroCharIdx}, ${heroFrameCount} frame(s))`);
     screens.forEach((s,i) => L.push(`;   [${i}] ${s.role} · ${s.name}`));
     if(music && musicChans) L.push(`; Musica: ${music.name} · ${musicChans.length} canal(is)`);
     else L.push("; Musica: (nenhuma)");
@@ -653,6 +661,8 @@ const BUILD = (() => {
     L.push("player_y:   .res 1");
     L.push("player_on:  .res 1    ; 0=oculto 1=visivel");
     L.push("player_flip:.res 1    ; 0=normal !=0 flip H");
+    L.push("player_frame: .res 1  ; frame atual da animacao do heroi (mesmo pool de sprite dos inimigos)");
+    L.push("player_timer: .res 1  ; frames restantes ate proximo frame");
     L.push("on_ground:  .res 1");
     L.push("jump_cnt:   .res 1    ; frames restantes de impulso de pulo");
     L.push("col_x:      .res 1    ; tile X para consulta");
@@ -875,8 +885,8 @@ const BUILD = (() => {
     L.push("  RTS");
     L.push("");
 
-    // ---- update_player_oam: grava 4 sprites 8x8 (metatile 2x2) em $0200 ----
-    // tiles padrão do Hero Idle: 0,1 / 16,17 (CHR page 0)
+    // ---- update_player_oam: le CharCells_${heroCharIdx}/CharDur_${heroCharIdx} (mesmo pool
+    // de sprite dos inimigos - fix do bug em que o player ficava com tile errado) ----
     L.push("update_player_oam:");
     L.push("  LDA player_on");
     L.push("  BNE upo_draw");
@@ -888,28 +898,77 @@ const BUILD = (() => {
     L.push("  STA $020C");
     L.push("  RTS");
     L.push("upo_draw:");
+    L.push("  ; tmp0/tmp1 -> ponteiro pros 4 bytes do frame atual (TL,TR,BL,BR)");
+    L.push("  LDA player_frame");
+    L.push("  ASL A");
+    L.push("  ASL A                 ; frame*4");
+    L.push("  CLC");
+    L.push(`  ADC #<CharCells_${heroCharIdx}`);
+    L.push("  STA tmp0");
+    L.push(`  LDA #>CharCells_${heroCharIdx}`);
+    L.push("  ADC #0");
+    L.push("  STA tmp1");
+    L.push("  LDY #0");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA cell_tl");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA cell_tr");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA cell_bl");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA cell_br");
     L.push("  LDA player_flip");
     L.push("  BEQ upo_noflip");
+    L.push("  ; flip H: espelha o metasprite trocando TL<->TR e BL<->BR");
+    L.push("  LDA cell_tl");
+    L.push("  PHA");
+    L.push("  LDA cell_tr");
+    L.push("  STA cell_tl");
+    L.push("  PLA");
+    L.push("  STA cell_tr");
+    L.push("  LDA cell_bl");
+    L.push("  PHA");
+    L.push("  LDA cell_br");
+    L.push("  STA cell_bl");
+    L.push("  PLA");
+    L.push("  STA cell_br");
+    L.push("upo_noflip:");
+    L.push("  LDA player_flip");
+    L.push("  BEQ upo_attr0");
     L.push("  LDA #%01000000     ; flip H");
     L.push("  STA tmp0");
-    L.push("  JMP upo_attr");
-    L.push("upo_noflip:");
+    L.push("  JMP upo_write");
+    L.push("upo_attr0:");
     L.push("  LDA #0");
     L.push("  STA tmp0");
-    L.push("upo_attr:");
-    L.push("  ; sprite 0: topo-esq");
+    L.push("upo_write:");
+    L.push("  ; --- TL ---");
+    L.push("  LDA cell_tl");
+    L.push("  CMP #$FF");
+    L.push("  BEQ upo_tl_hide");
     L.push("  LDA player_y");
     L.push("  STA $0200");
-    L.push("  LDA #0              ; tile 0");
+    L.push("  LDA cell_tl");
     L.push("  STA $0201");
     L.push("  LDA tmp0");
     L.push("  STA $0202");
     L.push("  LDA player_x");
     L.push("  STA $0203");
-    L.push("  ; sprite 1: topo-dir");
+    L.push("  JMP upo_tr");
+    L.push("upo_tl_hide:");
+    L.push("  LDA #$FF");
+    L.push("  STA $0200");
+    L.push("upo_tr:");
+    L.push("  ; --- TR ---");
+    L.push("  LDA cell_tr");
+    L.push("  CMP #$FF");
+    L.push("  BEQ upo_tr_hide");
     L.push("  LDA player_y");
     L.push("  STA $0204");
-    L.push("  LDA #1              ; tile 1");
+    L.push("  LDA cell_tr");
     L.push("  STA $0205");
     L.push("  LDA tmp0");
     L.push("  STA $0206");
@@ -917,23 +976,39 @@ const BUILD = (() => {
     L.push("  CLC");
     L.push("  ADC #8");
     L.push("  STA $0207");
-    L.push("  ; sprite 2: baixo-esq");
+    L.push("  JMP upo_bl");
+    L.push("upo_tr_hide:");
+    L.push("  LDA #$FF");
+    L.push("  STA $0204");
+    L.push("upo_bl:");
+    L.push("  ; --- BL ---");
+    L.push("  LDA cell_bl");
+    L.push("  CMP #$FF");
+    L.push("  BEQ upo_bl_hide");
     L.push("  LDA player_y");
     L.push("  CLC");
     L.push("  ADC #8");
     L.push("  STA $0208");
-    L.push("  LDA #16             ; tile 16");
+    L.push("  LDA cell_bl");
     L.push("  STA $0209");
     L.push("  LDA tmp0");
     L.push("  STA $020A");
     L.push("  LDA player_x");
     L.push("  STA $020B");
-    L.push("  ; sprite 3: baixo-dir");
+    L.push("  JMP upo_br");
+    L.push("upo_bl_hide:");
+    L.push("  LDA #$FF");
+    L.push("  STA $0208");
+    L.push("upo_br:");
+    L.push("  ; --- BR ---");
+    L.push("  LDA cell_br");
+    L.push("  CMP #$FF");
+    L.push("  BEQ upo_br_hide");
     L.push("  LDA player_y");
     L.push("  CLC");
     L.push("  ADC #8");
     L.push("  STA $020C");
-    L.push("  LDA #17             ; tile 17");
+    L.push("  LDA cell_br");
     L.push("  STA $020D");
     L.push("  LDA tmp0");
     L.push("  STA $020E");
@@ -941,18 +1016,31 @@ const BUILD = (() => {
     L.push("  CLC");
     L.push("  ADC #8");
     L.push("  STA $020F");
-    L.push("  ; se flip H, troca tiles L/R para o personagem não ficar invertido só no eixo");
-    L.push("  LDA player_flip");
-    L.push("  BEQ upo_done");
-    L.push("  LDA #1");
-    L.push("  STA $0201");
+    L.push("  RTS");
+    L.push("upo_br_hide:");
+    L.push("  LDA #$FF");
+    L.push("  STA $020C");
+    L.push("  RTS");
+    L.push("");
+
+    L.push("; avanca a animacao do heroi (mesmo esquema idle das instancias, mas so 1 personagem).");
+    L.push("animate_player:");
+    L.push("  LDA player_on");
+    L.push("  BEQ ap_done");
+    L.push("  DEC player_timer");
+    L.push("  LDA player_timer");
+    L.push("  BNE ap_done");
+    L.push("  INC player_frame");
+    L.push(`  LDA #${heroFrameCount}`);
+    L.push("  CMP player_frame");
+    L.push("  BNE ap_reload");
     L.push("  LDA #0");
-    L.push("  STA $0205");
-    L.push("  LDA #17");
-    L.push("  STA $0209");
-    L.push("  LDA #16");
-    L.push("  STA $020D");
-    L.push("upo_done:");
+    L.push("  STA player_frame");
+    L.push("ap_reload:");
+    L.push("  LDY player_frame");
+    L.push(`  LDA CharDur_${heroCharIdx},Y`);
+    L.push("  STA player_timer");
+    L.push("ap_done:");
     L.push("  RTS");
     L.push("");
 
@@ -966,6 +1054,9 @@ const BUILD = (() => {
     L.push("  STA jump_cnt");
     L.push("  STA on_ground");
     L.push("  STA play_idx       ; primeira tela da fase");
+    L.push("  STA player_frame");
+    L.push(`  LDA CharDur_${heroCharIdx}`);
+    L.push("  STA player_timer");
     L.push("  LDA #1");
     L.push("  STA player_on");
     L.push("  JSR update_player_oam");
@@ -1016,7 +1107,9 @@ const BUILD = (() => {
     L.push("  STA inst_on,X");
     L.push("  INX");
     L.push(`  CPX #${NUM_INSTANCES}`);
-    L.push("  BNE ci_loop");
+    L.push("  BEQ ci_done");
+    L.push("  JMP ci_loop");
+    L.push("ci_done:");
     L.push("  RTS");
     L.push("");
     // Le a tabela de spawn da tela atual (play_idx), gerada a partir de level-design.js
@@ -1231,7 +1324,9 @@ const BUILD = (() => {
     L.push("uio_next:");
     L.push("  INX");
     L.push(`  CPX #${NUM_INSTANCES}`);
-    L.push("  BNE uio_loop");
+    L.push("  BEQ uio_done");
+    L.push("  JMP uio_loop");
+    L.push("uio_done:");
     L.push("  RTS");
     L.push("");
     L.push("; avanca o timer/frame de animacao (idle simples) de cada instancia ativa.");
@@ -1257,7 +1352,9 @@ const BUILD = (() => {
     L.push("ai_next:");
     L.push("  INX");
     L.push(`  CPX #${NUM_INSTANCES}`);
-    L.push("  BNE ai_loop");
+    L.push("  BEQ ai_done");
+    L.push("  JMP ai_loop");
+    L.push("ai_done:");
     L.push("  RTS");
     L.push("");
     L.push("; ---- Camada 4: colisao instancia vs solido (chao/parede), parametrizada por X=slot ----");
@@ -1422,7 +1519,9 @@ const BUILD = (() => {
     L.push("uia_next:");
     L.push("  INX");
     L.push(`  CPX #${NUM_INSTANCES}`);
-    L.push("  BNE uia_loop");
+    L.push("  BEQ uia_done");
+    L.push("  JMP uia_loop");
+    L.push("uia_done:");
     L.push("  RTS");
     L.push("");
     L.push("; --- Acoes genericas (Camada 6 vai chamar via regras compiladas) ---");
@@ -1516,7 +1615,8 @@ const BUILD = (() => {
     L.push("cpe_next:");
     L.push("  INX");
     L.push(`  CPX #${NUM_INSTANCES}`);
-    L.push("  BNE cpe_loop");
+    L.push("  BEQ cpe_done");
+    L.push("  JMP cpe_loop");
     L.push("cpe_done:");
     L.push("  RTS");
     L.push("");
@@ -1788,6 +1888,7 @@ const BUILD = (() => {
     L.push("  LDA #0");
     L.push("  STA jump_cnt");
     L.push("up_done:");
+    L.push("  JSR animate_player");
     L.push("  JSR update_player_oam");
     L.push("  RTS");
     L.push("");

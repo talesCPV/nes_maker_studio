@@ -1,8 +1,9 @@
-; NES Maker Studio - BUILD v0.9.16 - Camada 4: instancias com gravidade + colisao solida
-; NROM-256 | inimigos caem/andam respeitando o collisionMap (chao+parede), sem beirada
+; NES Maker Studio - BUILD v0.9.17 - fix: sprite do herói volta a usar arte real (pool unificado)
+; NROM-256 | player e inimigos compartilham o mesmo empacotador de CHR $0000
 ; Telas: 7 · CHR tiles (fundo): 32/256
-; CHR tiles (sprites): 7/256
+; CHR tiles (sprites): 10/256
 ; Instâncias: 5
+; Herói: "Hero" (charIdx 0, 1 frame(s))
 ;   [0] splash · Splash 1
 ;   [1] play · Tela 1
 ;   [2] play · Tela 2
@@ -28,6 +29,8 @@ player_x:   .res 1
 player_y:   .res 1
 player_on:  .res 1    ; 0=oculto 1=visivel
 player_flip:.res 1    ; 0=normal !=0 flip H
+player_frame: .res 1  ; frame atual da animacao do heroi (mesmo pool de sprite dos inimigos)
+player_timer: .res 1  ; frames restantes ate proximo frame
 on_ground:  .res 1
 jump_cnt:   .res 1    ; frames restantes de impulso de pulo
 col_x:      .res 1    ; tile X para consulta
@@ -323,28 +326,77 @@ update_player_oam:
   STA $020C
   RTS
 upo_draw:
+  ; tmp0/tmp1 -> ponteiro pros 4 bytes do frame atual (TL,TR,BL,BR)
+  LDA player_frame
+  ASL A
+  ASL A                 ; frame*4
+  CLC
+  ADC #<CharCells_0
+  STA tmp0
+  LDA #>CharCells_0
+  ADC #0
+  STA tmp1
+  LDY #0
+  LDA (tmp0),Y
+  STA cell_tl
+  INY
+  LDA (tmp0),Y
+  STA cell_tr
+  INY
+  LDA (tmp0),Y
+  STA cell_bl
+  INY
+  LDA (tmp0),Y
+  STA cell_br
   LDA player_flip
   BEQ upo_noflip
+  ; flip H: espelha o metasprite trocando TL<->TR e BL<->BR
+  LDA cell_tl
+  PHA
+  LDA cell_tr
+  STA cell_tl
+  PLA
+  STA cell_tr
+  LDA cell_bl
+  PHA
+  LDA cell_br
+  STA cell_bl
+  PLA
+  STA cell_br
+upo_noflip:
+  LDA player_flip
+  BEQ upo_attr0
   LDA #%01000000     ; flip H
   STA tmp0
-  JMP upo_attr
-upo_noflip:
+  JMP upo_write
+upo_attr0:
   LDA #0
   STA tmp0
-upo_attr:
-  ; sprite 0: topo-esq
+upo_write:
+  ; --- TL ---
+  LDA cell_tl
+  CMP #$FF
+  BEQ upo_tl_hide
   LDA player_y
   STA $0200
-  LDA #0              ; tile 0
+  LDA cell_tl
   STA $0201
   LDA tmp0
   STA $0202
   LDA player_x
   STA $0203
-  ; sprite 1: topo-dir
+  JMP upo_tr
+upo_tl_hide:
+  LDA #$FF
+  STA $0200
+upo_tr:
+  ; --- TR ---
+  LDA cell_tr
+  CMP #$FF
+  BEQ upo_tr_hide
   LDA player_y
   STA $0204
-  LDA #1              ; tile 1
+  LDA cell_tr
   STA $0205
   LDA tmp0
   STA $0206
@@ -352,23 +404,39 @@ upo_attr:
   CLC
   ADC #8
   STA $0207
-  ; sprite 2: baixo-esq
+  JMP upo_bl
+upo_tr_hide:
+  LDA #$FF
+  STA $0204
+upo_bl:
+  ; --- BL ---
+  LDA cell_bl
+  CMP #$FF
+  BEQ upo_bl_hide
   LDA player_y
   CLC
   ADC #8
   STA $0208
-  LDA #16             ; tile 16
+  LDA cell_bl
   STA $0209
   LDA tmp0
   STA $020A
   LDA player_x
   STA $020B
-  ; sprite 3: baixo-dir
+  JMP upo_br
+upo_bl_hide:
+  LDA #$FF
+  STA $0208
+upo_br:
+  ; --- BR ---
+  LDA cell_br
+  CMP #$FF
+  BEQ upo_br_hide
   LDA player_y
   CLC
   ADC #8
   STA $020C
-  LDA #17             ; tile 17
+  LDA cell_br
   STA $020D
   LDA tmp0
   STA $020E
@@ -376,18 +444,30 @@ upo_attr:
   CLC
   ADC #8
   STA $020F
-  ; se flip H, troca tiles L/R para o personagem não ficar invertido só no eixo
-  LDA player_flip
-  BEQ upo_done
+  RTS
+upo_br_hide:
+  LDA #$FF
+  STA $020C
+  RTS
+
+; avanca a animacao do heroi (mesmo esquema idle das instancias, mas so 1 personagem).
+animate_player:
+  LDA player_on
+  BEQ ap_done
+  DEC player_timer
+  LDA player_timer
+  BNE ap_done
+  INC player_frame
   LDA #1
-  STA $0201
+  CMP player_frame
+  BNE ap_reload
   LDA #0
-  STA $0205
-  LDA #17
-  STA $0209
-  LDA #16
-  STA $020D
-upo_done:
+  STA player_frame
+ap_reload:
+  LDY player_frame
+  LDA CharDur_0,Y
+  STA player_timer
+ap_done:
   RTS
 
 spawn_player:
@@ -400,6 +480,9 @@ spawn_player:
   STA jump_cnt
   STA on_ground
   STA play_idx       ; primeira tela da fase
+  STA player_frame
+  LDA CharDur_0
+  STA player_timer
   LDA #1
   STA player_on
   JSR update_player_oam
@@ -444,7 +527,9 @@ ci_loop:
   STA inst_on,X
   INX
   CPX #5
-  BNE ci_loop
+  BEQ ci_done
+  JMP ci_loop
+ci_done:
   RTS
 
 spawn_enemies:
@@ -655,7 +740,9 @@ uio_br_hide:
 uio_next:
   INX
   CPX #5
-  BNE uio_loop
+  BEQ uio_done
+  JMP uio_loop
+uio_done:
   RTS
 
 ; avanca o timer/frame de animacao (idle simples) de cada instancia ativa.
@@ -681,7 +768,9 @@ ai_reload:
 ai_next:
   INX
   CPX #5
-  BNE ai_loop
+  BEQ ai_done
+  JMP ai_loop
+ai_done:
   RTS
 
 ; ---- Camada 4: colisao instancia vs solido (chao/parede), parametrizada por X=slot ----
@@ -846,7 +935,9 @@ uia_turn_right:
 uia_next:
   INX
   CPX #5
-  BNE uia_loop
+  BEQ uia_done
+  JMP uia_loop
+uia_done:
   RTS
 
 ; --- Acoes genericas (Camada 6 vai chamar via regras compiladas) ---
@@ -940,7 +1031,8 @@ cpe_loop:
 cpe_next:
   INX
   CPX #5
-  BNE cpe_loop
+  BEQ cpe_done
+  JMP cpe_loop
 cpe_done:
   RTS
 
@@ -1199,6 +1291,7 @@ up_fall:
   LDA #0
   STA jump_cnt
 up_done:
+  JSR animate_player
   JSR update_player_oam
   RTS
 
@@ -1391,15 +1484,15 @@ PlayScreenTable:  ; indices globais das telas de jogo (em ordem)
 ; play[3] screen=Tela 4 id=scr_1787144430768 spawns=2
 ; play[4] screen=tela final fase 1 id=scr_1787144451744 spawns=2
 EnemyData_0:
-  .byte $01, $D8, $C6, $00
+  .byte $01, $D8, $C6, $01
 EnemyData_1:
   .byte $00, $00, $00, $00
 EnemyData_2:
-  .byte $02, $64, $64, $00, $75, $22, $00
+  .byte $02, $64, $64, $01, $75, $22, $01
 EnemyData_3:
-  .byte $02, $93, $43, $00, $CF, $7F, $00
+  .byte $02, $93, $43, $01, $CF, $7F, $01
 EnemyData_4:
-  .byte $02, $D6, $D1, $00, $6A, $CC, $00
+  .byte $02, $D6, $D1, $01, $6A, $CC, $01
 EnemySpawnLo:
   .byte <EnemyData_0
   .byte <EnemyData_1
@@ -1413,20 +1506,28 @@ EnemySpawnHi:
   .byte >EnemyData_3
   .byte >EnemyData_4
 
-CharCells_0:  ; enemy
-  .byte $01, $02, $03, $04, $01, $02, $05, $04, $01, $02, $03, $04, $01, $02, $06, $04
+CharCells_0:  ; Hero
+  .byte $00, $01, $02, $03
 CharDur_0:
+  .byte 8
+CharCells_1:  ; enemy
+  .byte $04, $05, $06, $07, $04, $05, $08, $07, $04, $05, $06, $07, $04, $05, $09, $07
+CharDur_1:
   .byte 8, 8, 8, 8
 CharFrameCellsLo:
   .byte <CharCells_0
+  .byte <CharCells_1
 CharFrameCellsHi:
   .byte >CharCells_0
+  .byte >CharCells_1
 CharFrameDurLo:
   .byte <CharDur_0
+  .byte <CharDur_1
 CharFrameDurHi:
   .byte >CharDur_0
+  .byte >CharDur_1
 CharFrameCount:
-  .byte 4
+  .byte 1, 4
 
 Nametable_0:  ; Splash 1 (splash)
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
@@ -2095,15 +2196,15 @@ Time_ch2:
 .segment "CHARS"
   ; pg0 sprites (empacotado a partir dos frames dos personagens) / pg1 background empacotado
   .byte $00, $00, $00, $1F, $10, $10, $12, $10, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $F8, $08, $08, $28, $08, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $14, $13, $10, $10, $1F, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $08, $E8, $08, $08, $F8, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $80, $C3, $EC, $F0, $F1, $E3, $E0, $C0, $80, $C0, $E3, $EF, $EE, $DC, $DF, $BF
   .byte $80, $60, $18, $04, $84, $82, $02, $41, $00, $80, $E0, $F8, $78, $7C, $FC, $BE
   .byte $A7, $F9, $C2, $E6, $F4, $E3, $C0, $80, $98, $C0, $C1, $E1, $F3, $E0, $C0, $80
   .byte $C2, $02, $04, $04, $18, $60, $C0, $80, $3C, $FC, $F8, $F8, $E0, $80, $40, $80
   .byte $A7, $F8, $C0, $E1, $F1, $E3, $C1, $80, $98, $C0, $C0, $E0, $F0, $E0, $C0, $80
   .byte $A1, $E3, $FC, $F0, $FC, $E3, $C0, $80, $9E, $DC, $E3, $EF, $F3, $E0, $C0, $80
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
