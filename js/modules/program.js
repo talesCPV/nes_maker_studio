@@ -757,7 +757,8 @@ const PROGRAM = (() => {
           { value:'right', label:'Direita' },
           { value:'jump', label:'Pulo' }
         ];
-        // Atributo OAM do NES: bit 6 = Flip V, bit 7 = Flip H
+        // Atributo OAM do NES: bit 6 = Flip H, bit 7 = Flip V (a Camada 6/compilador de
+        // regras usa esses valores exatamente assim: flip_h=$40 flip_v=$80 flip_both=$C0)
         const flips = [
           { value:'default', label:'Default' },
           { value:'flip_v', label:'Flip V' },

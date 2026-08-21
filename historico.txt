@@ -78,3 +78,64 @@ O que falta fazer:
 
 Em backgrounds.js:
 * Juntar Hitbox|spaw(backgrounds.js) + objeto(backgrounds.js) + objetos|spaw(program.js) tudo em uma ferramenta só de spaw.O usuário clica num ponto da tela, ele já marca o ponto como spaw, cria o objeto e já pede pro usuario selecionar um personagem para ele
+
+ 
+
+enviar arquivos: backgrounds, build-rom, level-design, program, core
+
+
+Camada 0 — já existe
+    Tela estática + música.
+
+Camada 1 — Kernel de jogo (próximo passo sensato) - (já implementada)
+
+    Zero-page + main loop + input + estado de “tela atual”:
+    ZP: pad1, pad1_prev, game_state, screen_idx, scroll_x, lives, slots de instância (X/Y/charId/flags) conforme maxInstances
+    RESET: init APU (opcional), carrega primeira tela da fase inicial (ou splash da fase Splash)
+    NMI: music + OAM DMA + incremento de frame
+    Main: ler controle → processar regras leves → atualizar sprites → esperar NMI
+
+Camada 2 — Multi-tela estática (sem scroll suave) - (já implementada)
+
+    Embutir as 5 nametables + collision maps da Fase 1 + 2 splashes em RODATA
+    Ação/goto_warp e “avançar tela” trocam nametable (hard cut, como transitionType já permite)
+    Splash → Start → carrega célula 0,0 da Fase 1
+    Vidas = 0 → carrega nametable Game Over
+
+    Isso já fecha o fluxo intro → fase → game over sem scroll horizontal real.
+
+Camada 3 — Sprites (personagens) - (estamos aqui, o player renderiza mas o enemy não)
+
+    Converter frames (metatile → tiles da page 0 de sprites)
+    Pool de instâncias: spawn no ponto (quando houver instância na tela ou posição fixa de spawn)
+    Ações Mover / Matar / flip OAM (bits 6/7)
+    Animação Idle simples (timer por frame)
+
+Camada 4 — Colisão
+
+    Usar collisionMap 32×30 por tela (sólido/plataforma)
+    Hitboxes de personagem vs sólido (chão / parede) para gravidade + On Ground
+    Depois: personagem vs personagem e vs objetos (quando as instâncias existirem nas telas)
+
+Camada 5 — Scroll horizontal
+
+    scroll_h da Fase 1: 5 telas em fila, PPU scroll + troca de nametable na borda
+    Mirroring vertical (já no projeto) combina com scroll horizontal clássico
+    Mais código e mais PRG — pode exigir cuidado com NROM 16KB ou subir mapper depois
+
+Camada 6 — Regras compiladas
+
+    Traduzir cada passo para 6502:
+
+    Passo               Ideia em ASM
+    if_event input      bit do pad1
+    if_var              LDA var / CMP
+    sub_var / set_var   aritmética em ZP/RAM
+    move_character      ajusta X/Y + direção + flip + anim
+    kill_character      flag “morto” / remove slot
+    spawn_character     aloca slot + X/Y do objeto spawn
+    goto_warp           troca tela/fase + posição
+    play_sound          liga motor da faixa
+    if_hitbox           teste AABB entre refs (nativo / terreno / char / obj)
+
+    Regras com scope de fase só rodam quando current_phase == ….

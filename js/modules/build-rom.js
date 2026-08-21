@@ -114,7 +114,7 @@ const BUILD = (() => {
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <div style="display:flex;gap:8px;align-items:center;padding:10px 12px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
-          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.9.12 • OAM inimigos absoluto</h3>
+          <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM v0.9.14 • spawn DEBUG fixo</h3>
           <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             <select id="buildModeSelect" onchange="BUILD.setBuildMode(this.value)" style="background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:4px;font-size:11px">
               <option value="game" selected>🎮 Jogo completo (Camada 1)</option>
@@ -484,6 +484,57 @@ const BUILD = (() => {
     return { bgChr, screens: remapped, usedCount: usedTiles.length, overflowCount: overflow.size };
   }
 
+  // ---- Camada 3: empacota CHR de sprites ($0000) a partir dos FRAMES (metatiles) usados
+  // pela animação padrão (animations[0]) de cada personagem não-herói. Cada frame vira até
+  // 4 células (2x2 tiles, 16x16px) - metatiles maiores são truncados ao quadrante TL 2x2
+  // (aviso no log), metatiles menores geram menos células (o resto do metasprite fica oculto
+  // em runtime). O tile 0 é sempre reservado no slot 0 do banco (mesma convenção do BG).
+  function packSpriteCHR(chrBuf, chars){
+    const mapping = new Map();
+    const usedTiles = [];
+    mapping.set(0, 0); usedTiles.push(0);
+    const overflow = new Set();
+    const truncated = [];
+    function mapTile(t){
+      const orig = t || 0;
+      if(mapping.has(orig)) return mapping.get(orig);
+      if(usedTiles.length >= 256){ overflow.add(orig); return 0; }
+      mapping.set(orig, usedTiles.length);
+      usedTiles.push(orig);
+      return mapping.get(orig);
+    }
+    const metatiles = (typeof CHR !== "undefined" && CHR.getMetatiles) ? CHR.getMetatiles() : [];
+    const mtById = new Map(metatiles.map(m => [m.id, m]));
+    // slots do metasprite 2x2, na mesma ordem usada pelo desenho do player: TL,TR,BL,BR
+    const CORNERS = [{dx:0,dy:0},{dx:8,dy:0},{dx:0,dy:8},{dx:8,dy:8}];
+    const charData = chars.map((c, ci) => {
+      const anim = (c.animations || [])[0] || { name:"Idle", loop:true, frames:[] };
+      const frames = (anim.frames || []).map((f, fi) => {
+        const mt = mtById.get(f.metatileId);
+        const duration = Math.max(1, Math.min(255, f.duration || 8));
+        if(!mt || !mt.tiles || !mt.w || !mt.h) return { cells: [], duration };
+        if(mt.w > 2 || mt.h > 2) truncated.push(`${c.name} / ${anim.name} / frame ${fi+1} (${mt.w}x${mt.h} → 2x2)`);
+        const cells = [];
+        for(let ty=0; ty<Math.min(2, mt.h); ty++){
+          for(let tx=0; tx<Math.min(2, mt.w); tx++){
+            const raw = mt.tiles[ty*mt.w+tx] || 0;
+            const corner = ty*2+tx; // 0=TL 1=TR 2=BL 3=BR
+            cells.push({ tile: mapTile(raw), dx: CORNERS[corner].dx, dy: CORNERS[corner].dy, corner });
+          }
+        }
+        return { cells, duration };
+      });
+      return { id: c.id, name: c.name, frames: frames.length ? frames : [{ cells: [], duration: 8 }] };
+    });
+    const spriteChr = new Uint8Array(4096);
+    for(let i=0; i<usedTiles.length; i++){
+      const srcIdx = usedTiles[i];
+      const srcOff = (srcIdx % 512) * 16;
+      if(srcOff + 16 <= chrBuf.length) spriteChr.set(chrBuf.slice(srcOff, srcOff + 16), i * 16);
+    }
+    return { spriteChr, charData, usedCount: usedTiles.length, overflowCount: overflow.size, truncated };
+  }
+
   // ---- Music engine ASM helpers ----
   const CH_ORDER = ["pulse1", "pulse2", "triangle", "noise"];
   const CH_META = {
@@ -531,6 +582,22 @@ const BUILD = (() => {
     const playStart = collected.playStartIdx;
     const gameoverIdx = collected.gameoverIdx;
 
+    // ---- Camada 3: pool de instâncias (inimigos) + sprites reais ----
+    // Herói(is) ficam de fora da tabela de sprites de instância - o player continua com seu
+    // próprio caminho de desenho (fora de escopo desta camada). "Não-herói" = qualquer
+    // personagem cujo nome não contém "hero" (mesma heurística já usada no spawn table).
+    const allChars = Project.data?.characters || [];
+    const heroIdSet = new Set(allChars.filter(c => (c.name||"").toLowerCase().includes("hero")).map(c => String(c.id)));
+    const enemyChars = allChars.filter(c => !heroIdSet.has(String(c.id)));
+    const spritePack = packSpriteCHR(chrBuf, enemyChars);
+    const charIndexById = new Map(enemyChars.map((c,i) => [String(c.id), i]));
+    // orçamento de OAM: player fixo usa 4 sprites ($0200-$020F); cada instância usa até 4
+    // ($0210 em diante). 64 sprites totais / 4 = 16 metasprites - 1 do player = 15 no máximo.
+    const MAX_OAM_INSTANCES = 15;
+    const requestedInstances = Math.max(1, Math.min(20, parseInt(Project.data?.maxInstances) || 10));
+    const NUM_INSTANCES = Math.min(requestedInstances, MAX_OAM_INSTANCES);
+    const instanceOverflow = requestedInstances > MAX_OAM_INSTANCES;
+
     // paletas
     const paletteBytes=[]; for(let p=0;p<8;p++){ const pal=pals[p]||[15,0,16,48]; for(let c=0;c<4;c++) paletteBytes.push(pal[c]||0); }
     const firstNt = screens[0]?.remappedNt || new Array(960).fill(0);
@@ -559,9 +626,13 @@ const BUILD = (() => {
     }
 
     const L=[];
-    L.push("; NES Maker Studio - BUILD v0.9.12");
-    L.push("; NROM-256 | inimigos (spawn fixo garantido) + patrol + hit");
-    L.push(`; Telas: ${screens.length} · CHR tiles: ${packed.usedCount}/256` + (packed.overflowCount?` · overflow ${packed.overflowCount}`:""));
+    L.push("; NES Maker Studio - BUILD v0.9.16 - Camada 4: instancias com gravidade + colisao solida");
+    L.push("; NROM-256 | inimigos caem/andam respeitando o collisionMap (chao+parede), sem beirada");
+    L.push(`; Telas: ${screens.length} · CHR tiles (fundo): ${packed.usedCount}/256` + (packed.overflowCount?` · overflow ${packed.overflowCount}`:""));
+    L.push(`; CHR tiles (sprites): ${spritePack.usedCount}/256` + (spritePack.overflowCount?` · overflow ${spritePack.overflowCount}`:""));
+    L.push(`; Instâncias: ${NUM_INSTANCES}` + (instanceOverflow ? ` (maxInstances=${requestedInstances} excede o orçamento de OAM, limitado a ${MAX_OAM_INSTANCES})` : ""));
+    if(spritePack.truncated.length) spritePack.truncated.forEach(t => L.push(`; AVISO: frame maior que 2x2 truncado - ${t}`));
+    if(enemyChars.length === 0) L.push("; AVISO: nenhum personagem não-herói cadastrado - nenhuma instância vai renderizar sprite.");
     screens.forEach((s,i) => L.push(`;   [${i}] ${s.role} · ${s.name}`));
     if(music && musicChans) L.push(`; Musica: ${music.name} · ${musicChans.length} canal(is)`);
     else L.push("; Musica: (nenhuma)");
@@ -589,23 +660,22 @@ const BUILD = (() => {
     L.push("col_result: .res 1");
     L.push("ls_count:   .res 1    ; contador load_screen (nao reusa pad)");
     L.push("play_idx:   .res 1    ; indice 0..playCount-1 na sequencia da fase");
-    // ate 4 inimigos (x,y,on,dir) — dir: 0=dir 1=esq
-    L.push("en0_x:      .res 1");
-    L.push("en0_y:      .res 1");
-    L.push("en0_on:     .res 1");
-    L.push("en0_dir:    .res 1");
-    L.push("en1_x:      .res 1");
-    L.push("en1_y:      .res 1");
-    L.push("en1_on:     .res 1");
-    L.push("en1_dir:    .res 1");
-    L.push("en2_x:      .res 1");
-    L.push("en2_y:      .res 1");
-    L.push("en2_on:     .res 1");
-    L.push("en2_dir:    .res 1");
-    L.push("en3_x:      .res 1");
-    L.push("en3_y:      .res 1");
-    L.push("en3_on:     .res 1");
-    L.push("en3_dir:    .res 1");
+    // ---- Camada 3: pool de instâncias (SoA - struct of arrays, indexado por X) ----
+    L.push(`; pool de ${NUM_INSTANCES} instancia(s) - SoA pra indexar com LDA tabela,X`);
+    L.push(`inst_x:       .res ${NUM_INSTANCES}`);
+    L.push(`inst_y:       .res ${NUM_INSTANCES}`);
+    L.push(`inst_on:      .res ${NUM_INSTANCES}`);
+    L.push(`inst_dir:     .res ${NUM_INSTANCES}   ; atributo OAM: 0=normal $40=flipH (tb usado p/ patrol)`);
+    L.push(`inst_char:    .res ${NUM_INSTANCES}   ; indice do personagem (CharFrame*,X)`);
+    L.push(`inst_frame:   .res ${NUM_INSTANCES}   ; frame atual da animacao padrao`);
+    L.push(`inst_timer:   .res ${NUM_INSTANCES}   ; frames restantes ate proximo frame`);
+    L.push("inst_tmp:     .res 1   ; indice de loop / scratch");
+    L.push("cell_tl:      .res 1   ; scratch: 4 tiles do frame atual sendo desenhado");
+    L.push("cell_tr:      .res 1");
+    L.push("cell_bl:      .res 1");
+    L.push("cell_br:      .res 1");
+    L.push("oam_off:      .res 1   ; scratch: offset ($10 + slot*16) dentro da pagina $02xx");
+    L.push("inst_grounded: .res 1  ; scratch: resultado de check_ground_inst (Camada 4)");
     L.push("en_tmp:     .res 1");
     if(musicChans){
       L.push("music_on:   .res 1");
@@ -630,6 +700,9 @@ const BUILD = (() => {
     L.push("  STA $2003");
     L.push("  LDA #$02");
     L.push("  STA $4014");
+    L.push("  ; garante sprites ligados");
+    L.push("  LDA #%00011110");
+    L.push("  STA $2001");
     if(musicChans){
       L.push("  JSR music_update");
     }
@@ -935,371 +1008,515 @@ const BUILD = (() => {
     L.push("  RTS");
     L.push("");
 
-    // ---- inimigos ----
-    L.push("clear_enemies:");
+    // ---- Camada 3: pool de instancias generico (SoA, X = slot 0..NUM_INSTANCES-1) ----
+    L.push("clear_instances:");
+    L.push("  LDX #0");
+    L.push("ci_loop:");
     L.push("  LDA #0");
-    L.push("  STA en0_on");
-    L.push("  STA en1_on");
-    L.push("  STA en2_on");
-    L.push("  STA en3_on");
+    L.push("  STA inst_on,X");
+    L.push("  INX");
+    L.push(`  CPX #${NUM_INSTANCES}`);
+    L.push("  BNE ci_loop");
     L.push("  RTS");
     L.push("");
-
+    // Le a tabela de spawn da tela atual (play_idx), gerada a partir de level-design.js
+    // (Project.data.hitboxInstances). Formato por tela em EnemyData_N: count, depois
+    // (x,y,charIdx) x count.
     L.push("spawn_enemies:");
-    L.push("  JSR clear_enemies");
-    L.push("  ; play_idx → EnemySpawnLo/Hi (1 byte index) → count,x,y,...");
+    L.push("  JSR clear_instances");
     L.push("  LDX play_idx");
     L.push("  LDA EnemySpawnLo,X");
     L.push("  STA tmp0");
     L.push("  LDA EnemySpawnHi,X");
     L.push("  STA tmp1");
     L.push("  LDY #0");
-    L.push("  LDA (tmp0),Y");
-    L.push("  BEQ se_done");
+    L.push("  LDA (tmp0),Y          ; count desta tela");
     L.push("  STA en_tmp");
     L.push("  INY");
-    L.push("  ; en0");
+    L.push("  LDX #0                ; X = slot do pool sendo preenchido");
+    L.push("se_loop:");
     L.push("  LDA en_tmp");
     L.push("  BEQ se_done");
+    L.push(`  CPX #${NUM_INSTANCES}`);
+    L.push("  BEQ se_done           ; pool cheio, ignora o resto");
     L.push("  LDA (tmp0),Y");
-    L.push("  STA en0_x");
+    L.push("  STA inst_x,X");
     L.push("  INY");
     L.push("  LDA (tmp0),Y");
-    L.push("  STA en0_y");
+    L.push("  STA inst_y,X");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA inst_char,X");
     L.push("  INY");
     L.push("  LDA #1");
-    L.push("  STA en0_on");
+    L.push("  STA inst_on,X");
     L.push("  LDA #0");
-    L.push("  STA en0_dir");
+    L.push("  STA inst_dir,X");
+    L.push("  STA inst_frame,X");
+    L.push("  JSR load_frame_duration   ; X=slot -> A = duracao do frame 0 do personagem");
+    L.push("  STA inst_timer,X");
+    L.push("  INX");
     L.push("  DEC en_tmp");
-    L.push("  ; en1");
-    L.push("  LDA en_tmp");
-    L.push("  BEQ se_done");
-    L.push("  LDA (tmp0),Y");
-    L.push("  STA en1_x");
-    L.push("  INY");
-    L.push("  LDA (tmp0),Y");
-    L.push("  STA en1_y");
-    L.push("  INY");
-    L.push("  LDA #1");
-    L.push("  STA en1_on");
-    L.push("  LDA #1");
-    L.push("  STA en1_dir");
-    L.push("  DEC en_tmp");
-    L.push("  ; en2");
-    L.push("  LDA en_tmp");
-    L.push("  BEQ se_done");
-    L.push("  LDA (tmp0),Y");
-    L.push("  STA en2_x");
-    L.push("  INY");
-    L.push("  LDA (tmp0),Y");
-    L.push("  STA en2_y");
-    L.push("  INY");
-    L.push("  LDA #1");
-    L.push("  STA en2_on");
-    L.push("  LDA #0");
-    L.push("  STA en2_dir");
-    L.push("  DEC en_tmp");
-    L.push("  ; en3");
-    L.push("  LDA en_tmp");
-    L.push("  BEQ se_done");
-    L.push("  LDA (tmp0),Y");
-    L.push("  STA en3_x");
-    L.push("  INY");
-    L.push("  LDA (tmp0),Y");
-    L.push("  STA en3_y");
-    L.push("  LDA #1");
-    L.push("  STA en3_on");
-    L.push("  LDA #1");
-    L.push("  STA en3_dir");
+    L.push("  JMP se_loop");
     L.push("se_done:");
-    L.push("  JSR update_enemy_oam");
+    L.push("  JSR update_instances_oam");
     L.push("  RTS");
     L.push("");
-
-    // X=OAM base, tmp0=x, tmp1=y, en_tmp=attr — desenha 2x2 tiles 2,3 / 4,19
-    // OAM inimigos: slots 4-7 (en0) e 8-11 (en1) — endereços absolutos
-    L.push("update_enemy_oam:");
-    L.push("  ; --- en0 ---");
-    L.push("  LDA en0_on");
-    L.push("  BNE ueo0_draw");
+    // ---- tabelas de sprite por personagem (Camada 3) ----
+    L.push("; X = slot -> le inst_char,X e inst_frame,X, retorna duracao (frames) em A");
+    L.push("load_frame_duration:");
+    L.push("  LDA inst_char,X");
+    L.push("  TAY");
+    L.push("  LDA CharFrameDurLo,Y");
+    L.push("  STA tmp0");
+    L.push("  LDA CharFrameDurHi,Y");
+    L.push("  STA tmp1");
+    L.push("  LDY inst_frame,X");
+    L.push("  LDA (tmp0),Y");
+    L.push("  RTS");
+    L.push("");
+    L.push("; X = slot -> aponta tmp0/tmp1 pros 4 bytes de tile do frame atual (TL,TR,BL,BR;");
+    L.push("; $FF = celula oculta). Y fica sujo, X preservado.");
+    L.push("load_frame_cellptr:");
+    L.push("  LDA inst_char,X");
+    L.push("  TAY");
+    L.push("  LDA CharFrameCellsLo,Y");
+    L.push("  STA tmp0");
+    L.push("  LDA CharFrameCellsHi,Y");
+    L.push("  STA tmp1");
+    L.push("  LDA inst_frame,X");
+    L.push("  ASL A");
+    L.push("  ASL A                 ; frame*4");
+    L.push("  CLC");
+    L.push("  ADC tmp0");
+    L.push("  STA tmp0");
+    L.push("  BCC lfc_done");
+    L.push("  INC tmp1");
+    L.push("lfc_done:");
+    L.push("  RTS");
+    L.push("");
+    L.push("; calcula oam_off = $10 + X*16 (X = slot). Preserva X.");
+    L.push("uio_calc_off:");
+    L.push("  TXA");
+    L.push("  ASL A");
+    L.push("  ASL A");
+    L.push("  ASL A");
+    L.push("  ASL A                 ; X*16");
+    L.push("  CLC");
+    L.push("  ADC #$10               ; pula os 4 sprites do player ($0200-$020F)");
+    L.push("  STA oam_off");
+    L.push("  RTS");
+    L.push("");
+    L.push("; desenha ate NUM_INSTANCES metasprites 2x2 (16x16) em $0210+, 4 OAM por slot.");
+    L.push("update_instances_oam:");
+    L.push("  LDX #0");
+    L.push("uio_loop:");
+    L.push("  LDA inst_on,X");
+    L.push("  BNE uio_draw");
+    L.push("  JSR uio_calc_off");
+    L.push("  LDY oam_off");
     L.push("  LDA #$FF");
-    L.push("  STA $0210");
-    L.push("  STA $0214");
-    L.push("  STA $0218");
-    L.push("  STA $021C");
-    L.push("  JMP ueo1");
-    L.push("ueo0_draw:");
-    L.push("  LDA en0_y");
-    L.push("  STA $0210");
-    L.push("  LDA #0              ; tile hero TL (sempre visivel)");
-    L.push("  STA $0211");
-    L.push("  LDA #%00000001      ; pal 1");
-    L.push("  STA $0212");
-    L.push("  LDA en0_x");
-    L.push("  STA $0213");
-    L.push("  LDA en0_y");
-    L.push("  STA $0214");
-    L.push("  LDA #1");
-    L.push("  STA $0215");
-    L.push("  LDA #%00000001");
-    L.push("  STA $0216");
-    L.push("  LDA en0_x");
-    L.push("  CLC");
-    L.push("  ADC #8");
-    L.push("  STA $0217");
-    L.push("  LDA en0_y");
-    L.push("  CLC");
-    L.push("  ADC #8");
-    L.push("  STA $0218");
-    L.push("  LDA #16");
-    L.push("  STA $0219");
-    L.push("  LDA #%00000001");
-    L.push("  STA $021A");
-    L.push("  LDA en0_x");
-    L.push("  STA $021B");
-    L.push("  LDA en0_y");
-    L.push("  CLC");
-    L.push("  ADC #8");
-    L.push("  STA $021C");
-    L.push("  LDA #17");
-    L.push("  STA $021D");
-    L.push("  LDA #%00000001");
-    L.push("  STA $021E");
-    L.push("  LDA en0_x");
-    L.push("  CLC");
-    L.push("  ADC #8");
-    L.push("  STA $021F");
-    L.push("ueo1:");
-    L.push("  ; --- en1 ---");
-    L.push("  LDA en1_on");
-    L.push("  BNE ueo1_draw");
+    L.push("  STA $0200,Y");
+    L.push("  STA $0204,Y");
+    L.push("  STA $0208,Y");
+    L.push("  STA $020C,Y");
+    L.push("  JMP uio_next");
+    L.push("uio_draw:");
+    L.push("  JSR load_frame_cellptr");
+    L.push("  LDY #0");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA cell_tl");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA cell_tr");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA cell_bl");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA cell_br");
+    L.push("  LDA inst_dir,X");
+    L.push("  BEQ uio_noflip");
+    L.push("  ; flip H: espelha o metasprite trocando TL<->TR e BL<->BR");
+    L.push("  LDA cell_tl");
+    L.push("  PHA");
+    L.push("  LDA cell_tr");
+    L.push("  STA cell_tl");
+    L.push("  PLA");
+    L.push("  STA cell_tr");
+    L.push("  LDA cell_bl");
+    L.push("  PHA");
+    L.push("  LDA cell_br");
+    L.push("  STA cell_bl");
+    L.push("  PLA");
+    L.push("  STA cell_br");
+    L.push("uio_noflip:");
+    L.push("  JSR uio_calc_off");
+    L.push("  LDY oam_off");
+    L.push("  ; --- TL ---");
+    L.push("  LDA cell_tl");
+    L.push("  CMP #$FF");
+    L.push("  BEQ uio_tl_hide");
+    L.push("  LDA inst_y,X");
+    L.push("  STA $0200,Y");
+    L.push("  LDA cell_tl");
+    L.push("  STA $0201,Y");
+    L.push("  LDA inst_dir,X");
+    L.push("  STA $0202,Y");
+    L.push("  LDA inst_x,X");
+    L.push("  STA $0203,Y");
+    L.push("  JMP uio_tr");
+    L.push("uio_tl_hide:");
     L.push("  LDA #$FF");
-    L.push("  STA $0220");
-    L.push("  STA $0224");
-    L.push("  STA $0228");
-    L.push("  STA $022C");
-    L.push("  JMP ueo2");
-    L.push("ueo1_draw:");
-    L.push("  LDA en1_y");
-    L.push("  STA $0220");
+    L.push("  STA $0200,Y");
+    L.push("uio_tr:");
+    L.push("  ; --- TR ---");
+    L.push("  LDA cell_tr");
+    L.push("  CMP #$FF");
+    L.push("  BEQ uio_tr_hide");
+    L.push("  LDA inst_y,X");
+    L.push("  STA $0204,Y");
+    L.push("  LDA cell_tr");
+    L.push("  STA $0205,Y");
+    L.push("  LDA inst_dir,X");
+    L.push("  STA $0206,Y");
+    L.push("  LDA inst_x,X");
+    L.push("  CLC");
+    L.push("  ADC #8");
+    L.push("  STA $0207,Y");
+    L.push("  JMP uio_bl");
+    L.push("uio_tr_hide:");
+    L.push("  LDA #$FF");
+    L.push("  STA $0204,Y");
+    L.push("uio_bl:");
+    L.push("  ; --- BL ---");
+    L.push("  LDA cell_bl");
+    L.push("  CMP #$FF");
+    L.push("  BEQ uio_bl_hide");
+    L.push("  LDA inst_y,X");
+    L.push("  CLC");
+    L.push("  ADC #8");
+    L.push("  STA $0208,Y");
+    L.push("  LDA cell_bl");
+    L.push("  STA $0209,Y");
+    L.push("  LDA inst_dir,X");
+    L.push("  STA $020A,Y");
+    L.push("  LDA inst_x,X");
+    L.push("  STA $020B,Y");
+    L.push("  JMP uio_br");
+    L.push("uio_bl_hide:");
+    L.push("  LDA #$FF");
+    L.push("  STA $0208,Y");
+    L.push("uio_br:");
+    L.push("  ; --- BR ---");
+    L.push("  LDA cell_br");
+    L.push("  CMP #$FF");
+    L.push("  BEQ uio_br_hide");
+    L.push("  LDA inst_y,X");
+    L.push("  CLC");
+    L.push("  ADC #8");
+    L.push("  STA $020C,Y");
+    L.push("  LDA cell_br");
+    L.push("  STA $020D,Y");
+    L.push("  LDA inst_dir,X");
+    L.push("  STA $020E,Y");
+    L.push("  LDA inst_x,X");
+    L.push("  CLC");
+    L.push("  ADC #8");
+    L.push("  STA $020F,Y");
+    L.push("  JMP uio_next");
+    L.push("uio_br_hide:");
+    L.push("  LDA #$FF");
+    L.push("  STA $020C,Y");
+    L.push("uio_next:");
+    L.push("  INX");
+    L.push(`  CPX #${NUM_INSTANCES}`);
+    L.push("  BNE uio_loop");
+    L.push("  RTS");
+    L.push("");
+    L.push("; avanca o timer/frame de animacao (idle simples) de cada instancia ativa.");
+    L.push("animate_instances:");
+    L.push("  LDX #0");
+    L.push("ai_loop:");
+    L.push("  LDA inst_on,X");
+    L.push("  BEQ ai_next");
+    L.push("  DEC inst_timer,X");
+    L.push("  LDA inst_timer,X");
+    L.push("  BNE ai_next");
+    L.push("  INC inst_frame,X");
+    L.push("  LDA inst_char,X");
+    L.push("  TAY");
+    L.push("  LDA CharFrameCount,Y");
+    L.push("  CMP inst_frame,X      ; Z=1 se estourou (frame chegou no total)");
+    L.push("  BNE ai_reload");
     L.push("  LDA #0");
-    L.push("  STA $0221");
-    L.push("  LDA #%00000001");
-    L.push("  STA $0222");
-    L.push("  LDA en1_x");
-    L.push("  STA $0223");
-    L.push("  LDA en1_y");
-    L.push("  STA $0224");
-    L.push("  LDA #1");
-    L.push("  STA $0225");
-    L.push("  LDA #%00000001");
-    L.push("  STA $0226");
-    L.push("  LDA en1_x");
-    L.push("  CLC");
-    L.push("  ADC #8");
-    L.push("  STA $0227");
-    L.push("  LDA en1_y");
-    L.push("  CLC");
-    L.push("  ADC #8");
-    L.push("  STA $0228");
-    L.push("  LDA #16");
-    L.push("  STA $0229");
-    L.push("  LDA #%00000001");
-    L.push("  STA $022A");
-    L.push("  LDA en1_x");
-    L.push("  STA $022B");
-    L.push("  LDA en1_y");
-    L.push("  CLC");
-    L.push("  ADC #8");
-    L.push("  STA $022C");
-    L.push("  LDA #17");
-    L.push("  STA $022D");
-    L.push("  LDA #%00000001");
-    L.push("  STA $022E");
-    L.push("  LDA en1_x");
-    L.push("  CLC");
-    L.push("  ADC #8");
-    L.push("  STA $022F");
-    L.push("ueo2:");
+    L.push("  STA inst_frame,X");
+    L.push("ai_reload:");
+    L.push("  JSR load_frame_duration");
+    L.push("  STA inst_timer,X");
+    L.push("ai_next:");
+    L.push("  INX");
+    L.push(`  CPX #${NUM_INSTANCES}`);
+    L.push("  BNE ai_loop");
     L.push("  RTS");
     L.push("");
-
+    L.push("; ---- Camada 4: colisao instancia vs solido (chao/parede), parametrizada por X=slot ----");
+    L.push("; mesma logica de check_ground/check_wall_at do player, mas lendo inst_x/inst_y,X.");
+    L.push("; X e preservado ao redor de get_collision (que usa X internamente pra ScreenColLo/Hi).");
+    L.push("check_ground_inst:");
+    L.push("  LDA #0");
+    L.push("  STA inst_grounded");
+    L.push("  LDA inst_y,X");
+    L.push("  CLC");
+    L.push("  ADC #16");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  STA col_y");
+    L.push("  LDA inst_x,X");
+    L.push("  CLC");
+    L.push("  ADC #2");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  STA col_x");
+    L.push("  STX inst_tmp");
+    L.push("  JSR get_collision");
+    L.push("  LDX inst_tmp");
+    L.push("  LDA col_result");
+    L.push("  JSR is_solid");
+    L.push("  BNE cgi_yes");
+    L.push("  LDA inst_x,X");
+    L.push("  CLC");
+    L.push("  ADC #13");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  STA col_x");
+    L.push("  STX inst_tmp");
+    L.push("  JSR get_collision");
+    L.push("  LDX inst_tmp");
+    L.push("  LDA col_result");
+    L.push("  JSR is_solid");
+    L.push("  BNE cgi_yes");
+    L.push("  RTS");
+    L.push("cgi_yes:");
+    L.push("  LDA #1");
+    L.push("  STA inst_grounded");
+    L.push("  LDA col_y");
+    L.push("  ASL A");
+    L.push("  ASL A");
+    L.push("  ASL A");
+    L.push("  SEC");
+    L.push("  SBC #16");
+    L.push("  STA inst_y,X");
+    L.push("  RTS");
+    L.push("");
+    L.push("; col_x ja setado pelo chamador; testa 2 pontos verticais do corpo (X=slot).");
+    L.push("check_wall_at_inst:");
+    L.push("  LDA inst_y,X");
+    L.push("  CLC");
+    L.push("  ADC #4");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  STA col_y");
+    L.push("  STX inst_tmp");
+    L.push("  JSR get_collision");
+    L.push("  LDX inst_tmp");
+    L.push("  LDA col_result");
+    L.push("  JSR is_solid");
+    L.push("  BNE cwi_hit");
+    L.push("  LDA inst_y,X");
+    L.push("  CLC");
+    L.push("  ADC #12");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  STA col_y");
+    L.push("  STX inst_tmp");
+    L.push("  JSR get_collision");
+    L.push("  LDX inst_tmp");
+    L.push("  LDA col_result");
+    L.push("  JSR is_solid");
+    L.push("  BNE cwi_hit");
+    L.push("  LDA #0");
+    L.push("  STA col_result");
+    L.push("  RTS");
+    L.push("cwi_hit:");
+    L.push("  LDA #1");
+    L.push("  STA col_result");
+    L.push("  RTS");
+    L.push("");
+    L.push("; patrulha com gravidade + colisao real: cai (4px/frame) quando nao tem chao sob os pes;");
+    L.push("; quando no chao, anda 1px/frame e vira ao bater numa parede (check_wall_at_inst) ou ao");
+    L.push("; chegar no limite de seguranca da tela. Sem deteccao de beirada (pode cair de plataforma -");
+    L.push("; decisao explicita, fica pra depois). Usa o bit $40 de inst_dir (mesmo bit do flip H de");
+    L.push("; OAM) como 'esta virado pra esquerda' - flip e direcao de movimento sempre batem.");
+    L.push("update_instances_ai:");
+    L.push("  LDX #0");
+    L.push("uia_loop:");
+    L.push("  LDA inst_on,X");
+    L.push("  BEQ uia_next");
+    L.push("  JSR check_ground_inst");
+    L.push("  LDA inst_grounded");
+    L.push("  BNE uia_walk");
+    L.push("  ; caindo: aplica gravidade e nao anda nesse frame");
+    L.push("  LDA inst_y,X");
+    L.push("  CLC");
+    L.push("  ADC #4");
+    L.push("  STA inst_y,X");
+    L.push("  JMP uia_next");
+    L.push("uia_walk:");
+    L.push("  LDA inst_dir,X");
+    L.push("  AND #$40");
+    L.push("  BNE uia_left");
+    L.push("  ; indo pra direita: testa parede na borda direita proposta (x+1+13)");
+    L.push("  LDA inst_x,X");
+    L.push("  CLC");
+    L.push("  ADC #1");
+    L.push("  CLC");
+    L.push("  ADC #13");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  STA col_x");
+    L.push("  JSR check_wall_at_inst");
+    L.push("  LDA col_result");
+    L.push("  BNE uia_turn_left");
+    L.push("  LDA inst_x,X");
+    L.push("  CLC");
+    L.push("  ADC #1");
+    L.push("  STA inst_x,X");
+    L.push("  CMP #232          ; limite de seguranca (evita overflow do byte perto da borda)");
+    L.push("  BCC uia_next");
+    L.push("uia_turn_left:");
+    L.push("  LDA inst_dir,X");
+    L.push("  ORA #$40");
+    L.push("  STA inst_dir,X");
+    L.push("  JMP uia_next");
+    L.push("uia_left:");
+    L.push("  ; indo pra esquerda: testa parede na borda esquerda proposta (x-1+2)");
+    L.push("  LDA inst_x,X");
+    L.push("  SEC");
+    L.push("  SBC #1");
+    L.push("  CLC");
+    L.push("  ADC #2");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  LSR A");
+    L.push("  STA col_x");
+    L.push("  JSR check_wall_at_inst");
+    L.push("  LDA col_result");
+    L.push("  BNE uia_turn_right");
+    L.push("  LDA inst_x,X");
+    L.push("  SEC");
+    L.push("  SBC #1");
+    L.push("  STA inst_x,X");
+    L.push("  CMP #20           ; limite de seguranca");
+    L.push("  BCS uia_next");
+    L.push("uia_turn_right:");
+    L.push("  LDA inst_dir,X");
+    L.push("  AND #$BF");
+    L.push("  STA inst_dir,X");
+    L.push("uia_next:");
+    L.push("  INX");
+    L.push(`  CPX #${NUM_INSTANCES}`);
+    L.push("  BNE uia_loop");
+    L.push("  RTS");
+    L.push("");
+    L.push("; --- Acoes genericas (Camada 6 vai chamar via regras compiladas) ---");
+    L.push("; X = slot. Mata a instancia (esconde e libera o pool imediatamente).");
+    L.push("action_kill_instance:");
+    L.push("  LDA #0");
+    L.push("  STA inst_on,X");
+    L.push("  RTS");
+    L.push("");
+    L.push("; X = slot, A = direcao (0=direita 1=esquerda 2=cima 3=baixo), Y = passo em pixels.");
+    L.push("; Ajusta x/y e o flip (inst_dir) de acordo com a direcao. Troca de animacao (o animId");
+    L.push("; escolhido na Acao Mover) fica pra quando o compilador de regras (Camada 6) existir -");
+    L.push("; hoje so a animacao padrao (animations[0]) de cada personagem roda em runtime.");
+    L.push("action_move_instance:");
+    L.push("  CMP #0");
+    L.push("  BNE ami_1");
+    L.push("  STY tmp0");
+    L.push("  LDA inst_x,X");
+    L.push("  CLC");
+    L.push("  ADC tmp0");
+    L.push("  STA inst_x,X");
+    L.push("  LDA inst_dir,X");
+    L.push("  AND #$BF");
+    L.push("  STA inst_dir,X");
+    L.push("  RTS");
+    L.push("ami_1:");
+    L.push("  CMP #1");
+    L.push("  BNE ami_2");
+    L.push("  STY tmp0");
+    L.push("  LDA inst_x,X");
+    L.push("  SEC");
+    L.push("  SBC tmp0");
+    L.push("  STA inst_x,X");
+    L.push("  LDA inst_dir,X");
+    L.push("  ORA #$40");
+    L.push("  STA inst_dir,X");
+    L.push("  RTS");
+    L.push("ami_2:");
+    L.push("  CMP #2");
+    L.push("  BNE ami_3");
+    L.push("  STY tmp0");
+    L.push("  LDA inst_y,X");
+    L.push("  SEC");
+    L.push("  SBC tmp0");
+    L.push("  STA inst_y,X");
+    L.push("  RTS");
+    L.push("ami_3:");
+    L.push("  STY tmp0");
+    L.push("  LDA inst_y,X");
+    L.push("  CLC");
+    L.push("  ADC tmp0");
+    L.push("  STA inst_y,X");
+    L.push("  RTS");
+    L.push("");
+    L.push("; substitui o antigo bloco fixo de patrol+colisao+desenho por personagem");
     L.push("update_enemies:");
-    // patrol en0
-    L.push("  LDA en0_on");
-    L.push("  BEQ ue_1");
-    L.push("  LDA en0_dir");
-    L.push("  BNE ue0_left");
-    L.push("  LDA en0_x");
-    L.push("  CLC");
-    L.push("  ADC #1");
-    L.push("  STA en0_x");
-    L.push("  CMP #220");
-    L.push("  BCC ue_1");
-    L.push("  LDA #1");
-    L.push("  STA en0_dir");
-    L.push("  JMP ue_1");
-    L.push("ue0_left:");
-    L.push("  LDA en0_x");
-    L.push("  SEC");
-    L.push("  SBC #1");
-    L.push("  STA en0_x");
-    L.push("  CMP #20");
-    L.push("  BCS ue_1");
-    L.push("  LDA #0");
-    L.push("  STA en0_dir");
-    L.push("ue_1:");
-    L.push("  LDA en1_on");
-    L.push("  BEQ ue_2");
-    L.push("  LDA en1_dir");
-    L.push("  BNE ue1_left");
-    L.push("  LDA en1_x");
-    L.push("  CLC");
-    L.push("  ADC #1");
-    L.push("  STA en1_x");
-    L.push("  CMP #220");
-    L.push("  BCC ue_2");
-    L.push("  LDA #1");
-    L.push("  STA en1_dir");
-    L.push("  JMP ue_2");
-    L.push("ue1_left:");
-    L.push("  LDA en1_x");
-    L.push("  SEC");
-    L.push("  SBC #1");
-    L.push("  STA en1_x");
-    L.push("  CMP #20");
-    L.push("  BCS ue_2");
-    L.push("  LDA #0");
-    L.push("  STA en1_dir");
-    L.push("ue_2:");
-    L.push("  LDA en2_on");
-    L.push("  BEQ ue_3");
-    L.push("  LDA en2_x");
-    L.push("  CLC");
-    L.push("  ADC #1");
-    L.push("  STA en2_x");
-    L.push("  CMP #200");
-    L.push("  BCC ue_3");
-    L.push("  LDA #40");
-    L.push("  STA en2_x");
-    L.push("ue_3:");
-    L.push("  LDA en3_on");
-    L.push("  BEQ ue_col");
-    L.push("  LDA en3_x");
-    L.push("  SEC");
-    L.push("  SBC #1");
-    L.push("  STA en3_x");
-    L.push("  CMP #20");
-    L.push("  BCS ue_col");
-    L.push("  LDA #200");
-    L.push("  STA en3_x");
-    L.push("ue_col:");
-    // collision player vs enemies
+    L.push("  JSR update_instances_ai");
+    L.push("  JSR animate_instances");
     L.push("  JSR check_player_enemy_hit");
-    L.push("  JSR update_enemy_oam");
+    L.push("  JSR update_instances_oam");
     L.push("  RTS");
     L.push("");
-
     L.push("check_player_enemy_hit:");
     L.push("  LDA player_on");
     L.push("  BEQ cpe_done");
-    // macro-like for en0
-    L.push("  LDA en0_on");
-    L.push("  BEQ cpe1");
+    L.push("  LDX #0");
+    L.push("cpe_loop:");
+    L.push("  LDA inst_on,X");
+    L.push("  BEQ cpe_next");
     L.push("  LDA player_x");
     L.push("  CLC");
     L.push("  ADC #12");
-    L.push("  CMP en0_x");
-    L.push("  BCC cpe1");
-    L.push("  LDA en0_x");
+    L.push("  CMP inst_x,X");
+    L.push("  BCC cpe_next");
+    L.push("  LDA inst_x,X");
     L.push("  CLC");
     L.push("  ADC #12");
     L.push("  CMP player_x");
-    L.push("  BCC cpe1");
+    L.push("  BCC cpe_next");
     L.push("  LDA player_y");
     L.push("  CLC");
     L.push("  ADC #14");
-    L.push("  CMP en0_y");
-    L.push("  BCC cpe1");
-    L.push("  LDA en0_y");
+    L.push("  CMP inst_y,X");
+    L.push("  BCC cpe_next");
+    L.push("  LDA inst_y,X");
     L.push("  CLC");
     L.push("  ADC #14");
     L.push("  CMP player_y");
-    L.push("  BCC cpe1");
+    L.push("  BCC cpe_next");
     L.push("  JMP player_hurt");
-    L.push("cpe1:");
-    L.push("  LDA en1_on");
-    L.push("  BEQ cpe2");
-    L.push("  LDA player_x");
-    L.push("  CLC");
-    L.push("  ADC #12");
-    L.push("  CMP en1_x");
-    L.push("  BCC cpe2");
-    L.push("  LDA en1_x");
-    L.push("  CLC");
-    L.push("  ADC #12");
-    L.push("  CMP player_x");
-    L.push("  BCC cpe2");
-    L.push("  LDA player_y");
-    L.push("  CLC");
-    L.push("  ADC #14");
-    L.push("  CMP en1_y");
-    L.push("  BCC cpe2");
-    L.push("  LDA en1_y");
-    L.push("  CLC");
-    L.push("  ADC #14");
-    L.push("  CMP player_y");
-    L.push("  BCC cpe2");
-    L.push("  JMP player_hurt");
-    L.push("cpe2:");
-    L.push("  LDA en2_on");
-    L.push("  BEQ cpe3");
-    L.push("  LDA player_x");
-    L.push("  CLC");
-    L.push("  ADC #12");
-    L.push("  CMP en2_x");
-    L.push("  BCC cpe3");
-    L.push("  LDA en2_x");
-    L.push("  CLC");
-    L.push("  ADC #12");
-    L.push("  CMP player_x");
-    L.push("  BCC cpe3");
-    L.push("  LDA player_y");
-    L.push("  CLC");
-    L.push("  ADC #14");
-    L.push("  CMP en2_y");
-    L.push("  BCC cpe3");
-    L.push("  LDA en2_y");
-    L.push("  CLC");
-    L.push("  ADC #14");
-    L.push("  CMP player_y");
-    L.push("  BCC cpe3");
-    L.push("  JMP player_hurt");
-    L.push("cpe3:");
-    L.push("  LDA en3_on");
-    L.push("  BEQ cpe_done");
-    L.push("  LDA player_x");
-    L.push("  CLC");
-    L.push("  ADC #12");
-    L.push("  CMP en3_x");
-    L.push("  BCC cpe_done");
-    L.push("  LDA en3_x");
-    L.push("  CLC");
-    L.push("  ADC #12");
-    L.push("  CMP player_x");
-    L.push("  BCC cpe_done");
-    L.push("  LDA player_y");
-    L.push("  CLC");
-    L.push("  ADC #14");
-    L.push("  CMP en3_y");
-    L.push("  BCC cpe_done");
-    L.push("  LDA en3_y");
-    L.push("  CLC");
-    L.push("  ADC #14");
-    L.push("  CMP player_y");
-    L.push("  BCC cpe_done");
-    L.push("  JMP player_hurt");
+    L.push("cpe_next:");
+    L.push("  INX");
+    L.push(`  CPX #${NUM_INSTANCES}`);
+    L.push("  BNE cpe_loop");
     L.push("cpe_done:");
     L.push("  RTS");
     L.push("");
@@ -1734,41 +1951,36 @@ const BUILD = (() => {
     L.push("  .byte " + playIdxs.map(i => i & 0xFF).join(", "));
     L.push("");
 
-    // Enemy spawn tables a partir de hitboxInstances (level-design)
-    // Formato por tela: count, x0,y0, x1,y1, ...
+    // Camada 3: tabelas de spawn a partir de Project.data.hitboxInstances (level-design.js -
+    // única fonte de spawn usada na ROM, por decisão explícita). Formato por tela:
+    // count, depois (x,y,charIdx) x count - charIdx indexa CharFrameCells*/CharFrameDur*/
+    // CharFrameCount, na mesma ordem de enemyChars (personagens não-herói do projeto).
     const instances = (Project?.data?.hitboxInstances || []).slice();
     const objs = Project?.data?.hitboxObjects || [];
-    const heroIds = new Set((Project?.data?.characters || [])
-      .filter(c => {
-        const n = (c.name||"").toLowerCase();
-        return n === "hero" || n.includes("hero");
-      }).map(c => String(c.id)));
-    // mapa id → screen (string)
     const idOf = (s) => s && s.id != null ? String(s.id) : "";
+    let skippedNoChar = 0;
     const enemySpawns = playIdxs.map((gi) => {
       const scr = screens[gi];
       const sid = idOf(scr);
-      const pts = instances.filter(inst => {
-        if (!scr) return false;
+      const pts = [];
+      instances.forEach(inst => {
+        if (!scr) return;
         const iscreen = inst.screenId != null ? String(inst.screenId) : "";
-        if (iscreen !== sid) return false;
-        const cid = inst.characterId != null ? String(inst.characterId) : "";
-        if (cid && heroIds.has(cid)) return false;
-        if (cid) return true;
-        const oid = inst.objectId || inst.hitboxObjectId;
-        const o = objs.find(x => String(x.id) === String(oid));
-        if (o && o.kind === "spawn") {
-          const oc = o.characterId != null ? String(o.characterId) : "";
-          if (oc && heroIds.has(oc)) return false;
-          return true;
+        if (iscreen !== sid) return;
+        let cid = inst.characterId != null ? String(inst.characterId) : "";
+        if (!cid) {
+          const oid = inst.objectId || inst.hitboxObjectId;
+          const o = objs.find(x => String(x.id) === String(oid));
+          if (o && o.kind === "spawn" && o.characterId != null) cid = String(o.characterId);
         }
-        // instance sem characterId mas na tela certa → ainda conta (spawn cru)
-        return true;
-      }).map(inst => [inst.x|0, inst.y|0]);
-      return { count: Math.min(4, pts.length), points: pts.slice(0, 4) };
+        if (heroIdSet.has(cid)) return; // herói não entra no pool de instâncias
+        if (!charIndexById.has(cid)) { skippedNoChar++; return; } // sem personagem resolvido, não dá pra desenhar
+        pts.push([inst.x|0, inst.y|0, charIndexById.get(cid)]);
+      });
+      return { count: Math.min(NUM_INSTANCES, pts.length), points: pts.slice(0, NUM_INSTANCES) };
     });
     // diagnostico no ASM
-    L.push("; hitboxInstances total=" + instances.length);
+    L.push("; hitboxInstances total=" + instances.length + (skippedNoChar ? ` (${skippedNoChar} ignorada(s) sem personagem resolvido)` : ""));
     enemySpawns.forEach((es, pi) => {
       const scr = screens[playIdxs[pi]];
       L.push("; play[" + pi + "] screen=" + (scr && scr.name) + " id=" + idOf(scr) + " spawns=" + es.count);
@@ -1777,14 +1989,51 @@ const BUILD = (() => {
     enemySpawns.forEach((es, pi) => {
       L.push(`EnemyData_${pi}:`);
       const bytes = [es.count & 0xFF];
-      es.points.forEach(([x,y]) => { bytes.push(x & 0xFF, y & 0xFF); });
-      if (bytes.length === 1) bytes.push(0, 0); // garante pelo menos 1 par dummy se count=0
+      es.points.forEach(([x,y,ci]) => { bytes.push(x & 0xFF, y & 0xFF, ci & 0xFF); });
+      if (bytes.length === 1) bytes.push(0, 0, 0); // garante pelo menos 1 trinca dummy se count=0
       L.push("  .byte " + bytes.map(b => "$" + (b&0xFF).toString(16).padStart(2,"0").toUpperCase()).join(", "));
     });
     L.push("EnemySpawnLo:");
     enemySpawns.forEach((_, pi) => L.push(`  .byte <EnemyData_${pi}`));
     L.push("EnemySpawnHi:");
     enemySpawns.forEach((_, pi) => L.push(`  .byte >EnemyData_${pi}`));
+    L.push("");
+
+    // ---- Camada 3: tabelas de sprite por personagem (CharFrameCells/Dur/Count) ----
+    if(spritePack.charData.length){
+      spritePack.charData.forEach((cd, ci) => {
+        L.push(`CharCells_${ci}:  ; ${cd.name}`);
+        const bytes = [];
+        cd.frames.forEach(fr => {
+          const byCorner = [null,null,null,null];
+          fr.cells.forEach(c => { byCorner[c.corner] = c.tile; });
+          for(let k=0;k<4;k++) bytes.push(byCorner[k] == null ? 0xFF : (byCorner[k] & 0xFF));
+        });
+        L.push("  .byte " + bytes.map(b => "$" + b.toString(16).padStart(2,"0").toUpperCase()).join(", "));
+        L.push(`CharDur_${ci}:`);
+        L.push("  .byte " + cd.frames.map(fr => fr.duration & 0xFF).join(", "));
+      });
+      L.push("CharFrameCellsLo:");
+      spritePack.charData.forEach((_,ci) => L.push(`  .byte <CharCells_${ci}`));
+      L.push("CharFrameCellsHi:");
+      spritePack.charData.forEach((_,ci) => L.push(`  .byte >CharCells_${ci}`));
+      L.push("CharFrameDurLo:");
+      spritePack.charData.forEach((_,ci) => L.push(`  .byte <CharDur_${ci}`));
+      L.push("CharFrameDurHi:");
+      spritePack.charData.forEach((_,ci) => L.push(`  .byte >CharDur_${ci}`));
+      L.push("CharFrameCount:");
+      L.push("  .byte " + spritePack.charData.map(cd => cd.frames.length & 0xFF).join(", "));
+    } else {
+      // nenhum personagem não-herói - mantém as tabelas com 1 entrada dummy pra não quebrar
+      // o linker (spawn_enemies nunca vai preencher charIdx>0 nesse caso).
+      L.push("CharCells_0: .byte $FF,$FF,$FF,$FF");
+      L.push("CharDur_0:   .byte 8");
+      L.push("CharFrameCellsLo: .byte <CharCells_0");
+      L.push("CharFrameCellsHi: .byte >CharCells_0");
+      L.push("CharFrameDurLo:   .byte <CharDur_0");
+      L.push("CharFrameDurHi:   .byte >CharDur_0");
+      L.push("CharFrameCount:   .byte 1");
+    }
     L.push("");
 
     screens.forEach((sc, i) => {
@@ -1828,9 +2077,9 @@ const BUILD = (() => {
     L.push("  .word IRQ");
     L.push("");
     L.push('.segment "CHARS"');
-    L.push("  ; pg0 sprites (vazio na camada 1) / pg1 background empacotado");
+    L.push("  ; pg0 sprites (empacotado a partir dos frames dos personagens) / pg1 background empacotado");
     const chrFinal = new Uint8Array(8192);
-    chrFinal.set(chrBuf.slice(0, 4096), 0);
+    chrFinal.set(spritePack.spriteChr, 0);
     chrFinal.set(packed.bgChr, 4096);
     for (let i = 0; i < chrFinal.length; i += 16) {
       if (i === 4096) L.push("  ; $1000 background");
@@ -2539,14 +2788,31 @@ const BUILD = (() => {
         const instAll = Project?.data?.hitboxInstances || [];
         log("Spawns (hitboxInstances): " + instAll.length);
         instAll.forEach(inst => log("  · screen=" + inst.screenId + " char=" + (inst.characterId||"?") + " @(" + inst.x + "," + inst.y + ")"));
-        // re-simula contagem por tela de play (mesma lógica do ASM)
+        // re-simula contagem por tela de play (mesma lógica do ASM: exclui herói, exige
+        // personagem resolvido - direto ou via hitboxObject kind=spawn - e limita ao pool)
         try {
           const col = collectGameScreens();
+          const allChars = Project.data?.characters || [];
+          const heroIdSet = new Set(allChars.filter(c => (c.name||"").toLowerCase().includes("hero")).map(c => String(c.id)));
+          const objs = Project?.data?.hitboxObjects || [];
+          const maxInst = Math.min(15, Math.max(1, Math.min(20, parseInt(Project.data?.maxInstances) || 10)));
           const playI = col.screens.map((s,i) => (s.role==="play"||s.type==="background")?i:-1).filter(i=>i>=0);
           playI.forEach((gi, pi) => {
             const scr = col.screens[gi];
-            const n = instAll.filter(inst => String(inst.screenId)===String(scr.id)).length;
-            log("  → EnemyData_" + pi + " (" + scr.name + "): " + n + " inimigo(s)");
+            const resolved = instAll.filter(inst => {
+              if (String(inst.screenId) !== String(scr.id)) return false;
+              let cid = inst.characterId != null ? String(inst.characterId) : "";
+              if (!cid) {
+                const oid = inst.objectId || inst.hitboxObjectId;
+                const o = objs.find(x => String(x.id) === String(oid));
+                if (o && o.kind === "spawn" && o.characterId != null) cid = String(o.characterId);
+              }
+              if (!cid || heroIdSet.has(cid)) return false;
+              return allChars.some(c => String(c.id) === cid);
+            });
+            const n = Math.min(maxInst, resolved.length);
+            const skipped = resolved.length - n;
+            log("  → EnemyData_" + pi + " (" + scr.name + "): " + n + " inimigo(s)" + (skipped ? ` (+${skipped} ignorado(s) por limite de pool)` : ""));
           });
         } catch(e) { log("  (diag spawns: " + e.message + ")"); }
       } else {

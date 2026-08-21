@@ -1,6 +1,8 @@
-; NES Maker Studio - BUILD v0.9.12
-; NROM-256 | inimigos (spawn fixo garantido) + patrol + hit
-; Telas: 7 · CHR tiles: 32/256
+; NES Maker Studio - BUILD v0.9.16 - Camada 4: instancias com gravidade + colisao solida
+; NROM-256 | inimigos caem/andam respeitando o collisionMap (chao+parede), sem beirada
+; Telas: 7 · CHR tiles (fundo): 32/256
+; CHR tiles (sprites): 7/256
+; Instâncias: 5
 ;   [0] splash · Splash 1
 ;   [1] play · Tela 1
 ;   [2] play · Tela 2
@@ -33,22 +35,21 @@ col_y:      .res 1    ; tile Y para consulta
 col_result: .res 1
 ls_count:   .res 1    ; contador load_screen (nao reusa pad)
 play_idx:   .res 1    ; indice 0..playCount-1 na sequencia da fase
-en0_x:      .res 1
-en0_y:      .res 1
-en0_on:     .res 1
-en0_dir:    .res 1
-en1_x:      .res 1
-en1_y:      .res 1
-en1_on:     .res 1
-en1_dir:    .res 1
-en2_x:      .res 1
-en2_y:      .res 1
-en2_on:     .res 1
-en2_dir:    .res 1
-en3_x:      .res 1
-en3_y:      .res 1
-en3_on:     .res 1
-en3_dir:    .res 1
+; pool de 5 instancia(s) - SoA pra indexar com LDA tabela,X
+inst_x:       .res 5
+inst_y:       .res 5
+inst_on:      .res 5
+inst_dir:     .res 5   ; atributo OAM: 0=normal $40=flipH (tb usado p/ patrol)
+inst_char:    .res 5   ; indice do personagem (CharFrame*,X)
+inst_frame:   .res 5   ; frame atual da animacao padrao
+inst_timer:   .res 5   ; frames restantes ate proximo frame
+inst_tmp:     .res 1   ; indice de loop / scratch
+cell_tl:      .res 1   ; scratch: 4 tiles do frame atual sendo desenhado
+cell_tr:      .res 1
+cell_bl:      .res 1
+cell_br:      .res 1
+oam_off:      .res 1   ; scratch: offset ($10 + slot*16) dentro da pagina $02xx
+inst_grounded: .res 1  ; scratch: resultado de check_ground_inst (Camada 4)
 en_tmp:     .res 1
 music_on:   .res 1
 ch0_timer: .res 1
@@ -71,6 +72,9 @@ NMI:
   STA $2003
   LDA #$02
   STA $4014
+  ; garante sprites ligados
+  LDA #%00011110
+  STA $2001
   JSR music_update
   LDA #1
   STA nmi_flag
@@ -433,361 +437,510 @@ try_screen_left:
 tsl_done:
   RTS
 
-clear_enemies:
+clear_instances:
+  LDX #0
+ci_loop:
   LDA #0
-  STA en0_on
-  STA en1_on
-  STA en2_on
-  STA en3_on
+  STA inst_on,X
+  INX
+  CPX #5
+  BNE ci_loop
   RTS
 
 spawn_enemies:
-  JSR clear_enemies
-  ; play_idx → EnemySpawnLo/Hi (1 byte index) → count,x,y,...
+  JSR clear_instances
   LDX play_idx
   LDA EnemySpawnLo,X
   STA tmp0
   LDA EnemySpawnHi,X
   STA tmp1
   LDY #0
-  LDA (tmp0),Y
-  BEQ se_done
+  LDA (tmp0),Y          ; count desta tela
   STA en_tmp
   INY
-  ; en0
+  LDX #0                ; X = slot do pool sendo preenchido
+se_loop:
   LDA en_tmp
   BEQ se_done
+  CPX #5
+  BEQ se_done           ; pool cheio, ignora o resto
   LDA (tmp0),Y
-  STA en0_x
+  STA inst_x,X
   INY
   LDA (tmp0),Y
-  STA en0_y
+  STA inst_y,X
+  INY
+  LDA (tmp0),Y
+  STA inst_char,X
   INY
   LDA #1
-  STA en0_on
+  STA inst_on,X
   LDA #0
-  STA en0_dir
+  STA inst_dir,X
+  STA inst_frame,X
+  JSR load_frame_duration   ; X=slot -> A = duracao do frame 0 do personagem
+  STA inst_timer,X
+  INX
   DEC en_tmp
-  ; en1
-  LDA en_tmp
-  BEQ se_done
-  LDA (tmp0),Y
-  STA en1_x
-  INY
-  LDA (tmp0),Y
-  STA en1_y
-  INY
-  LDA #1
-  STA en1_on
-  LDA #1
-  STA en1_dir
-  DEC en_tmp
-  ; en2
-  LDA en_tmp
-  BEQ se_done
-  LDA (tmp0),Y
-  STA en2_x
-  INY
-  LDA (tmp0),Y
-  STA en2_y
-  INY
-  LDA #1
-  STA en2_on
-  LDA #0
-  STA en2_dir
-  DEC en_tmp
-  ; en3
-  LDA en_tmp
-  BEQ se_done
-  LDA (tmp0),Y
-  STA en3_x
-  INY
-  LDA (tmp0),Y
-  STA en3_y
-  LDA #1
-  STA en3_on
-  LDA #1
-  STA en3_dir
+  JMP se_loop
 se_done:
-  JSR update_enemy_oam
+  JSR update_instances_oam
   RTS
 
-update_enemy_oam:
-  ; --- en0 ---
-  LDA en0_on
-  BNE ueo0_draw
+; X = slot -> le inst_char,X e inst_frame,X, retorna duracao (frames) em A
+load_frame_duration:
+  LDA inst_char,X
+  TAY
+  LDA CharFrameDurLo,Y
+  STA tmp0
+  LDA CharFrameDurHi,Y
+  STA tmp1
+  LDY inst_frame,X
+  LDA (tmp0),Y
+  RTS
+
+; X = slot -> aponta tmp0/tmp1 pros 4 bytes de tile do frame atual (TL,TR,BL,BR;
+; $FF = celula oculta). Y fica sujo, X preservado.
+load_frame_cellptr:
+  LDA inst_char,X
+  TAY
+  LDA CharFrameCellsLo,Y
+  STA tmp0
+  LDA CharFrameCellsHi,Y
+  STA tmp1
+  LDA inst_frame,X
+  ASL A
+  ASL A                 ; frame*4
+  CLC
+  ADC tmp0
+  STA tmp0
+  BCC lfc_done
+  INC tmp1
+lfc_done:
+  RTS
+
+; calcula oam_off = $10 + X*16 (X = slot). Preserva X.
+uio_calc_off:
+  TXA
+  ASL A
+  ASL A
+  ASL A
+  ASL A                 ; X*16
+  CLC
+  ADC #$10               ; pula os 4 sprites do player ($0200-$020F)
+  STA oam_off
+  RTS
+
+; desenha ate NUM_INSTANCES metasprites 2x2 (16x16) em $0210+, 4 OAM por slot.
+update_instances_oam:
+  LDX #0
+uio_loop:
+  LDA inst_on,X
+  BNE uio_draw
+  JSR uio_calc_off
+  LDY oam_off
   LDA #$FF
-  STA $0210
-  STA $0214
-  STA $0218
-  STA $021C
-  JMP ueo1
-ueo0_draw:
-  LDA en0_y
-  STA $0210
-  LDA #0              ; tile hero TL (sempre visivel)
-  STA $0211
-  LDA #%00000001      ; pal 1
-  STA $0212
-  LDA en0_x
-  STA $0213
-  LDA en0_y
-  STA $0214
-  LDA #1
-  STA $0215
-  LDA #%00000001
-  STA $0216
-  LDA en0_x
-  CLC
-  ADC #8
-  STA $0217
-  LDA en0_y
-  CLC
-  ADC #8
-  STA $0218
-  LDA #16
-  STA $0219
-  LDA #%00000001
-  STA $021A
-  LDA en0_x
-  STA $021B
-  LDA en0_y
-  CLC
-  ADC #8
-  STA $021C
-  LDA #17
-  STA $021D
-  LDA #%00000001
-  STA $021E
-  LDA en0_x
-  CLC
-  ADC #8
-  STA $021F
-ueo1:
-  ; --- en1 ---
-  LDA en1_on
-  BNE ueo1_draw
+  STA $0200,Y
+  STA $0204,Y
+  STA $0208,Y
+  STA $020C,Y
+  JMP uio_next
+uio_draw:
+  JSR load_frame_cellptr
+  LDY #0
+  LDA (tmp0),Y
+  STA cell_tl
+  INY
+  LDA (tmp0),Y
+  STA cell_tr
+  INY
+  LDA (tmp0),Y
+  STA cell_bl
+  INY
+  LDA (tmp0),Y
+  STA cell_br
+  LDA inst_dir,X
+  BEQ uio_noflip
+  ; flip H: espelha o metasprite trocando TL<->TR e BL<->BR
+  LDA cell_tl
+  PHA
+  LDA cell_tr
+  STA cell_tl
+  PLA
+  STA cell_tr
+  LDA cell_bl
+  PHA
+  LDA cell_br
+  STA cell_bl
+  PLA
+  STA cell_br
+uio_noflip:
+  JSR uio_calc_off
+  LDY oam_off
+  ; --- TL ---
+  LDA cell_tl
+  CMP #$FF
+  BEQ uio_tl_hide
+  LDA inst_y,X
+  STA $0200,Y
+  LDA cell_tl
+  STA $0201,Y
+  LDA inst_dir,X
+  STA $0202,Y
+  LDA inst_x,X
+  STA $0203,Y
+  JMP uio_tr
+uio_tl_hide:
   LDA #$FF
-  STA $0220
-  STA $0224
-  STA $0228
-  STA $022C
-  JMP ueo2
-ueo1_draw:
-  LDA en1_y
-  STA $0220
+  STA $0200,Y
+uio_tr:
+  ; --- TR ---
+  LDA cell_tr
+  CMP #$FF
+  BEQ uio_tr_hide
+  LDA inst_y,X
+  STA $0204,Y
+  LDA cell_tr
+  STA $0205,Y
+  LDA inst_dir,X
+  STA $0206,Y
+  LDA inst_x,X
+  CLC
+  ADC #8
+  STA $0207,Y
+  JMP uio_bl
+uio_tr_hide:
+  LDA #$FF
+  STA $0204,Y
+uio_bl:
+  ; --- BL ---
+  LDA cell_bl
+  CMP #$FF
+  BEQ uio_bl_hide
+  LDA inst_y,X
+  CLC
+  ADC #8
+  STA $0208,Y
+  LDA cell_bl
+  STA $0209,Y
+  LDA inst_dir,X
+  STA $020A,Y
+  LDA inst_x,X
+  STA $020B,Y
+  JMP uio_br
+uio_bl_hide:
+  LDA #$FF
+  STA $0208,Y
+uio_br:
+  ; --- BR ---
+  LDA cell_br
+  CMP #$FF
+  BEQ uio_br_hide
+  LDA inst_y,X
+  CLC
+  ADC #8
+  STA $020C,Y
+  LDA cell_br
+  STA $020D,Y
+  LDA inst_dir,X
+  STA $020E,Y
+  LDA inst_x,X
+  CLC
+  ADC #8
+  STA $020F,Y
+  JMP uio_next
+uio_br_hide:
+  LDA #$FF
+  STA $020C,Y
+uio_next:
+  INX
+  CPX #5
+  BNE uio_loop
+  RTS
+
+; avanca o timer/frame de animacao (idle simples) de cada instancia ativa.
+animate_instances:
+  LDX #0
+ai_loop:
+  LDA inst_on,X
+  BEQ ai_next
+  DEC inst_timer,X
+  LDA inst_timer,X
+  BNE ai_next
+  INC inst_frame,X
+  LDA inst_char,X
+  TAY
+  LDA CharFrameCount,Y
+  CMP inst_frame,X      ; Z=1 se estourou (frame chegou no total)
+  BNE ai_reload
   LDA #0
-  STA $0221
-  LDA #%00000001
-  STA $0222
-  LDA en1_x
-  STA $0223
-  LDA en1_y
-  STA $0224
-  LDA #1
-  STA $0225
-  LDA #%00000001
-  STA $0226
-  LDA en1_x
-  CLC
-  ADC #8
-  STA $0227
-  LDA en1_y
-  CLC
-  ADC #8
-  STA $0228
-  LDA #16
-  STA $0229
-  LDA #%00000001
-  STA $022A
-  LDA en1_x
-  STA $022B
-  LDA en1_y
-  CLC
-  ADC #8
-  STA $022C
-  LDA #17
-  STA $022D
-  LDA #%00000001
-  STA $022E
-  LDA en1_x
-  CLC
-  ADC #8
-  STA $022F
-ueo2:
+  STA inst_frame,X
+ai_reload:
+  JSR load_frame_duration
+  STA inst_timer,X
+ai_next:
+  INX
+  CPX #5
+  BNE ai_loop
   RTS
 
+; ---- Camada 4: colisao instancia vs solido (chao/parede), parametrizada por X=slot ----
+; mesma logica de check_ground/check_wall_at do player, mas lendo inst_x/inst_y,X.
+; X e preservado ao redor de get_collision (que usa X internamente pra ScreenColLo/Hi).
+check_ground_inst:
+  LDA #0
+  STA inst_grounded
+  LDA inst_y,X
+  CLC
+  ADC #16
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  LDA inst_x,X
+  CLC
+  ADC #2
+  LSR A
+  LSR A
+  LSR A
+  STA col_x
+  STX inst_tmp
+  JSR get_collision
+  LDX inst_tmp
+  LDA col_result
+  JSR is_solid
+  BNE cgi_yes
+  LDA inst_x,X
+  CLC
+  ADC #13
+  LSR A
+  LSR A
+  LSR A
+  STA col_x
+  STX inst_tmp
+  JSR get_collision
+  LDX inst_tmp
+  LDA col_result
+  JSR is_solid
+  BNE cgi_yes
+  RTS
+cgi_yes:
+  LDA #1
+  STA inst_grounded
+  LDA col_y
+  ASL A
+  ASL A
+  ASL A
+  SEC
+  SBC #16
+  STA inst_y,X
+  RTS
+
+; col_x ja setado pelo chamador; testa 2 pontos verticais do corpo (X=slot).
+check_wall_at_inst:
+  LDA inst_y,X
+  CLC
+  ADC #4
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  STX inst_tmp
+  JSR get_collision
+  LDX inst_tmp
+  LDA col_result
+  JSR is_solid
+  BNE cwi_hit
+  LDA inst_y,X
+  CLC
+  ADC #12
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  STX inst_tmp
+  JSR get_collision
+  LDX inst_tmp
+  LDA col_result
+  JSR is_solid
+  BNE cwi_hit
+  LDA #0
+  STA col_result
+  RTS
+cwi_hit:
+  LDA #1
+  STA col_result
+  RTS
+
+; patrulha com gravidade + colisao real: cai (4px/frame) quando nao tem chao sob os pes;
+; quando no chao, anda 1px/frame e vira ao bater numa parede (check_wall_at_inst) ou ao
+; chegar no limite de seguranca da tela. Sem deteccao de beirada (pode cair de plataforma -
+; decisao explicita, fica pra depois). Usa o bit $40 de inst_dir (mesmo bit do flip H de
+; OAM) como 'esta virado pra esquerda' - flip e direcao de movimento sempre batem.
+update_instances_ai:
+  LDX #0
+uia_loop:
+  LDA inst_on,X
+  BEQ uia_next
+  JSR check_ground_inst
+  LDA inst_grounded
+  BNE uia_walk
+  ; caindo: aplica gravidade e nao anda nesse frame
+  LDA inst_y,X
+  CLC
+  ADC #4
+  STA inst_y,X
+  JMP uia_next
+uia_walk:
+  LDA inst_dir,X
+  AND #$40
+  BNE uia_left
+  ; indo pra direita: testa parede na borda direita proposta (x+1+13)
+  LDA inst_x,X
+  CLC
+  ADC #1
+  CLC
+  ADC #13
+  LSR A
+  LSR A
+  LSR A
+  STA col_x
+  JSR check_wall_at_inst
+  LDA col_result
+  BNE uia_turn_left
+  LDA inst_x,X
+  CLC
+  ADC #1
+  STA inst_x,X
+  CMP #232          ; limite de seguranca (evita overflow do byte perto da borda)
+  BCC uia_next
+uia_turn_left:
+  LDA inst_dir,X
+  ORA #$40
+  STA inst_dir,X
+  JMP uia_next
+uia_left:
+  ; indo pra esquerda: testa parede na borda esquerda proposta (x-1+2)
+  LDA inst_x,X
+  SEC
+  SBC #1
+  CLC
+  ADC #2
+  LSR A
+  LSR A
+  LSR A
+  STA col_x
+  JSR check_wall_at_inst
+  LDA col_result
+  BNE uia_turn_right
+  LDA inst_x,X
+  SEC
+  SBC #1
+  STA inst_x,X
+  CMP #20           ; limite de seguranca
+  BCS uia_next
+uia_turn_right:
+  LDA inst_dir,X
+  AND #$BF
+  STA inst_dir,X
+uia_next:
+  INX
+  CPX #5
+  BNE uia_loop
+  RTS
+
+; --- Acoes genericas (Camada 6 vai chamar via regras compiladas) ---
+; X = slot. Mata a instancia (esconde e libera o pool imediatamente).
+action_kill_instance:
+  LDA #0
+  STA inst_on,X
+  RTS
+
+; X = slot, A = direcao (0=direita 1=esquerda 2=cima 3=baixo), Y = passo em pixels.
+; Ajusta x/y e o flip (inst_dir) de acordo com a direcao. Troca de animacao (o animId
+; escolhido na Acao Mover) fica pra quando o compilador de regras (Camada 6) existir -
+; hoje so a animacao padrao (animations[0]) de cada personagem roda em runtime.
+action_move_instance:
+  CMP #0
+  BNE ami_1
+  STY tmp0
+  LDA inst_x,X
+  CLC
+  ADC tmp0
+  STA inst_x,X
+  LDA inst_dir,X
+  AND #$BF
+  STA inst_dir,X
+  RTS
+ami_1:
+  CMP #1
+  BNE ami_2
+  STY tmp0
+  LDA inst_x,X
+  SEC
+  SBC tmp0
+  STA inst_x,X
+  LDA inst_dir,X
+  ORA #$40
+  STA inst_dir,X
+  RTS
+ami_2:
+  CMP #2
+  BNE ami_3
+  STY tmp0
+  LDA inst_y,X
+  SEC
+  SBC tmp0
+  STA inst_y,X
+  RTS
+ami_3:
+  STY tmp0
+  LDA inst_y,X
+  CLC
+  ADC tmp0
+  STA inst_y,X
+  RTS
+
+; substitui o antigo bloco fixo de patrol+colisao+desenho por personagem
 update_enemies:
-  LDA en0_on
-  BEQ ue_1
-  LDA en0_dir
-  BNE ue0_left
-  LDA en0_x
-  CLC
-  ADC #1
-  STA en0_x
-  CMP #220
-  BCC ue_1
-  LDA #1
-  STA en0_dir
-  JMP ue_1
-ue0_left:
-  LDA en0_x
-  SEC
-  SBC #1
-  STA en0_x
-  CMP #20
-  BCS ue_1
-  LDA #0
-  STA en0_dir
-ue_1:
-  LDA en1_on
-  BEQ ue_2
-  LDA en1_dir
-  BNE ue1_left
-  LDA en1_x
-  CLC
-  ADC #1
-  STA en1_x
-  CMP #220
-  BCC ue_2
-  LDA #1
-  STA en1_dir
-  JMP ue_2
-ue1_left:
-  LDA en1_x
-  SEC
-  SBC #1
-  STA en1_x
-  CMP #20
-  BCS ue_2
-  LDA #0
-  STA en1_dir
-ue_2:
-  LDA en2_on
-  BEQ ue_3
-  LDA en2_x
-  CLC
-  ADC #1
-  STA en2_x
-  CMP #200
-  BCC ue_3
-  LDA #40
-  STA en2_x
-ue_3:
-  LDA en3_on
-  BEQ ue_col
-  LDA en3_x
-  SEC
-  SBC #1
-  STA en3_x
-  CMP #20
-  BCS ue_col
-  LDA #200
-  STA en3_x
-ue_col:
+  JSR update_instances_ai
+  JSR animate_instances
   JSR check_player_enemy_hit
-  JSR update_enemy_oam
+  JSR update_instances_oam
   RTS
 
 check_player_enemy_hit:
   LDA player_on
   BEQ cpe_done
-  LDA en0_on
-  BEQ cpe1
+  LDX #0
+cpe_loop:
+  LDA inst_on,X
+  BEQ cpe_next
   LDA player_x
   CLC
   ADC #12
-  CMP en0_x
-  BCC cpe1
-  LDA en0_x
+  CMP inst_x,X
+  BCC cpe_next
+  LDA inst_x,X
   CLC
   ADC #12
   CMP player_x
-  BCC cpe1
+  BCC cpe_next
   LDA player_y
   CLC
   ADC #14
-  CMP en0_y
-  BCC cpe1
-  LDA en0_y
+  CMP inst_y,X
+  BCC cpe_next
+  LDA inst_y,X
   CLC
   ADC #14
   CMP player_y
-  BCC cpe1
+  BCC cpe_next
   JMP player_hurt
-cpe1:
-  LDA en1_on
-  BEQ cpe2
-  LDA player_x
-  CLC
-  ADC #12
-  CMP en1_x
-  BCC cpe2
-  LDA en1_x
-  CLC
-  ADC #12
-  CMP player_x
-  BCC cpe2
-  LDA player_y
-  CLC
-  ADC #14
-  CMP en1_y
-  BCC cpe2
-  LDA en1_y
-  CLC
-  ADC #14
-  CMP player_y
-  BCC cpe2
-  JMP player_hurt
-cpe2:
-  LDA en2_on
-  BEQ cpe3
-  LDA player_x
-  CLC
-  ADC #12
-  CMP en2_x
-  BCC cpe3
-  LDA en2_x
-  CLC
-  ADC #12
-  CMP player_x
-  BCC cpe3
-  LDA player_y
-  CLC
-  ADC #14
-  CMP en2_y
-  BCC cpe3
-  LDA en2_y
-  CLC
-  ADC #14
-  CMP player_y
-  BCC cpe3
-  JMP player_hurt
-cpe3:
-  LDA en3_on
-  BEQ cpe_done
-  LDA player_x
-  CLC
-  ADC #12
-  CMP en3_x
-  BCC cpe_done
-  LDA en3_x
-  CLC
-  ADC #12
-  CMP player_x
-  BCC cpe_done
-  LDA player_y
-  CLC
-  ADC #14
-  CMP en3_y
-  BCC cpe_done
-  LDA en3_y
-  CLC
-  ADC #14
-  CMP player_y
-  BCC cpe_done
-  JMP player_hurt
+cpe_next:
+  INX
+  CPX #5
+  BNE cpe_loop
 cpe_done:
   RTS
 
@@ -1231,22 +1384,22 @@ ScreenColHi:
 PlayScreenTable:  ; indices globais das telas de jogo (em ordem)
   .byte 1, 2, 3, 4, 5
 
-; hitboxInstances total=8
-; play[0] screen=Tela 1 id=scr_1787144379503 spawns=2
+; hitboxInstances total=7
+; play[0] screen=Tela 1 id=scr_1787144379503 spawns=1
 ; play[1] screen=Tela 2 id=scr_1787144402490 spawns=0
 ; play[2] screen=Tela 3 id=scr_1787144420490 spawns=2
 ; play[3] screen=Tela 4 id=scr_1787144430768 spawns=2
 ; play[4] screen=tela final fase 1 id=scr_1787144451744 spawns=2
 EnemyData_0:
-  .byte $02, $D8, $C6, $86, $93
+  .byte $01, $D8, $C6, $00
 EnemyData_1:
-  .byte $00, $00, $00
+  .byte $00, $00, $00, $00
 EnemyData_2:
-  .byte $02, $64, $64, $75, $22
+  .byte $02, $64, $64, $00, $75, $22, $00
 EnemyData_3:
-  .byte $02, $93, $43, $CF, $7F
+  .byte $02, $93, $43, $00, $CF, $7F, $00
 EnemyData_4:
-  .byte $02, $D6, $D1, $6A, $CC
+  .byte $02, $D6, $D1, $00, $6A, $CC, $00
 EnemySpawnLo:
   .byte <EnemyData_0
   .byte <EnemyData_1
@@ -1259,6 +1412,21 @@ EnemySpawnHi:
   .byte >EnemyData_2
   .byte >EnemyData_3
   .byte >EnemyData_4
+
+CharCells_0:  ; enemy
+  .byte $01, $02, $03, $04, $01, $02, $05, $04, $01, $02, $03, $04, $01, $02, $06, $04
+CharDur_0:
+  .byte 8, 8, 8, 8
+CharFrameCellsLo:
+  .byte <CharCells_0
+CharFrameCellsHi:
+  .byte >CharCells_0
+CharFrameDurLo:
+  .byte <CharDur_0
+CharFrameDurHi:
+  .byte >CharDur_0
+CharFrameCount:
+  .byte 4
 
 Nametable_0:  ; Splash 1 (splash)
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
@@ -1925,28 +2093,14 @@ Time_ch2:
   .word IRQ
 
 .segment "CHARS"
-  ; pg0 sprites (vazio na camada 1) / pg1 background empacotado
+  ; pg0 sprites (empacotado a partir dos frames dos personagens) / pg1 background empacotado
   .byte $00, $00, $00, $1F, $10, $10, $12, $10, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $F8, $08, $08, $28, $08, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $80, $C3, $EC, $F0, $F1, $E3, $E0, $C0, $80, $C0, $E3, $EF, $EE, $DC, $DF, $BF
   .byte $80, $60, $18, $04, $84, $82, $02, $41, $00, $80, $E0, $F8, $78, $7C, $FC, $BE
   .byte $A7, $F9, $C2, $E6, $F4, $E3, $C0, $80, $98, $C0, $C1, $E1, $F3, $E0, $C0, $80
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $14, $13, $10, $10, $1F, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $08, $E8, $08, $08, $F8, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $A1, $E3, $FC, $F0, $FC, $E3, $C0, $80, $9E, $DC, $E3, $EF, $F3, $E0, $C0, $80
   .byte $C2, $02, $04, $04, $18, $60, $C0, $80, $3C, $FC, $F8, $F8, $E0, $80, $40, $80
   .byte $A7, $F8, $C0, $E1, $F1, $E3, $C1, $80, $98, $C0, $C0, $E0, $F0, $E0, $C0, $80
+  .byte $A1, $E3, $FC, $F0, $FC, $E3, $C0, $80, $9E, $DC, $E3, $EF, $F3, $E0, $C0, $80
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
@@ -1959,101 +2113,115 @@ Time_ch2:
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $18, $18, $18, $18, $00, $18, $18, $00, $18, $18, $18, $18, $00, $18, $18, $00
-  .byte $24, $24, $24, $00, $00, $00, $00, $00, $24, $24, $24, $00, $00, $00, $00, $00
-  .byte $36, $FF, $66, $FF, $6C, $00, $00, $00, $36, $FF, $66, $FF, $6C, $00, $00, $00
-  .byte $08, $1C, $2A, $18, $0C, $2A, $1C, $08, $08, $1C, $2A, $18, $0C, $2A, $1C, $08
-  .byte $80, $C0, $E0, $F0, $F0, $E0, $C0, $80, $80, $C0, $E0, $F0, $F0, $E0, $C0, $80
-  .byte $70, $C8, $C1, $6E, $CC, $CC, $78, $00, $70, $C8, $C1, $6E, $CC, $CC, $78, $00
-  .byte $18, $08, $10, $00, $00, $00, $00, $00, $18, $08, $10, $00, $00, $00, $00, $00
-  .byte $0C, $18, $30, $30, $30, $30, $18, $0C, $0C, $18, $30, $30, $30, $30, $18, $0C
-  .byte $30, $18, $0C, $0C, $0C, $0C, $18, $30, $30, $18, $0C, $0C, $0C, $0C, $18, $30
-  .byte $08, $2A, $1C, $2A, $08, $00, $00, $00, $08, $2A, $1C, $2A, $08, $00, $00, $00
-  .byte $00, $08, $08, $3E, $08, $08, $00, $00, $00, $08, $08, $3E, $08, $08, $00, $00
-  .byte $00, $00, $00, $00, $00, $18, $08, $10, $00, $00, $00, $00, $00, $18, $08, $10
-  .byte $00, $00, $00, $7E, $00, $00, $00, $00, $00, $00, $00, $7E, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $18, $18, $00, $00, $00, $00, $00, $00, $18, $18, $00
-  .byte $04, $04, $08, $08, $10, $10, $20, $20, $04, $04, $08, $08, $10, $10, $20, $20
-  .byte $3C, $66, $6E, $76, $66, $66, $3C, $00, $3C, $66, $6E, $76, $66, $66, $3C, $00
-  .byte $18, $38, $18, $18, $18, $18, $18, $00, $18, $38, $18, $18, $18, $18, $18, $00
-  .byte $3C, $46, $06, $1C, $30, $60, $7E, $00, $3C, $46, $06, $1C, $30, $60, $7E, $00
-  .byte $7E, $0C, $18, $3C, $06, $46, $3C, $00, $7E, $0C, $18, $3C, $06, $46, $3C, $00
-  .byte $0E, $16, $26, $46, $7F, $06, $06, $00, $0E, $16, $26, $46, $7F, $06, $06, $00
-  .byte $7E, $60, $7C, $06, $06, $46, $3C, $00, $7E, $60, $7C, $06, $06, $46, $3C, $00
-  .byte $1C, $30, $60, $7C, $66, $66, $3C, $00, $1C, $30, $60, $7C, $66, $66, $3C, $00
-  .byte $7E, $06, $06, $0C, $18, $18, $18, $00, $7E, $06, $06, $0C, $18, $18, $18, $00
-  .byte $3C, $66, $66, $3C, $66, $66, $3C, $00, $3C, $66, $66, $3C, $66, $66, $3C, $00
-  .byte $3C, $66, $66, $3E, $06, $0C, $38, $00, $3C, $66, $66, $3E, $06, $0C, $38, $00
-  .byte $00, $18, $18, $00, $00, $18, $18, $00, $00, $18, $18, $00, $00, $18, $18, $00
-  .byte $00, $18, $18, $00, $00, $18, $08, $10, $00, $18, $18, $00, $00, $18, $08, $10
-  .byte $00, $0C, $18, $30, $18, $0C, $00, $00, $00, $0C, $18, $30, $18, $0C, $00, $00
-  .byte $00, $00, $7E, $00, $7E, $00, $00, $00, $00, $00, $7E, $00, $7E, $00, $00, $00
-  .byte $00, $30, $18, $0C, $18, $30, $00, $00, $00, $30, $18, $0C, $18, $30, $00, $00
-  .byte $3C, $46, $06, $0C, $18, $00, $18, $00, $3C, $46, $06, $0C, $18, $00, $18, $00
-  .byte $3C, $42, $99, $A5, $A5, $9A, $40, $3C, $3C, $42, $99, $A5, $A5, $9A, $40, $3C
-  .byte $3C, $66, $66, $7E, $66, $66, $66, $00, $3C, $66, $66, $7E, $66, $66, $66, $00
-  .byte $7C, $66, $66, $7C, $66, $66, $7C, $00, $7C, $66, $66, $7C, $66, $66, $7C, $00
-  .byte $80, $C0, $E0, $F0, $F0, $E0, $C0, $80, $80, $C0, $E0, $F0, $F0, $E0, $C0, $80
-  .byte $80, $C0, $E0, $F0, $F0, $E0, $C0, $80, $80, $C0, $E0, $F0, $F0, $E0, $C0, $80
-  .byte $7E, $60, $60, $7C, $60, $60, $7E, $00, $7E, $60, $60, $7C, $60, $60, $7E, $00
-  .byte $7E, $60, $60, $7C, $60, $60, $60, $00, $7E, $60, $60, $7C, $60, $60, $60, $00
-  .byte $3C, $62, $60, $6E, $66, $66, $3C, $00, $3C, $62, $60, $6E, $66, $66, $3C, $00
-  .byte $66, $66, $66, $7E, $66, $66, $66, $00, $66, $66, $66, $7E, $66, $66, $66, $00
-  .byte $18, $18, $18, $18, $18, $18, $18, $00, $18, $18, $18, $18, $18, $18, $18, $00
-  .byte $06, $06, $06, $06, $66, $66, $3C, $00, $06, $06, $06, $06, $66, $66, $3C, $00
-  .byte $66, $6C, $78, $70, $78, $6C, $66, $00, $66, $6C, $78, $70, $78, $6C, $66, $00
-  .byte $60, $60, $60, $60, $60, $60, $7E, $00, $60, $60, $60, $60, $60, $60, $7E, $00
-  .byte $83, $C7, $EF, $BB, $93, $83, $83, $00, $83, $C7, $EF, $BB, $93, $83, $83, $00
-  .byte $61, $71, $79, $5D, $4F, $47, $43, $00, $61, $71, $79, $5D, $4F, $47, $43, $00
-  .byte $3C, $66, $66, $66, $66, $66, $3C, $00, $3C, $66, $66, $66, $66, $66, $3C, $00
-  .byte $7C, $66, $66, $7C, $60, $60, $60, $00, $7C, $66, $66, $7C, $60, $60, $60, $00
-  .byte $3C, $66, $66, $66, $66, $66, $3C, $06, $3C, $66, $66, $66, $66, $66, $3C, $06
-  .byte $7C, $66, $66, $7C, $66, $66, $66, $00, $7C, $66, $66, $7C, $66, $66, $66, $00
-  .byte $1C, $32, $38, $1C, $0E, $26, $1C, $00, $1C, $32, $38, $1C, $0E, $26, $1C, $00
-  .byte $7E, $18, $18, $18, $18, $18, $18, $00, $7E, $18, $18, $18, $18, $18, $18, $00
-  .byte $80, $C0, $E0, $F0, $F0, $E0, $C0, $80, $80, $C0, $E0, $F0, $F0, $E0, $C0, $80
-  .byte $66, $66, $66, $66, $66, $64, $78, $00, $66, $66, $66, $66, $66, $64, $78, $00
-  .byte $DB, $DB, $DB, $DB, $DB, $DA, $FC, $00, $DB, $DB, $DB, $DB, $DB, $DA, $FC, $00
-  .byte $66, $66, $66, $3C, $66, $66, $66, $00, $66, $66, $66, $3C, $66, $66, $66, $00
-  .byte $66, $66, $66, $3C, $18, $18, $18, $00, $66, $66, $66, $3C, $18, $18, $18, $00
-  .byte $7E, $06, $0C, $18, $30, $60, $7E, $00, $7E, $06, $0C, $18, $30, $60, $7E, $00
-  .byte $1C, $18, $18, $18, $18, $18, $18, $1C, $1C, $18, $18, $18, $18, $18, $18, $1C
-  .byte $20, $20, $10, $10, $08, $08, $04, $04, $20, $20, $10, $10, $08, $08, $04, $04
-  .byte $38, $18, $18, $18, $18, $18, $18, $38, $38, $18, $18, $18, $18, $18, $18, $38
-  .byte $08, $14, $22, $00, $00, $00, $00, $00, $08, $14, $22, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $FF, $00, $00, $00, $00, $00, $00, $00, $FF
-  .byte $10, $20, $30, $00, $00, $00, $00, $00, $10, $20, $30, $00, $00, $00, $00, $00
-  .byte $00, $00, $3C, $06, $3E, $66, $3E, $00, $00, $00, $3C, $06, $3E, $66, $3E, $00
-  .byte $60, $60, $7C, $66, $66, $66, $7C, $00, $60, $60, $7C, $66, $66, $66, $7C, $00
-  .byte $00, $00, $3C, $62, $60, $62, $3C, $00, $00, $00, $3C, $62, $60, $62, $3C, $00
-  .byte $06, $06, $3E, $66, $66, $66, $3E, $00, $06, $06, $3E, $66, $66, $66, $3E, $00
-  .byte $00, $00, $3C, $66, $7E, $60, $3C, $00, $00, $00, $3C, $66, $7E, $60, $3C, $00
-  .byte $0E, $18, $3C, $18, $18, $18, $18, $00, $0E, $18, $3C, $18, $18, $18, $18, $00
-  .byte $00, $00, $3E, $66, $66, $3E, $06, $3C, $00, $00, $3E, $66, $66, $3E, $06, $3C
-  .byte $60, $60, $7C, $66, $66, $66, $66, $00, $60, $60, $7C, $66, $66, $66, $66, $00
-  .byte $18, $00, $18, $18, $18, $18, $18, $00, $18, $00, $18, $18, $18, $18, $18, $00
-  .byte $06, $00, $06, $06, $06, $06, $26, $1C, $06, $00, $06, $06, $06, $06, $26, $1C
-  .byte $60, $60, $66, $6C, $78, $6C, $66, $00, $60, $60, $66, $6C, $78, $6C, $66, $00
-  .byte $38, $18, $18, $18, $18, $18, $18, $00, $38, $18, $18, $18, $18, $18, $18, $00
-  .byte $00, $00, $FE, $DB, $DB, $DB, $DB, $00, $00, $00, $FE, $DB, $DB, $DB, $DB, $00
-  .byte $00, $00, $7C, $66, $66, $66, $66, $00, $00, $00, $7C, $66, $66, $66, $66, $00
-  .byte $00, $00, $3C, $66, $66, $66, $3C, $00, $00, $00, $3C, $66, $66, $66, $3C, $00
-  .byte $00, $00, $7C, $66, $66, $66, $7C, $60, $00, $00, $7C, $66, $66, $66, $7C, $60
-  .byte $00, $00, $3E, $66, $66, $66, $3E, $06, $00, $00, $3E, $66, $66, $66, $3E, $06
-  .byte $00, $00, $36, $3E, $30, $30, $30, $00, $00, $00, $36, $3E, $30, $30, $30, $00
-  .byte $00, $00, $3E, $60, $3C, $06, $7C, $00, $00, $00, $3E, $60, $3C, $06, $7C, $00
-  .byte $18, $18, $3C, $18, $18, $18, $0C, $00, $18, $18, $3C, $18, $18, $18, $0C, $00
-  .byte $00, $00, $66, $66, $66, $66, $3E, $00, $00, $00, $66, $66, $66, $66, $3E, $00
-  .byte $00, $00, $66, $66, $66, $64, $78, $00, $00, $00, $66, $66, $66, $64, $78, $00
-  .byte $00, $00, $DB, $DB, $DB, $DA, $FC, $00, $00, $00, $DB, $DB, $DB, $DA, $FC, $00
-  .byte $00, $00, $66, $66, $3C, $66, $66, $00, $00, $00, $66, $66, $3C, $66, $66, $00
-  .byte $00, $00, $66, $66, $66, $3E, $06, $3C, $00, $00, $66, $66, $66, $3E, $06, $3C
-  .byte $00, $00, $7E, $0C, $18, $30, $7E, $00, $00, $00, $7E, $0C, $18, $30, $7E, $00
-  .byte $80, $C0, $E0, $F0, $F0, $E0, $C0, $80, $80, $C0, $E0, $F0, $F0, $E0, $C0, $80
-  .byte $18, $18, $18, $18, $18, $18, $18, $18, $18, $18, $18, $18, $18, $18, $18, $18
-  .byte $E0, $30, $30, $1C, $30, $30, $E0, $00, $E0, $30, $30, $1C, $30, $30, $E0, $00
-  .byte $32, $4C, $00, $00, $00, $00, $00, $00, $32, $4C, $00, $00, $00, $00, $00, $00
-  .byte $00, $10, $38, $6C, $C6, $C6, $FE, $00, $00, $10, $38, $6C, $C6, $C6, $FE, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
