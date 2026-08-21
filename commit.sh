@@ -20,6 +20,7 @@ then
     git add historico.txt
     git add backup.zip
     git add intro.md
+    git add upload.sh
     
     git commit -m "by_script"
 
