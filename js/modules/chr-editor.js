@@ -1,10 +1,17 @@
-// CHR EDITOR v5.7 - import metatiles: .nms ou .chr bruto
+// CHR EDITOR v5.8 - metatile com 1 camada overlay (mais cores via empilhamento)
 const CHR = (() => {
   let chrBuffer = new Uint8Array(8192);
   let palettes = [[15,0,16,48],[15,6,22,38],[15,10,26,42],[15,2,18,34],[15,22,48,15],[15,25,41,57],[15,3,19,35],[15,9,25,41]];
   let activePal = 0, activeSlot = 1;
   let currentBank = 0, gridW=2, gridH=2, selectedTiles=[0,1,16,17], selectedFlips=[0,0,0,0], activeSlotIdx=0, isDrawing=false, undoStack=[];
   // selectedFlips: 0=none 1=H 2=V 3=HV — flip de OAM por célula (não altera pixels do CHR)
+  // Camada overlay (máx. 1): segunda pilha de tiles/paleta para mais cores em runtime
+  let editLayer = 0;           // 0 = base, 1 = overlay
+  let overlayEnabled = false;
+  let overlayTiles = [];       // mesmos slots que selectedTiles quando ativo
+  let overlayFlips = [];
+  let overlayPal = 5;          // subpalette sprite default (SPR1)
+  let overlayDx = 0, overlayDy = 0;
   let metatiles = [];
   let sheetCanvas, sheetCtx, zoomCanvas, zoomCtx, previewCanvas, previewCtx;
   let tool='pen', toolStart=null, toolPreviewEnd=null, copyDrag=null, clipboard=null, sheetClipboardTile=null;
@@ -150,6 +157,33 @@ const CHR = (() => {
               </div>
             </div>
 
+            <div style="background:#111;border:1px solid #333;border-radius:6px;padding:8px">
+              <h4 style="font-size:10px;color:#4ec9b0;margin-bottom:6px">CAMADAS DO METATILE</h4>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <button type="button" id="btnLayer0" class="btn-tool" onclick="CHR.setEditLayer(0)" style="font-size:11px;padding:3px 10px">Base</button>
+                <button type="button" id="btnLayer1" class="btn-tool" onclick="CHR.setEditLayer(1)" style="font-size:11px;padding:3px 10px">Overlay</button>
+                <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ccc;cursor:pointer;margin-left:6px">
+                  <input type="checkbox" id="chkOverlayEnabled" onchange="CHR.setOverlayEnabled(this.checked)"> Ativar overlay
+                </label>
+                <span style="font-size:10px;color:#666;margin-left:4px">pal</span>
+                <select id="overlayPalSelect" onchange="CHR.setOverlayPal(this.value)" style="background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:2px 4px;font-size:11px">
+                  <option value="4">SPR0</option>
+                  <option value="5">SPR1</option>
+                  <option value="6">SPR2</option>
+                  <option value="7">SPR3</option>
+                  <option value="0">BG0</option>
+                  <option value="1">BG1</option>
+                  <option value="2">BG2</option>
+                  <option value="3">BG3</option>
+                </select>
+                <span style="font-size:10px;color:#666">dx</span>
+                <input id="overlayDx" type="number" min="-8" max="8" value="0" onchange="CHR.setOverlayOffset()" style="width:44px;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:2px;font-size:11px">
+                <span style="font-size:10px;color:#666">dy</span>
+                <input id="overlayDy" type="number" min="-8" max="8" value="0" onchange="CHR.setOverlayOffset()" style="width:44px;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:2px;font-size:11px">
+                <span id="lblEditLayer" style="font-size:10px;color:#ffcc00;margin-left:auto">editando: Base</span>
+              </div>
+            </div>
+
             <!-- PREVIEW DE METATILES - também voltou -->
             <div style="background:#111;border:1px solid #333;border-radius:6px;padding:8px">
               <h4 style="font-size:10px;color:#4ec9b0;margin-bottom:6px">METATILES NO PROJETO - clique pra carregar ( <span id="lblMetatileCount">0</span> )</h4>
@@ -282,7 +316,7 @@ const CHR = (() => {
     sheetCanvas=document.getElementById('sheetCanvas'); sheetCtx=sheetCanvas.getContext('2d');
     zoomCanvas=document.getElementById('zoomCanvas'); zoomCtx=zoomCanvas.getContext('2d');
     previewCanvas=document.getElementById('previewCanvas'); previewCtx=previewCanvas.getContext('2d');
-    attachEvents(); populateSelects(); updateBankSelect(); ensurePaletteMatchesBank(); initPalUI(); setGrid(gridW,gridH); updateMetatileSelect(); tool='pen'; renderAll();
+    attachEvents(); populateSelects(); updateBankSelect(); ensurePaletteMatchesBank(); initPalUI(); setGrid(gridW,gridH); updateMetatileSelect(); tool='pen'; updateLayerUI(); renderAll();
   }
 
   function parseNES(buffer) {
@@ -363,6 +397,89 @@ const CHR = (() => {
     while(selectedFlips.length < selectedTiles.length) selectedFlips.push(0);
     if(selectedFlips.length > selectedTiles.length) selectedFlips.length = selectedTiles.length;
   }
+  function ensureOverlayLen(){
+    const n = selectedTiles.length;
+    while(overlayTiles.length < n) overlayTiles.push(-1); // vazio
+    while(overlayFlips.length < n) overlayFlips.push(0);
+    if(overlayTiles.length > n) overlayTiles.length = n;
+    if(overlayFlips.length > n) overlayFlips.length = n;
+  }
+  function currentTiles(){ return editLayer === 1 && overlayEnabled ? overlayTiles : selectedTiles; }
+  function currentFlips(){ return editLayer === 1 && overlayEnabled ? overlayFlips : selectedFlips; }
+  function setCurrentTileAt(slot, absIdx){
+    if(editLayer === 1 && overlayEnabled){
+      ensureOverlayLen();
+      overlayTiles[slot] = absIdx;
+    } else {
+      selectedTiles[slot] = absIdx;
+    }
+  }
+  function setEditLayer(layer){
+    editLayer = layer === 1 ? 1 : 0;
+    if(editLayer === 1){
+      if(!overlayEnabled){
+        overlayEnabled = true;
+        const chk = document.getElementById('chkOverlayEnabled');
+        if(chk) chk.checked = true;
+      }
+      // garante N slots vazios (-1), NUNCA copia a base
+      if(!overlayTiles.length){
+        overlayTiles = Array(selectedTiles.length).fill(-1);
+        overlayFlips = Array(selectedTiles.length).fill(0);
+      } else {
+        ensureOverlayLen();
+      }
+    }
+    updateLayerUI();
+    renderAll();
+    updateLabels();
+  }
+  function setOverlayEnabled(on){
+    overlayEnabled = !!on;
+    if(overlayEnabled){
+      const n = selectedTiles.length;
+      const hasContent = overlayTiles.length === n && overlayTiles.some(t => t != null && t >= 0);
+      // sem conteúdo próprio → todos os slots vazios (nunca herda a base)
+      if(!hasContent){
+        overlayTiles = Array(n).fill(-1);
+        overlayFlips = Array(n).fill(0);
+      } else {
+        ensureOverlayLen();
+      }
+      editLayer = 1;
+    } else {
+      editLayer = 0;
+    }
+    updateLayerUI();
+    renderAll();
+    updateLabels();
+  }
+  function setOverlayPal(v){
+    overlayPal = parseInt(v, 10);
+    if(isNaN(overlayPal)) overlayPal = 5;
+    renderAll();
+  }
+  function setOverlayOffset(){
+    overlayDx = parseInt(document.getElementById('overlayDx')?.value, 10) || 0;
+    overlayDy = parseInt(document.getElementById('overlayDy')?.value, 10) || 0;
+    renderAll();
+  }
+  function updateLayerUI(){
+    const b0 = document.getElementById('btnLayer0');
+    const b1 = document.getElementById('btnLayer1');
+    const lbl = document.getElementById('lblEditLayer');
+    const chk = document.getElementById('chkOverlayEnabled');
+    if(chk) chk.checked = overlayEnabled;
+    const op = document.getElementById('overlayPalSelect');
+    if(op) op.value = String(overlayPal);
+    const dx = document.getElementById('overlayDx');
+    const dy = document.getElementById('overlayDy');
+    if(dx) dx.value = overlayDx;
+    if(dy) dy.value = overlayDy;
+    if(b0){ b0.style.background = editLayer===0 ? '#ffcc00' : ''; b0.style.color = editLayer===0 ? '#000' : ''; }
+    if(b1){ b1.style.background = editLayer===1 ? '#ffcc00' : ''; b1.style.color = editLayer===1 ? '#000' : ''; b1.disabled = false; }
+    if(lbl) lbl.textContent = editLayer===1 ? 'editando: Overlay' : 'editando: Base';
+  }
   function flipLabel(f){
     f = f|0;
     if(f===3) return 'HV';
@@ -372,14 +489,18 @@ const CHR = (() => {
   }
   function toggleSlotFlipH(){
     ensureFlipsLen();
+    if(overlayEnabled) ensureOverlayLen();
     if(activeSlotIdx < 0 || activeSlotIdx >= selectedTiles.length) return;
-    selectedFlips[activeSlotIdx] = (selectedFlips[activeSlotIdx]|0) ^ 1;
+    const flips = currentFlips();
+    flips[activeSlotIdx] = (flips[activeSlotIdx]|0) ^ 1;
     updateLabels(); renderAll();
   }
   function toggleSlotFlipV(){
     ensureFlipsLen();
+    if(overlayEnabled) ensureOverlayLen();
     if(activeSlotIdx < 0 || activeSlotIdx >= selectedTiles.length) return;
-    selectedFlips[activeSlotIdx] = (selectedFlips[activeSlotIdx]|0) ^ 2;
+    const flips = currentFlips();
+    flips[activeSlotIdx] = (flips[activeSlotIdx]|0) ^ 2;
     updateLabels(); renderAll();
   }
   function renderSheet(){ if(!sheetCtx) return; sheetCtx.fillStyle="#000"; sheetCtx.fillRect(0,0,512,512); const base=currentBank*256; for(let ty=0;ty<16;ty++) for(let tx=0;tx<16;tx++) drawTile(sheetCtx, base+ty*16+tx, tx*32, ty*32, 4); if(document.getElementById('chkShowGrid')?.checked){ sheetCtx.save(); sheetCtx.strokeStyle="#888"; sheetCtx.setLineDash([2,2]); for(let x=32;x<512;x+=32){ sheetCtx.beginPath(); sheetCtx.moveTo(x+.5,0); sheetCtx.lineTo(x+.5,512); sheetCtx.stroke(); } for(let y=32;y<512;y+=32){ sheetCtx.beginPath(); sheetCtx.moveTo(0,y+.5); sheetCtx.lineTo(512,y+.5); sheetCtx.stroke(); } sheetCtx.restore(); } selectedTiles.forEach((ti,slot)=>{ const local=ti%256; if(Math.floor(ti/256)!==currentBank) return; const tx=local%16, ty=Math.floor(local/16), cur=slot===activeSlotIdx; sheetCtx.strokeStyle=cur?'#ffcc00':'#007acc'; sheetCtx.lineWidth=cur?3:2; sheetCtx.strokeRect(tx*32+1,ty*32+1,30,30); }); }
@@ -387,12 +508,13 @@ const CHR = (() => {
   function getRectPoints(x0,y0,x1,y1){ const pts=[]; const minX=Math.min(x0,x1), maxX=Math.max(x0,x1), minY=Math.min(y0,y1), maxY=Math.max(y0,y1); for(let x=minX;x<=maxX;x++){ pts.push({x,y:minY}); pts.push({x,y:maxY}); } for(let y=minY+1;y<=maxY-1;y++){ pts.push({x:minX,y}); pts.push({x:maxX,y}); } return pts; }
   function getCirclePoints(cx,cy,r){ const pts=[]; let x=r, y=0, err=0; while(x>=y){ pts.push({x:cx+x,y:cy+y},{x:cx+y,y:cy+x},{x:cx-y,y:cy+x},{x:cx-x,y:cy+y},{x:cx-x,y:cy-y},{x:cx-y,y:cy-x},{x:cx+y,y:cy-x},{x:cx+x,y:cy-y}); y++; if(err<=0){ err+=2*y+1; } if(err>0){ x--; err-=2*x+1; } } return pts; }
   function getMatrix(){
-    // Matriz de cores 0–3 do grupo atual (pixels, sem aplicar flip de célula do metatile)
+    // Matriz de cores 0–3 da camada em edição
+    const tiles = currentTiles();
     const W = gridW * 8, H = gridH * 8;
     const M = Array.from({ length: H }, () => Array(W).fill(0));
     for(let gy=0; gy<gridH; gy++){
       for(let gx=0; gx<gridW; gx++){
-        const ti = selectedTiles[gy * gridW + gx];
+        const ti = tiles[gy * gridW + gx];
         if(ti == null) continue;
         const off = ti * 16;
         if(off + 16 > chrBuffer.length) continue;
@@ -408,11 +530,12 @@ const CHR = (() => {
     return M;
   }
   function setMatrix(M){
-    // Grava matriz de pixels de volta nos tiles de selectedTiles (usa gridW/gridH atuais)
+    // Grava matriz de pixels de volta nos tiles da camada em edição
     if(!M || !M.length || !M[0] || !M[0].length) return;
+    const tiles = currentTiles();
     for(let gy=0; gy<gridH; gy++){
       for(let gx=0; gx<gridW; gx++){
-        const ti = selectedTiles[gy * gridW + gx];
+        const ti = tiles[gy * gridW + gx];
         if(ti == null) continue;
         const off = ti * 16;
         if(off + 16 > chrBuffer.length) continue;
@@ -490,37 +613,75 @@ const CHR = (() => {
     ensureFlipsLen();
     const a=document.getElementById('lblActiveSlot'), b=document.getElementById('lblTileIndices'), size=document.getElementById('lblMetatileSize'), status=document.getElementById('statusLeft');
     if(a) a.textContent=`${activeSlotIdx+1}/${selectedTiles.length}`;
-    if(b) b.textContent=selectedTiles.map((i,idx)=>"$"+i.toString(16).toUpperCase().padStart(2,"0")+`(${(i%256).toString(16).toUpperCase()})`+(selectedFlips[idx]?`[${flipLabel(selectedFlips[idx])}]`:'')).join(", ");
-    if(size) size.textContent=`${gridW}x${gridH} PT${currentBank} (${selectedTiles.length} tiles)`;
-    if(status) status.textContent=`PT${currentBank} - Slot ${activeSlotIdx+1} - Tile $${selectedTiles[activeSlotIdx]?.toString(16).toUpperCase()} flip=${flipLabel(selectedFlips[activeSlotIdx])} - Tool ${tool}`;
+    const tiles = currentTiles(), flips = currentFlips();
+    if(b) b.textContent=tiles.map((i,idx)=>"$"+i.toString(16).toUpperCase().padStart(2,"0")+`(${(i%256).toString(16).toUpperCase()})`+(flips[idx]?`[${flipLabel(flips[idx])}]`:'')).join(", ");
+    if(size) size.textContent=`${gridW}x${gridH} PT${currentBank} (${selectedTiles.length} tiles)`+(overlayEnabled?' +overlay':'');
+    if(status) status.textContent=`PT${currentBank} - L${editLayer} Slot ${activeSlotIdx+1} - Tile $${tiles[activeSlotIdx]?.toString(16).toUpperCase()} flip=${flipLabel(flips[activeSlotIdx])} - Tool ${tool}`;
     const sf=document.getElementById('lblSlotFlip');
-    if(sf) sf.textContent = `slot ${activeSlotIdx+1}: ${flipLabel(selectedFlips[activeSlotIdx]|0)}`;
+    if(sf) sf.textContent = `slot ${activeSlotIdx+1}: ${flipLabel(flips[activeSlotIdx]|0)}`;
     renderQuickTileSelector();
   }
 
   function renderQuickTileSelector(){
     const cont=document.getElementById('quickTileSelector'); if(!cont) return; cont.innerHTML='';
     ensureFlipsLen();
-    selectedTiles.forEach((ti,idx)=>{
-      const isActive=idx===activeSlotIdx;
-      const fl=selectedFlips[idx]|0;
+    const isOv = (editLayer === 1 && overlayEnabled);
+    if(isOv) ensureOverlayLen();
+    const tiles = isOv ? overlayTiles : selectedTiles;
+    const flips = isOv ? overlayFlips : selectedFlips;
+    const title = document.querySelector('#quickTileSelector')?.previousElementSibling;
+    // atualiza título do painel se existir h4
+    const panelH4 = cont.parentElement && cont.parentElement.querySelector('h4');
+    if(panelH4){
+      panelH4.textContent = isOv
+        ? 'SELETOR OVERLAY — slots vazios; clique no slot e depois no grid CHR'
+        : 'SELETOR BASE — tiles do metatile (clique = slot ativo)';
+      panelH4.style.color = isOv ? '#8585ff' : '#4ec9b0';
+    }
+    tiles.forEach((ti,idx)=>{
+      const isActive = idx === activeSlotIdx;
+      const fl = flips[idx]|0;
+      const empty = isOv && (ti==null || ti<0);
+      const border = isActive ? (isOv ? '2px solid #8585ff' : '2px solid #ffcc00') : '1px solid #444';
+      const bg = isActive ? (isOv ? '#1a1a3a' : '#332a00') : '#111';
       const div=document.createElement('div');
-      div.style.cssText=`display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px;border:${isActive?'2px solid #ffcc00':'1px solid #444'};border-radius:4px;background:${isActive?'#332a00':'#111'};cursor:pointer;min-width:56px;position:relative`;
-      div.onclick=()=>{ activeSlotIdx=idx; renderAll(); updateLabels(); };
-      const canvas=document.createElement('canvas'); canvas.width=16; canvas.height=16; canvas.style.cssText='width:32px;height:32px;image-rendering:pixelated;border:1px solid #222;background:#000';
-      drawTile(canvas.getContext('2d'), ti, 0,0,2, fl);
-      if(fl){
+      div.style.cssText=`display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px;border:${border};border-radius:4px;background:${bg};cursor:pointer;min-width:56px;position:relative`;
+      div.onclick=()=>{ activeSlotIdx=idx; if(isOv) editLayer=1; else editLayer=0; updateLayerUI(); renderAll(); updateLabels(); };
+      if(isOv){
+        div.oncontextmenu=(e)=>{
+          e.preventDefault();
+          overlayTiles[idx]=-1; overlayFlips[idx]=0;
+          renderAll(); updateLabels();
+        };
+        div.title = 'Direito = limpar slot';
+      }
+      const canvas=document.createElement('canvas'); canvas.width=16; canvas.height=16;
+      canvas.style.cssText='width:32px;height:32px;image-rendering:pixelated;border:1px solid #222;background:#000';
+      const ctx=canvas.getContext('2d');
+      if(empty){
+        ctx.fillStyle='#222'; ctx.fillRect(0,0,16,16);
+        ctx.strokeStyle='#555'; ctx.strokeRect(0.5,0.5,15,15);
+        ctx.fillStyle='#888'; ctx.font='9px sans-serif'; ctx.fillText('∅',5,11);
+      } else {
+        drawTile(ctx, ti, 0, 0, 2, fl);
+      }
+      if(fl && !empty){
         const badge=document.createElement('div');
         badge.textContent=flipLabel(fl);
         badge.style.cssText='position:absolute;top:2px;right:2px;font-size:8px;background:#27ae60;color:#fff;padding:0 3px;border-radius:2px;line-height:1.3';
         div.appendChild(badge);
       }
       const label=document.createElement('div'); label.style.cssText='font-size:9px;color:#888;text-align:center;line-height:1.2';
-      label.innerHTML=`<b style="color:${isActive?'#ffcc00':'#fff'}">${idx+1}</b><br>$${ti.toString(16).toUpperCase()}<br><span style="color:#666">%${(ti%256).toString(16).toUpperCase()}</span>`;
+      const accent = isActive ? (isOv?'#8585ff':'#ffcc00') : '#fff';
+      label.innerHTML = empty
+        ? `<b style="color:${accent}">${idx+1}</b><br><span style="color:#666">vazio</span>`
+        : `<b style="color:${accent}">${idx+1}</b><br>$${Number(ti).toString(16).toUpperCase()}<br><span style="color:#666">${isOv?'ov':'base'}</span>`;
       div.appendChild(canvas); div.appendChild(label); cont.appendChild(div);
     });
+    // esconde painel overlay duplicado se existir
+    const ovPanel = document.getElementById('overlaySelectorPanel');
+    if(ovPanel) ovPanel.style.display = 'none';
   }
-
   function renderMetatilePreview(){
     const cont=document.getElementById('metatilePreview'); if(!cont) return; cont.innerHTML='';
     metatiles.filter(mt => (mt.bank||0) === currentBank).forEach(mt=>{
@@ -538,6 +699,17 @@ const CHR = (() => {
     const first=selectedTiles[0]||currentBank*256;
     selectedTiles=[]; selectedFlips=[];
     for(let i=0;i<w*h;i++){ selectedTiles.push(first+i); selectedFlips.push(0); }
+    if(overlayEnabled){
+      const oldOv = [...overlayTiles];
+      const oldOf = [...overlayFlips];
+      overlayTiles=[]; overlayFlips=[];
+      for(let i=0;i<w*h;i++){
+        overlayTiles.push(i < oldOv.length ? oldOv[i] : -1);
+        overlayFlips.push(i < oldOf.length ? (oldOf[i]|0) : 0);
+      }
+    } else {
+      overlayTiles=[]; overlayFlips=[];
+    }
     activeSlotIdx=0;
     if(zoomCanvas){ zoomCanvas.width=w*8*16; zoomCanvas.height=h*8*16; }
     const cSel=document.getElementById('tileColsSelect'), rSel=document.getElementById('tileRowsSelect');
@@ -545,7 +717,96 @@ const CHR = (() => {
     if(rSel) rSel.value=String(h);
     renderAll(); updateLabels();
   }
-  function renderZoom(){ if(!zoomCtx) return; const sizeW=gridW*8, sizeH=gridH*8; zoomCanvas.width=sizeW*16; zoomCanvas.height=sizeH*16; zoomCtx.fillStyle="#000"; zoomCtx.fillRect(0,0,zoomCanvas.width,zoomCanvas.height); for(let gy=0;gy<gridH;gy++) for(let gx=0;gx<gridW;gx++){ const ti=selectedTiles[gy*gridW+gx]; if(ti!==undefined) drawTile(zoomCtx, ti, gx*8*16, gy*8*16, 16, selectedFlips[gy*gridW+gx]|0); } if(document.getElementById('chkMetatileGrid')?.checked && (gridW>1 || gridH>1)){ zoomCtx.save(); zoomCtx.strokeStyle="rgba(255,255,0,0.6)"; zoomCtx.lineWidth=1; for(let gx=1; gx<gridW; gx++){ zoomCtx.beginPath(); zoomCtx.moveTo(gx*8*16+0.5, 0); zoomCtx.lineTo(gx*8*16+0.5, zoomCanvas.height); zoomCtx.stroke(); } for(let gy=1; gy<gridH; gy++){ zoomCtx.beginPath(); zoomCtx.moveTo(0, gy*8*16+0.5); zoomCtx.lineTo(zoomCanvas.width, gy*8*16+0.5); zoomCtx.stroke(); } zoomCtx.restore(); } if((tool==='line'||tool==='rect'||tool==='circle')&&toolStart&&toolPreviewEnd){ let pts=[]; if(tool==='line') pts=bresenham(toolStart.x,toolStart.y,toolPreviewEnd.x,toolPreviewEnd.y); else if(tool==='rect') pts=getRectPoints(toolStart.x,toolStart.y,toolPreviewEnd.x,toolPreviewEnd.y); else if(tool==='circle'){ const r=Math.round(Math.hypot(toolPreviewEnd.x-toolStart.x, toolPreviewEnd.y-toolStart.y)); pts=getCirclePoints(toolStart.x,toolStart.y,r); } zoomCtx.fillStyle="rgba(255,255,0,0.9)"; pts.forEach(p=>{ if(p.x>=0&&p.x<sizeW&&p.y>=0&&p.y<sizeH) zoomCtx.fillRect(p.x*16, p.y*16, 16,16); }); } if(copyDrag&&copyDrag.active){ const x0=Math.min(copyDrag.x0, copyDrag.x1), y0=Math.min(copyDrag.y0, copyDrag.y1); const x1=Math.max(copyDrag.x0, copyDrag.x1), y1=Math.max(copyDrag.y0, copyDrag.y1); zoomCtx.fillStyle="rgba(0,150,255,0.25)"; zoomCtx.fillRect(x0*16, y0*16, (x1-x0+1)*16, (y1-y0+1)*16); } if(previewCtx){ previewCanvas.width=sizeW*2; previewCanvas.height=sizeH*2; previewCtx.fillStyle="#000"; previewCtx.fillRect(0,0,previewCanvas.width,previewCanvas.height); for(let gy=0;gy<gridH;gy++) for(let gx=0;gx<gridW;gx++){ const ti=selectedTiles[gy*gridW+gx]; if(ti!==undefined) drawTile(previewCtx, ti, gx*8*2, gy*8*2, 2, selectedFlips[gy*gridW+gx]|0); } } }
+  function drawTileTransparent(ctx, tileIdx, dx, dy, scale, flip, palIdx){
+    // desenha só pixels com cor != 0 (transparência NES)
+    const off = tileIdx * 16;
+    if(off + 16 > chrBuffer.length) return;
+    const pal = palettes[palIdx != null ? palIdx : activePal] || palettes[0];
+    flip = flip | 0;
+    const fh = !!(flip & 1), fv = !!(flip & 2);
+    for(let y=0; y<8; y++){
+      const sy = fv ? (7-y) : y;
+      const p0 = chrBuffer[off+sy], p1 = chrBuffer[off+sy+8];
+      for(let x=0; x<8; x++){
+        const sx = fh ? (7-x) : x;
+        const sh = 7-sx, ci = (((p1>>sh)&1)<<1) | ((p0>>sh)&1);
+        if(ci === 0) continue;
+        ctx.fillStyle = NES_PALETTE[pal[ci]&63];
+        ctx.fillRect(dx + x*scale, dy + y*scale, scale, scale);
+      }
+    }
+  }
+  function renderZoom(){
+    if(!zoomCtx) return;
+    const sizeW = gridW * 8, sizeH = gridH * 8;
+    zoomCanvas.width = sizeW * 16;
+    zoomCanvas.height = sizeH * 16;
+    zoomCtx.fillStyle = "#000";
+    zoomCtx.fillRect(0, 0, zoomCanvas.width, zoomCanvas.height);
+    // base
+    for(let gy=0; gy<gridH; gy++) for(let gx=0; gx<gridW; gx++){
+      const ti = selectedTiles[gy*gridW+gx];
+      if(ti !== undefined) drawTile(zoomCtx, ti, gx*8*16, gy*8*16, 16, selectedFlips[gy*gridW+gx]|0);
+    }
+    // overlay composto
+    if(overlayEnabled){
+      ensureOverlayLen();
+      const odx = (overlayDx|0) * 16, ody = (overlayDy|0) * 16;
+      for(let gy=0; gy<gridH; gy++) for(let gx=0; gx<gridW; gx++){
+        const ti = overlayTiles[gy*gridW+gx];
+        if(ti === undefined) continue;
+        drawTileTransparent(zoomCtx, ti, gx*8*16 + odx, gy*8*16 + ody, 16, overlayFlips[gy*gridW+gx]|0, overlayPal);
+      }
+    }
+    // highlight da camada em edição (borda suave)
+    if(editLayer === 1 && overlayEnabled){
+      zoomCtx.save();
+      zoomCtx.strokeStyle = "rgba(133,133,255,0.5)";
+      zoomCtx.lineWidth = 2;
+      zoomCtx.strokeRect(1, 1, zoomCanvas.width-2, zoomCanvas.height-2);
+      zoomCtx.restore();
+    }
+    if(document.getElementById('chkMetatileGrid')?.checked && (gridW>1 || gridH>1)){
+      zoomCtx.save();
+      zoomCtx.strokeStyle = "rgba(255,255,0,0.6)";
+      zoomCtx.lineWidth = 1;
+      for(let gx=1; gx<gridW; gx++){ zoomCtx.beginPath(); zoomCtx.moveTo(gx*8*16+0.5, 0); zoomCtx.lineTo(gx*8*16+0.5, zoomCanvas.height); zoomCtx.stroke(); }
+      for(let gy=1; gy<gridH; gy++){ zoomCtx.beginPath(); zoomCtx.moveTo(0, gy*8*16+0.5); zoomCtx.lineTo(zoomCanvas.width, gy*8*16+0.5); zoomCtx.stroke(); }
+      zoomCtx.restore();
+    }
+    if((tool==='line'||tool==='rect'||tool==='circle')&&toolStart&&toolPreviewEnd){
+      let pts=[];
+      if(tool==='line') pts=bresenham(toolStart.x,toolStart.y,toolPreviewEnd.x,toolPreviewEnd.y);
+      else if(tool==='rect') pts=getRectPoints(toolStart.x,toolStart.y,toolPreviewEnd.x,toolPreviewEnd.y);
+      else if(tool==='circle'){ const r=Math.round(Math.hypot(toolPreviewEnd.x-toolStart.x, toolPreviewEnd.y-toolStart.y)); pts=getCirclePoints(toolStart.x,toolStart.y,r); }
+      zoomCtx.fillStyle="rgba(255,255,0,0.9)";
+      pts.forEach(p=>{ if(p.x>=0&&p.x<sizeW&&p.y>=0&&p.y<sizeH) zoomCtx.fillRect(p.x*16, p.y*16, 16,16); });
+    }
+    if(copyDrag&&copyDrag.active){
+      const x0=Math.min(copyDrag.x0, copyDrag.x1), y0=Math.min(copyDrag.y0, copyDrag.y1);
+      const x1=Math.max(copyDrag.x0, copyDrag.x1), y1=Math.max(copyDrag.y0, copyDrag.y1);
+      zoomCtx.fillStyle="rgba(0,150,255,0.25)";
+      zoomCtx.fillRect(x0*16, y0*16, (x1-x0+1)*16, (y1-y0+1)*16);
+    }
+    if(previewCtx){
+      previewCanvas.width = sizeW * 2;
+      previewCanvas.height = sizeH * 2;
+      previewCtx.fillStyle = "#000";
+      previewCtx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+      for(let gy=0; gy<gridH; gy++) for(let gx=0; gx<gridW; gx++){
+        const ti = selectedTiles[gy*gridW+gx];
+        if(ti !== undefined) drawTile(previewCtx, ti, gx*8*2, gy*8*2, 2, selectedFlips[gy*gridW+gx]|0);
+      }
+      if(overlayEnabled){
+        ensureOverlayLen();
+        for(let gy=0; gy<gridH; gy++) for(let gx=0; gx<gridW; gx++){
+          const ti2 = overlayTiles[gy*gridW+gx];
+          if(ti2 === undefined) continue;
+          drawTileTransparent(previewCtx, ti2, gx*8*2+(overlayDx|0)*2, gy*8*2+(overlayDy|0)*2, 2, overlayFlips[gy*gridW+gx]|0, overlayPal);
+        }
+      }
+    }
+  }
   function renderAll(){ renderSheet(); renderZoom(); renderQuickTileSelector(); renderMetatilePreview(); renderTileQueue(); }
 
   function doLine(x0,y0,x1,y1){ const M=getMatrix(); bresenham(x0,y0,x1,y1).forEach(p=>{ if(p.y>=0&&p.y<M.length&&p.x>=0&&p.x<M[0].length) M[p.y][p.x]=activeSlot; }); pushUndo(); setMatrix(M); }
@@ -732,7 +993,8 @@ const CHR = (() => {
   }
 
   function paintZoomPixel(px, py, colorSlot){
-    const gx=Math.floor(px/8), gy=Math.floor(py/8), slot=gy*gridW+gx, ti=selectedTiles[slot];
+    const tiles=currentTiles();
+    const gx=Math.floor(px/8), gy=Math.floor(py/8), slot=gy*gridW+gx, ti=tiles[slot];
     if(ti===undefined) return;
     const lx=px%8, ly=py%8, off=ti*16, sh=7-lx;
     const c = colorSlot & 3;
@@ -754,7 +1016,7 @@ const CHR = (() => {
       if(tool==='sheetcopy'){ copySheetTile(g); return; }
       if(tool==='sheetpaste'){ pasteSheetTile(g); return; }
       if(tool==='sheetclear'){ clearSheetTile(g); return; }
-      selectedTiles[activeSlotIdx]=g; activeSlotIdx=(activeSlotIdx+1)%selectedTiles.length; renderAll(); updateLabels();
+      setCurrentTileAt(activeSlotIdx, g); activeSlotIdx=(activeSlotIdx+1)%selectedTiles.length; renderAll(); updateLabels();
     });
     zoomCanvas?.addEventListener('mousedown', e=>{
       const rect=zoomCanvas.getBoundingClientRect(); const px=Math.floor(((e.clientX-rect.left)/rect.width)*zoomCanvas.width/16), py=Math.floor(((e.clientY-rect.top)/rect.height)*zoomCanvas.height/16);
@@ -776,37 +1038,82 @@ const CHR = (() => {
   function saveMetatile(){
     const sel=document.getElementById('metatileSelect');
     const existingId = sel && sel.value;
+    const packOverlay = ()=>{
+      if(!overlayEnabled) return null;
+      ensureOverlayLen();
+      return { tiles:[...overlayTiles], flips:[...overlayFlips], palette:overlayPal, dx:overlayDx|0, dy:overlayDy|0 };
+    };
     if(existingId){
       const mt = metatiles.find(m=>m.id===existingId);
       if(mt){
-        ensureFlipsLen(); mt.w=gridW; mt.h=gridH; mt.tiles=[...selectedTiles]; mt.flips=[...selectedFlips]; mt.bank=currentBank; mt.palette=activePal;
+        ensureFlipsLen();
+        mt.w=gridW; mt.h=gridH; mt.tiles=[...selectedTiles]; mt.flips=[...selectedFlips];
+        mt.bank=currentBank; mt.palette=activePal;
+        const ov = packOverlay();
+        if(ov) mt.overlay = ov; else delete mt.overlay;
         updateMetatileSelect(); renderAll();
-        if(typeof Project!=='undefined' && Project.status) Project.status(`Metatile "${mt.name}" atualizado`);
+        if(typeof Project!=='undefined' && Project.status) Project.status(`Metatile "${mt.name}" atualizado`+(ov?' (+overlay)':''));
         return;
       }
     }
-    // Nenhum metatile selecionado no dropdown - cria um novo como fallback
     const name=prompt(`Nome:`, `metatile_${metatiles.length+1}_${gridW}x${gridH}_PT${currentBank}`); if(!name) return;
-    const id='mt_'+Date.now(); const mt={ id, name:name.trim(), w:gridW, h:gridH, tiles:[...selectedTiles], flips:[...selectedFlips], bank:currentBank, palette:activePal, created:Date.now() };
-    metatiles.push(mt); updateMetatileSelect(); if(sel) sel.value=id; renderAll();
+    ensureFlipsLen();
+    const id='mt_'+Date.now();
+    const mt={ id, name:name.trim(), w:gridW, h:gridH, tiles:[...selectedTiles], flips:[...selectedFlips], bank:currentBank, palette:activePal, created:Date.now() };
+    const ov = packOverlay();
+    if(ov) mt.overlay = ov;
+    metatiles.push(mt);
+    updateMetatileSelect();
+    if(sel) sel.value = id;
+    renderAll();
+    if(typeof Project!=='undefined' && Project.status) Project.status(`Metatile "${mt.name}" criado`);
   }
-  // Cria um metatile novo de verdade (pede nome, abre uma seleção 2x2 com os 4 primeiros
-  // tiles do banco atual pra o usuário editar/redimensionar). O metatile já fica selecionado
-  // no dropdown, então clicar em Save salva as alterações nele (mesmo caminho de saveMetatile
-  // acima, não cria um segundo metatile).
+
+
   function newTile(){
     const name=prompt("Nome do novo metatile:", `metatile_${metatiles.length+1}`); if(!name) return;
     const base=currentBank*256;
     gridW=2; gridH=2; selectedTiles=[base, base+1, base+16, base+17]; selectedFlips=[0,0,0,0]; activeSlotIdx=0;
+    overlayEnabled=false; overlayTiles=[]; overlayFlips=[]; overlayDx=0; overlayDy=0; editLayer=0;
     const id='mt_'+Date.now();
     const mt={ id, name:name.trim(), w:gridW, h:gridH, tiles:[...selectedTiles], flips:[...selectedFlips], bank:currentBank, palette:activePal, created:Date.now() };
     metatiles.push(mt);
     updateMetatileSelect();
     const sel=document.getElementById('metatileSelect'); if(sel) sel.value=id;
+    updateLayerUI();
     renderAll(); updateLabels();
     if(typeof Project!=='undefined' && Project.status) Project.status(`Novo metatile "${mt.name}" - edite e clique em Save`);
   }
-  function loadSelectedMetatile(){ const sel=document.getElementById('metatileSelect'); if(!sel||!sel.value) return; const mt=metatiles.find(m=>m.id===sel.value); if(!mt) return; gridW=mt.w; gridH=mt.h; selectedTiles=[...mt.tiles]; selectedFlips=(mt.flips&&mt.flips.length===mt.tiles.length)?[...mt.flips]:mt.tiles.map(()=>0); currentBank=mt.bank||0; activePal=mt.palette||0; activeSlotIdx=0; if(zoomCanvas){ zoomCanvas.width=gridW*8*16; zoomCanvas.height=gridH*8*16; } renderAll(); updateLabels(); }
+  function loadSelectedMetatile(){
+    const sel=document.getElementById('metatileSelect');
+    if(!sel||!sel.value) return;
+    const mt=metatiles.find(m=>m.id===sel.value);
+    if(!mt) return;
+    gridW=mt.w; gridH=mt.h;
+    selectedTiles=[...mt.tiles];
+    selectedFlips=(mt.flips&&mt.flips.length===mt.tiles.length)?[...mt.flips]:mt.tiles.map(()=>0);
+    currentBank=mt.bank||0;
+    activePal=mt.palette||0;
+    activeSlotIdx=0;
+    if(mt.overlay && Array.isArray(mt.overlay.tiles) && mt.overlay.tiles.length){
+      overlayEnabled = true;
+      overlayTiles = mt.overlay.tiles.map(t => (t==null || t < 0) ? -1 : t|0);
+      overlayFlips = (mt.overlay.flips && mt.overlay.flips.length===overlayTiles.length) ? [...mt.overlay.flips] : overlayTiles.map(()=>0);
+      overlayPal = mt.overlay.palette != null ? mt.overlay.palette : 5;
+      overlayDx = mt.overlay.dx|0;
+      overlayDy = mt.overlay.dy|0;
+    } else {
+      overlayEnabled = false;
+      overlayTiles = [];
+      overlayFlips = [];
+      overlayDx = 0; overlayDy = 0;
+    }
+    editLayer = 0;
+    if(zoomCanvas){ zoomCanvas.width=gridW*8*16; zoomCanvas.height=gridH*8*16; }
+    updateLayerUI();
+    renderAll(); updateLabels();
+  }
+
   function onMetatileSelectChange(){ loadSelectedMetatile(); }
   function deleteMetatile(){ const sel=document.getElementById('metatileSelect'); if(!sel||!sel.value) return; metatiles=metatiles.filter(m=>m.id!==sel.value); updateMetatileSelect(); renderAll(); }
   function renameMetatile(){
@@ -832,7 +1139,7 @@ const CHR = (() => {
     if(!sel) return;
     const cur=sel.value;
     sel.innerHTML='<option value="">— Metatiles —</option>';
-    bankMetatiles.forEach(mt=>{ const o=document.createElement('option'); o.value=mt.id; o.textContent=`${mt.name} (${mt.w}x${mt.h}) PT${mt.bank||0}`; sel.appendChild(o); });
+    bankMetatiles.forEach(mt=>{ const o=document.createElement('option'); o.value=mt.id; o.textContent=`${mt.name} (${mt.w}x${mt.h}) PT${mt.bank||0}`+(mt.overlay?' +ov':''); sel.appendChild(o); });
     if(cur && bankMetatiles.some(m=>m.id===cur)) sel.value=cur;
     renderMetatilePreview();
   }
@@ -1728,6 +2035,8 @@ const CHR = (() => {
     saveMetatile, loadSelectedMetatile, deleteMetatile, renameMetatile, updateMetatileSelect, onMetatileSelectChange, newTile,
     setTool(t){ setToolImpl(t); },
     toggleSlotFlipH, toggleSlotFlipV,
+    setEditLayer, setOverlayEnabled, setOverlayPal, setOverlayOffset,
+
     openImageImport, closeImageImport,
     imgImportSetGrid, imgImportRedraw,
     imgImportSetCropFromInputs, imgImportApplyCrop, imgImportClearSelection, imgImportSelectAll,
