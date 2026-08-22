@@ -1,4 +1,4 @@
-// CHR EDITOR v5.4 - import imagem → quantize → fila de tiles + metatile ao colar - PT0/PT1
+// CHR EDITOR v5.7 - import metatiles: .nms ou .chr bruto
 const CHR = (() => {
   let chrBuffer = new Uint8Array(8192);
   let palettes = [[15,0,16,48],[15,6,22,38],[15,10,26,42],[15,2,18,34],[15,22,48,15],[15,25,41,57],[15,3,19,35],[15,9,25,41]];
@@ -16,16 +16,25 @@ const CHR = (() => {
 
   // ---- Import imagem → pixel art (passo 1: crop / resize / grid em tiles) ----
   let imgImport = {
-    img: null,          // HTMLImageElement
-    // região de crop em pixels da imagem original
-    cropX: 0, cropY: 0, cropW: 0, cropH: 0,
-    // grade sobreposta, em TILES (1 tile = 8×8 px na saída)
+    img: null,           // HTMLImageElement ou Canvas (após crop)
+    // seleção atual em px da imagem (null = nenhuma)
+    sel: null,           // {x,y,w,h}
     gridTW: 2, gridTH: 2,
-    // escala de visualização no canvas do modal
-    viewScale: 1,
-    // modo: 'pan' | 'crop'
-    mode: 'crop',
-    drag: null
+    drag: null,          // {type:'new'|'move'|'resize', handle, x0,y0, orig}
+    pendingMeta: null,
+    lastOutput: null
+  };
+
+  // Import de outro .nms (tiles + metatiles → fila)
+  let nmsImport = {
+    name: '',
+    chr: null,           // Uint8Array
+    metatiles: [],
+    bank: 0,             // página 0/1 visualizada
+    // seleção atual: lista de { absIdx, data[16] }
+    picked: [],
+    // se veio de um metatile escolhido no menu
+    pendingMeta: null    // { w,h, name, layout: [absIdx,...] } no arquivo fonte
   };
 
   function buildHTML(){
@@ -36,10 +45,12 @@ const CHR = (() => {
           <select id="bankSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 8px;font-size:12px"></select>
           <button class="btn-tool" style="background:#c0392b;color:#fff" onclick="CHR.addBank()">+ BANK</button>
           <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer"><input type="checkbox" id="chkShowGrid"> grid</label>
-          <div style="display:flex;gap:6px;align-items:center;margin-left:8px;border-left:1px solid #333;padding-left:8px">
-            <button class="btn-tool" onclick="CHR.importCHR()">🧱 Import CHR</button>
-            <button class="btn-tool" onclick="CHR.openImageImport()" style="background:#16a085;color:#fff" title="Importar PNG/JPG e preparar crop/grid em tiles">🖼 Import imagem</button>
-            <button class="btn-tool" onclick="Project.exportCHR()">⬇️ Export</button>
+          <div style="display:flex;gap:6px;align-items:center;margin-left:8px;border-left:1px solid #333;padding-left:8px;flex-wrap:wrap">
+            <button class="btn-tool" onclick="CHR.openImageImport()" title="Importar PNG/JPG e preparar crop/grid em tiles" style="background:#16a085;color:#fff;border-color:#1abc9c;min-width:118px;height:28px;padding:0 10px;font-size:11px;font-weight:600;border-radius:4px;border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;gap:4px;box-sizing:border-box">🖼 Import imagem</button>
+            <button class="btn-tool" onclick="CHR.openNmsImport()" title="Importar tiles/metatiles de outro .nms ou .chr" style="background:#8e44ad;color:#fff;border-color:#a569bd;min-width:118px;height:28px;padding:0 10px;font-size:11px;font-weight:600;border-radius:4px;border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;gap:4px;box-sizing:border-box">📦 Import metatiles</button>
+            <button class="btn-tool" onclick="CHR.importCHR()" title="Importar arquivo .chr / .bin / .nes no buffer atual" style="background:#2c3e50;color:#fff;border-color:#5d6d7e;min-width:118px;height:28px;padding:0 10px;font-size:11px;font-weight:600;border-radius:4px;border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;gap:4px;box-sizing:border-box">🧱 Import .chr</button>
+            <button class="btn-tool" onclick="Project.exportCHR()" title="Exportar buffer CHR atual" style="background:#34495e;color:#fff;border-color:#5d6d7e;min-width:118px;height:28px;padding:0 10px;font-size:11px;font-weight:600;border-radius:4px;border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;gap:4px;box-sizing:border-box">⬇️ Export .chr</button>
+            <input type="file" id="importNms_internal" accept=".nms,.chr,.bin,application/json,application/octet-stream" style="display:none">
             <input type="file" id="importCHR_internal" accept=".chr,.bin,.nes" style="display:none">
             <input type="file" id="importImage_internal" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
           </div>
@@ -48,6 +59,7 @@ const CHR = (() => {
             <select id="tileColsSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:3px"></select>
             <span>X</span>
             <select id="tileRowsSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:3px"></select>
+            <button class="btn-tool" onclick="CHR.applyGridResize()" title="Aplica o tamanho escolhido nos selects" style="background:#2980b9;color:#fff;font-size:11px;padding:3px 8px">Redimensionar</button>
             <span style="margin-left:8px">Slot: <b id="lblActiveSlot" style="color:#ffcc00">1/4</b></span>
             <button class="btn-tool" onclick="CHR.autoFill()">Auto</button>
           </div>
@@ -69,20 +81,21 @@ const CHR = (() => {
             <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;background:#252526;padding:6px 8px;border-radius:6px;border:1px solid #333">
               <span style="font-size:10px;color:#888;margin-right:4px">TOOLS:</span>
               <button class="btn-tool tool-btn active" data-tool="pen" onclick="CHR.setTool('pen')">🖊️ Pen</button>
+              <button class="btn-tool tool-btn" data-tool="erase" onclick="CHR.setTool('erase')" title="Apaga pixels (cor 0)">🧹 Erase</button>
               <button class="btn-tool tool-btn" data-tool="line" onclick="CHR.setTool('line')">📏 Line</button>
               <button class="btn-tool tool-btn" data-tool="rect" onclick="CHR.setTool('rect')">⬜ Rect</button>
               <button class="btn-tool tool-btn" data-tool="circle" onclick="CHR.setTool('circle')">⭕ Circle</button>
               <button class="btn-tool tool-btn" data-tool="fill" onclick="CHR.setTool('fill')">🪣 Fill</button>
               <button class="btn-tool tool-btn" data-tool="copy" onclick="CHR.setTool('copy')">📋 Copy</button>
               <button class="btn-tool tool-btn" data-tool="paste" onclick="CHR.setTool('paste')">📌 Paste</button>
-              <div style="width:1px;height:18px;background:#444;margin:0 6px"></div>
-              <button class="btn-tool tool-btn" data-tool="sheetcopy" onclick="CHR.setTool('sheetcopy')" title="Clique nos tiles da folha para adicioná-los à fila (pode vários)">🗐 Copiar Tile</button>
-              <button class="btn-tool tool-btn" data-tool="sheetpaste" onclick="CHR.setTool('sheetpaste')" title="Clique na folha para colar o tile selecionado na fila">📥 Colar Tile</button>
-              <button class="btn-tool" onclick="CHR.clearTileQueue()" title="Limpa a fila de tiles copiados" style="font-size:10px;padding:3px 6px">🗑 Fila</button>
+              <span style="color:#666;margin:0 4px;font-size:14px;user-select:none">|</span>
+              <button class="btn-tool tool-btn" data-tool="sheetcopy" onclick="CHR.setTool('sheetcopy')" title="Clique nos tiles da folha para adicioná-los à fila (pode vários)" style="height:26px;padding:0 8px;font-size:11px;line-height:1;box-sizing:border-box;display:inline-flex;align-items:center">🗐 Copiar Tile</button>
+              <button class="btn-tool tool-btn" data-tool="sheetpaste" onclick="CHR.setTool('sheetpaste')" title="Clique na folha para colar o tile selecionado na fila" style="height:26px;padding:0 8px;font-size:11px;line-height:1;box-sizing:border-box;display:inline-flex;align-items:center">📥 Colar Tile</button>
+              <button class="btn-tool tool-btn" data-tool="sheetclear" onclick="CHR.setTool('sheetclear')" title="Clique no tile da folha para zerar (16 bytes)" style="height:26px;padding:0 8px;font-size:11px;line-height:1;box-sizing:border-box;display:inline-flex;align-items:center">🗑 Clear Tile</button>
+              <button class="btn-tool" onclick="CHR.clearTileQueue()" title="Limpa a fila de tiles copiados" style="height:26px;padding:0 8px;font-size:11px;line-height:1;box-sizing:border-box;display:inline-flex;align-items:center">🗑 Fila</button>
               <span style="font-size:10px;color:#888;margin-left:4px" id="lblSheetClipboard">Fila: 0 tiles</span>
               <div style="width:1px;height:18px;background:#444;margin:0 6px"></div>
               <button class="btn-tool" onclick="CHR.undo()" style="background:#555;color:#fff">↩️ Undo</button>
-              <span style="font-size:10px;color:#888;margin-left:6px" id="lblClipboard">Clipboard: vazio</span>
             </div>
 
             <!-- FILA DE TILES (copiar/colar) - mesma ideia do seletor rápido -->
@@ -164,7 +177,7 @@ const CHR = (() => {
             <div style="display:flex;flex:1;min-height:0;overflow:hidden">
               <div style="flex:1;padding:12px;overflow:auto;display:flex;flex-direction:column;gap:8px;background:#111">
                 <canvas id="imgImportCanvas" width="512" height="384" style="max-width:100%;background:#000;border:1px solid #444;image-rendering:pixelated;cursor:crosshair;display:block;margin:0 auto"></canvas>
-                <div style="font-size:10px;color:#666;text-align:center">Arraste na imagem para definir o crop · a grade segue o tamanho em tiles</div>
+                <div style="font-size:10px;color:#666;text-align:center">Arraste para selecionar · alças amarelas redimensionam · Crop descarta o resto · grade na imagem atual</div>
               </div>
               <div style="width:280px;min-width:280px;border-left:1px solid #333;padding:12px;overflow:auto;display:flex;flex-direction:column;gap:12px;background:#181818">
                 <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
@@ -173,8 +186,25 @@ const CHR = (() => {
                   <div id="imgImportFileInfo" style="font-size:10px;color:#888;margin-top:8px;line-height:1.4">Nenhuma imagem</div>
                 </div>
                 <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
+                  <h4 style="font-size:11px;color:#4ec9b0;margin:0 0 8px">Seleção / Crop</h4>
+                  <div style="font-size:10px;color:#666;line-height:1.4;margin-bottom:8px">
+                    1. Arraste na imagem para selecionar<br>
+                    2. Arraste as <b style="color:#ffcc00">alças</b> para redimensionar<br>
+                    3. <b>Crop</b> descarta o resto (fica só a seleção)
+                  </div>
+                  <div style="display:grid;grid-template-columns:40px 1fr 40px 1fr;gap:4px 6px;align-items:center;font-size:10px;color:#888">
+                    <span>X</span><input id="imgImportCropX" type="number" min="0" value="0" onchange="CHR.imgImportSetCropFromInputs()" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px">
+                    <span>Y</span><input id="imgImportCropY" type="number" min="0" value="0" onchange="CHR.imgImportSetCropFromInputs()" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px">
+                    <span>W</span><input id="imgImportCropW" type="number" min="1" value="16" onchange="CHR.imgImportSetCropFromInputs()" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px">
+                    <span>H</span><input id="imgImportCropH" type="number" min="1" value="16" onchange="CHR.imgImportSetCropFromInputs()" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px">
+                  </div>
+                  <button class="btn-tool" onclick="CHR.imgImportApplyCrop()" style="width:100%;margin-top:8px;background:#e67e22;color:#fff;font-weight:bold">✂ Crop (descartar resto)</button>
+                  <button class="btn-tool" onclick="CHR.imgImportClearSelection()" style="width:100%;margin-top:4px;font-size:10px">Limpar seleção</button>
+                  <button class="btn-tool" onclick="CHR.imgImportSelectAll()" style="width:100%;margin-top:4px;font-size:10px">Selecionar tudo</button>
+                </div>
+                <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
                   <h4 style="font-size:11px;color:#7dcea0;margin:0 0 8px">Grade em tiles</h4>
-                  <div style="font-size:10px;color:#666;margin-bottom:6px">1 tile = 8×8 px. Ex.: 2×2 → grade 16×16 px sobre o crop.</div>
+                  <div style="font-size:10px;color:#666;margin-bottom:6px">Sobre a <b>imagem atual</b> (após crop). 1 tile = 8×8 px na saída.</div>
                   <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
                     <label style="font-size:10px;color:#888;width:40px">Cols</label>
                     <input id="imgImportGridW" type="number" min="1" max="32" value="2" onchange="CHR.imgImportSetGrid()" style="width:60px;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:4px;font-size:12px">
@@ -185,26 +215,11 @@ const CHR = (() => {
                   <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;cursor:pointer">
                     <input type="checkbox" id="imgImportShowGrid" checked onchange="CHR.imgImportRedraw()"> Mostrar grade
                   </label>
-                  <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;cursor:pointer;margin-top:4px">
-                    <input type="checkbox" id="imgImportSnapCrop" checked onchange="CHR.imgImportSnapCropToGrid()"> Snap crop à grade
-                  </label>
                 </div>
                 <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
-                  <h4 style="font-size:11px;color:#4ec9b0;margin:0 0 8px">Crop (px na imagem)</h4>
-                  <div style="display:grid;grid-template-columns:40px 1fr 40px 1fr;gap:4px 6px;align-items:center;font-size:10px;color:#888">
-                    <span>X</span><input id="imgImportCropX" type="number" min="0" value="0" onchange="CHR.imgImportSetCropFromInputs()" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px">
-                    <span>Y</span><input id="imgImportCropY" type="number" min="0" value="0" onchange="CHR.imgImportSetCropFromInputs()" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px">
-                    <span>W</span><input id="imgImportCropW" type="number" min="1" value="16" onchange="CHR.imgImportSetCropFromInputs()" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px">
-                    <span>H</span><input id="imgImportCropH" type="number" min="1" value="16" onchange="CHR.imgImportSetCropFromInputs()" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px">
-                  </div>
-                  <button class="btn-tool" onclick="CHR.imgImportFitGridCrop()" style="width:100%;margin-top:8px;font-size:10px">Ajustar crop = grade (N×8 px)</button>
-                  <button class="btn-tool" onclick="CHR.imgImportResetCrop()" style="width:100%;margin-top:4px;font-size:10px">Crop = imagem inteira</button>
-                </div>
-                <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
-                  <h4 style="font-size:11px;color:#e67e22;margin:0 0 8px">Saída (resize)</h4>
+                  <h4 style="font-size:11px;color:#e67e22;margin:0 0 8px">Saída</h4>
                   <div style="font-size:10px;color:#888;line-height:1.5" id="imgImportOutInfo">—</div>
-                  <div style="font-size:10px;color:#666;margin-top:6px">A saída será <b style="color:#e67e22" id="imgImportOutPx">16×16</b> px
-                    (= grid × 8), independentemente do tamanho do crop na foto — nearest neighbor.</div>
+                  <div style="font-size:10px;color:#666;margin-top:6px">A imagem atual é redimensionada (nearest) para <b style="color:#e67e22" id="imgImportOutPx">16×16</b> px (= grade × 8).</div>
                 </div>
                 <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px">
                   <button class="btn-tool" onclick="CHR.imgImportPreviewOutput()" style="background:#8e44ad;color:#fff;padding:8px">👁 Preview (quantize NES)</button>
@@ -216,6 +231,49 @@ const CHR = (() => {
             <div id="imgImportPreviewBar" style="display:none;padding:10px;border-top:1px solid #333;background:#0a0a0a;align-items:center;gap:12px">
               <span style="font-size:10px;color:#888">Preview saída:</span>
               <canvas id="imgImportOutCanvas" width="16" height="16" style="image-rendering:pixelated;border:1px solid #555;background:#222"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- MODAL: Import metatiles de outro .nms -->
+        <div id="nmsImportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:10000;align-items:center;justify-content:center">
+          <div style="background:#1e1e1e;border:1px solid #444;border-radius:10px;width:min(980px,96vw);max-height:92vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.6)">
+            <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #333;flex-wrap:wrap">
+              <h3 style="margin:0;font-size:14px;color:#c39bd3">📦 Import metatiles (.nms)</h3>
+              <span style="font-size:11px;color:#888">.nms (tiles+metatiles) ou .chr bruto → fila de colar</span>
+              <button class="btn-tool" onclick="CHR.closeNmsImport()" style="margin-left:auto;background:#c0392b;color:#fff">✕ Fechar</button>
+            </div>
+            <div style="display:flex;flex:1;min-height:0;overflow:hidden">
+              <div style="flex:1;padding:12px;overflow:auto;display:flex;flex-direction:column;gap:8px;background:#111">
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                  <button class="btn-tool" onclick="document.getElementById('importNms_internal').click()" style="background:#2980b9;color:#fff">📂 Abrir .nms / .chr</button>
+                  <span id="nmsImportFileInfo" style="font-size:11px;color:#888">Nenhum arquivo</span>
+                  <select id="nmsImportBank" onchange="CHR.nmsImportSetBank()" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px;margin-left:auto">
+                    <option value="0">PT0 $0000</option>
+                    <option value="1">PT1 $1000</option>
+                  </select>
+                </div>
+                <canvas id="nmsImportSheet" width="512" height="512" style="border:2px solid #444;background:#000;image-rendering:pixelated;cursor:crosshair;display:block;max-width:100%"></canvas>
+                <div style="font-size:10px;color:#666">Clique nos tiles para adicionar/remover da seleção (borda amarela = selecionado)</div>
+              </div>
+              <div style="width:300px;min-width:300px;border-left:1px solid #333;padding:12px;overflow:auto;display:flex;flex-direction:column;gap:12px;background:#181818">
+                <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;flex:1;display:flex;flex-direction:column;min-height:0">
+                  <h4 style="font-size:11px;color:#7dcea0;margin:0 0 8px">Metatiles do arquivo</h4>
+                  <div id="nmsImportMtList" style="flex:1;overflow:auto;display:flex;flex-direction:column;gap:6px;min-height:120px">
+                    <div style="font-size:10px;color:#555">Abra um .nms para listar</div>
+                  </div>
+                </div>
+                <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
+                  <h4 style="font-size:11px;color:#ffcc00;margin:0 0 6px">Seleção <span id="nmsImportPickCount" style="color:#888">(0)</span></h4>
+                  <div id="nmsImportPickPreview" style="display:flex;flex-wrap:wrap;gap:4px;max-height:100px;overflow:auto;min-height:36px"></div>
+                  <button class="btn-tool" onclick="CHR.nmsImportClearPicked()" style="width:100%;margin-top:8px;font-size:10px">Limpar seleção</button>
+                </div>
+                <div style="font-size:9px;color:#666;line-height:1.4">
+                  Clique num metatile da lista para selecionar todos os tiles dele (e marcar layout para remontar).<br>
+                  Ou escolha tiles soltos no grid.
+                </div>
+                <button class="btn-tool" onclick="CHR.nmsImportConfirm()" style="background:#27ae60;color:#fff;padding:10px;font-weight:bold">→ Enfileirar e colar</button>
+              </div>
             </div>
           </div>
         </div>
@@ -249,7 +307,25 @@ const CHR = (() => {
       return buffer.slice(chrStart, chrStart + (chrBlocks * 8192));
   }
 
-  function populateSelects(){ const cSel=document.getElementById('tileColsSelect'), rSel=document.getElementById('tileRowsSelect'); if(!cSel||!rSel) return; cSel.innerHTML=""; rSel.innerHTML=""; for(let i=1;i<=8;i++){ let o=document.createElement('option'); o.value=i; o.textContent=i+` col`; cSel.appendChild(o); let o2=document.createElement('option'); o2.value=i; o2.textContent=i+` lin`; rSel.appendChild(o2); } cSel.value=gridW; rSel.value=gridH; cSel.onchange=()=>setGrid(parseInt(cSel.value),gridH); rSel.onchange=()=>setGrid(gridW,parseInt(rSel.value)); }
+  function populateSelects(){
+    const cSel=document.getElementById('tileColsSelect'), rSel=document.getElementById('tileRowsSelect');
+    if(!cSel||!rSel) return;
+    cSel.innerHTML=""; rSel.innerHTML="";
+    for(let i=1;i<=8;i++){
+      let o=document.createElement('option'); o.value=i; o.textContent=i+` col`; cSel.appendChild(o);
+      let o2=document.createElement('option'); o2.value=i; o2.textContent=i+` lin`; rSel.appendChild(o2);
+    }
+    cSel.value=gridW; rSel.value=gridH;
+    // redimensionamento só via botão applyGridResize — selects não aplicam sozinhos
+  }
+  function applyGridResize(){
+    const cSel=document.getElementById('tileColsSelect'), rSel=document.getElementById('tileRowsSelect');
+    const w = Math.max(1, Math.min(8, parseInt(cSel?.value, 10) || gridW));
+    const h = Math.max(1, Math.min(8, parseInt(rSel?.value, 10) || gridH));
+    setGrid(w, h);
+    if(typeof Project !== 'undefined' && Project.status)
+      Project.status(`Metatile redimensionado para ${w}×${h}`);
+  }
   function isSpriteBank(bankIdx){ return bankIdx%2===0; } // pg0 (par) = sprites, pg1 (ímpar) = backgrounds/splash
   function updateBankSelect(){ const sel=document.getElementById('bankSelect'); if(!sel) return; sel.innerHTML=""; const total=Math.max(2,Math.ceil(chrBuffer.length/4096)); for(let i=0;i<total;i++){ let o=document.createElement('option'); o.value=i; o.textContent=`${i%2===0?'PT0 $0000':'PT1 $1000'} (${isSpriteBank(i)?'sprites':'backgrounds'})`; sel.appendChild(o); } sel.value=currentBank; sel.onchange=e=>{ currentBank=parseInt(e.target.value); ensurePaletteMatchesBank(); renderAll(); updateLabels(); initPalUI(); updateMetatileSelect(); }; }
   function ensurePaletteMatchesBank(){
@@ -310,8 +386,104 @@ const CHR = (() => {
   function bresenham(x0,y0,x1,y1){ const pts=[]; let dx=Math.abs(x1-x0), dy=Math.abs(y1-y0); let sx=x0<x1?1:-1, sy=y0<y1?1:-1, err=dx-dy; while(true){ pts.push({x:x0,y:y0}); if(x0===x1&&y0===y1) break; let e2=2*err; if(e2>-dy){ err-=dy; x0+=sx; } if(e2<dx){ err+=dx; y0+=sy; } } return pts; }
   function getRectPoints(x0,y0,x1,y1){ const pts=[]; const minX=Math.min(x0,x1), maxX=Math.max(x0,x1), minY=Math.min(y0,y1), maxY=Math.max(y0,y1); for(let x=minX;x<=maxX;x++){ pts.push({x,y:minY}); pts.push({x,y:maxY}); } for(let y=minY+1;y<=maxY-1;y++){ pts.push({x:minX,y}); pts.push({x:maxX,y}); } return pts; }
   function getCirclePoints(cx,cy,r){ const pts=[]; let x=r, y=0, err=0; while(x>=y){ pts.push({x:cx+x,y:cy+y},{x:cx+y,y:cy+x},{x:cx-y,y:cy+x},{x:cx-x,y:cy+y},{x:cx-x,y:cy-y},{x:cx-y,y:cy-x},{x:cx+y,y:cy-x},{x:cx+x,y:cy-y}); y++; if(err<=0){ err+=2*y+1; } if(err>0){ x--; err-=2*x+1; } } return pts; }
-  function getMatrix(){ const W=gridW*8,H=gridH*8,M=Array.from({length:H},()=>Array(W).fill(0)); for(let gy=0;gy<gridH;gy++) for(let gx=0;gx<gridW;gx++){ const ti=selectedTiles[gy*gridW+gx], off=ti*16; if(off>=chrBuffer.length) continue; for(let py=0;py<8;py++){ const p0=chrBuffer[off+py], p1=chrBuffer[off+py+8]; for(let px=0;px<8;px++){ const sh=7-px; M[gy*8+py][gx*8+px]=((p1>>sh&1)<<1)|(p0>>sh&1); } } } return M; }
-  function setMatrix(M){ for(let gy=0;gy<gridH;gy++) for(let gx=0;gx<gridW;gx++){ const ti=selectedTiles[gy*gridW+gx], off=ti*16; if(off>=chrBuffer.length) continue; for(let py=0;py<8;py++){ let a=0,b=0; for(let px=0;px<8;px++){ const c=M[gy*8+py][gx*8+px], sh=7-px; if(c&1) a|=1<<sh; if(c>>1&1) b|=1<<sh; } chrBuffer[off+py]=a; chrBuffer[off+py+8]=b; } } renderAll(); }
+  function getMatrix(){
+    // Matriz de cores 0–3 do grupo atual (pixels, sem aplicar flip de célula do metatile)
+    const W = gridW * 8, H = gridH * 8;
+    const M = Array.from({ length: H }, () => Array(W).fill(0));
+    for(let gy=0; gy<gridH; gy++){
+      for(let gx=0; gx<gridW; gx++){
+        const ti = selectedTiles[gy * gridW + gx];
+        if(ti == null) continue;
+        const off = ti * 16;
+        if(off + 16 > chrBuffer.length) continue;
+        for(let py=0; py<8; py++){
+          const p0 = chrBuffer[off + py], p1 = chrBuffer[off + py + 8];
+          for(let px=0; px<8; px++){
+            const sh = 7 - px;
+            M[gy * 8 + py][gx * 8 + px] = ((p1 >> sh) & 1) << 1 | ((p0 >> sh) & 1);
+          }
+        }
+      }
+    }
+    return M;
+  }
+  function setMatrix(M){
+    // Grava matriz de pixels de volta nos tiles de selectedTiles (usa gridW/gridH atuais)
+    if(!M || !M.length || !M[0] || !M[0].length) return;
+    for(let gy=0; gy<gridH; gy++){
+      for(let gx=0; gx<gridW; gx++){
+        const ti = selectedTiles[gy * gridW + gx];
+        if(ti == null) continue;
+        const off = ti * 16;
+        if(off + 16 > chrBuffer.length) continue;
+        for(let py=0; py<8; py++){
+          let a = 0, b = 0;
+          const row = M[gy * 8 + py];
+          if(!row) continue;
+          for(let px=0; px<8; px++){
+            const c = (row[gx * 8 + px] || 0) & 3;
+            const sh = 7 - px;
+            if(c & 1) a |= (1 << sh);
+            if(c & 2) b |= (1 << sh);
+          }
+          chrBuffer[off + py] = a;
+          chrBuffer[off + py + 8] = b;
+        }
+      }
+    }
+    renderAll();
+  }
+  /** Espelha o grupo na horizontal — só pixels no CHR (não reordena selectedTiles). */
+  function flipGroupH(){
+    if(!selectedTiles.length) return;
+    pushUndo();
+    const M = getMatrix();
+    for(let y=0; y<M.length; y++) M[y].reverse();
+    setMatrix(M);
+    updateLabels();
+  }
+  /** Espelha o grupo na vertical — só pixels no CHR. */
+  function flipGroupV(){
+    if(!selectedTiles.length) return;
+    pushUndo();
+    const M = getMatrix();
+    M.reverse();
+    setMatrix(M);
+    updateLabels();
+  }
+  /**
+   * Rotação 90° horária do grupo de pixels.
+   * Corrige bug: gridW/gridH devem ser em TILES (não em pixels).
+   * Só reescreve o CHR; a lista selectedTiles mantém os mesmos índices em ordem.
+   */
+  function rotateGroupCW(){
+    if(!selectedTiles.length) return;
+    pushUndo();
+    const M = getMatrix();
+    if(!M.length || !M[0] || !M[0].length) return;
+    const ph = M.length, pw = M[0].length;
+    const N = Array.from({ length: pw }, () => Array(ph).fill(0));
+    for(let y=0; y<ph; y++)
+      for(let x=0; x<pw; x++)
+        N[x][ph - 1 - y] = M[y][x];
+
+    const oldW = gridW, oldH = gridH;
+    gridW = oldH;
+    gridH = oldW;
+    // selectedTiles / flips: mesma quantidade, ordem de slots inalterada
+    ensureFlipsLen();
+    activeSlotIdx = Math.min(Math.max(0, activeSlotIdx), selectedTiles.length - 1);
+    if(zoomCanvas){
+      zoomCanvas.width = gridW * 8 * 16;
+      zoomCanvas.height = gridH * 8 * 16;
+    }
+    const cSel = document.getElementById('tileColsSelect');
+    const rSel = document.getElementById('tileRowsSelect');
+    if(cSel) cSel.value = String(gridW);
+    if(rSel) rSel.value = String(gridH);
+    setMatrix(N);
+    updateLabels();
+  }
 
   function pushUndo(){ undoStack.push(chrBuffer.slice()); if(undoStack.length>60) undoStack.shift(); }
   function updateLabels(){
@@ -361,7 +533,18 @@ const CHR = (() => {
     });
   }
 
-  function setGrid(w,h){ gridW=w; gridH=h; const first=selectedTiles[0]||currentBank*256; selectedTiles=[]; selectedFlips=[]; for(let i=0;i<w*h;i++){ selectedTiles.push(first+i); selectedFlips.push(0); } activeSlotIdx=0; if(zoomCanvas){ zoomCanvas.width=w*8*16; zoomCanvas.height=h*8*16; } renderAll(); updateLabels(); }
+  function setGrid(w,h){
+    gridW=w; gridH=h;
+    const first=selectedTiles[0]||currentBank*256;
+    selectedTiles=[]; selectedFlips=[];
+    for(let i=0;i<w*h;i++){ selectedTiles.push(first+i); selectedFlips.push(0); }
+    activeSlotIdx=0;
+    if(zoomCanvas){ zoomCanvas.width=w*8*16; zoomCanvas.height=h*8*16; }
+    const cSel=document.getElementById('tileColsSelect'), rSel=document.getElementById('tileRowsSelect');
+    if(cSel) cSel.value=String(w);
+    if(rSel) rSel.value=String(h);
+    renderAll(); updateLabels();
+  }
   function renderZoom(){ if(!zoomCtx) return; const sizeW=gridW*8, sizeH=gridH*8; zoomCanvas.width=sizeW*16; zoomCanvas.height=sizeH*16; zoomCtx.fillStyle="#000"; zoomCtx.fillRect(0,0,zoomCanvas.width,zoomCanvas.height); for(let gy=0;gy<gridH;gy++) for(let gx=0;gx<gridW;gx++){ const ti=selectedTiles[gy*gridW+gx]; if(ti!==undefined) drawTile(zoomCtx, ti, gx*8*16, gy*8*16, 16, selectedFlips[gy*gridW+gx]|0); } if(document.getElementById('chkMetatileGrid')?.checked && (gridW>1 || gridH>1)){ zoomCtx.save(); zoomCtx.strokeStyle="rgba(255,255,0,0.6)"; zoomCtx.lineWidth=1; for(let gx=1; gx<gridW; gx++){ zoomCtx.beginPath(); zoomCtx.moveTo(gx*8*16+0.5, 0); zoomCtx.lineTo(gx*8*16+0.5, zoomCanvas.height); zoomCtx.stroke(); } for(let gy=1; gy<gridH; gy++){ zoomCtx.beginPath(); zoomCtx.moveTo(0, gy*8*16+0.5); zoomCtx.lineTo(zoomCanvas.width, gy*8*16+0.5); zoomCtx.stroke(); } zoomCtx.restore(); } if((tool==='line'||tool==='rect'||tool==='circle')&&toolStart&&toolPreviewEnd){ let pts=[]; if(tool==='line') pts=bresenham(toolStart.x,toolStart.y,toolPreviewEnd.x,toolPreviewEnd.y); else if(tool==='rect') pts=getRectPoints(toolStart.x,toolStart.y,toolPreviewEnd.x,toolPreviewEnd.y); else if(tool==='circle'){ const r=Math.round(Math.hypot(toolPreviewEnd.x-toolStart.x, toolPreviewEnd.y-toolStart.y)); pts=getCirclePoints(toolStart.x,toolStart.y,r); } zoomCtx.fillStyle="rgba(255,255,0,0.9)"; pts.forEach(p=>{ if(p.x>=0&&p.x<sizeW&&p.y>=0&&p.y<sizeH) zoomCtx.fillRect(p.x*16, p.y*16, 16,16); }); } if(copyDrag&&copyDrag.active){ const x0=Math.min(copyDrag.x0, copyDrag.x1), y0=Math.min(copyDrag.y0, copyDrag.y1); const x1=Math.max(copyDrag.x0, copyDrag.x1), y1=Math.max(copyDrag.y0, copyDrag.y1); zoomCtx.fillStyle="rgba(0,150,255,0.25)"; zoomCtx.fillRect(x0*16, y0*16, (x1-x0+1)*16, (y1-y0+1)*16); } if(previewCtx){ previewCanvas.width=sizeW*2; previewCanvas.height=sizeH*2; previewCtx.fillStyle="#000"; previewCtx.fillRect(0,0,previewCanvas.width,previewCanvas.height); for(let gy=0;gy<gridH;gy++) for(let gx=0;gx<gridW;gx++){ const ti=selectedTiles[gy*gridW+gx]; if(ti!==undefined) drawTile(previewCtx, ti, gx*8*2, gy*8*2, 2, selectedFlips[gy*gridW+gx]|0); } } }
   function renderAll(){ renderSheet(); renderZoom(); renderQuickTileSelector(); renderMetatilePreview(); renderTileQueue(); }
 
@@ -413,6 +596,15 @@ const CHR = (() => {
     renderAll();
     if(typeof Project !== 'undefined' && Project.status)
       Project.status(`Colado #${usedIdx+1} → PT${Math.floor(absIdx/256)}:$${(absIdx%256).toString(16).padStart(2,'0').toUpperCase()} · próximo: #${tileQueueActive+1}`);
+  }
+  function clearSheetTile(absIdx){
+    const off = absIdx*16;
+    if(off+16 > chrBuffer.length) return;
+    pushUndo();
+    for(let i=0;i<16;i++) chrBuffer[off+i] = 0;
+    renderAll();
+    if(typeof Project !== 'undefined' && Project.status)
+      Project.status(`Tile PT${Math.floor(absIdx/256)}:$${(absIdx%256).toString(16).padStart(2,'0').toUpperCase()} limpo`);
   }
   function clearTileQueue(){
     tileQueue = [];
@@ -539,6 +731,15 @@ const CHR = (() => {
     e.target.value = '';
   }
 
+  function paintZoomPixel(px, py, colorSlot){
+    const gx=Math.floor(px/8), gy=Math.floor(py/8), slot=gy*gridW+gx, ti=selectedTiles[slot];
+    if(ti===undefined) return;
+    const lx=px%8, ly=py%8, off=ti*16, sh=7-lx;
+    const c = colorSlot & 3;
+    if(c & 1) chrBuffer[off+ly] |= (1<<sh); else chrBuffer[off+ly] &= ~(1<<sh);
+    if(c & 2) chrBuffer[off+ly+8] |= (1<<sh); else chrBuffer[off+ly+8] &= ~(1<<sh);
+    renderAll();
+  }
   function attachEvents(){
     // Handler de import .CHR
     const importInput = document.getElementById('importCHR_internal');
@@ -552,19 +753,23 @@ const CHR = (() => {
       const g=currentBank*256+y*16+x;
       if(tool==='sheetcopy'){ copySheetTile(g); return; }
       if(tool==='sheetpaste'){ pasteSheetTile(g); return; }
+      if(tool==='sheetclear'){ clearSheetTile(g); return; }
       selectedTiles[activeSlotIdx]=g; activeSlotIdx=(activeSlotIdx+1)%selectedTiles.length; renderAll(); updateLabels();
     });
     zoomCanvas?.addEventListener('mousedown', e=>{
       const rect=zoomCanvas.getBoundingClientRect(); const px=Math.floor(((e.clientX-rect.left)/rect.width)*zoomCanvas.width/16), py=Math.floor(((e.clientY-rect.top)/rect.height)*zoomCanvas.height/16);
       if(e.button===2){ const gx=Math.floor(px/8), gy=Math.floor(py/8), slot=gy*gridW+gx, ti=selectedTiles[slot]; if(ti!==undefined){ const lx=px%8, ly=py%8, off=ti*16; const p0=chrBuffer[off+ly], p1=chrBuffer[off+ly+8], sh=7-lx; activeSlot=((p1>>sh&1)<<1)|(p0>>sh&1); initPalUI(); } return; }
-      if(tool==='pen'){ isDrawing=true; const gx=Math.floor(px/8), gy=Math.floor(py/8), slot=gy*gridW+gx, ti=selectedTiles[slot]; if(ti===undefined) return; const lx=px%8, ly=py%8, off=ti*16; const sh=7-lx; if(activeSlot&1) chrBuffer[off+ly]|=1<<sh; else chrBuffer[off+ly]&=~(1<<sh); if(activeSlot>>1&1) chrBuffer[off+ly+8]|=1<<sh; else chrBuffer[off+ly+8]&=~(1<<sh); renderAll(); }
+      if(tool==='pen' || tool==='erase'){
+        isDrawing=true;
+        paintZoomPixel(px, py, tool==='erase' ? 0 : activeSlot);
+      }
       else if(['line','rect','circle'].includes(tool)){ if(!toolStart){ toolStart={x:px,y:py}; } else { if(tool==='line') doLine(toolStart.x,toolStart.y,px,py); else if(tool==='rect') doRect(toolStart.x,toolStart.y,px,py); else if(tool==='circle') doCircle(toolStart.x,toolStart.y,px,py); toolStart=null; toolPreviewEnd=null; } }
       else if(tool==='fill') doFill(px,py);
       else if(tool==='copy') copyDrag={x0:px,y0:py,x1:px,y1:py,active:true};
       else if(tool==='paste') doPaste(px,py);
     });
     zoomCanvas?.addEventListener('contextmenu', e=>e.preventDefault());
-    zoomCanvas?.addEventListener('mousemove', e=>{ const rect=zoomCanvas.getBoundingClientRect(); const px=Math.floor(((e.clientX-rect.left)/rect.width)*zoomCanvas.width/16), py=Math.floor(((e.clientY-rect.top)/rect.height)*zoomCanvas.height/16); if(tool==='pen'&&isDrawing&&e.buttons===1){ const gx=Math.floor(px/8), gy=Math.floor(py/8), slot=gy*gridW+gx, ti=selectedTiles[slot]; if(ti===undefined) return; const lx=px%8, ly=py%8, off=ti*16; const sh=7-lx; if(activeSlot&1) chrBuffer[off+ly]|=1<<sh; else chrBuffer[off+ly]&=~(1<<sh); if(activeSlot>>1&1) chrBuffer[off+ly+8]|=1<<sh; else chrBuffer[off+ly+8]&=~(1<<sh); renderAll(); } else if(['line','rect','circle'].includes(tool)&&toolStart){ toolPreviewEnd={x:px,y:py}; renderZoom(); } else if(tool==='copy'&&copyDrag&&copyDrag.active){ copyDrag.x1=px; copyDrag.y1=py; renderZoom(); } });
+    zoomCanvas?.addEventListener('mousemove', e=>{ const rect=zoomCanvas.getBoundingClientRect(); const px=Math.floor(((e.clientX-rect.left)/rect.width)*zoomCanvas.width/16), py=Math.floor(((e.clientY-rect.top)/rect.height)*zoomCanvas.height/16); if((tool==='pen'||tool==='erase')&&isDrawing&&e.buttons===1){ paintZoomPixel(px, py, tool==='erase' ? 0 : activeSlot); } else if(['line','rect','circle'].includes(tool)&&toolStart){ toolPreviewEnd={x:px,y:py}; renderZoom(); } else if(tool==='copy'&&copyDrag&&copyDrag.active){ copyDrag.x1=px; copyDrag.y1=py; renderZoom(); } });
     window.addEventListener('mouseup', ()=>{ isDrawing=false; if(copyDrag&&copyDrag.active){ copyDrag.active=false; doCopy(copyDrag.x0, copyDrag.y0, copyDrag.x1, copyDrag.y1); renderZoom(); copyDrag=null; } });
   }
 
@@ -646,6 +851,7 @@ const CHR = (() => {
     if(status){
       if(t==='sheetcopy') status.textContent = 'Copiar Tile: clique na folha para ADICIONAR à fila';
       else if(t==='sheetpaste') status.textContent = 'Colar Tile: clique na folha para colar o item selecionado da fila';
+      else if(t==='sheetclear') status.textContent = 'Clear Tile: clique na folha para ZERAR o tile';
       else status.textContent = `Tool: ${t}`;
     }
     renderAll();
@@ -695,10 +901,16 @@ const CHR = (() => {
     }
     imgImportAttachCanvasEvents();
     imgImportRedraw();
+    imgImportUpdateOutInfo();
   }
   function closeImageImport(){
     const modal = document.getElementById('imgImportModal');
     if(modal) modal.style.display = 'none';
+  }
+  function imgImportNaturalSize(){
+    if(!imgImport.img) return {w:0,h:0};
+    if(imgImport.img.naturalWidth) return {w: imgImport.img.naturalWidth, h: imgImport.img.naturalHeight};
+    return {w: imgImport.img.width, h: imgImport.img.height};
   }
   function handleImageImportFile(e){
     const file = e.target.files && e.target.files[0];
@@ -708,9 +920,7 @@ const CHR = (() => {
     img.onload = ()=>{
       URL.revokeObjectURL(url);
       imgImport.img = img;
-      imgImport.cropX = 0; imgImport.cropY = 0;
-      imgImport.cropW = img.naturalWidth; imgImport.cropH = img.naturalHeight;
-      // grade default: tenta 2x2 tiles se a imagem for pequena, senão ~1/8
+      imgImport.sel = null;
       imgImport.gridTW = Math.max(1, Math.min(16, Math.round(img.naturalWidth/32) || 2));
       imgImport.gridTH = Math.max(1, Math.min(16, Math.round(img.naturalHeight/32) || 2));
       const gw = document.getElementById('imgImportGridW');
@@ -719,7 +929,7 @@ const CHR = (() => {
       if(gh) gh.value = imgImport.gridTH;
       const info = document.getElementById('imgImportFileInfo');
       if(info) info.innerHTML = `<b style="color:#fff">${file.name}</b><br>${img.naturalWidth}×${img.naturalHeight} px`;
-      imgImportSyncCropInputs();
+      imgImportSyncSelInputs();
       imgImportUpdateOutInfo();
       imgImportRedraw();
     };
@@ -732,91 +942,125 @@ const CHR = (() => {
     const gh = parseInt(document.getElementById('imgImportGridH')?.value, 10) || 1;
     imgImport.gridTW = Math.max(1, Math.min(32, gw));
     imgImport.gridTH = Math.max(1, Math.min(32, gh));
-    if(document.getElementById('imgImportSnapCrop')?.checked) imgImportSnapCropToGrid();
     imgImportUpdateOutInfo();
     imgImportRedraw();
   }
-  function imgImportFitGridCrop(){
-    if(!imgImport.img) return;
-    // crop vira exatamente gridTW*8 × gridTH*8 a partir do canto atual do crop
-    const tw = imgImport.gridTW * 8, th = imgImport.gridTH * 8;
-    imgImport.cropW = Math.min(tw, imgImport.img.naturalWidth - imgImport.cropX);
-    imgImport.cropH = Math.min(th, imgImport.img.naturalHeight - imgImport.cropY);
-    // se a imagem for maior, força tamanho exato da grade
-    if(imgImport.img.naturalWidth >= tw && imgImport.img.naturalHeight >= th){
-      imgImport.cropW = tw;
-      imgImport.cropH = th;
+  function imgImportClearSelection(){
+    imgImport.sel = null;
+    imgImportSyncSelInputs();
+    imgImportRedraw();
+  }
+  function imgImportSelectAll(){
+    const sz = imgImportNaturalSize();
+    if(!sz.w) return;
+    imgImport.sel = { x:0, y:0, w:sz.w, h:sz.h };
+    imgImportSyncSelInputs();
+    imgImportRedraw();
+  }
+  /** Descarta tudo fora da seleção: a imagem atual vira só o retângulo. */
+  function imgImportApplyCrop(){
+    if(!imgImport.img){ alert('Carregue uma imagem primeiro'); return; }
+    if(!imgImport.sel || imgImport.sel.w < 1 || imgImport.sel.h < 1){
+      alert('Faça uma seleção antes de aplicar o Crop.');
+      return;
     }
-    imgImportSyncCropInputs();
+    const s = imgImport.sel;
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(s.w));
+    c.height = Math.max(1, Math.round(s.h));
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(imgImport.img, s.x, s.y, s.w, s.h, 0, 0, c.width, c.height);
+    // usa o canvas como nova "imagem"
+    imgImport.img = c;
+    imgImport.sel = null;
+    const info = document.getElementById('imgImportFileInfo');
+    if(info){
+      const prev = info.innerHTML.split('<br>')[0] || 'Imagem';
+      info.innerHTML = prev + `<br>${c.width}×${c.height} px <span style="color:#e67e22">(cropado)</span>`;
+    }
+    imgImportSyncSelInputs();
     imgImportUpdateOutInfo();
     imgImportRedraw();
-  }
-  function imgImportSnapCropToGrid(){
-    if(!imgImport.img) return;
-    if(!document.getElementById('imgImportSnapCrop')?.checked) return;
-    const tw = imgImport.gridTW * 8, th = imgImport.gridTH * 8;
-    // arredonda origem e tamanho para múltiplos da célula da grade no espaço da imagem
-    // usa o tamanho de saída (tw/th) como passo se o crop for o "quadro" da grade
-    imgImport.cropX = Math.max(0, Math.round(imgImport.cropX / 8) * 8);
-    imgImport.cropY = Math.max(0, Math.round(imgImport.cropY / 8) * 8);
-    imgImport.cropW = Math.max(8, Math.round(imgImport.cropW / 8) * 8);
-    imgImport.cropH = Math.max(8, Math.round(imgImport.cropH / 8) * 8);
-    const iw = imgImport.img.naturalWidth, ih = imgImport.img.naturalHeight;
-    if(imgImport.cropX + imgImport.cropW > iw) imgImport.cropW = iw - imgImport.cropX;
-    if(imgImport.cropY + imgImport.cropH > ih) imgImport.cropH = ih - imgImport.cropY;
-    imgImportSyncCropInputs();
-    imgImportUpdateOutInfo();
-    imgImportRedraw();
-  }
-  function imgImportResetCrop(){
-    if(!imgImport.img) return;
-    imgImport.cropX = 0; imgImport.cropY = 0;
-    imgImport.cropW = imgImport.img.naturalWidth;
-    imgImport.cropH = imgImport.img.naturalHeight;
-    imgImportSyncCropInputs();
-    imgImportUpdateOutInfo();
-    imgImportRedraw();
+    if(typeof Project !== 'undefined' && Project.status)
+      Project.status(`Crop aplicado: ${c.width}×${c.height} px`);
   }
   function imgImportSetCropFromInputs(){
     if(!imgImport.img) return;
-    const iw = imgImport.img.naturalWidth, ih = imgImport.img.naturalHeight;
-    imgImport.cropX = Math.max(0, Math.min(iw-1, parseInt(document.getElementById('imgImportCropX')?.value,10)||0));
-    imgImport.cropY = Math.max(0, Math.min(ih-1, parseInt(document.getElementById('imgImportCropY')?.value,10)||0));
-    imgImport.cropW = Math.max(1, Math.min(iw - imgImport.cropX, parseInt(document.getElementById('imgImportCropW')?.value,10)||1));
-    imgImport.cropH = Math.max(1, Math.min(ih - imgImport.cropY, parseInt(document.getElementById('imgImportCropH')?.value,10)||1));
-    if(document.getElementById('imgImportSnapCrop')?.checked) imgImportSnapCropToGrid();
-    else { imgImportSyncCropInputs(); imgImportUpdateOutInfo(); imgImportRedraw(); }
+    const sz = imgImportNaturalSize();
+    let x = Math.max(0, parseInt(document.getElementById('imgImportCropX')?.value,10)||0);
+    let y = Math.max(0, parseInt(document.getElementById('imgImportCropY')?.value,10)||0);
+    let w = Math.max(1, parseInt(document.getElementById('imgImportCropW')?.value,10)||1);
+    let h = Math.max(1, parseInt(document.getElementById('imgImportCropH')?.value,10)||1);
+    if(x >= sz.w) x = sz.w - 1;
+    if(y >= sz.h) y = sz.h - 1;
+    if(x + w > sz.w) w = sz.w - x;
+    if(y + h > sz.h) h = sz.h - y;
+    imgImport.sel = { x, y, w, h };
+    imgImportSyncSelInputs();
+    imgImportRedraw();
   }
-  function imgImportSyncCropInputs(){
-    const set = (id,v)=>{ const el=document.getElementById(id); if(el) el.value = v|0; };
-    set('imgImportCropX', imgImport.cropX);
-    set('imgImportCropY', imgImport.cropY);
-    set('imgImportCropW', imgImport.cropW);
-    set('imgImportCropH', imgImport.cropH);
+  function imgImportSyncSelInputs(){
+    const s = imgImport.sel || { x:0, y:0, w:0, h:0 };
+    const set = (id,v)=>{ const el=document.getElementById(id); if(el) el.value = Math.round(v); };
+    set('imgImportCropX', s.x); set('imgImportCropY', s.y);
+    set('imgImportCropW', s.w); set('imgImportCropH', s.h);
   }
   function imgImportUpdateOutInfo(){
     const outW = imgImport.gridTW * 8;
     const outH = imgImport.gridTH * 8;
+    const sz = imgImportNaturalSize();
     const el = document.getElementById('imgImportOutInfo');
     const px = document.getElementById('imgImportOutPx');
     if(px) px.textContent = `${outW}×${outH}`;
     if(el){
-      el.innerHTML = `Grade: <b style="color:#7dcea0">${imgImport.gridTW}×${imgImport.gridTH}</b> tiles<br>`+
-        `Crop fonte: <b style="color:#fff">${imgImport.cropW|0}×${imgImport.cropH|0}</b> px<br>`+
+      el.innerHTML = `Imagem atual: <b style="color:#fff">${sz.w}×${sz.h}</b> px<br>`+
+        `Grade: <b style="color:#7dcea0">${imgImport.gridTW}×${imgImport.gridTH}</b> tiles<br>`+
         `Saída: <b style="color:#e67e22">${outW}×${outH}</b> px (nearest)<br>`+
-        `Tiles gerados depois: <b>${imgImport.gridTW * imgImport.gridTH}</b>`;
+        `Tiles: <b>${imgImport.gridTW * imgImport.gridTH}</b>`;
     }
   }
   function imgImportGetViewMetrics(){
     const canvas = document.getElementById('imgImportCanvas');
     if(!canvas || !imgImport.img) return null;
-    const iw = imgImport.img.naturalWidth, ih = imgImport.img.naturalHeight;
+    const sz = imgImportNaturalSize();
+    const iw = sz.w, ih = sz.h;
+    if(!iw || !ih) return null;
     const pad = 8;
     const maxW = canvas.width - pad*2, maxH = canvas.height - pad*2;
-    const scale = Math.min(maxW/iw, maxH/ih, 4);
+    const scale = Math.min(maxW/iw, maxH/ih, 8);
     const dw = iw * scale, dh = ih * scale;
     const ox = (canvas.width - dw) / 2, oy = (canvas.height - dh) / 2;
     return { scale, ox, oy, dw, dh, iw, ih };
+  }
+  function imgImportHandleSize(m){
+    return Math.max(6, Math.min(12, 8));
+  }
+  function imgImportGetHandles(m){
+    if(!imgImport.sel) return [];
+    const s = imgImport.sel;
+    const x0 = m.ox + s.x * m.scale, y0 = m.oy + s.y * m.scale;
+    const x1 = m.ox + (s.x+s.w) * m.scale, y1 = m.oy + (s.y+s.h) * m.scale;
+    const xm = (x0+x1)/2, ym = (y0+y1)/2;
+    return [
+      { id:'nw', x:x0, y:y0 }, { id:'n', x:xm, y:y0 }, { id:'ne', x:x1, y:y0 },
+      { id:'e', x:x1, y:ym }, { id:'se', x:x1, y:y1 }, { id:'s', x:xm, y:y1 },
+      { id:'sw', x:x0, y:y1 }, { id:'w', x:x0, y:ym }
+    ];
+  }
+  function imgImportHitHandle(mx, my, m){
+    const hs = imgImportHandleSize(m);
+    for(const h of imgImportGetHandles(m)){
+      if(Math.abs(mx - h.x) <= hs && Math.abs(my - h.y) <= hs) return h.id;
+    }
+    return null;
+  }
+  function imgImportHitInsideSel(mx, my, m){
+    if(!imgImport.sel) return false;
+    const s = imgImport.sel;
+    const x0 = m.ox + s.x * m.scale, y0 = m.oy + s.y * m.scale;
+    const x1 = m.ox + (s.x+s.w) * m.scale, y1 = m.oy + (s.y+s.h) * m.scale;
+    return mx >= x0 && mx <= x1 && my >= y0 && my <= y1;
   }
   function imgImportRedraw(){
     const canvas = document.getElementById('imgImportCanvas');
@@ -825,7 +1069,7 @@ const CHR = (() => {
     ctx.fillStyle = '#0a0a0a';
     ctx.fillRect(0,0,canvas.width, canvas.height);
     if(!imgImport.img){
-      ctx.fillStyle = '#444';
+      ctx.fillStyle = '#555';
       ctx.font = '14px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('Escolha uma imagem…', canvas.width/2, canvas.height/2);
@@ -835,82 +1079,141 @@ const CHR = (() => {
     if(!m) return;
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(imgImport.img, m.ox, m.oy, m.dw, m.dh);
-    // escurece fora do crop
-    const cx = m.ox + imgImport.cropX * m.scale;
-    const cy = m.oy + imgImport.cropY * m.scale;
-    const cw = imgImport.cropW * m.scale;
-    const ch = imgImport.cropH * m.scale;
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(m.ox, m.oy, m.dw, Math.max(0, cy - m.oy));
-    ctx.fillRect(m.ox, cy+ch, m.dw, Math.max(0, m.oy+m.dh - (cy+ch)));
-    ctx.fillRect(m.ox, cy, Math.max(0, cx - m.ox), ch);
-    ctx.fillRect(cx+cw, cy, Math.max(0, m.ox+m.dw - (cx+cw)), ch);
-    // borda do crop
-    ctx.strokeStyle = '#ffcc00';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(cx+0.5, cy+0.5, cw, ch);
-    // grade em tiles sobre o crop
+
+    // grade sobre a IMAGEM INTEIRA (atual)
     if(document.getElementById('imgImportShowGrid')?.checked !== false){
       const tw = imgImport.gridTW, th = imgImport.gridTH;
-      ctx.strokeStyle = 'rgba(125,206,160,0.85)';
+      ctx.strokeStyle = 'rgba(125,206,160,0.75)';
       ctx.lineWidth = 1;
       for(let i=0;i<=tw;i++){
-        const x = cx + (cw * i / tw);
-        ctx.beginPath(); ctx.moveTo(x+0.5, cy); ctx.lineTo(x+0.5, cy+ch); ctx.stroke();
+        const x = m.ox + (m.dw * i / tw);
+        ctx.beginPath(); ctx.moveTo(x+0.5, m.oy); ctx.lineTo(x+0.5, m.oy+m.dh); ctx.stroke();
       }
       for(let j=0;j<=th;j++){
-        const y = cy + (ch * j / th);
-        ctx.beginPath(); ctx.moveTo(cx, y+0.5); ctx.lineTo(cx+cw, y+0.5); ctx.stroke();
+        const y = m.oy + (m.dh * j / th);
+        ctx.beginPath(); ctx.moveTo(m.ox, y+0.5); ctx.lineTo(m.ox+m.dw, y+0.5); ctx.stroke();
+      }
+    }
+
+    // seleção
+    if(imgImport.sel){
+      const s = imgImport.sel;
+      const cx = m.ox + s.x * m.scale;
+      const cy = m.oy + s.y * m.scale;
+      const cw = s.w * m.scale;
+      const ch = s.h * m.scale;
+      // escurece fora
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(m.ox, m.oy, m.dw, Math.max(0, cy - m.oy));
+      ctx.fillRect(m.ox, cy+ch, m.dw, Math.max(0, m.oy+m.dh - (cy+ch)));
+      ctx.fillRect(m.ox, cy, Math.max(0, cx - m.ox), ch);
+      ctx.fillRect(cx+cw, cy, Math.max(0, m.ox+m.dw - (cx+cw)), ch);
+      ctx.strokeStyle = '#ffcc00';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(cx+0.5, cy+0.5, cw, ch);
+      // alças
+      const hs = imgImportHandleSize(m);
+      ctx.fillStyle = '#ffcc00';
+      for(const h of imgImportGetHandles(m)){
+        ctx.fillRect(h.x - hs/2, h.y - hs/2, hs, hs);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(h.x - hs/2, h.y - hs/2, hs, hs);
+        ctx.fillStyle = '#ffcc00';
       }
     }
   }
   function imgImportCanvasToImage(mx, my){
     const m = imgImportGetViewMetrics();
     if(!m) return null;
-    const ix = (mx - m.ox) / m.scale;
-    const iy = (my - m.oy) / m.scale;
     return {
-      x: Math.max(0, Math.min(m.iw, ix)),
-      y: Math.max(0, Math.min(m.ih, iy))
+      x: Math.max(0, Math.min(m.iw, (mx - m.ox) / m.scale)),
+      y: Math.max(0, Math.min(m.ih, (my - m.oy) / m.scale))
     };
   }
   function imgImportAttachCanvasEvents(){
     const canvas = document.getElementById('imgImportCanvas');
-    if(!canvas || canvas._imgImpBound) return;
-    canvas._imgImpBound = true;
+    if(!canvas || canvas._imgImpBound2) return;
+    canvas._imgImpBound2 = true;
+    const pos = (e)=>{
+      const r = canvas.getBoundingClientRect();
+      return {
+        mx: (e.clientX - r.left) * (canvas.width / r.width),
+        my: (e.clientY - r.top) * (canvas.height / r.height)
+      };
+    };
     canvas.addEventListener('mousedown', e=>{
       if(!imgImport.img) return;
-      const r = canvas.getBoundingClientRect();
-      const mx = (e.clientX - r.left) * (canvas.width / r.width);
-      const my = (e.clientY - r.top) * (canvas.height / r.height);
+      const { mx, my } = pos(e);
+      const m = imgImportGetViewMetrics();
+      if(!m) return;
+      const handle = imgImportHitHandle(mx, my, m);
+      if(handle){
+        imgImport.drag = { type:'resize', handle, orig: { ...imgImport.sel } };
+        return;
+      }
+      if(imgImportHitInsideSel(mx, my, m)){
+        const p = imgImportCanvasToImage(mx, my);
+        imgImport.drag = { type:'move', x0: p.x, y0: p.y, orig: { ...imgImport.sel } };
+        return;
+      }
       const p = imgImportCanvasToImage(mx, my);
       if(!p) return;
-      imgImport.drag = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
-    });
-    canvas.addEventListener('mousemove', e=>{
-      if(!imgImport.drag || !imgImport.img) return;
-      const r = canvas.getBoundingClientRect();
-      const mx = (e.clientX - r.left) * (canvas.width / r.width);
-      const my = (e.clientY - r.top) * (canvas.height / r.height);
-      const p = imgImportCanvasToImage(mx, my);
-      if(!p) return;
-      imgImport.drag.x1 = p.x; imgImport.drag.y1 = p.y;
-      imgImport.cropX = Math.min(imgImport.drag.x0, imgImport.drag.x1);
-      imgImport.cropY = Math.min(imgImport.drag.y0, imgImport.drag.y1);
-      imgImport.cropW = Math.abs(imgImport.drag.x1 - imgImport.drag.x0) || 1;
-      imgImport.cropH = Math.abs(imgImport.drag.y1 - imgImport.drag.y0) || 1;
-      imgImportSyncCropInputs();
-      imgImportUpdateOutInfo();
+      imgImport.drag = { type:'new', x0: p.x, y0: p.y };
+      imgImport.sel = { x: p.x, y: p.y, w: 1, h: 1 };
+      imgImportSyncSelInputs();
       imgImportRedraw();
     });
-    window.addEventListener('mouseup', ()=>{
+    canvas.addEventListener('mousemove', e=>{
+      if(!imgImport.img) return;
+      const { mx, my } = pos(e);
+      const m = imgImportGetViewMetrics();
+      if(!m) return;
+      // cursor
+      const handle = imgImportHitHandle(mx, my, m);
+      if(handle){
+        const cursors = { n:'ns-resize', s:'ns-resize', e:'ew-resize', w:'ew-resize', nw:'nwse-resize', se:'nwse-resize', ne:'nesw-resize', sw:'nesw-resize' };
+        canvas.style.cursor = cursors[handle] || 'crosshair';
+      } else if(imgImportHitInsideSel(mx, my, m)) canvas.style.cursor = 'move';
+      else canvas.style.cursor = 'crosshair';
+
       if(!imgImport.drag) return;
-      imgImport.drag = null;
-      if(document.getElementById('imgImportSnapCrop')?.checked) imgImportSnapCropToGrid();
-      else { imgImportSyncCropInputs(); imgImportUpdateOutInfo(); }
+      const p = imgImportCanvasToImage(mx, my);
+      if(!p) return;
+      const sz = imgImportNaturalSize();
+
+      if(imgImport.drag.type === 'new'){
+        const x0 = imgImport.drag.x0, y0 = imgImport.drag.y0;
+        imgImport.sel = {
+          x: Math.min(x0, p.x), y: Math.min(y0, p.y),
+          w: Math.max(1, Math.abs(p.x - x0)), h: Math.max(1, Math.abs(p.y - y0))
+        };
+      } else if(imgImport.drag.type === 'move'){
+        const o = imgImport.drag.orig;
+        let nx = o.x + (p.x - imgImport.drag.x0);
+        let ny = o.y + (p.y - imgImport.drag.y0);
+        nx = Math.max(0, Math.min(sz.w - o.w, nx));
+        ny = Math.max(0, Math.min(sz.h - o.h, ny));
+        imgImport.sel = { x: nx, y: ny, w: o.w, h: o.h };
+      } else if(imgImport.drag.type === 'resize'){
+        const o = imgImport.drag.orig;
+        let x0 = o.x, y0 = o.y, x1 = o.x + o.w, y1 = o.y + o.h;
+        const h = imgImport.drag.handle;
+        if(h.includes('n')) y0 = Math.min(p.y, y1 - 1);
+        if(h.includes('s')) y1 = Math.max(p.y, y0 + 1);
+        if(h.includes('w')) x0 = Math.min(p.x, x1 - 1);
+        if(h.includes('e')) x1 = Math.max(p.x, x0 + 1);
+        x0 = Math.max(0, x0); y0 = Math.max(0, y0);
+        x1 = Math.min(sz.w, x1); y1 = Math.min(sz.h, y1);
+        imgImport.sel = { x: x0, y: y0, w: Math.max(1, x1-x0), h: Math.max(1, y1-y0) };
+      }
+      imgImportSyncSelInputs();
+      imgImportRedraw();
     });
+    window.addEventListener('mouseup', ()=>{ imgImport.drag = null; });
   }
-  /** Gera canvas da saída: crop redimensionado para gridTW*8 × gridTH*8 (nearest). */
+
+  /** Saída = imagem ATUAL inteira → gridTW*8 × gridTH*8 nearest. */
   function imgImportBuildOutputCanvas(){
     if(!imgImport.img) return null;
     const outW = imgImport.gridTW * 8;
@@ -919,11 +1222,8 @@ const CHR = (() => {
     c.width = outW; c.height = outH;
     const ctx = c.getContext('2d');
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(
-      imgImport.img,
-      imgImport.cropX, imgImport.cropY, imgImport.cropW, imgImport.cropH,
-      0, 0, outW, outH
-    );
+    const sz = imgImportNaturalSize();
+    ctx.drawImage(imgImport.img, 0, 0, sz.w, sz.h, 0, 0, outW, outH);
     return c;
   }
 
@@ -936,8 +1236,6 @@ const CHR = (() => {
       b: parseInt(h.slice(4,6), 16) || 0
     };
   }
-
-  /** 4 cores RGB da subpalette ativa (índices NES → hex → RGB). */
   function imgImportActivePaletteRgb(){
     const slots = palettes[activePal] || palettes[0];
     return [0,1,2,3].map(i => {
@@ -946,7 +1244,6 @@ const CHR = (() => {
       return imgImportHexToRgb(hex);
     });
   }
-
   function imgImportNearestSlot(r, g, b, paletteRgb){
     let best = 0, bestD = Infinity;
     for(let i=0;i<4;i++){
@@ -957,21 +1254,16 @@ const CHR = (() => {
     }
     return best;
   }
-
-  /** ImageData → matriz de índices 0–3 (subpalette ativa). */
   function imgImportQuantizeToIndices(imageData){
     const { data, width, height } = imageData;
     const pal = imgImportActivePaletteRgb();
     const indices = new Uint8Array(width * height);
     for(let i=0, p=0; i<data.length; i+=4, p++){
-      const a = data[i+3];
-      if(a < 128){ indices[p] = 0; continue; } // transparente → slot 0
+      if(data[i+3] < 128){ indices[p] = 0; continue; }
       indices[p] = imgImportNearestSlot(data[i], data[i+1], data[i+2], pal);
     }
     return { indices, width, height, pal };
   }
-
-  /** 8×8 índices 0–3 → 16 bytes formato NES (2 planes). */
   function imgImportEncodeTile(indices, width, ox, oy){
     const bytes = new Array(16).fill(0);
     for(let y=0;y<8;y++){
@@ -987,8 +1279,6 @@ const CHR = (() => {
     }
     return bytes;
   }
-
-  /** Aplica quantize no canvas e redesenha com as 4 cores NES (preview). */
   function imgImportQuantizeCanvas(srcCanvas){
     const ctx = srcCanvas.getContext('2d');
     const imageData = ctx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
@@ -1005,7 +1295,6 @@ const CHR = (() => {
     octx.putImageData(id, 0, 0);
     return { canvas: out, indices, width, height };
   }
-
   function imgImportPreviewOutput(){
     const raw = imgImportBuildOutputCanvas();
     if(!raw){ alert('Carregue uma imagem primeiro'); return; }
@@ -1019,11 +1308,6 @@ const CHR = (() => {
     oc.getContext('2d').drawImage(q.canvas, 0, 0);
     if(bar) bar.style.display = 'flex';
   }
-
-  /**
-   * Passo 2: quantize → enfileira cada tile 8×8 na fila de copiar/colar.
-   * Ao colar todos os tiles do lote, cria metatile remontando a imagem (ordem da grade).
-   */
   function imgImportConfirmStep1(){
     const raw = imgImportBuildOutputCanvas();
     if(!raw){ alert('Carregue uma imagem primeiro'); return; }
@@ -1031,57 +1315,39 @@ const CHR = (() => {
     const tw = imgImport.gridTW, th = imgImport.gridTH;
     const n = tw * th;
     if(n > TILE_QUEUE_MAX){
-      alert(`A grade ${tw}×${th} gera ${n} tiles, mas a fila cabe no máximo ${TILE_QUEUE_MAX}.\nReduza a grade.`);
+      alert(`A grade ${tw}×${th} gera ${n} tiles (máx. ${TILE_QUEUE_MAX}).`);
       return;
     }
-
-    // enfileira (substitui fila atual deste import — limpa só se vier de import anterior opcional)
-    // não limpamos fila manual do usuário: anexamos
     const batchId = 'imp_' + Date.now();
     const startLen = tileQueue.length;
     if(startLen + n > TILE_QUEUE_MAX){
-      // remove do início até caber
-      const need = startLen + n - TILE_QUEUE_MAX;
-      tileQueue.splice(0, need);
+      tileQueue.splice(0, startLen + n - TILE_QUEUE_MAX);
     }
-
     for(let ty=0; ty<th; ty++){
       for(let tx=0; tx<tw; tx++){
         const layoutIndex = ty * tw + tx;
         const data = imgImportEncodeTile(q.indices, q.width, tx*8, ty*8);
         tileQueue.push({
-          data,
-          sourceIdx: -1,
-          bank: currentBank,
-          local: layoutIndex,
-          layoutIndex,
-          importBatch: batchId,
-          label: `${tx},${ty}`
+          data, sourceIdx: -1, bank: currentBank, local: layoutIndex,
+          layoutIndex, importBatch: batchId, label: `${tx},${ty}`
         });
       }
     }
-    tileQueueActive = Math.max(0, tileQueue.length - n); // aponta pro primeiro do lote
+    tileQueueActive = Math.max(0, tileQueue.length - n);
     sheetClipboardTile = tileQueue[tileQueueActive]?.data || null;
-
     imgImport.pendingMeta = {
-      batchId,
-      w: tw,
-      h: th,
-      slots: new Array(n).fill(null),
-      remaining: n,
+      batchId, w: tw, h: th,
+      slots: new Array(n).fill(null), remaining: n,
       name: `Import ${tw}x${th}`
     };
-
     updateTileQueueLabel();
     renderTileQueue();
     imgImportPreviewOutput();
     closeImageImport();
     setToolImpl('sheetpaste');
-
-    if(typeof Project !== 'undefined' && Project.status){
-      Project.status(`Import: ${n} tiles na fila (${tw}×${th}). Cole com “Colar Tile” na folha CHR.`);
-    }
-    alert(`✓ ${n} tiles quantizados (subpalette ${activePal}) na fila.\n\n1. Clique nas posições da folha CHR para colar (ordem: esquerda→direita, cima→baixo na grade).\n2. Ao colar todos, o metatile “${imgImport.pendingMeta.name}” será criado automaticamente.`);
+    if(typeof Project !== 'undefined' && Project.status)
+      Project.status(`Import: ${n} tiles na fila (${tw}×${th}). Cole na folha CHR.`);
+    alert(`✓ ${n} tiles na fila.\nCole com “Colar Tile”. Ao terminar, o metatile é criado.`);
   }
 
   /** Chamado após cada paste: se o lote de import completou, grava metatile. */
@@ -1098,7 +1364,7 @@ const CHR = (() => {
     }
     // completo
     const tiles = pm.slots.map(x => x|0);
-    const flips = tiles.map(() => 0);
+    const flips = (pm.flips && pm.flips.length === tiles.length) ? [...pm.flips] : tiles.map(() => 0);
     const id = 'mt_' + Date.now();
     const mt = {
       id,
@@ -1130,6 +1396,318 @@ const CHR = (() => {
   }
 
 
+
+  // ========== IMPORT .NMS (tiles + metatiles → fila) ==========
+  function openNmsImport(){
+    const modal = document.getElementById('nmsImportModal');
+    if(!modal) return;
+    modal.style.display = 'flex';
+    const input = document.getElementById('importNms_internal');
+    if(input && !input._bound){
+      input._bound = true;
+      input.onchange = handleNmsImportFile;
+    }
+    nmsImportAttachSheet();
+    nmsImportRedraw();
+  }
+  function closeNmsImport(){
+    const modal = document.getElementById('nmsImportModal');
+    if(modal) modal.style.display = 'none';
+  }
+  function handleNmsImportFile(e){
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+    const nameLower = (file.name || '').toLowerCase();
+    const isChr = nameLower.endsWith('.chr') || nameLower.endsWith('.bin');
+    const reader = new FileReader();
+    if(isChr){
+      reader.onload = (ev)=>{
+        try{
+          const buf = new Uint8Array(ev.target.result);
+          if(buf.length < 16){ alert('Arquivo .chr muito pequeno'); return; }
+          const u8 = new Uint8Array(Math.max(8192, buf.length));
+          u8.set(buf.slice(0, Math.min(buf.length, u8.length)));
+          // se veio só 4KB, espelha em PT1 para ter 2 páginas
+          if(buf.length >= 4096 && buf.length < 8192){
+            u8.set(buf.slice(0, 4096), 4096);
+          }
+          nmsImport.chr = u8;
+          nmsImport.metatiles = [];
+          nmsImport.name = file.name;
+          nmsImport.bank = 0;
+          nmsImport.picked = [];
+          nmsImport.pendingMeta = null;
+          const info = document.getElementById('nmsImportFileInfo');
+          if(info) info.innerHTML = `<b style="color:#fff">${file.name}</b> · ${(buf.length/1024).toFixed(1)} KB CHR · sem metatiles`;
+          const bankSel = document.getElementById('nmsImportBank');
+          if(bankSel) bankSel.value = '0';
+          nmsImportRenderMtList();
+          nmsImportRedraw();
+          nmsImportRenderPicked();
+        }catch(err){
+          alert('Erro ao ler .chr: ' + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.onload = (ev)=>{
+        try{
+          const json = JSON.parse(ev.target.result);
+          if(!json.chr){ alert('Arquivo .nms inválido (sem CHR)'); return; }
+          const arr = Array.isArray(json.chr) ? json.chr : [];
+          const u8 = new Uint8Array(Math.max(8192, arr.length));
+          u8.set(arr.slice(0, u8.length));
+          nmsImport.chr = u8;
+          nmsImport.metatiles = Array.isArray(json.metatiles) ? json.metatiles : [];
+          nmsImport.name = json.name || file.name;
+          nmsImport.bank = 0;
+          nmsImport.picked = [];
+          nmsImport.pendingMeta = null;
+          const info = document.getElementById('nmsImportFileInfo');
+          if(info) info.innerHTML = `<b style="color:#fff">${nmsImport.name}</b> · ${nmsImport.metatiles.length} metatile(s)`;
+          const bankSel = document.getElementById('nmsImportBank');
+          if(bankSel) bankSel.value = '0';
+          nmsImportRenderMtList();
+          nmsImportRedraw();
+          nmsImportRenderPicked();
+        }catch(err){
+          alert('Erro ao ler .nms: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+    e.target.value = '';
+  }
+  function nmsImportSetBank(){
+    const v = parseInt(document.getElementById('nmsImportBank')?.value, 10) || 0;
+    nmsImport.bank = v;
+    nmsImportRedraw();
+  }
+  function nmsImportDrawTile(ctx, chr, absIdx, dx, dy, scale){
+    const off = absIdx * 16;
+    if(!chr || off + 16 > chr.length) return;
+    const pal = palettes[activePal] || palettes[0];
+    for(let y=0;y<8;y++){
+      const p0 = chr[off+y], p1 = chr[off+y+8];
+      for(let x=0;x<8;x++){
+        const sh = 7-x, ci = (((p1>>sh)&1)<<1) | ((p0>>sh)&1);
+        ctx.fillStyle = (typeof NES_PALETTE !== 'undefined' ? NES_PALETTE[pal[ci]&63] : '#000');
+        ctx.fillRect(dx + x*scale, dy + y*scale, scale, scale);
+      }
+    }
+  }
+  function nmsImportRedraw(){
+    const canvas = document.getElementById('nmsImportSheet');
+    if(!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,512,512);
+    if(!nmsImport.chr){
+      ctx.fillStyle = '#555';
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Abra um arquivo .nms…', 256, 256);
+      return;
+    }
+    const base = nmsImport.bank * 256;
+    for(let ty=0;ty<16;ty++){
+      for(let tx=0;tx<16;tx++){
+        const abs = base + ty*16 + tx;
+        nmsImportDrawTile(ctx, nmsImport.chr, abs, tx*32, ty*32, 4);
+      }
+    }
+    // highlight picked
+    const pickedSet = new Set(nmsImport.picked.map(p => p.absIdx));
+    ctx.lineWidth = 2;
+    for(let ty=0;ty<16;ty++){
+      for(let tx=0;tx<16;tx++){
+        const abs = base + ty*16 + tx;
+        if(!pickedSet.has(abs)) continue;
+        ctx.strokeStyle = '#ffcc00';
+        ctx.strokeRect(tx*32+1, ty*32+1, 30, 30);
+      }
+    }
+    // grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    for(let i=0;i<=16;i++){
+      ctx.beginPath(); ctx.moveTo(i*32+0.5,0); ctx.lineTo(i*32+0.5,512); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,i*32+0.5); ctx.lineTo(512,i*32+0.5); ctx.stroke();
+    }
+  }
+  function nmsImportAttachSheet(){
+    const canvas = document.getElementById('nmsImportSheet');
+    if(!canvas || canvas._nmsBound) return;
+    canvas._nmsBound = true;
+    canvas.addEventListener('click', e=>{
+      if(!nmsImport.chr) return;
+      const r = canvas.getBoundingClientRect();
+      const x = Math.floor((e.clientX - r.left) / r.width * 16);
+      const y = Math.floor((e.clientY - r.top) / r.height * 16);
+      if(x<0||x>15||y<0||y>15) return;
+      const absIdx = nmsImport.bank * 256 + y*16 + x;
+      nmsImportToggleTile(absIdx);
+    });
+  }
+  function nmsImportReadTileData(absIdx){
+    const off = absIdx * 16;
+    if(!nmsImport.chr || off+16 > nmsImport.chr.length) return null;
+    return Array.from(nmsImport.chr.slice(off, off+16));
+  }
+  function nmsImportToggleTile(absIdx){
+    // seleção manual de tile solto invalida pendingMeta de metatile
+    nmsImport.pendingMeta = null;
+    const i = nmsImport.picked.findIndex(p => p.absIdx === absIdx);
+    if(i >= 0) nmsImport.picked.splice(i, 1);
+    else {
+      const data = nmsImportReadTileData(absIdx);
+      if(!data) return;
+      nmsImport.picked.push({ absIdx, data });
+    }
+    nmsImportRedraw();
+    nmsImportRenderPicked();
+  }
+  function nmsImportClearPicked(){
+    nmsImport.picked = [];
+    nmsImport.pendingMeta = null;
+    nmsImportRedraw();
+    nmsImportRenderPicked();
+  }
+  function nmsImportRenderPicked(){
+    const cont = document.getElementById('nmsImportPickPreview');
+    const cnt = document.getElementById('nmsImportPickCount');
+    if(cnt) cnt.textContent = `(${nmsImport.picked.length})`;
+    if(!cont) return;
+    cont.innerHTML = '';
+    nmsImport.picked.forEach((p, idx)=>{
+      const c = document.createElement('canvas');
+      c.width = 16; c.height = 16;
+      c.style.cssText = 'width:24px;height:24px;image-rendering:pixelated;border:1px solid #555;background:#000';
+      // draw from data
+      const ctx = c.getContext('2d');
+      const pal = palettes[activePal] || palettes[0];
+      for(let y=0;y<8;y++){
+        const p0 = p.data[y]||0, p1 = p.data[y+8]||0;
+        for(let x=0;x<8;x++){
+          const sh=7-x, ci=(((p1>>sh)&1)<<1)|((p0>>sh)&1);
+          ctx.fillStyle = NES_PALETTE[pal[ci]&63] || '#000';
+          ctx.fillRect(x*2,y*2,2,2);
+        }
+      }
+      c.title = `#${idx+1} $${(p.absIdx%256).toString(16)}`;
+      cont.appendChild(c);
+    });
+  }
+  function nmsImportRenderMtList(){
+    const cont = document.getElementById('nmsImportMtList');
+    if(!cont) return;
+    cont.innerHTML = '';
+    if(!nmsImport.metatiles.length){
+      cont.innerHTML = '<div style="font-size:10px;color:#555">Nenhum metatile neste arquivo</div>';
+      return;
+    }
+    nmsImport.metatiles.forEach(mt=>{
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:8px;align-items:center;padding:6px;background:#1a1a1a;border:1px solid #333;border-radius:4px;cursor:pointer';
+      row.onclick = ()=> nmsImportSelectMetatile(mt);
+      const cv = document.createElement('canvas');
+      const tw = Math.min(4, mt.w||1), th = Math.min(4, mt.h||1);
+      cv.width = tw*8; cv.height = th*8;
+      cv.style.cssText = `width:${tw*16}px;height:${th*16}px;image-rendering:pixelated;border:1px solid #333;background:#000;flex-shrink:0`;
+      const ctx = cv.getContext('2d');
+      const tiles = mt.tiles || [];
+      const flips = mt.flips || [];
+      for(let gy=0;gy<th;gy++) for(let gx=0;gx<tw;gx++){
+        const ti = tiles[gy*(mt.w||1)+gx];
+        if(ti == null) continue;
+        nmsImportDrawTile(ctx, nmsImport.chr, ti, gx*8, gy*8, 1);
+      }
+      const lab = document.createElement('div');
+      lab.style.cssText = 'font-size:11px;color:#ddd;overflow:hidden';
+      lab.innerHTML = `<b style="color:#c39bd3">${mt.name||'?'}</b><br><span style="color:#666;font-size:10px">${mt.w}×${mt.h} · ${(mt.tiles||[]).length} tiles</span>`;
+      row.appendChild(cv); row.appendChild(lab);
+      cont.appendChild(row);
+    });
+  }
+  function nmsImportSelectMetatile(mt){
+    if(!mt || !nmsImport.chr) return;
+    const tiles = mt.tiles || [];
+    nmsImport.picked = [];
+    tiles.forEach((absIdx, layoutIndex)=>{
+      const data = nmsImportReadTileData(absIdx);
+      if(!data) return;
+      nmsImport.picked.push({ absIdx, data, layoutIndex });
+    });
+    nmsImport.pendingMeta = {
+      w: mt.w || 1,
+      h: mt.h || 1,
+      name: mt.name || 'Import MT',
+      flips: (mt.flips && mt.flips.length === tiles.length) ? [...mt.flips] : tiles.map(()=>0)
+    };
+    // troca banco se tiles estão em outra página
+    if(tiles.length){
+      const b = Math.floor((tiles[0]|0) / 256);
+      nmsImport.bank = b;
+      const bankSel = document.getElementById('nmsImportBank');
+      if(bankSel) bankSel.value = String(b);
+    }
+    nmsImportRedraw();
+    nmsImportRenderPicked();
+    if(typeof Project !== 'undefined' && Project.status)
+      Project.status(`Metatile "${mt.name}" selecionado (${tiles.length} tiles)`);
+  }
+  function nmsImportConfirm(){
+    if(!nmsImport.picked.length){
+      alert('Selecione tiles no grid ou um metatile na lista.');
+      return;
+    }
+    const n = nmsImport.picked.length;
+    if(n > TILE_QUEUE_MAX){
+      alert(`Seleção tem ${n} tiles (máx. ${TILE_QUEUE_MAX}).`);
+      return;
+    }
+    const batchId = 'nms_' + Date.now();
+    const startLen = tileQueue.length;
+    if(startLen + n > TILE_QUEUE_MAX){
+      tileQueue.splice(0, startLen + n - TILE_QUEUE_MAX);
+    }
+    const fromMeta = !!nmsImport.pendingMeta;
+    nmsImport.picked.forEach((p, i)=>{
+      const layoutIndex = (p.layoutIndex != null) ? p.layoutIndex : i;
+      tileQueue.push({
+        data: p.data,
+        sourceIdx: p.absIdx,
+        bank: Math.floor(p.absIdx/256),
+        local: p.absIdx % 256,
+        layoutIndex: fromMeta ? layoutIndex : null,
+        importBatch: fromMeta ? batchId : null,
+        label: fromMeta ? `${layoutIndex}` : `$${ (p.absIdx%256).toString(16) }`
+      });
+    });
+    if(fromMeta && nmsImport.pendingMeta){
+      const pm = nmsImport.pendingMeta;
+      imgImport.pendingMeta = {
+        batchId,
+        w: pm.w,
+        h: pm.h,
+        slots: new Array(pm.w * pm.h).fill(null),
+        remaining: Math.min(n, pm.w * pm.h),
+        name: pm.name,
+        flips: pm.flips || null
+      };
+    }
+    tileQueueActive = Math.max(0, tileQueue.length - n);
+    sheetClipboardTile = tileQueue[tileQueueActive]?.data || null;
+    updateTileQueueLabel();
+    renderTileQueue();
+    closeNmsImport();
+    setToolImpl('sheetpaste');
+    if(typeof Project !== 'undefined' && Project.status)
+      Project.status(`${n} tiles do .nms na fila` + (fromMeta ? ' (metatile será remontado ao colar todos)' : ''));
+    alert(`✓ ${n} tiles na fila.\nUse “Colar Tile” na folha CHR.` + (fromMeta ? '\nAo colar todos, o metatile será recriado neste projeto.' : ''));
+  }
+
+
   return {
     init(){ buildHTML(); setTimeout(()=>tryLoadDefaultCHR(), 100); },
     loadBuffer(buf, pals){ let newBuf = buf.length>=8192?buf:(()=>{let n=new Uint8Array(8192); n.set(buf); return n;})(); const hasData = newBuf.some(b=>b!==0); if(!hasData){ console.log('Buffer vazio recebido, mantendo atual e tentando carregar novo.chr'); tryLoadDefaultCHR(); } else { chrBuffer = newBuf; } if(pals) palettes=pals.map(p=>[...p]); if(!document.getElementById('sheetCanvas')) buildHTML(); else { updateBankSelect(); ensurePaletteMatchesBank(); initPalUI(); updateMetatileSelect(); renderAll(); } },
@@ -1137,11 +1715,12 @@ const CHR = (() => {
     renderAll(){ renderSheet(); renderZoom(); renderQuickTileSelector(); renderMetatilePreview(); renderTileQueue(); }, setGrid(w,h){ gridW=w; gridH=h; const first=selectedTiles[0]||currentBank*256; selectedTiles=[]; selectedFlips=[]; for(let i=0;i<w*h;i++){ selectedTiles.push(first+i); selectedFlips.push(0); } activeSlotIdx=0; if(zoomCanvas){ zoomCanvas.width=w*8*16; zoomCanvas.height=h*8*16; } renderAll(); updateLabels(); },
     clearTileQueue, selectTileQueueItem, removeTileQueueItem,
     addBank(){ const nb=new Uint8Array(chrBuffer.length+8192); nb.set(chrBuffer); chrBuffer=nb; updateBankSelect(); renderAll(); },
+    applyGridResize,
     autoFill(){ const s=selectedTiles[0]||currentBank*256; for(let i=0;i<selectedTiles.length;i++) selectedTiles[i]=s+i; ensureFlipsLen(); activeSlotIdx=0; renderAll(); updateLabels(); },
     clearSelection(){ gridW=1; gridH=1; selectedTiles=[selectedTiles[0]||currentBank*256]; selectedFlips=[selectedFlips[0]|0]; activeSlotIdx=0; renderAll(); updateLabels(); },
-    flipH(){ const M=getMatrix(); for(let y=0;y<M.length;y++) M[y].reverse(); pushUndo(); setMatrix(M); },
-    flipV(){ const M=getMatrix(); M.reverse(); pushUndo(); setMatrix(M); },
-    rotate(){ const M=getMatrix(), h=M.length, w=M[0].length, n=Array.from({length:w},()=>Array(h).fill(0)); for(let y=0;y<h;y++) for(let x=0;x<w;x++) n[x][h-1-y]=M[y][x]; gridW=h; gridH=w; pushUndo(); setMatrix(n); },
+    flipH(){ flipGroupH(); },
+    flipV(){ flipGroupV(); },
+    rotate(){ rotateGroupCW(); },
     shift(dir){ const M=getMatrix(), h=M.length, w=M[0].length, n=Array.from({length:h},()=>Array(w).fill(0)); for(let y=0;y<h;y++) for(let x=0;x<w;x++){ let ny=y,nx=x; if(dir==='left') nx=(x+1)%w; if(dir==='right') nx=(x+w-1)%w; if(dir==='up') ny=(y+1)%h; if(dir==='down') ny=(y+h-1)%h; n[y][x]=M[ny][nx]; } pushUndo(); setMatrix(n); },
     clearGroup(){ pushUndo(); selectedTiles.forEach(ti=>chrBuffer.fill(0,ti*16,ti*16+16)); renderAll(); },
     undo(){ if(undoStack.length){ chrBuffer=undoStack.pop(); renderAll(); } },
@@ -1150,9 +1729,10 @@ const CHR = (() => {
     setTool(t){ setToolImpl(t); },
     toggleSlotFlipH, toggleSlotFlipV,
     openImageImport, closeImageImport,
-    imgImportSetGrid, imgImportRedraw, imgImportSnapCropToGrid,
-    imgImportFitGridCrop, imgImportResetCrop, imgImportSetCropFromInputs,
-    imgImportPreviewOutput, imgImportConfirmStep1
+    imgImportSetGrid, imgImportRedraw,
+    imgImportSetCropFromInputs, imgImportApplyCrop, imgImportClearSelection, imgImportSelectAll,
+    imgImportPreviewOutput, imgImportConfirmStep1,
+    openNmsImport, closeNmsImport, nmsImportSetBank, nmsImportClearPicked, nmsImportConfirm
   };
 })();
 document.addEventListener('DOMContentLoaded', ()=>{ CHR.init(); });

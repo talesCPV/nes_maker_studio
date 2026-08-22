@@ -1,8 +1,9 @@
 ; NES Maker Studio - BUILD v0.9.17 - fix: sprite do herói volta a usar arte real (pool unificado)
 ; NROM-256 | player e inimigos compartilham o mesmo empacotador de CHR $0000
 ; Telas: 7 · CHR tiles (fundo): 32/256
-; CHR tiles (sprites): 10/256
+; CHR tiles (sprites): 14/256
 ; Instâncias: 5
+; AVISO: frame maior que 2x2 truncado - Simon / Idle / frame 1 (2x4 → 2x2)
 ; Herói: "Hero" (charIdx 0, 1 frame(s))
 ;   [0] splash · Splash 1
 ;   [1] play · Tela 1
@@ -22,6 +23,13 @@ pad1_old:   .res 1
 pad1_edge:  .res 1
 game_state: .res 1    ; 0=splash 1=play 2=gameover
 cur_screen: .res 1
+scroll_x:   .res 1  ; Camada 5: fine scroll (0-255) dentro do par de telas visivel
+nt_page:    .res 1  ; Camada 5: 0/1 - qual nametable fisica ($2000/$2400) tem a tela esquerda
+gcw_col:    .res 1  ; scratch: coluna de pixel mundial pro check de parede durante scroll
+gcw_sel:    .res 1  ; scratch: 0=tela esquerda(play_idx) 1=tela direita(play_idx+1)
+gcw_screen: .res 1  ; scratch: indice global de tela resolvido p/ get_collision2
+psn_screen: .res 1  ; scratch: indice global de tela p/ preload_screen_nt
+psn_base_hi:.res 1  ; scratch: $20 ou $24 - pagina fisica alvo do preload_screen_nt
 nmi_flag:   .res 1
 tmp0:       .res 1
 tmp1:       .res 1
@@ -52,6 +60,7 @@ cell_tr:      .res 1
 cell_bl:      .res 1
 cell_br:      .res 1
 oam_off:      .res 1   ; scratch: offset ($10 + slot*16) dentro da pagina $02xx
+inst_scr_x:   .res 1   ; Camada 5: posicao X na tela (inst_x - scroll_x) do slot sendo desenhado
 inst_grounded: .res 1  ; scratch: resultado de check_ground_inst (Camada 4)
 en_tmp:     .res 1
 music_on:   .res 1
@@ -78,6 +87,27 @@ NMI:
   ; garante sprites ligados
   LDA #%00011110
   STA $2001
+  ; Camada 5: scroll continuo - so durante o jogo (fora disso fica fixo em 0,0)
+  LDA game_state
+  CMP #1
+  BNE nmi_scroll_static
+  LDA #%10010000
+  ORA nt_page          ; bit0 = pagina nametable esquerda atual
+  STA $2000
+  BIT $2002
+  LDA scroll_x
+  STA $2005
+  LDA #0
+  STA $2005
+  JMP nmi_scroll_done
+nmi_scroll_static:
+  LDA #%10010000
+  STA $2000
+  BIT $2002
+  LDA #0
+  STA $2005
+  STA $2005
+nmi_scroll_done:
   JSR music_update
   LDA #1
   STA nmi_flag
@@ -257,9 +287,13 @@ rp_loop:
 ; Carrega nametable+attrs da tela A (hard cut, rendering off)
 load_screen:
   STA cur_screen
-  ; desliga rendering
+  ; desliga rendering E a geracao de NMI (bit 7 do $2000) - a escrita de ~1000 bytes
+  ; leva mais de um frame; sem isso, o NMI (que agora escreve $2005 todo frame por
+  ; causa do scroll da Camada 5) pode disparar NO MEIO da sequencia $2006/$2007 e
+  ; embaralhar o latch de escrita da PPU, corrompendo a nametable inteira.
   LDA #0
   STA $2001
+  STA $2000
   ; ponteiro da nametable (tabela de 1 byte por tela — SEM ASL)
   LDX cur_screen
   LDA ScreenNtLo,X
@@ -310,7 +344,68 @@ ls_at:
   LDA #0
   STA $2005
   STA $2005
-  ; religa rendering (bg + sprites)
+  ; religa NMI (o NMI corrige $2000/nt_page sozinho no proximo frame) + rendering
+  LDA #%10010000
+  STA $2000
+  LDA #%00011110
+  STA $2001
+  RTS
+
+preload_screen_nt:
+  STA psn_screen
+  ; desliga rendering E geracao de NMI - mesmo motivo do load_screen (evita o NMI
+  ; corromper o latch $2006/$2007 no meio da escrita longa)
+  LDA #0
+  STA $2001
+  STA $2000
+  LDX psn_screen
+  LDA ScreenNtLo,X
+  STA tmp0
+  LDA ScreenNtHi,X
+  STA tmp1
+  BIT $2002
+  LDA psn_base_hi     ; $20 ou $24, setado pelo chamador
+  STA $2006
+  LDA #$00
+  STA $2006
+  LDY #0
+  LDX #4
+psn_nt_outer:
+  LDA #240
+  STA ls_count
+psn_nt_inner:
+  LDA (tmp0),Y
+  STA $2007
+  INY
+  BNE psn_nt_noinc
+  INC tmp1
+psn_nt_noinc:
+  DEC ls_count
+  BNE psn_nt_inner
+  DEX
+  BNE psn_nt_outer
+  LDX psn_screen
+  LDA ScreenAtLo,X
+  STA tmp0
+  LDA ScreenAtHi,X
+  STA tmp1
+  BIT $2002
+  LDA psn_base_hi
+  ORA #$03            ; mesma pagina, offset $3C0 dentro dela
+  STA $2006
+  LDA #$C0
+  STA $2006
+  LDY #0
+psn_at:
+  LDA (tmp0),Y
+  STA $2007
+  INY
+  CPY #64
+  BNE psn_at
+  ; religa NMI (com nt_page atual) + rendering
+  LDA #%10010000
+  ORA nt_page
+  STA $2000
   LDA #%00011110
   STA $2001
   RTS
@@ -520,6 +615,70 @@ try_screen_left:
 tsl_done:
   RTS
 
+advance_screen_right:
+  LDA nt_page          ; pagina que estava a esquerda (play_idx) - agora livre
+  EOR #1
+  STA nt_page          ; nova esquerda = quem era direita
+  LDA play_idx
+  CLC
+  ADC #2
+  CMP #5
+  BCS asr_noload       ; play_idx+2 nao existe - nada a pre-carregar
+  TAX
+  LDA PlayScreenTable,X
+  ; a pagina a reescrever e' a que ERA nt_page antes do EOR (a antiga esquerda)
+  PHA
+  LDA nt_page
+  EOR #1
+  BEQ asr_base0
+  LDA #$24
+  JMP asr_baseok
+asr_base0:
+  LDA #$20
+asr_baseok:
+  STA psn_base_hi
+  PLA
+  JSR preload_screen_nt
+asr_noload:
+  INC play_idx
+  LDA play_idx
+  TAX
+  LDA PlayScreenTable,X
+  STA cur_screen       ; enemies/colisao 'normal' passam a usar a nova tela esquerda
+  JSR spawn_enemies
+  RTS
+
+advance_screen_left:
+  LDA nt_page
+  EOR #1
+  STA nt_page
+  LDA play_idx        ; play_idx ainda e' o valor ANTIGO (esquerda antes da travessia)
+  SEC
+  SBC #1              ; nova esquerda = play_idx-1 - precisa ser carregada de novo
+  BMI asl_noload      ; play_idx-1 < 0 -> inicio do mundo, nada a pre-carregar
+  TAX
+  LDA PlayScreenTable,X
+  PHA
+  LDA nt_page
+  EOR #1
+  BEQ asl_base0
+  LDA #$24
+  JMP asl_baseok
+asl_base0:
+  LDA #$20
+asl_baseok:
+  STA psn_base_hi
+  PLA
+  JSR preload_screen_nt
+asl_noload:
+  DEC play_idx
+  LDA play_idx
+  TAX
+  LDA PlayScreenTable,X
+  STA cur_screen
+  JSR spawn_enemies
+  RTS
+
 clear_instances:
   LDX #0
 ci_loop:
@@ -563,8 +722,23 @@ se_loop:
   LDA #0
   STA inst_dir,X
   STA inst_frame,X
+  ; load_frame_duration usa Y/tmp0/tmp1 como scratch - e' exatamente o que o loop
+  ; acima usa como cursor de leitura em EnemyData_N. Sem salvar/restaurar aqui, a
+  ; 2a instancia em diante lia lixo (Y resetava, tmp0/tmp1 apontavam pra outra tabela).
+  TYA
+  PHA
+  LDA tmp0
+  PHA
+  LDA tmp1
+  PHA
   JSR load_frame_duration   ; X=slot -> A = duracao do frame 0 do personagem
   STA inst_timer,X
+  PLA
+  STA tmp1
+  PLA
+  STA tmp0
+  PLA
+  TAY
   INX
   DEC en_tmp
   JMP se_loop
@@ -631,6 +805,15 @@ uio_loop:
   STA $020C,Y
   JMP uio_next
 uio_draw:
+  ; Camada 5: posicao na tela = inst_x - scroll_x (inimigos sempre pertencem a tela
+  ; esquerda atual/cur_screen). Se der borrow, saiu da tela pela esquerda - esconde.
+  LDA inst_x,X
+  SEC
+  SBC scroll_x
+  BCS uio_x_ok
+  JMP uio_offscreen
+uio_x_ok:
+  STA inst_scr_x
   JSR load_frame_cellptr
   LDY #0
   LDA (tmp0),Y
@@ -672,7 +855,7 @@ uio_noflip:
   STA $0201,Y
   LDA inst_dir,X
   STA $0202,Y
-  LDA inst_x,X
+  LDA inst_scr_x
   STA $0203,Y
   JMP uio_tr
 uio_tl_hide:
@@ -689,7 +872,7 @@ uio_tr:
   STA $0205,Y
   LDA inst_dir,X
   STA $0206,Y
-  LDA inst_x,X
+  LDA inst_scr_x
   CLC
   ADC #8
   STA $0207,Y
@@ -710,7 +893,7 @@ uio_bl:
   STA $0209,Y
   LDA inst_dir,X
   STA $020A,Y
-  LDA inst_x,X
+  LDA inst_scr_x
   STA $020B,Y
   JMP uio_br
 uio_bl_hide:
@@ -729,7 +912,7 @@ uio_br:
   STA $020D,Y
   LDA inst_dir,X
   STA $020E,Y
-  LDA inst_x,X
+  LDA inst_scr_x
   CLC
   ADC #8
   STA $020F,Y
@@ -737,6 +920,15 @@ uio_br:
 uio_br_hide:
   LDA #$FF
   STA $020C,Y
+uio_offscreen:
+  JSR uio_calc_off
+  LDY oam_off
+  LDA #$FF
+  STA $0200,Y
+  STA $0204,Y
+  STA $0208,Y
+  STA $020C,Y
+  JMP uio_next
 uio_next:
   INX
   CPX #5
@@ -1090,6 +1282,70 @@ gc_oob:
   STA col_result
   RTS
 
+get_collision2:
+  LDA col_y
+  CMP #30
+  BCS gc2_oob
+  LDA col_x
+  CMP #32
+  BCS gc2_oob
+  LDA col_y
+  AND #7
+  ASL A
+  ASL A
+  ASL A
+  ASL A
+  ASL A
+  CLC
+  ADC col_x
+  TAY
+  LDX gcw_screen
+  LDA ScreenColLo,X
+  STA tmp0
+  LDA ScreenColHi,X
+  STA tmp1
+  LDA col_y
+  LSR A
+  LSR A
+  LSR A
+  CLC
+  ADC tmp1
+  STA tmp1
+  LDA (tmp0),Y
+  STA col_result
+  RTS
+gc2_oob:
+  LDA #0
+  STA col_result
+  RTS
+
+world_col_from:
+  CLC
+  ADC scroll_x
+  STA gcw_col
+  LDA #0
+  BCC wcf_sel_ok
+  LDA #1
+wcf_sel_ok:
+  STA gcw_sel
+  BEQ wcf_use_cur
+  LDA play_idx
+  CLC
+  ADC #1
+  JMP wcf_have
+wcf_use_cur:
+  LDA play_idx
+wcf_have:
+  TAX
+  LDA PlayScreenTable,X
+  STA gcw_screen
+  LDA gcw_col
+  LSR A
+  LSR A
+  LSR A
+  STA col_x
+  RTS
+
 check_ground:
   LDA #0
   STA on_ground
@@ -1101,29 +1357,23 @@ check_ground:
   LSR A
   LSR A
   STA col_y
-  ; tile X esquerdo
+  ; tile X esquerdo (mundo: scroll_x + player_x + 2)
   LDA player_x
   CLC
   ADC #2
-  LSR A
-  LSR A
-  LSR A
-  STA col_x
-  JSR get_collision
+  JSR world_col_from
+  JSR get_collision2
   LDA col_result
   CMP #1
   BEQ cg_yes
   CMP #2
   BEQ cg_yes
-  ; tile X direito
+  ; tile X direito (mundo: scroll_x + player_x + 13)
   LDA player_x
   CLC
   ADC #13
-  LSR A
-  LSR A
-  LSR A
-  STA col_x
-  JSR get_collision
+  JSR world_col_from
+  JSR get_collision2
   LDA col_result
   CMP #1
   BEQ cg_yes
@@ -1163,7 +1413,7 @@ check_wall_at:
   LSR A
   LSR A
   STA col_y
-  JSR get_collision
+  JSR get_collision2
   LDA col_result
   JSR is_solid
   BNE cw_hit
@@ -1175,7 +1425,7 @@ check_wall_at:
   LSR A
   LSR A
   STA col_y
-  JSR get_collision
+  JSR get_collision2
   LDA col_result
   JSR is_solid
   BNE cw_hit
@@ -1192,26 +1442,95 @@ update_player:
   BNE up_go
   RTS
 up_go:
-  ; --- horizontal + colisao lateral ---
+  ; --- horizontal + colisao lateral (Camada 5: deadzone de camera 96-152) ---
   LDA pad1
   AND #%01000000      ; Left bit6
-  BEQ up_right
+  BNE up_left_check
+  JMP up_right
+up_left_check:
+  LDA player_x
+  CMP #96             ; DEADZONE_LEFT
+  BCC uls_deadzone    ; player_x < 96 -> tenta rolar em vez de mover o sprite
+  JMP up_left_move    ; dentro/alem da deadzone -> movimento livre normal
+uls_deadzone:
+  LDA play_idx
+  BNE uls_try_scroll
+  ; play_idx==0: nao ha tela anterior - clamp antigo em 8, sem scroll
   LDA player_x
   CMP #8
   BCS up_left_move
-  JSR try_screen_left
-  JMP up_jump
+  JMP up_right
+uls_try_scroll:
+  ; testa parede NO MUNDO na posicao proposta. gcw_col precisa ser a coluna
+  ; DENTRO DO PAR de telas visivel (scroll_x + posicao NA TELA do player, nao so
+  ; o delta) - por isso soma DEADZONE_LEFT(96), nao so o movimento. Selecao de tela
+  ; e' sempre por ADC/carry (>=256 -> play_idx+1), independente da direcao do
+  ; movimento - e' sobre POSICAO no mundo, nao sobre pra que lado anda.
+  LDA scroll_x
+  CLC
+  ADC #95             ; DEADZONE_LEFT(96) - 3(mov) + 2(sonda) = 95
+  STA gcw_col
+  LDA #0
+  BCC uls_sel_ok      ; sem overflow -> tela atual (play_idx)
+  LDA #1              ; overflow -> proxima tela (play_idx+1)
+uls_sel_ok:
+  STA gcw_sel
+  BEQ uls_use_cur
+  LDA play_idx
+  CLC
+  ADC #1
+  JMP uls_have
+uls_use_cur:
+  LDA play_idx
+uls_have:
+  TAX
+  LDA PlayScreenTable,X
+  STA gcw_screen
+  LDA gcw_col
+  LSR A
+  LSR A
+  LSR A
+  STA col_x
+  LDA player_y
+  CLC
+  ADC #4
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  JSR get_collision2
+  LDA col_result
+  JSR is_solid
+  BNE up_right         ; bloqueado - segue pro botao direito, igual antes
+  LDA player_y
+  CLC
+  ADC #12
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  JSR get_collision2
+  LDA col_result
+  JSR is_solid
+  BNE up_right
+  ; livre: rola o mundo pra esquerda
+  LDA scroll_x
+  SEC
+  SBC #3
+  STA scroll_x
+  BCS uls_no_cross     ; sem borrow -> nao cruzou 256
+  JSR advance_screen_left
+uls_no_cross:
+  LDA #1
+  STA player_flip
 up_left_move:
-  ; tile X na borda esquerda proposta (x-3+2)
+  ; tile X na borda esquerda proposta (x-3+2) - movimento livre dentro da deadzone
   LDA player_x
   SEC
   SBC #3
   CLC
   ADC #2
-  LSR A
-  LSR A
-  LSR A
-  STA col_x
+  JSR world_col_from
   JSR check_wall_at
   LDA col_result
   BNE up_right           ; bloqueado
@@ -1224,23 +1543,90 @@ up_left_move:
 up_right:
   LDA pad1
   AND #%10000000      ; Right bit7
-  BEQ up_jump
+  BNE up_right_check
+  JMP up_jump
+up_right_check:
+  LDA player_x
+  CMP #152            ; DEADZONE_RIGHT
+  BCS urs_deadzone    ; player_x >= 152 -> tenta rolar em vez de mover o sprite
+  JMP up_right_move   ; dentro da deadzone -> movimento livre normal
+urs_deadzone:
+  LDA play_idx
+  CMP #4
+  BCC urs_try_scroll  ; play_idx < ultima tela -> ha pra onde rolar
+  ; play_idx == ultima tela: nao ha mais o que rolar - clamp antigo em 232
   LDA player_x
   CMP #232
   BCC up_right_move
-  JSR try_screen_right
+  JMP up_jump
+urs_try_scroll:
+  ; testa parede NO MUNDO (scroll_x + DEADZONE_RIGHT(152) + sonda direita(+13) + mov(+3))
+  LDA scroll_x
+  CLC
+  ADC #168
+  STA gcw_col
+  LDA #0
+  BCC urs_sel_ok      ; sem overflow -> ainda na tela atual (play_idx)
+  LDA #1              ; overflow -> proxima tela (play_idx+1)
+urs_sel_ok:
+  STA gcw_sel
+  BEQ urs_use_cur
+  LDA play_idx
+  CLC
+  ADC #1
+  JMP urs_have
+urs_use_cur:
+  LDA play_idx
+urs_have:
+  TAX
+  LDA PlayScreenTable,X
+  STA gcw_screen
+  LDA gcw_col
+  LSR A
+  LSR A
+  LSR A
+  STA col_x
+  LDA player_y
+  CLC
+  ADC #4
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  JSR get_collision2
+  LDA col_result
+  JSR is_solid
+  BNE up_jump          ; bloqueado
+  LDA player_y
+  CLC
+  ADC #12
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  JSR get_collision2
+  LDA col_result
+  JSR is_solid
+  BNE up_jump
+  ; livre: rola o mundo pra direita
+  LDA scroll_x
+  CLC
+  ADC #3
+  STA scroll_x
+  BCC urs_no_cross     ; sem overflow -> nao cruzou 256
+  JSR advance_screen_right
+urs_no_cross:
+  LDA #0
+  STA player_flip
   JMP up_jump
 up_right_move:
-  ; tile X na borda direita proposta (x+3+13)
+  ; tile X na borda direita proposta (x+3+13) - movimento livre dentro da deadzone
   LDA player_x
   CLC
   ADC #3
   CLC
   ADC #13
-  LSR A
-  LSR A
-  LSR A
-  STA col_x
+  JSR world_col_from
   JSR check_wall_at
   LDA col_result
   BNE up_jump            ; bloqueado
@@ -1388,7 +1774,14 @@ st_splash:
   LDA #1
   STA game_state
   LDA #1
-  JSR load_screen
+  JSR load_screen        ; tela 0 vai pra $2000 (hard cut, igual antes)
+  LDA #0
+  STA scroll_x
+  STA nt_page            ; tela esquerda (play_idx=0) fica na pagina $2000
+  LDA #2
+  LDX #$24
+  STX psn_base_hi
+  JSR preload_screen_nt  ; tela 1 pré-carregada em $2400 (pra scroll já funcionar)
   JSR spawn_player
   JSR spawn_enemies
   JSR music_init
@@ -1423,8 +1816,8 @@ st_gameover:
   JMP MainLoop
 
 PaletteData:
-  .byte $0F, $00, $10, $30, $0F, $06, $16, $26, $0F, $0A, $1A, $2A, $0F, $02, $12, $22
-  .byte $0F, $16, $30, $0F, $0F, $19, $29, $39, $0F, $03, $13, $23, $0F, $09, $19, $29
+  .byte $0F, $00, $10, $30, $0F, $06, $16, $26, $0F, $00, $16, $30, $0F, $02, $12, $22
+  .byte $0F, $16, $30, $07, $0F, $19, $29, $39, $0F, $03, $13, $23, $0F, $09, $19, $29
 
 ScreenNtLo:
   .byte <Nametable_0
@@ -1514,20 +1907,28 @@ CharCells_1:  ; enemy
   .byte $04, $05, $06, $07, $04, $05, $08, $07, $04, $05, $06, $07, $04, $05, $09, $07
 CharDur_1:
   .byte 8, 8, 8, 8
+CharCells_2:  ; Simon
+  .byte $0A, $0B, $0C, $0D
+CharDur_2:
+  .byte 8
 CharFrameCellsLo:
   .byte <CharCells_0
   .byte <CharCells_1
+  .byte <CharCells_2
 CharFrameCellsHi:
   .byte >CharCells_0
   .byte >CharCells_1
+  .byte >CharCells_2
 CharFrameDurLo:
   .byte <CharDur_0
   .byte <CharDur_1
+  .byte <CharDur_2
 CharFrameDurHi:
   .byte >CharDur_0
   .byte >CharDur_1
+  .byte >CharDur_2
 CharFrameCount:
-  .byte 1, 4
+  .byte 1, 4, 1
 
 Nametable_0:  ; Splash 1 (splash)
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
@@ -2199,16 +2600,16 @@ Time_ch2:
   .byte $00, $00, $00, $F8, $08, $08, $28, $08, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $14, $13, $10, $10, $1F, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $08, $E8, $08, $08, $F8, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $80, $C3, $EC, $F0, $F1, $E3, $E0, $C0, $80, $C0, $E3, $EF, $EE, $DC, $DF, $BF
+  .byte $00, $03, $0C, $10, $11, $23, $20, $40, $00, $00, $03, $0F, $0E, $1C, $1F, $3F
   .byte $80, $60, $18, $04, $84, $82, $02, $41, $00, $80, $E0, $F8, $78, $7C, $FC, $BE
-  .byte $A7, $F9, $C2, $E6, $F4, $E3, $C0, $80, $98, $C0, $C1, $E1, $F3, $E0, $C0, $80
+  .byte $27, $39, $02, $06, $04, $03, $00, $00, $18, $00, $01, $01, $03, $00, $00, $00
   .byte $C2, $02, $04, $04, $18, $60, $C0, $80, $3C, $FC, $F8, $F8, $E0, $80, $40, $80
-  .byte $A7, $F8, $C0, $E1, $F1, $E3, $C1, $80, $98, $C0, $C0, $E0, $F0, $E0, $C0, $80
-  .byte $A1, $E3, $FC, $F0, $FC, $E3, $C0, $80, $9E, $DC, $E3, $EF, $F3, $E0, $C0, $80
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $27, $38, $00, $01, $01, $03, $01, $00, $18, $00, $00, $00, $00, $00, $00, $00
+  .byte $21, $23, $1C, $10, $0C, $03, $00, $00, $1E, $1C, $03, $0F, $03, $00, $00, $00
+  .byte $00, $01, $03, $03, $1F, $3F, $3F, $FF, $00, $01, $03, $03, $1F, $21, $30, $FF
+  .byte $F0, $F8, $C8, $D8, $C8, $E8, $B8, $C0, $F0, $F8, $F8, $A8, $B8, $D8, $78, $E0
+  .byte $7F, $9F, $BF, $FF, $3F, $3F, $1F, $1F, $F0, $F9, $FF, $FF, $3F, $3D, $0F, $15
+  .byte $E0, $F0, $9E, $99, $B9, $FA, $FC, $C0, $00, $F0, $FE, $FF, $EF, $CE, $FC, $40
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
