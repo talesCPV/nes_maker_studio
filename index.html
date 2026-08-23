@@ -24,21 +24,40 @@
 </div>
 <div id="main">
   <div id="sidebar">
-    <div class="side-title">Módulos</div>
-    <div class="side-item active" data-mod="dashboard" onclick="UI.switchModule('dashboard')">📊 Dashboard</div>
-    <div class="side-item" data-mod="chr" onclick="UI.switchModule('chr')">🎨 CHR Editor</div>
-    <div class="side-item" data-mod="bg" onclick="UI.switchModule('bg')">🗺 Backgrounds</div>
-    <div class="side-item" data-mod="char" onclick="UI.switchModule('char')">🦸 Personagens</div>
-    <div class="side-item" data-mod="sound" onclick="UI.switchModule('sound')">🎵 Sons APU</div>
-    <div class="side-item" data-mod="world" onclick="UI.switchModule('world')">🌍 Level-Design</div>
-    <div class="side-item" data-mod="program" onclick="UI.switchModule('program')">🧠 Programação</div>
-    <div class="side-item" data-mod="build" onclick="UI.switchModule('build')">🔨 Build ROM</div>
-    <div style="margin-top:auto;padding:12px;border-top:1px solid #222;font-size:11px;color:#666;line-height:1.4">
+    <div class="side-header">
+      <span class="side-title">Módulos</span>
+      <button type="button" class="side-toggle" id="btnSideToggle" title="Recolher menu" onclick="UI.toggleSidebar()">«</button>
+    </div>
+    <div class="side-item active" data-mod="dashboard" onclick="UI.switchModule('dashboard')" title="Dashboard">
+      <span class="side-ico">📊</span><span class="side-label">Dashboard</span>
+    </div>
+    <div class="side-item" data-mod="chr" onclick="UI.switchModule('chr')" title="CHR Editor">
+      <span class="side-ico">🎨</span><span class="side-label">CHR Editor</span>
+    </div>
+    <div class="side-item" data-mod="bg" onclick="UI.switchModule('bg')" title="Backgrounds">
+      <span class="side-ico">🗺</span><span class="side-label">Backgrounds</span>
+    </div>
+    <div class="side-item" data-mod="char" onclick="UI.switchModule('char')" title="Personagens">
+      <span class="side-ico">🦸</span><span class="side-label">Personagens</span>
+    </div>
+    <div class="side-item" data-mod="sound" onclick="UI.switchModule('sound')" title="Sons APU">
+      <span class="side-ico">🎵</span><span class="side-label">Sons APU</span>
+    </div>
+    <div class="side-item" data-mod="world" onclick="UI.switchModule('world')" title="level-design">
+      <span class="side-ico">🌍</span><span class="side-label">level-design</span>
+    </div>
+    <div class="side-item" data-mod="program" onclick="UI.switchModule('program')" title="Programação">
+      <span class="side-ico">🧠</span><span class="side-label">Programação</span>
+    </div>
+    <div class="side-item" data-mod="build" onclick="UI.switchModule('build')" title="Build ROM">
+      <span class="side-ico">🔨</span><span class="side-label">Build ROM</span>
+    </div>
+    <div class="side-footer">
       <div>CHR: <span id="infoCHR">8KB</span></div>
       <div>Banks: <span id="infoBanks">2</span></div>
       <div>Fases: <span id="infoPhases">0</span></div>
       <div>Splash: <span id="infoSplash">0</span></div>
-      <div>Formato: <b style="color:#00ff00">.nms v0.6.5 FINAL</b></div>
+      <div class="side-footer-format">Formato: <b style="color:#00ff00">.nms</b></div>
     </div>
   </div>
   <div id="content">
@@ -77,6 +96,29 @@ const UI = {
     if(name==='program'){ try{ PROGRAM.init(); }catch(e){} }
     if(name==='build'){ try{ BUILD.init(); }catch(e){} }
     if(name==='sound'){ try{ SOUND.init(); }catch(e){} }
+  },
+  toggleSidebar(){
+    const sb = document.getElementById('sidebar');
+    if(!sb) return;
+    const collapsed = sb.classList.toggle('collapsed');
+    try { localStorage.setItem('nms_sidebar_collapsed', collapsed ? '1' : '0'); } catch(e){}
+    const btn = document.getElementById('btnSideToggle');
+    if(btn){
+      btn.textContent = collapsed ? '»' : '«';
+      btn.title = collapsed ? 'Expandir menu' : 'Recolher menu';
+    }
+  },
+  restoreSidebar(){
+    try {
+      if(localStorage.getItem('nms_sidebar_collapsed') === '1'){
+        const sb = document.getElementById('sidebar');
+        if(sb){
+          sb.classList.add('collapsed');
+          const btn = document.getElementById('btnSideToggle');
+          if(btn){ btn.textContent = '»'; btn.title = 'Expandir menu'; }
+        }
+      }
+    } catch(e){}
   }
 }
 window.addEventListener('keydown', e=>{
@@ -85,7 +127,7 @@ window.addEventListener('keydown', e=>{
   if(e.ctrlKey && e.key.toLowerCase()==='o'){ e.preventDefault(); document.getElementById('openNMS').click(); }
   if(e.ctrlKey && e.key.toLowerCase()==='z'){ e.preventDefault(); CHR.undo(); }
 });
-window.addEventListener('DOMContentLoaded', ()=>{ Project.newProject(true); setTimeout(()=>UI.switchModule('dashboard'), 100); });
+window.addEventListener('DOMContentLoaded', ()=>{ UI.restoreSidebar(); Project.newProject(true); setTimeout(()=>UI.switchModule('dashboard'), 100); });
 </script>
 </body>
 </html>

@@ -63,10 +63,7 @@ const CHR = (() => {
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <div style="display:flex;gap:8px;align-items:center;padding:8px 12px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
-          <select id="bankSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 8px;font-size:12px"></select>
-          <button class="btn-tool" style="background:#c0392b;color:#fff" onclick="CHR.addBank()">+ BANK</button>
-          <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer"><input type="checkbox" id="chkShowGrid"> grid</label>
-          <div style="display:flex;gap:6px;align-items:center;margin-left:8px;border-left:1px solid #333;padding-left:8px;flex-wrap:wrap">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <button class="btn-tool" onclick="CHR.openImageImport()" title="Importar PNG/JPG e preparar crop/grid em tiles" style="background:#16a085;color:#fff;border-color:#1abc9c;min-width:118px;height:28px;padding:0 10px;font-size:11px;font-weight:600;border-radius:4px;border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;gap:4px;box-sizing:border-box">🖼 Import imagem</button>
             <button class="btn-tool" onclick="CHR.openNmsImport()" title="Importar tiles/metatiles de outro .nms ou .chr" style="background:#8e44ad;color:#fff;border-color:#a569bd;min-width:118px;height:28px;padding:0 10px;font-size:11px;font-weight:600;border-radius:4px;border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;gap:4px;box-sizing:border-box">📦 Import metatiles</button>
             <button class="btn-tool" onclick="CHR.importCHR()" title="Importar arquivo .chr / .bin / .nes no buffer atual" style="background:#2c3e50;color:#fff;border-color:#5d6d7e;min-width:118px;height:28px;padding:0 10px;font-size:11px;font-weight:600;border-radius:4px;border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;gap:4px;box-sizing:border-box">🧱 Import .chr</button>
@@ -75,48 +72,69 @@ const CHR = (() => {
             <input type="file" id="importCHR_internal" accept=".chr,.bin,.nes" style="display:none">
             <input type="file" id="importImage_internal" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
           </div>
-          <div style="margin-left:auto;display:flex;gap:6px;align-items:center;font-size:12px">
-            <b>Tamanho:</b>
-            <select id="tileColsSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:3px"></select>
-            <span>X</span>
-            <select id="tileRowsSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:3px"></select>
-            <button class="btn-tool" onclick="CHR.applyGridResize()" title="Aplica o tamanho escolhido nos selects" style="background:#2980b9;color:#fff;font-size:11px;padding:3px 8px">Redimensionar</button>
-            <span style="margin-left:8px">Slot: <b id="lblActiveSlot" style="color:#ffcc00">1/4</b></span>
-            <button class="btn-tool" onclick="CHR.autoFill()">Auto</button>
-          </div>
+          <span style="margin-left:auto;font-size:10px;color:#888" id="lblMetatileSize">2x2 PT0</span>
+          <span style="font-size:10px;color:#888">Tiles: <b id="lblTileIndices" style="color:#ffcc00">$00</b></span>
+        </div>
+
+        <div id="chrMetatileToolbar" style="display:flex;gap:6px;align-items:center;padding:6px 10px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
+          <span style="font-size:10px;color:#888;margin-right:2px">TOOLS</span>
+          <button type="button" class="icon-btn tool-btn active" data-tool="pen" onclick="CHR.setTool('pen')" title="Pen">🖊️</button>
+          <button type="button" class="icon-btn tool-btn" data-tool="erase" onclick="CHR.setTool('erase')" title="Erase">🧹</button>
+          <button type="button" class="icon-btn tool-btn" data-tool="line" onclick="CHR.setTool('line')" title="Line">📏</button>
+          <button type="button" class="icon-btn tool-btn" data-tool="rect" onclick="CHR.setTool('rect')" title="Rect">⬜</button>
+          <button type="button" class="icon-btn tool-btn" data-tool="circle" onclick="CHR.setTool('circle')" title="Circle">⭕</button>
+          <button type="button" class="icon-btn tool-btn" data-tool="fill" onclick="CHR.setTool('fill')" title="Fill">🪣</button>
+          <button type="button" class="icon-btn tool-btn" data-tool="copy" onclick="CHR.setTool('copy')" title="Copy pixels">📋</button>
+          <button type="button" class="icon-btn tool-btn" data-tool="paste" onclick="CHR.setTool('paste')" title="Paste pixels">📌</button>
+          <span style="width:1px;height:24px;background:#444;margin:0 2px"></span>
+          <button type="button" class="icon-btn tool-btn" data-tool="sheetcopy" onclick="CHR.setTool('sheetcopy')" title="Copiar Tile (fila)">🗐</button>
+          <button type="button" class="icon-btn tool-btn" data-tool="sheetpaste" onclick="CHR.setTool('sheetpaste')" title="Colar Tile">📥</button>
+          <button type="button" class="icon-btn tool-btn" data-tool="sheetclear" onclick="CHR.setTool('sheetclear')" title="Clear Tile">🗑</button>
+          <button type="button" class="icon-btn" onclick="CHR.clearTileQueue()" title="Limpar fila de tiles">✖️</button>
+          <span style="font-size:10px;color:#888" id="lblSheetClipboard">Fila: 0</span>
+          <span style="width:1px;height:24px;background:#444;margin:0 2px"></span>
+          <button type="button" class="icon-btn" onclick="CHR.flipH()" title="Flip H (pixels do grupo)">↔️</button>
+          <button type="button" class="icon-btn" onclick="CHR.flipV()" title="Flip V (pixels do grupo)">↕️</button>
+          <button type="button" class="icon-btn" onclick="CHR.rotate()" title="Rotate 90°">🔄</button>
+          <button type="button" class="icon-btn" onclick="CHR.toggleSlotFlipH()" title="Flip H da célula (OAM)" style="background:#1a3a1a;border-color:#2a5a2a">↔</button>
+          <button type="button" class="icon-btn" onclick="CHR.toggleSlotFlipV()" title="Flip V da célula (OAM)" style="background:#1a3a1a;border-color:#2a5a2a">↕</button>
+          <span id="lblSlotFlip" style="font-size:10px;color:#888;min-width:28px">—</span>
+          <button type="button" class="icon-btn" onclick="CHR.shift('left')" title="Shift left">←</button>
+          <button type="button" class="icon-btn" onclick="CHR.shift('up')" title="Shift up">↑</button>
+          <button type="button" class="icon-btn" onclick="CHR.shift('down')" title="Shift down">↓</button>
+          <button type="button" class="icon-btn" onclick="CHR.shift('right')" title="Shift right">→</button>
+          <button type="button" class="icon-btn" onclick="CHR.clearGroup()" title="Clear group" style="background:#5a1a1a;border-color:#7d2525">🧹</button>
+          <button type="button" class="icon-btn" onclick="CHR.undo()" title="Undo">↩️</button>
         </div>
 
         <div style="display:flex;flex:1;overflow:hidden;min-height:0">
           <div style="width:560px;min-width:560px;background:#181818;padding:12px;display:flex;flex-direction:column;gap:8px;overflow:auto;border-right:1px solid #333">
-            <h3 style="font-size:11px;color:#4ec9b0">GRADE - PT0 $0000 (0-255) PT1 $1000 (256-511)</h3>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <select id="bankSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 8px;font-size:12px"></select>
+              <button class="btn-tool" style="background:#c0392b;color:#fff" onclick="CHR.addBank()">+ BANK</button>
+              <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ccc;cursor:pointer"><input type="checkbox" id="chkShowGrid"> grid</label>
+            </div>
             <canvas id="sheetCanvas" width="512" height="512" style="border:2px solid #333;background:#000;image-rendering:pixelated;cursor:crosshair;display:block"></canvas>
           </div>
 
           <div style="flex:1;background:#1e1e1e;padding:12px;display:flex;flex-direction:column;gap:10px;overflow:auto;min-width:460px">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-              <h3 style="font-size:11px;color:#4ec9b0">EDIÇÃO METATILE</h3>
-              <span style="font-size:10px;color:#888" id="lblMetatileSize">2x2 PT0</span>
-              <span style="font-size:10px;color:#888">Tiles: <b id="lblTileIndices" style="color:#ffcc00">$00,$01</b></span>
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+              <h3 style="font-size:11px;color:#4ec9b0;margin:0">EDIÇÃO METATILE</h3>
             </div>
-
-            <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;background:#252526;padding:6px 8px;border-radius:6px;border:1px solid #333">
-              <span style="font-size:10px;color:#888;margin-right:4px">TOOLS:</span>
-              <button class="btn-tool tool-btn active" data-tool="pen" onclick="CHR.setTool('pen')">🖊️ Pen</button>
-              <button class="btn-tool tool-btn" data-tool="erase" onclick="CHR.setTool('erase')" title="Apaga pixels (cor 0)">🧹 Erase</button>
-              <button class="btn-tool tool-btn" data-tool="line" onclick="CHR.setTool('line')">📏 Line</button>
-              <button class="btn-tool tool-btn" data-tool="rect" onclick="CHR.setTool('rect')">⬜ Rect</button>
-              <button class="btn-tool tool-btn" data-tool="circle" onclick="CHR.setTool('circle')">⭕ Circle</button>
-              <button class="btn-tool tool-btn" data-tool="fill" onclick="CHR.setTool('fill')">🪣 Fill</button>
-              <button class="btn-tool tool-btn" data-tool="copy" onclick="CHR.setTool('copy')">📋 Copy</button>
-              <button class="btn-tool tool-btn" data-tool="paste" onclick="CHR.setTool('paste')">📌 Paste</button>
-              <span style="color:#666;margin:0 4px;font-size:14px;user-select:none">|</span>
-              <button class="btn-tool tool-btn" data-tool="sheetcopy" onclick="CHR.setTool('sheetcopy')" title="Clique nos tiles da folha para adicioná-los à fila (pode vários)" style="height:26px;padding:0 8px;font-size:11px;line-height:1;box-sizing:border-box;display:inline-flex;align-items:center">🗐 Copiar Tile</button>
-              <button class="btn-tool tool-btn" data-tool="sheetpaste" onclick="CHR.setTool('sheetpaste')" title="Clique na folha para colar o tile selecionado na fila" style="height:26px;padding:0 8px;font-size:11px;line-height:1;box-sizing:border-box;display:inline-flex;align-items:center">📥 Colar Tile</button>
-              <button class="btn-tool tool-btn" data-tool="sheetclear" onclick="CHR.setTool('sheetclear')" title="Clique no tile da folha para zerar (16 bytes)" style="height:26px;padding:0 8px;font-size:11px;line-height:1;box-sizing:border-box;display:inline-flex;align-items:center">🗑 Clear Tile</button>
-              <button class="btn-tool" onclick="CHR.clearTileQueue()" title="Limpa a fila de tiles copiados" style="height:26px;padding:0 8px;font-size:11px;line-height:1;box-sizing:border-box;display:inline-flex;align-items:center">🗑 Fila</button>
-              <span style="font-size:10px;color:#888;margin-left:4px" id="lblSheetClipboard">Fila: 0 tiles</span>
-              <div style="width:1px;height:18px;background:#444;margin:0 6px"></div>
-              <button class="btn-tool" onclick="CHR.undo()" style="background:#555;color:#fff">↩️ Undo</button>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:#111;border:1px solid #333;border-radius:6px;padding:8px">
+              <span style="font-size:10px;color:#4ec9b0;font-weight:700">METATILE</span>
+              <select id="tileColsSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:3px"></select>
+              <span style="color:#666">×</span>
+              <select id="tileRowsSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:3px"></select>
+              <button class="btn-tool" onclick="CHR.applyGridResize()" style="background:#2980b9;color:#fff;font-size:11px;padding:3px 8px">Redimensionar</button>
+              <span style="font-size:11px;color:#888">Slot <b id="lblActiveSlot" style="color:#ffcc00">1/4</b></span>
+              <button class="btn-tool" onclick="CHR.autoFill()">Auto</button>
+              <span style="color:#444;margin:0 4px">|</span>
+              <select id="metatileSelect" style="min-width:160px;background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px" onchange="CHR.onMetatileSelectChange()"><option value="">— Metatiles —</option></select>
+              <button class="btn-tool" style="background:#27ae60;color:#fff" onclick="CHR.saveMetatile()">💾 Save</button>
+              <button class="btn-tool" style="background:#4ec9b0;color:#111" onclick="CHR.newTile()">✨ New</button>
+              <button class="btn-tool" style="background:#f39c12;color:#111" onclick="CHR.renameMetatile()">✏️ Rename</button>
+              <button class="btn-tool" onclick="CHR.deleteMetatile()">🗑️</button>
             </div>
 
             <!-- FILA DE TILES (copiar/colar) - mesma ideia do seletor rápido -->
@@ -128,47 +146,26 @@ const CHR = (() => {
               <div id="tileQueueSelector" style="display:flex;gap:6px;flex-wrap:wrap;min-height:40px"></div>
             </div>
 
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <button class="btn-tool" onclick="CHR.flipH()" title="Espelha PIXELS do grupo (reescreve CHR)">Flip H px</button>
-              <button class="btn-tool" onclick="CHR.flipV()" title="Espelha PIXELS do grupo (reescreve CHR)">Flip V px</button>
-              <button class="btn-tool" onclick="CHR.rotate()">Rotate</button>
-              <div style="display:flex;align-items:center;gap:4px;margin-left:6px;border-left:1px solid #444;padding-left:8px">
-                <span style="font-size:9px;color:#7dcea0">célula:</span>
-                <button class="btn-tool" onclick="CHR.toggleSlotFlipH()" title="Flip H nesta célula do metatile (reusa tile no CHR)" style="background:#1a3a1a;color:#7dcea0">↔ H</button>
-                <button class="btn-tool" onclick="CHR.toggleSlotFlipV()" title="Flip V nesta célula do metatile" style="background:#1a3a1a;color:#7dcea0">↕ V</button>
-                <span id="lblSlotFlip" style="font-size:10px;color:#888">slot: —</span>
-              </div>
-              <button class="btn-tool" onclick="CHR.shift('left')">←</button>
-              <button class="btn-tool" onclick="CHR.shift('up')">↑</button>
-              <button class="btn-tool" onclick="CHR.shift('down')">↓</button>
-              <button class="btn-tool" onclick="CHR.shift('right')">→</button>
-              <button class="btn-tool" style="background:#c0392b;color:#fff" onclick="CHR.clearGroup()">Clear</button>
-              <div style="display:flex;align-items:center;gap:4px;margin-left:8px;border-left:1px solid #444;padding-left:8px">
-                <select id="metatileSelect" style="min-width:200px;background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px" onchange="CHR.onMetatileSelectChange()"><option value="">— Metatiles —</option></select>
-                <button class="btn-tool" style="background:#27ae60;color:#fff" onclick="CHR.saveMetatile()">💾 Save</button>
-                <button class="btn-tool" style="background:#4ec9b0;color:#111" onclick="CHR.newTile()">✨ New</button>
-                <button class="btn-tool" style="background:#f39c12;color:#111" onclick="CHR.renameMetatile()" title="Renomeia o metatile selecionado">✏️ Rename</button>
-                <button class="btn-tool" onclick="CHR.deleteMetatile()">🗑️</button>
-              </div>
-            </div>
-
-            <!-- SELETOR RÁPIDO DE TILES - que você pediu pra voltar -->
             <div style="background:#111;border:1px solid #333;border-radius:6px;padding:8px">
-              <h4 style="font-size:10px;color:#4ec9b0;margin-bottom:6px">SELETOR RÁPIDO - TILES SELECIONADOS (clique pra trocar slot ativo)</h4>
-              <div id="quickTileSelector" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+              <h4 style="font-size:10px;color:#4ec9b0;margin:0 0 6px">ZOOM / EDIÇÃO</h4>
+              <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+                <div>
+                  <canvas id="zoomCanvas" width="320" height="320" style="border:1px solid #555;background:#000;image-rendering:pixelated;cursor:crosshair;display:block;min-width:320px;min-height:320px"></canvas>
+                  <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:#888;cursor:pointer;margin-top:6px"><input type="checkbox" id="chkMetatileGrid" checked onchange="CHR.renderAll()"> grid (tiles + pixels)</label>
+                </div>
+                <div style="flex:1;min-width:120px">
+                  <div style="font-size:10px;color:#888;margin-bottom:6px">PREVIEW 1:1 + PALETA RÁPIDA</div>
+                  <canvas id="previewCanvas" width="128" height="128" style="border:1px solid #333;background:#000;image-rendering:pixelated;display:block"></canvas>
+                  <div style="display:flex;gap:6px;margin-top:10px" id="quickColors"></div>
+                  <div style="font-size:10px;color:#666;margin-top:8px;line-height:1.4">Esquerdo desenha · direito pega cor · teclas 1–4</div>
+                </div>
+              </div>
             </div>
 
-            <div style="display:flex;gap:12px;align-items:flex-start">
-              <div>
-                <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:#888;margin-bottom:4px;cursor:pointer"><input type="checkbox" id="chkMetatileGrid" checked onchange="CHR.renderAll()"> grid entre tiles</label>
-                <canvas id="zoomCanvas" width="320" height="320" style="border:1px solid #555;background:#000;image-rendering:pixelated;cursor:crosshair;display:block;min-width:320px;min-height:320px"></canvas>
-                <div style="font-size:10px;color:#666;margin-top:6px">Botão esquerdo desenha, direito pega cor (teclas 1-4 troca cor)</div>
-              </div>
-              <div style="flex:1">
-                <div style="font-size:10px;color:#888;margin-bottom:6px">PREVIEW 1:1 + PALETA RÁPIDA</div>
-                <canvas id="previewCanvas" width="128" height="128" style="border:1px solid #333;background:#000;image-rendering:pixelated;display:block"></canvas>
-                <div style="display:flex;gap:6px;margin-top:10px" id="quickColors"></div>
-              </div>
+            <!-- SELETOR RÁPIDO DE TILES -->
+            <div style="background:#111;border:1px solid #333;border-radius:6px;padding:8px">
+              <h4 style="font-size:10px;color:#4ec9b0;margin-bottom:6px">SELETOR BASE — tiles do metatile (clique = slot ativo)</h4>
+              <div id="quickTileSelector" style="display:flex;gap:6px;flex-wrap:wrap"></div>
             </div>
 
             <div style="background:#111;border:1px solid #333;border-radius:6px;padding:8px">
@@ -844,12 +841,40 @@ const CHR = (() => {
       zoomCtx.strokeRect(1, 1, zoomCanvas.width-2, zoomCanvas.height-2);
       zoomCtx.restore();
     }
-    if(document.getElementById('chkMetatileGrid')?.checked && (gridW>1 || gridH>1)){
+    if(document.getElementById('chkMetatileGrid')?.checked){
       zoomCtx.save();
-      zoomCtx.strokeStyle = "rgba(255,255,0,0.6)";
+      const scale = 16; // 1 pixel NES = 16 CSS px no zoom
+      const totalPxW = gridW * 8;
+      const totalPxH = gridH * 8;
+      // grid pontilhado por pixel
+      zoomCtx.strokeStyle = "rgba(255,255,255,0.18)";
       zoomCtx.lineWidth = 1;
-      for(let gx=1; gx<gridW; gx++){ zoomCtx.beginPath(); zoomCtx.moveTo(gx*8*16+0.5, 0); zoomCtx.lineTo(gx*8*16+0.5, zoomCanvas.height); zoomCtx.stroke(); }
-      for(let gy=1; gy<gridH; gy++){ zoomCtx.beginPath(); zoomCtx.moveTo(0, gy*8*16+0.5); zoomCtx.lineTo(zoomCanvas.width, gy*8*16+0.5); zoomCtx.stroke(); }
+      zoomCtx.setLineDash([1, 2]);
+      for(let px=1; px<totalPxW; px++){
+        if(px % 8 === 0) continue; // divisa de tile fica sólida
+        const x = px * scale + 0.5;
+        zoomCtx.beginPath(); zoomCtx.moveTo(x, 0); zoomCtx.lineTo(x, zoomCanvas.height); zoomCtx.stroke();
+      }
+      for(let py=1; py<totalPxH; py++){
+        if(py % 8 === 0) continue;
+        const y = py * scale + 0.5;
+        zoomCtx.beginPath(); zoomCtx.moveTo(0, y); zoomCtx.lineTo(zoomCanvas.width, y); zoomCtx.stroke();
+      }
+      // linhas cheias na divisa dos tiles
+      zoomCtx.setLineDash([]);
+      zoomCtx.strokeStyle = "rgba(255,255,0,0.7)";
+      zoomCtx.lineWidth = 1;
+      for(let gx=1; gx<gridW; gx++){
+        const x = gx * 8 * scale + 0.5;
+        zoomCtx.beginPath(); zoomCtx.moveTo(x, 0); zoomCtx.lineTo(x, zoomCanvas.height); zoomCtx.stroke();
+      }
+      for(let gy=1; gy<gridH; gy++){
+        const y = gy * 8 * scale + 0.5;
+        zoomCtx.beginPath(); zoomCtx.moveTo(0, y); zoomCtx.lineTo(zoomCanvas.width, y); zoomCtx.stroke();
+      }
+      // borda externa do metatile
+      zoomCtx.strokeStyle = "rgba(255,255,0,0.45)";
+      zoomCtx.strokeRect(0.5, 0.5, zoomCanvas.width-1, zoomCanvas.height-1);
       zoomCtx.restore();
     }
     if((tool==='line'||tool==='rect'||tool==='circle')&&toolStart&&toolPreviewEnd){
@@ -1226,9 +1251,10 @@ const CHR = (() => {
     tool=t; toolStart=null; toolPreviewEnd=null; if(copyDrag) copyDrag.active=false;
     try{
       document.querySelectorAll('.tool-btn').forEach(b=>{
-        b.classList.toggle('active', b.dataset.tool===t);
-        if(b.dataset.tool===t){ b.style.background='#ffcc00'; b.style.color='#000'; }
-        else { b.style.background=''; b.style.color=''; }
+        const on = b.dataset.tool===t;
+        b.classList.toggle('active', on);
+        if(on){ b.style.background='#007acc'; b.style.borderColor='#007acc'; }
+        else { b.style.background=''; b.style.borderColor=''; }
       });
     }catch(e){}
     // dica de status
