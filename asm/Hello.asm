@@ -1,7 +1,7 @@
 ; NES Maker Studio - BUILD v0.9.17 - fix: sprite do herói volta a usar arte real (pool unificado)
 ; NROM-256 | player e inimigos compartilham o mesmo empacotador de CHR $0000
-; Telas: 7 · CHR tiles (fundo): 32/256
-; CHR tiles (sprites): 14/256
+; Telas: 6 · CHR tiles (fundo): 27/256
+; CHR tiles (sprites): 13/256
 ; Instâncias: 5
 ; AVISO: frame maior que 2x2 truncado - Simon / Idle / frame 1 (2x4 → 2x2)
 ; Herói: "Hero" (charIdx 0, 1 frame(s))
@@ -11,7 +11,6 @@
 ;   [3] play · Tela 3
 ;   [4] play · Tela 4
 ;   [5] play · tela final fase 1
-;   [6] splash · Game Over
 ; Musica: dr-wily-stage-1 · 3 canal(is)
 
 .segment "HEADER"
@@ -61,6 +60,20 @@ cell_bl:      .res 1
 cell_br:      .res 1
 oam_off:      .res 1   ; scratch: offset ($10 + slot*16) dentro da pagina $02xx
 inst_scr_x:   .res 1   ; Camada 5: posicao X na tela (inst_x - scroll_x) do slot sendo desenhado
+cell_tl_fl:   .res 1   ; flip por celula (bits de atributo OAM ja convertidos) do frame atual
+cell_tr_fl:   .res 1
+cell_bl_fl:   .res 1
+cell_br_fl:   .res 1
+ovl_tl:       .res 1   ; sprites sobrepostos do player (Camada 3 fix): tiles + flip+paleta
+ovl_tr:       .res 1
+ovl_bl:       .res 1
+ovl_br:       .res 1
+ovl_tl_fl:    .res 1
+ovl_tr_fl:    .res 1
+ovl_bl_fl:    .res 1
+ovl_br_fl:    .res 1
+ovl_dx:       .res 1
+ovl_dy:       .res 1
 inst_grounded: .res 1  ; scratch: resultado de check_ground_inst (Camada 4)
 en_tmp:     .res 1
 music_on:   .res 1
@@ -413,12 +426,16 @@ psn_at:
 update_player_oam:
   LDA player_on
   BNE upo_draw
-  ; esconde: Y=$FF nos 4 slots
+  ; esconde: Y=$FF nos 8 slots (4 base + 4 overlay)
   LDA #$FF
   STA $0200
   STA $0204
   STA $0208
   STA $020C
+  STA $0210
+  STA $0214
+  STA $0218
+  STA $021C
   RTS
 upo_draw:
   ; tmp0/tmp1 -> ponteiro pros 4 bytes do frame atual (TL,TR,BL,BR)
@@ -443,9 +460,33 @@ upo_draw:
   INY
   LDA (tmp0),Y
   STA cell_br
+  ; mesmo offset (frame*4), agora na tabela de flip por celula (ja em bits de atributo
+  ; OAM: bit6=H bit7=V) - se combina por XOR com o flip de direcao (player_flip) abaixo.
+  LDA player_frame
+  ASL A
+  ASL A
+  CLC
+  ADC #<CharFlips_0
+  STA tmp0
+  LDA #>CharFlips_0
+  ADC #0
+  STA tmp1
+  LDY #0
+  LDA (tmp0),Y
+  STA cell_tl_fl
+  INY
+  LDA (tmp0),Y
+  STA cell_tr_fl
+  INY
+  LDA (tmp0),Y
+  STA cell_bl_fl
+  INY
+  LDA (tmp0),Y
+  STA cell_br_fl
   LDA player_flip
   BEQ upo_noflip
-  ; flip H: espelha o metasprite trocando TL<->TR e BL<->BR
+  ; flip H de direcao: espelha o metasprite trocando TL<->TR e BL<->BR (tile e flip
+  ; autoral viajam juntos)
   LDA cell_tl
   PHA
   LDA cell_tr
@@ -458,10 +499,22 @@ upo_draw:
   STA cell_bl
   PLA
   STA cell_br
+  LDA cell_tl_fl
+  PHA
+  LDA cell_tr_fl
+  STA cell_tl_fl
+  PLA
+  STA cell_tr_fl
+  LDA cell_bl_fl
+  PHA
+  LDA cell_br_fl
+  STA cell_bl_fl
+  PLA
+  STA cell_br_fl
 upo_noflip:
   LDA player_flip
   BEQ upo_attr0
-  LDA #%01000000     ; flip H
+  LDA #%01000000     ; flip H de direcao
   STA tmp0
   JMP upo_write
 upo_attr0:
@@ -476,7 +529,8 @@ upo_write:
   STA $0200
   LDA cell_tl
   STA $0201
-  LDA tmp0
+  LDA cell_tl_fl
+  EOR tmp0
   STA $0202
   LDA player_x
   STA $0203
@@ -493,7 +547,8 @@ upo_tr:
   STA $0204
   LDA cell_tr
   STA $0205
-  LDA tmp0
+  LDA cell_tr_fl
+  EOR tmp0
   STA $0206
   LDA player_x
   CLC
@@ -514,7 +569,8 @@ upo_bl:
   STA $0208
   LDA cell_bl
   STA $0209
-  LDA tmp0
+  LDA cell_bl_fl
+  EOR tmp0
   STA $020A
   LDA player_x
   STA $020B
@@ -533,16 +589,200 @@ upo_br:
   STA $020C
   LDA cell_br
   STA $020D
-  LDA tmp0
+  LDA cell_br_fl
+  EOR tmp0
   STA $020E
   LDA player_x
   CLC
   ADC #8
   STA $020F
-  RTS
+  JMP upo_overlay
 upo_br_hide:
   LDA #$FF
   STA $020C
+
+; --- sprites sobrepostos do player (mt.overlay) - $0210-$021F. Le do MESMO indice de
+; frame que a camada base (CharOv*_${heroCharIdx}), independente do flip de direcao (v1:
+; overlay nao espelha automaticamente com a direcao - desenha sempre como autorado).
+upo_overlay:
+  ; Camada 3 fix: escolhe a tabela normal ou espelhada (*Flip) dependendo da direcao -
+  ; o espelhamento (posicao+conteudo+dx) ja foi calculado em JS na geracao do build,
+  ; aqui so' escolhemos qual conjunto de tabelas ler.
+  LDA player_flip
+  BEQ upo_ov_normal
+  LDA player_frame
+  ASL A
+  ASL A
+  CLC
+  ADC #<CharOvCellsFlip_0
+  STA tmp0
+  LDA #>CharOvCellsFlip_0
+  ADC #0
+  STA tmp1
+  JMP upo_ov_read_cells
+upo_ov_normal:
+  LDA player_frame
+  ASL A
+  ASL A
+  CLC
+  ADC #<CharOvCells_0
+  STA tmp0
+  LDA #>CharOvCells_0
+  ADC #0
+  STA tmp1
+upo_ov_read_cells:
+  LDY #0
+  LDA (tmp0),Y
+  STA ovl_tl
+  INY
+  LDA (tmp0),Y
+  STA ovl_tr
+  INY
+  LDA (tmp0),Y
+  STA ovl_bl
+  INY
+  LDA (tmp0),Y
+  STA ovl_br
+  LDA player_flip
+  BEQ upo_ov_flips_normal
+  LDA player_frame
+  ASL A
+  ASL A
+  CLC
+  ADC #<CharOvFlipsFlip_0
+  STA tmp0
+  LDA #>CharOvFlipsFlip_0
+  ADC #0
+  STA tmp1
+  JMP upo_ov_read_flips
+upo_ov_flips_normal:
+  LDA player_frame
+  ASL A
+  ASL A
+  CLC
+  ADC #<CharOvFlips_0
+  STA tmp0
+  LDA #>CharOvFlips_0
+  ADC #0
+  STA tmp1
+upo_ov_read_flips:
+  LDY #0
+  LDA (tmp0),Y
+  STA ovl_tl_fl
+  INY
+  LDA (tmp0),Y
+  STA ovl_tr_fl
+  INY
+  LDA (tmp0),Y
+  STA ovl_bl_fl
+  INY
+  LDA (tmp0),Y
+  STA ovl_br_fl
+  LDA player_flip
+  BEQ upo_ov_dx_normal
+  LDY player_frame
+  LDA CharOvDxFlip_0,Y
+  STA ovl_dx
+  JMP upo_ov_dy
+upo_ov_dx_normal:
+  LDY player_frame
+  LDA CharOvDx_0,Y
+  STA ovl_dx
+upo_ov_dy:
+  LDY player_frame
+  LDA CharOvDy_0,Y
+  STA ovl_dy
+  ; --- overlay TL ---
+  LDA ovl_tl
+  CMP #$FF
+  BEQ upo_ov_tl_hide
+  LDA player_y
+  CLC
+  ADC ovl_dy
+  STA $0210
+  LDA ovl_tl
+  STA $0211
+  LDA ovl_tl_fl
+  STA $0212
+  LDA player_x
+  CLC
+  ADC ovl_dx
+  STA $0213
+  JMP upo_ov_tr
+upo_ov_tl_hide:
+  LDA #$FF
+  STA $0210
+upo_ov_tr:
+  ; --- overlay TR ---
+  LDA ovl_tr
+  CMP #$FF
+  BEQ upo_ov_tr_hide
+  LDA player_y
+  CLC
+  ADC ovl_dy
+  STA $0214
+  LDA ovl_tr
+  STA $0215
+  LDA ovl_tr_fl
+  STA $0216
+  LDA player_x
+  CLC
+  ADC ovl_dx
+  CLC
+  ADC #8
+  STA $0217
+  JMP upo_ov_bl
+upo_ov_tr_hide:
+  LDA #$FF
+  STA $0214
+upo_ov_bl:
+  ; --- overlay BL ---
+  LDA ovl_bl
+  CMP #$FF
+  BEQ upo_ov_bl_hide
+  LDA player_y
+  CLC
+  ADC ovl_dy
+  CLC
+  ADC #8
+  STA $0218
+  LDA ovl_bl
+  STA $0219
+  LDA ovl_bl_fl
+  STA $021A
+  LDA player_x
+  CLC
+  ADC ovl_dx
+  STA $021B
+  JMP upo_ov_br
+upo_ov_bl_hide:
+  LDA #$FF
+  STA $0218
+upo_ov_br:
+  ; --- overlay BR ---
+  LDA ovl_br
+  CMP #$FF
+  BEQ upo_ov_br_hide
+  LDA player_y
+  CLC
+  ADC ovl_dy
+  CLC
+  ADC #8
+  STA $021C
+  LDA ovl_br
+  STA $021D
+  LDA ovl_br_fl
+  STA $021E
+  LDA player_x
+  CLC
+  ADC ovl_dx
+  CLC
+  ADC #8
+  STA $021F
+  RTS
+upo_ov_br_hide:
+  LDA #$FF
+  STA $021C
   RTS
 
 ; avanca a animacao do heroi (mesmo esquema idle das instancias, mas so 1 personagem).
@@ -651,7 +891,13 @@ asr_noload:
 advance_screen_left:
   LDA nt_page
   EOR #1
-  STA nt_page
+  STA nt_page          ; nova esquerda = a pagina que ja segurava play_idx-1... nao,
+  ; espera - play_idx-1 ainda NAO esta em lugar nenhum, precisa ser carregada agora.
+  ; A pagina a escrever com play_idx-1 e' exatamente esse nt_page NOVO (a que segurava
+  ; a antiga DIREITA/play_idx+1, agora livre) - SEM EOR de novo (isso e' so' pro lado
+  ; direito, onde a pagina livre e' a antiga ESQUERDA = nt_page novo EOR 1). Usar EOR
+  ; aqui tambem sobrescrevia a pagina errada (a que ainda segura play_idx, destruindo a
+  ; tela que devia continuar visivel como nova direita) - bug real, corrigido.
   LDA play_idx        ; play_idx ainda e' o valor ANTIGO (esquerda antes da travessia)
   SEC
   SBC #1              ; nova esquerda = play_idx-1 - precisa ser carregada de novo
@@ -660,7 +906,6 @@ advance_screen_left:
   LDA PlayScreenTable,X
   PHA
   LDA nt_page
-  EOR #1
   BEQ asl_base0
   LDA #$24
   JMP asl_baseok
@@ -778,6 +1023,27 @@ load_frame_cellptr:
 lfc_done:
   RTS
 
+; igual load_frame_cellptr, mas aponta pros 4 bytes de FLIP (ja em bits de atributo
+; OAM: bit6=H bit7=V) do mesmo frame. Usa tmp0/tmp1 tambem - so' chamar depois de ja
+; ter lido os 4 bytes de tile pro scratch (cell_tl..br), senao um sobrescreve o outro.
+load_frame_flipptr:
+  LDA inst_char,X
+  TAY
+  LDA CharFrameFlipsLo,Y
+  STA tmp0
+  LDA CharFrameFlipsHi,Y
+  STA tmp1
+  LDA inst_frame,X
+  ASL A
+  ASL A                 ; frame*4
+  CLC
+  ADC tmp0
+  STA tmp0
+  BCC lff_done
+  INC tmp1
+lff_done:
+  RTS
+
 ; calcula oam_off = $10 + X*16 (X = slot). Preserva X.
 uio_calc_off:
   TXA
@@ -786,7 +1052,7 @@ uio_calc_off:
   ASL A
   ASL A                 ; X*16
   CLC
-  ADC #$10               ; pula os 4 sprites do player ($0200-$020F)
+  ADC #$20               ; pula os 8 sprites do player ($0200-$021F: base+overlay)
   STA oam_off
   RTS
 
@@ -827,9 +1093,25 @@ uio_x_ok:
   INY
   LDA (tmp0),Y
   STA cell_br
+  ; flip autoral por celula (editor: mirror dentro do metatile) - independente do flip
+  ; de direcao (inst_dir) que vem a seguir. Os dois se combinam por XOR na escrita.
+  JSR load_frame_flipptr
+  LDY #0
+  LDA (tmp0),Y
+  STA cell_tl_fl
+  INY
+  LDA (tmp0),Y
+  STA cell_tr_fl
+  INY
+  LDA (tmp0),Y
+  STA cell_bl_fl
+  INY
+  LDA (tmp0),Y
+  STA cell_br_fl
   LDA inst_dir,X
   BEQ uio_noflip
-  ; flip H: espelha o metasprite trocando TL<->TR e BL<->BR
+  ; flip H de direcao: espelha o metasprite trocando TL<->TR e BL<->BR (tile E flip
+  ; autoral viajam juntos - cada celula continua com seu proprio flip depois da troca)
   LDA cell_tl
   PHA
   LDA cell_tr
@@ -842,6 +1124,18 @@ uio_x_ok:
   STA cell_bl
   PLA
   STA cell_br
+  LDA cell_tl_fl
+  PHA
+  LDA cell_tr_fl
+  STA cell_tl_fl
+  PLA
+  STA cell_tr_fl
+  LDA cell_bl_fl
+  PHA
+  LDA cell_br_fl
+  STA cell_bl_fl
+  PLA
+  STA cell_br_fl
 uio_noflip:
   JSR uio_calc_off
   LDY oam_off
@@ -853,7 +1147,8 @@ uio_noflip:
   STA $0200,Y
   LDA cell_tl
   STA $0201,Y
-  LDA inst_dir,X
+  LDA cell_tl_fl
+  EOR inst_dir,X
   STA $0202,Y
   LDA inst_scr_x
   STA $0203,Y
@@ -870,7 +1165,8 @@ uio_tr:
   STA $0204,Y
   LDA cell_tr
   STA $0205,Y
-  LDA inst_dir,X
+  LDA cell_tr_fl
+  EOR inst_dir,X
   STA $0206,Y
   LDA inst_scr_x
   CLC
@@ -891,7 +1187,8 @@ uio_bl:
   STA $0208,Y
   LDA cell_bl
   STA $0209,Y
-  LDA inst_dir,X
+  LDA cell_bl_fl
+  EOR inst_dir,X
   STA $020A,Y
   LDA inst_scr_x
   STA $020B,Y
@@ -910,7 +1207,8 @@ uio_br:
   STA $020C,Y
   LDA cell_br
   STA $020D,Y
-  LDA inst_dir,X
+  LDA cell_br_fl
+  EOR inst_dir,X
   STA $020E,Y
   LDA inst_scr_x
   CLC
@@ -1523,6 +1821,8 @@ uls_have:
 uls_no_cross:
   LDA #1
   STA player_flip
+  JMP up_jump          ; NAO cair em up_left_move - senao o player anda De novo por
+  ; cima do que o scroll ja moveu (dobra a velocidade percebida - bug reportado)
 up_left_move:
   ; tile X na borda esquerda proposta (x-3+2) - movimento livre dentro da deadzone
   LDA player_x
@@ -1798,7 +2098,7 @@ st_play:
   LDA #2
   STA game_state
   JSR hide_player
-  LDA #6
+  LDA #5
   JSR load_screen
 st_play_done:
   JMP MainLoop
@@ -1826,7 +2126,6 @@ ScreenNtLo:
   .byte <Nametable_3
   .byte <Nametable_4
   .byte <Nametable_5
-  .byte <Nametable_6
 ScreenNtHi:
   .byte >Nametable_0
   .byte >Nametable_1
@@ -1834,7 +2133,6 @@ ScreenNtHi:
   .byte >Nametable_3
   .byte >Nametable_4
   .byte >Nametable_5
-  .byte >Nametable_6
 ScreenAtLo:
   .byte <Attr_0
   .byte <Attr_1
@@ -1842,7 +2140,6 @@ ScreenAtLo:
   .byte <Attr_3
   .byte <Attr_4
   .byte <Attr_5
-  .byte <Attr_6
 ScreenAtHi:
   .byte >Attr_0
   .byte >Attr_1
@@ -1850,7 +2147,6 @@ ScreenAtHi:
   .byte >Attr_3
   .byte >Attr_4
   .byte >Attr_5
-  .byte >Attr_6
 ScreenColLo:
   .byte <Collision_0
   .byte <Collision_1
@@ -1858,7 +2154,6 @@ ScreenColLo:
   .byte <Collision_3
   .byte <Collision_4
   .byte <Collision_5
-  .byte <Collision_6
 ScreenColHi:
   .byte >Collision_0
   .byte >Collision_1
@@ -1866,7 +2161,6 @@ ScreenColHi:
   .byte >Collision_3
   .byte >Collision_4
   .byte >Collision_5
-  .byte >Collision_6
 PlayScreenTable:  ; indices globais das telas de jogo (em ordem)
   .byte 1, 2, 3, 4, 5
 
@@ -1900,15 +2194,63 @@ EnemySpawnHi:
   .byte >EnemyData_4
 
 CharCells_0:  ; Hero
-  .byte $00, $01, $02, $03
+  .byte $00, $00, $01, $02
+CharFlips_0:  ; flip por celula ja convertido pra bits de atributo OAM (bit6=H bit7=V)
+  .byte $00, $40, $00, $00
+CharOvCells_0:  ; sprites sobrepostos (mt.overlay) - $FF em todas = sem overlay nesse frame
+  .byte $03, $04, $FF, $FF
+CharOvFlips_0:  ; flip+paleta do overlay ja combinados (bit0-1=paleta bit6-7=flip)
+  .byte $00, $00, $00, $00
+CharOvDx_0:
+  .byte $00
+CharOvDy_0:
+  .byte $03
+CharOvCellsFlip_0:  ; variante espelhada (usada quando player_flip != 0)
+  .byte $04, $03, $FF, $FF
+CharOvFlipsFlip_0:
+  .byte $40, $40, $40, $40
+CharOvDxFlip_0:
+  .byte $00
 CharDur_0:
   .byte 8
 CharCells_1:  ; enemy
-  .byte $04, $05, $06, $07, $04, $05, $08, $07, $04, $05, $06, $07, $04, $05, $09, $07
+  .byte $05, $06, $07, $08, $05, $06, $09, $08, $05, $06, $07, $08, $05, $06, $0A, $08
+CharFlips_1:  ; flip por celula ja convertido pra bits de atributo OAM (bit6=H bit7=V)
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+CharOvCells_1:  ; sprites sobrepostos (mt.overlay) - $FF em todas = sem overlay nesse frame
+  .byte $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF
+CharOvFlips_1:  ; flip+paleta do overlay ja combinados (bit0-1=paleta bit6-7=flip)
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+CharOvDx_1:
+  .byte $00, $00, $00, $00
+CharOvDy_1:
+  .byte $00, $00, $00, $00
+CharOvCellsFlip_1:  ; variante espelhada (usada quando player_flip != 0)
+  .byte $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF
+CharOvFlipsFlip_1:
+  .byte $40, $40, $40, $40, $40, $40, $40, $40, $40, $40, $40, $40, $40, $40, $40, $40
+CharOvDxFlip_1:
+  .byte $00, $00, $00, $00
 CharDur_1:
   .byte 8, 8, 8, 8
 CharCells_2:  ; Simon
-  .byte $0A, $0B, $0C, $0D
+  .byte $03, $04, $0B, $0C
+CharFlips_2:  ; flip por celula ja convertido pra bits de atributo OAM (bit6=H bit7=V)
+  .byte $00, $00, $00, $00
+CharOvCells_2:  ; sprites sobrepostos (mt.overlay) - $FF em todas = sem overlay nesse frame
+  .byte $FF, $FF, $FF, $FF
+CharOvFlips_2:  ; flip+paleta do overlay ja combinados (bit0-1=paleta bit6-7=flip)
+  .byte $00, $00, $00, $00
+CharOvDx_2:
+  .byte $00
+CharOvDy_2:
+  .byte $00
+CharOvCellsFlip_2:  ; variante espelhada (usada quando player_flip != 0)
+  .byte $FF, $FF, $FF, $FF
+CharOvFlipsFlip_2:
+  .byte $40, $40, $40, $40
+CharOvDxFlip_2:
+  .byte $00
 CharDur_2:
   .byte 8
 CharFrameCellsLo:
@@ -1919,6 +2261,14 @@ CharFrameCellsHi:
   .byte >CharCells_0
   .byte >CharCells_1
   .byte >CharCells_2
+CharFrameFlipsLo:
+  .byte <CharFlips_0
+  .byte <CharFlips_1
+  .byte <CharFlips_2
+CharFrameFlipsHi:
+  .byte >CharFlips_0
+  .byte >CharFlips_1
+  .byte >CharFlips_2
 CharFrameDurLo:
   .byte <CharDur_0
   .byte <CharDur_1
@@ -2338,74 +2688,6 @@ Collision_5:
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
 
-Nametable_6:  ; Game Over (splash)
-  .byte $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17
-  .byte $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17
-  .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
-  .byte $02, $03, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $1B, $0E, $1C, $07, $0A, $1D, $1E, $07, $10, $1F, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $05
-  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
-  .byte $17, $01, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $17, $17
-  .byte $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17
-  .byte $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17
-Attr_6:
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-Collision_6:
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-
 ; --- Music data ---
 ; canal 0: pulse1
 PitchLo_ch0:
@@ -2597,19 +2879,19 @@ Time_ch2:
 .segment "CHARS"
   ; pg0 sprites (empacotado a partir dos frames dos personagens) / pg1 background empacotado
   .byte $00, $00, $00, $1F, $10, $10, $12, $10, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $F8, $08, $08, $28, $08, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $14, $13, $10, $10, $1F, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $08, $E8, $08, $08, $F8, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $01, $03, $03, $1F, $3F, $3F, $FF, $00, $01, $03, $03, $1F, $21, $30, $FF
+  .byte $F0, $F8, $C8, $D8, $C8, $E8, $B8, $C0, $F0, $F8, $F8, $A8, $B8, $D8, $78, $E0
   .byte $00, $03, $0C, $10, $11, $23, $20, $40, $00, $00, $03, $0F, $0E, $1C, $1F, $3F
   .byte $80, $60, $18, $04, $84, $82, $02, $41, $00, $80, $E0, $F8, $78, $7C, $FC, $BE
   .byte $27, $39, $02, $06, $04, $03, $00, $00, $18, $00, $01, $01, $03, $00, $00, $00
   .byte $C2, $02, $04, $04, $18, $60, $C0, $80, $3C, $FC, $F8, $F8, $E0, $80, $40, $80
   .byte $27, $38, $00, $01, $01, $03, $01, $00, $18, $00, $00, $00, $00, $00, $00, $00
   .byte $21, $23, $1C, $10, $0C, $03, $00, $00, $1E, $1C, $03, $0F, $03, $00, $00, $00
-  .byte $00, $01, $03, $03, $1F, $3F, $3F, $FF, $00, $01, $03, $03, $1F, $21, $30, $FF
-  .byte $F0, $F8, $C8, $D8, $C8, $E8, $B8, $C0, $F0, $F8, $F8, $A8, $B8, $D8, $78, $E0
   .byte $7F, $9F, $BF, $FF, $3F, $3F, $1F, $1F, $F0, $F9, $FF, $FF, $3F, $3D, $0F, $15
   .byte $E0, $F0, $9E, $99, $B9, $FA, $FC, $C0, $00, $F0, $FE, $FF, $EF, $CE, $FC, $40
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
@@ -2880,11 +3162,11 @@ Time_ch2:
   .byte $7E, $60, $60, $7C, $60, $60, $60, $00, $7E, $60, $60, $7C, $60, $60, $60, $00
   .byte $00, $00, $7C, $66, $66, $66, $66, $00, $00, $00, $7C, $66, $66, $66, $66, $00
   .byte $00, $00, $3C, $62, $60, $62, $3C, $00, $00, $00, $3C, $62, $60, $62, $3C, $00
-  .byte $3C, $62, $60, $6E, $66, $66, $3C, $00, $3C, $62, $60, $6E, $66, $66, $3C, $00
-  .byte $00, $00, $FE, $DB, $DB, $DB, $DB, $00, $00, $00, $FE, $DB, $DB, $DB, $DB, $00
-  .byte $3C, $66, $66, $66, $66, $66, $3C, $00, $3C, $66, $66, $66, $66, $66, $3C, $00
-  .byte $00, $00, $66, $66, $66, $64, $78, $00, $00, $00, $66, $66, $66, $64, $78, $00
-  .byte $18, $18, $18, $18, $00, $18, $18, $00, $18, $18, $18, $18, $00, $18, $18, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00

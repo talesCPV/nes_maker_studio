@@ -138,4 +138,35 @@ Camada 6 — Regras compiladas
     play_sound          liga motor da faixa
     if_hitbox           teste AABB entre refs (nativo / terreno / char / obj)
 
-    Regras com scope de fase só rodam quando current_phase == ….
+    *Regras com scope de fase só rodam quando current_phase == ….
+
+    NÃO ESQUECER !!!
+
+    chr-editor.js, modal de importar imagem:
+    * Colocar botão de zoom in, zoom out.
+    * Mostar o grid dentro da área da seleção (importante para poder alinhar os pixels da imagem com o corte).
+    * Apesar da seleção ser por tiles o grid deve ser por pixel (sel 1x2 mostra um grid 8x16) .
+    * Ter um checkbox PB (coloca a imagem em Preto e Branco).
+    * O preview deve ser só da área selecionada (mesmo o crop não tenha sido feito).
+    * Este não sei se é possível, colocar um input range ou um campo numerico para ajustar o nearest da conversão da imagem.
+    * Colocar as 4 paletas abaixo para aplicar elas no preview.
+    * Deixar eu trocar as cores das paletas de lugar, mas só na imagem, por exemplo: seleciono uma paleta de 4 cores, ele vai aplicar as cores no meu preview, deixar eu trocar as cores de lugar (troco a cor 1 com a 3, ele inverte as cores no desenho, importa a imagem com as cores editadas mas não mexe na paleta original).
+    * Deixar o preview em runtime para o usuario ir fazendo os ajustes.
+
+    characters.js:
+    * Arrumar o flip tile dentro do metatile
+    * Quando selecionar "enemy" colocar um select para a inteligencia do NPC com os eventos custom criados em programação
+
+    program.js
+    * Em Regras->Ação inserir "Atirar", colocar as seleções: [personagem], [direção](além de cima baixo... coloque frente(pro lado que o npc estiver olhando)),[animação],[flips]
+    * Em Regras->Ação->Mover->direção colocar a opção zig-zag->(apresentar um campo numerico para selecionar o range de movimento, PS: é o movimento que esta hoje nos inimigos)
+    * Em Regras->Se evento->P1 ou P2 Idle, apresentar um campo numerico para selecionar o tempo, default 0.(será usado para animações)
+    * Em Regras->Ação adicionar a opção "Pausar o jogo" (usada para botão de pause)
+
+    dashboard.js:
+    * Colocar um select abaixo do tipo de scroll com as seguinte opções:
+    para transição hard-cut -> não mostrar o select
+    para scroll horizontal -> direita, esquerda, ambos
+    para scroll vertical -> cima, baixo, ambos
+    PS: Hoje estamos testando o scroll horizontal com ambos movimentos(mais dificil), mas podemos ter a opção da tela só ir para um lado e não permitir voltar(mais facil de implementar)
+    

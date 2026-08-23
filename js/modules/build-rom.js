@@ -512,19 +512,40 @@ const BUILD = (() => {
       const frames = (anim.frames || []).map((f, fi) => {
         const mt = mtById.get(f.metatileId);
         const duration = Math.max(1, Math.min(255, f.duration || 8));
-        if(!mt || !mt.tiles || !mt.w || !mt.h) return { cells: [], duration };
+        if(!mt || !mt.tiles || !mt.w || !mt.h) return { cells: [], duration, overlay: null };
         if(mt.w > 2 || mt.h > 2) truncated.push(`${c.name} / ${anim.name} / frame ${fi+1} (${mt.w}x${mt.h} → 2x2)`);
         const cells = [];
         for(let ty=0; ty<Math.min(2, mt.h); ty++){
           for(let tx=0; tx<Math.min(2, mt.w); tx++){
-            const raw = mt.tiles[ty*mt.w+tx] || 0;
+            const idx = ty*mt.w+tx;
+            const raw = mt.tiles[idx] || 0;
+            const flip = (mt.flips && mt.flips[idx]) || 0; // bit0=H bit1=V (convenção do CHR editor)
             const corner = ty*2+tx; // 0=TL 1=TR 2=BL 3=BR
-            cells.push({ tile: mapTile(raw), dx: CORNERS[corner].dx, dy: CORNERS[corner].dy, corner });
+            cells.push({ tile: mapTile(raw), flip, dx: CORNERS[corner].dx, dy: CORNERS[corner].dy, corner });
           }
         }
-        return { cells, duration };
+        // sprites sobrepostos (mt.overlay): camada extra opcional, mesmo grid da base, com
+        // deslocamento (dx,dy) e paleta próprios. Só processa se existir - fica null senão.
+        let overlay = null;
+        if(mt.overlay && mt.overlay.tiles && mt.overlay.tiles.length){
+          const ov = mt.overlay;
+          const ovCells = [];
+          for(let ty=0; ty<Math.min(2, mt.h); ty++){
+            for(let tx=0; tx<Math.min(2, mt.w); tx++){
+              const idx = ty*mt.w+tx;
+              const raw = ov.tiles[idx];
+              const corner = ty*2+tx;
+              if(raw == null || raw < 0) continue; // célula do overlay não usada nesse slot
+              const flip = (ov.flips && ov.flips[idx]) || 0;
+              ovCells.push({ tile: mapTile(raw), flip, corner });
+            }
+          }
+          const palIdx = ov.palette != null ? ov.palette : 5;
+          overlay = { cells: ovCells, dx: (ov.dx|0), dy: (ov.dy|0), palAttr: Math.max(0, Math.min(3, palIdx - 4)) };
+        }
+        return { cells, duration, overlay };
       });
-      return { id: c.id, name: c.name, frames: frames.length ? frames : [{ cells: [], duration: 8 }] };
+      return { id: c.id, name: c.name, frames: frames.length ? frames : [{ cells: [], duration: 8, overlay: null }] };
     });
     const spriteChr = new Uint8Array(4096);
     for(let i=0; i<usedTiles.length; i++){
@@ -597,9 +618,10 @@ const BUILD = (() => {
     // (sem herói cadastrado -> heroCharIdx cai no índice 0, que sempre existe - se for um
     // inimigo real ele "empresta" a arte por engano; se não houver personagem nenhum, cai no
     // placeholder $FF/oculto emitido por packSpriteCHR. Avisamos no log de qualquer forma.)
-    // orçamento de OAM: player fixo usa 4 sprites ($0200-$020F); cada instância usa até 4
-    // ($0210 em diante). 64 sprites totais / 4 = 16 metasprites - 1 do player = 15 no máximo.
-    const MAX_OAM_INSTANCES = 15;
+    // orçamento de OAM: player fixo usa 8 sprites ($0200-$021F: 4 base + 4 overlay reservados
+    // pro player, mesmo que o personagem atual não use overlay); cada instância usa até 4
+    // ($0220 em diante). (64-8) sprites / 4 = 14 metasprites de instância no máximo.
+    const MAX_OAM_INSTANCES = 14;
     const requestedInstances = Math.max(1, Math.min(20, parseInt(Project.data?.maxInstances) || 10));
     const NUM_INSTANCES = Math.min(requestedInstances, MAX_OAM_INSTANCES);
     const instanceOverflow = requestedInstances > MAX_OAM_INSTANCES;
@@ -698,6 +720,20 @@ const BUILD = (() => {
     L.push("cell_br:      .res 1");
     L.push("oam_off:      .res 1   ; scratch: offset ($10 + slot*16) dentro da pagina $02xx");
     L.push("inst_scr_x:   .res 1   ; Camada 5: posicao X na tela (inst_x - scroll_x) do slot sendo desenhado");
+    L.push("cell_tl_fl:   .res 1   ; flip por celula (bits de atributo OAM ja convertidos) do frame atual");
+    L.push("cell_tr_fl:   .res 1");
+    L.push("cell_bl_fl:   .res 1");
+    L.push("cell_br_fl:   .res 1");
+    L.push("ovl_tl:       .res 1   ; sprites sobrepostos do player (Camada 3 fix): tiles + flip+paleta");
+    L.push("ovl_tr:       .res 1");
+    L.push("ovl_bl:       .res 1");
+    L.push("ovl_br:       .res 1");
+    L.push("ovl_tl_fl:    .res 1");
+    L.push("ovl_tr_fl:    .res 1");
+    L.push("ovl_bl_fl:    .res 1");
+    L.push("ovl_br_fl:    .res 1");
+    L.push("ovl_dx:       .res 1");
+    L.push("ovl_dy:       .res 1");
     L.push("inst_grounded: .res 1  ; scratch: resultado de check_ground_inst (Camada 4)");
     L.push("en_tmp:     .res 1");
     if(musicChans){
@@ -996,12 +1032,16 @@ const BUILD = (() => {
     L.push("update_player_oam:");
     L.push("  LDA player_on");
     L.push("  BNE upo_draw");
-    L.push("  ; esconde: Y=$FF nos 4 slots");
+    L.push("  ; esconde: Y=$FF nos 8 slots (4 base + 4 overlay)");
     L.push("  LDA #$FF");
     L.push("  STA $0200");
     L.push("  STA $0204");
     L.push("  STA $0208");
     L.push("  STA $020C");
+    L.push("  STA $0210");
+    L.push("  STA $0214");
+    L.push("  STA $0218");
+    L.push("  STA $021C");
     L.push("  RTS");
     L.push("upo_draw:");
     L.push("  ; tmp0/tmp1 -> ponteiro pros 4 bytes do frame atual (TL,TR,BL,BR)");
@@ -1026,9 +1066,33 @@ const BUILD = (() => {
     L.push("  INY");
     L.push("  LDA (tmp0),Y");
     L.push("  STA cell_br");
+    L.push("  ; mesmo offset (frame*4), agora na tabela de flip por celula (ja em bits de atributo");
+    L.push("  ; OAM: bit6=H bit7=V) - se combina por XOR com o flip de direcao (player_flip) abaixo.");
+    L.push("  LDA player_frame");
+    L.push("  ASL A");
+    L.push("  ASL A");
+    L.push("  CLC");
+    L.push(`  ADC #<CharFlips_${heroCharIdx}`);
+    L.push("  STA tmp0");
+    L.push(`  LDA #>CharFlips_${heroCharIdx}`);
+    L.push("  ADC #0");
+    L.push("  STA tmp1");
+    L.push("  LDY #0");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA cell_tl_fl");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA cell_tr_fl");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA cell_bl_fl");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA cell_br_fl");
     L.push("  LDA player_flip");
     L.push("  BEQ upo_noflip");
-    L.push("  ; flip H: espelha o metasprite trocando TL<->TR e BL<->BR");
+    L.push("  ; flip H de direcao: espelha o metasprite trocando TL<->TR e BL<->BR (tile e flip");
+    L.push("  ; autoral viajam juntos)");
     L.push("  LDA cell_tl");
     L.push("  PHA");
     L.push("  LDA cell_tr");
@@ -1041,10 +1105,22 @@ const BUILD = (() => {
     L.push("  STA cell_bl");
     L.push("  PLA");
     L.push("  STA cell_br");
+    L.push("  LDA cell_tl_fl");
+    L.push("  PHA");
+    L.push("  LDA cell_tr_fl");
+    L.push("  STA cell_tl_fl");
+    L.push("  PLA");
+    L.push("  STA cell_tr_fl");
+    L.push("  LDA cell_bl_fl");
+    L.push("  PHA");
+    L.push("  LDA cell_br_fl");
+    L.push("  STA cell_bl_fl");
+    L.push("  PLA");
+    L.push("  STA cell_br_fl");
     L.push("upo_noflip:");
     L.push("  LDA player_flip");
     L.push("  BEQ upo_attr0");
-    L.push("  LDA #%01000000     ; flip H");
+    L.push("  LDA #%01000000     ; flip H de direcao");
     L.push("  STA tmp0");
     L.push("  JMP upo_write");
     L.push("upo_attr0:");
@@ -1059,7 +1135,8 @@ const BUILD = (() => {
     L.push("  STA $0200");
     L.push("  LDA cell_tl");
     L.push("  STA $0201");
-    L.push("  LDA tmp0");
+    L.push("  LDA cell_tl_fl");
+    L.push("  EOR tmp0");
     L.push("  STA $0202");
     L.push("  LDA player_x");
     L.push("  STA $0203");
@@ -1076,7 +1153,8 @@ const BUILD = (() => {
     L.push("  STA $0204");
     L.push("  LDA cell_tr");
     L.push("  STA $0205");
-    L.push("  LDA tmp0");
+    L.push("  LDA cell_tr_fl");
+    L.push("  EOR tmp0");
     L.push("  STA $0206");
     L.push("  LDA player_x");
     L.push("  CLC");
@@ -1097,7 +1175,8 @@ const BUILD = (() => {
     L.push("  STA $0208");
     L.push("  LDA cell_bl");
     L.push("  STA $0209");
-    L.push("  LDA tmp0");
+    L.push("  LDA cell_bl_fl");
+    L.push("  EOR tmp0");
     L.push("  STA $020A");
     L.push("  LDA player_x");
     L.push("  STA $020B");
@@ -1116,16 +1195,200 @@ const BUILD = (() => {
     L.push("  STA $020C");
     L.push("  LDA cell_br");
     L.push("  STA $020D");
-    L.push("  LDA tmp0");
+    L.push("  LDA cell_br_fl");
+    L.push("  EOR tmp0");
     L.push("  STA $020E");
     L.push("  LDA player_x");
     L.push("  CLC");
     L.push("  ADC #8");
     L.push("  STA $020F");
-    L.push("  RTS");
+    L.push("  JMP upo_overlay");
     L.push("upo_br_hide:");
     L.push("  LDA #$FF");
     L.push("  STA $020C");
+    L.push("");
+    L.push("; --- sprites sobrepostos do player (mt.overlay) - $0210-$021F. Le do MESMO indice de");
+    L.push("; frame que a camada base (CharOv*_${heroCharIdx}), independente do flip de direcao (v1:");
+    L.push("; overlay nao espelha automaticamente com a direcao - desenha sempre como autorado).");
+    L.push("upo_overlay:");
+    L.push("  ; Camada 3 fix: escolhe a tabela normal ou espelhada (*Flip) dependendo da direcao -");
+    L.push("  ; o espelhamento (posicao+conteudo+dx) ja foi calculado em JS na geracao do build,");
+    L.push("  ; aqui so' escolhemos qual conjunto de tabelas ler.");
+    L.push("  LDA player_flip");
+    L.push("  BEQ upo_ov_normal");
+    L.push("  LDA player_frame");
+    L.push("  ASL A");
+    L.push("  ASL A");
+    L.push("  CLC");
+    L.push(`  ADC #<CharOvCellsFlip_${heroCharIdx}`);
+    L.push("  STA tmp0");
+    L.push(`  LDA #>CharOvCellsFlip_${heroCharIdx}`);
+    L.push("  ADC #0");
+    L.push("  STA tmp1");
+    L.push("  JMP upo_ov_read_cells");
+    L.push("upo_ov_normal:");
+    L.push("  LDA player_frame");
+    L.push("  ASL A");
+    L.push("  ASL A");
+    L.push("  CLC");
+    L.push(`  ADC #<CharOvCells_${heroCharIdx}`);
+    L.push("  STA tmp0");
+    L.push(`  LDA #>CharOvCells_${heroCharIdx}`);
+    L.push("  ADC #0");
+    L.push("  STA tmp1");
+    L.push("upo_ov_read_cells:");
+    L.push("  LDY #0");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA ovl_tl");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA ovl_tr");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA ovl_bl");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA ovl_br");
+    L.push("  LDA player_flip");
+    L.push("  BEQ upo_ov_flips_normal");
+    L.push("  LDA player_frame");
+    L.push("  ASL A");
+    L.push("  ASL A");
+    L.push("  CLC");
+    L.push(`  ADC #<CharOvFlipsFlip_${heroCharIdx}`);
+    L.push("  STA tmp0");
+    L.push(`  LDA #>CharOvFlipsFlip_${heroCharIdx}`);
+    L.push("  ADC #0");
+    L.push("  STA tmp1");
+    L.push("  JMP upo_ov_read_flips");
+    L.push("upo_ov_flips_normal:");
+    L.push("  LDA player_frame");
+    L.push("  ASL A");
+    L.push("  ASL A");
+    L.push("  CLC");
+    L.push(`  ADC #<CharOvFlips_${heroCharIdx}`);
+    L.push("  STA tmp0");
+    L.push(`  LDA #>CharOvFlips_${heroCharIdx}`);
+    L.push("  ADC #0");
+    L.push("  STA tmp1");
+    L.push("upo_ov_read_flips:");
+    L.push("  LDY #0");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA ovl_tl_fl");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA ovl_tr_fl");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA ovl_bl_fl");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA ovl_br_fl");
+    L.push("  LDA player_flip");
+    L.push("  BEQ upo_ov_dx_normal");
+    L.push("  LDY player_frame");
+    L.push(`  LDA CharOvDxFlip_${heroCharIdx},Y`);
+    L.push("  STA ovl_dx");
+    L.push("  JMP upo_ov_dy");
+    L.push("upo_ov_dx_normal:");
+    L.push("  LDY player_frame");
+    L.push(`  LDA CharOvDx_${heroCharIdx},Y`);
+    L.push("  STA ovl_dx");
+    L.push("upo_ov_dy:");
+    L.push("  LDY player_frame");
+    L.push(`  LDA CharOvDy_${heroCharIdx},Y`);
+    L.push("  STA ovl_dy");
+    L.push("  ; --- overlay TL ---");
+    L.push("  LDA ovl_tl");
+    L.push("  CMP #$FF");
+    L.push("  BEQ upo_ov_tl_hide");
+    L.push("  LDA player_y");
+    L.push("  CLC");
+    L.push("  ADC ovl_dy");
+    L.push("  STA $0210");
+    L.push("  LDA ovl_tl");
+    L.push("  STA $0211");
+    L.push("  LDA ovl_tl_fl");
+    L.push("  STA $0212");
+    L.push("  LDA player_x");
+    L.push("  CLC");
+    L.push("  ADC ovl_dx");
+    L.push("  STA $0213");
+    L.push("  JMP upo_ov_tr");
+    L.push("upo_ov_tl_hide:");
+    L.push("  LDA #$FF");
+    L.push("  STA $0210");
+    L.push("upo_ov_tr:");
+    L.push("  ; --- overlay TR ---");
+    L.push("  LDA ovl_tr");
+    L.push("  CMP #$FF");
+    L.push("  BEQ upo_ov_tr_hide");
+    L.push("  LDA player_y");
+    L.push("  CLC");
+    L.push("  ADC ovl_dy");
+    L.push("  STA $0214");
+    L.push("  LDA ovl_tr");
+    L.push("  STA $0215");
+    L.push("  LDA ovl_tr_fl");
+    L.push("  STA $0216");
+    L.push("  LDA player_x");
+    L.push("  CLC");
+    L.push("  ADC ovl_dx");
+    L.push("  CLC");
+    L.push("  ADC #8");
+    L.push("  STA $0217");
+    L.push("  JMP upo_ov_bl");
+    L.push("upo_ov_tr_hide:");
+    L.push("  LDA #$FF");
+    L.push("  STA $0214");
+    L.push("upo_ov_bl:");
+    L.push("  ; --- overlay BL ---");
+    L.push("  LDA ovl_bl");
+    L.push("  CMP #$FF");
+    L.push("  BEQ upo_ov_bl_hide");
+    L.push("  LDA player_y");
+    L.push("  CLC");
+    L.push("  ADC ovl_dy");
+    L.push("  CLC");
+    L.push("  ADC #8");
+    L.push("  STA $0218");
+    L.push("  LDA ovl_bl");
+    L.push("  STA $0219");
+    L.push("  LDA ovl_bl_fl");
+    L.push("  STA $021A");
+    L.push("  LDA player_x");
+    L.push("  CLC");
+    L.push("  ADC ovl_dx");
+    L.push("  STA $021B");
+    L.push("  JMP upo_ov_br");
+    L.push("upo_ov_bl_hide:");
+    L.push("  LDA #$FF");
+    L.push("  STA $0218");
+    L.push("upo_ov_br:");
+    L.push("  ; --- overlay BR ---");
+    L.push("  LDA ovl_br");
+    L.push("  CMP #$FF");
+    L.push("  BEQ upo_ov_br_hide");
+    L.push("  LDA player_y");
+    L.push("  CLC");
+    L.push("  ADC ovl_dy");
+    L.push("  CLC");
+    L.push("  ADC #8");
+    L.push("  STA $021C");
+    L.push("  LDA ovl_br");
+    L.push("  STA $021D");
+    L.push("  LDA ovl_br_fl");
+    L.push("  STA $021E");
+    L.push("  LDA player_x");
+    L.push("  CLC");
+    L.push("  ADC ovl_dx");
+    L.push("  CLC");
+    L.push("  ADC #8");
+    L.push("  STA $021F");
+    L.push("  RTS");
+    L.push("upo_ov_br_hide:");
+    L.push("  LDA #$FF");
+    L.push("  STA $021C");
     L.push("  RTS");
     L.push("");
 
@@ -1246,7 +1509,13 @@ const BUILD = (() => {
     L.push("advance_screen_left:");
     L.push("  LDA nt_page");
     L.push("  EOR #1");
-    L.push("  STA nt_page");
+    L.push("  STA nt_page          ; nova esquerda = a pagina que ja segurava play_idx-1... nao,");
+    L.push("  ; espera - play_idx-1 ainda NAO esta em lugar nenhum, precisa ser carregada agora.");
+    L.push("  ; A pagina a escrever com play_idx-1 e' exatamente esse nt_page NOVO (a que segurava");
+    L.push("  ; a antiga DIREITA/play_idx+1, agora livre) - SEM EOR de novo (isso e' so' pro lado");
+    L.push("  ; direito, onde a pagina livre e' a antiga ESQUERDA = nt_page novo EOR 1). Usar EOR");
+    L.push("  ; aqui tambem sobrescrevia a pagina errada (a que ainda segura play_idx, destruindo a");
+    L.push("  ; tela que devia continuar visivel como nova direita) - bug real, corrigido.");
     L.push("  LDA play_idx        ; play_idx ainda e' o valor ANTIGO (esquerda antes da travessia)");
     L.push("  SEC");
     L.push("  SBC #1              ; nova esquerda = play_idx-1 - precisa ser carregada de novo");
@@ -1255,7 +1524,6 @@ const BUILD = (() => {
     L.push("  LDA PlayScreenTable,X");
     L.push("  PHA");
     L.push("  LDA nt_page");
-    L.push("  EOR #1");
     L.push("  BEQ asl_base0");
     L.push("  LDA #$24");
     L.push("  JMP asl_baseok");
@@ -1379,6 +1647,27 @@ const BUILD = (() => {
     L.push("lfc_done:");
     L.push("  RTS");
     L.push("");
+    L.push("; igual load_frame_cellptr, mas aponta pros 4 bytes de FLIP (ja em bits de atributo");
+    L.push("; OAM: bit6=H bit7=V) do mesmo frame. Usa tmp0/tmp1 tambem - so' chamar depois de ja");
+    L.push("; ter lido os 4 bytes de tile pro scratch (cell_tl..br), senao um sobrescreve o outro.");
+    L.push("load_frame_flipptr:");
+    L.push("  LDA inst_char,X");
+    L.push("  TAY");
+    L.push("  LDA CharFrameFlipsLo,Y");
+    L.push("  STA tmp0");
+    L.push("  LDA CharFrameFlipsHi,Y");
+    L.push("  STA tmp1");
+    L.push("  LDA inst_frame,X");
+    L.push("  ASL A");
+    L.push("  ASL A                 ; frame*4");
+    L.push("  CLC");
+    L.push("  ADC tmp0");
+    L.push("  STA tmp0");
+    L.push("  BCC lff_done");
+    L.push("  INC tmp1");
+    L.push("lff_done:");
+    L.push("  RTS");
+    L.push("");
     L.push("; calcula oam_off = $10 + X*16 (X = slot). Preserva X.");
     L.push("uio_calc_off:");
     L.push("  TXA");
@@ -1387,7 +1676,7 @@ const BUILD = (() => {
     L.push("  ASL A");
     L.push("  ASL A                 ; X*16");
     L.push("  CLC");
-    L.push("  ADC #$10               ; pula os 4 sprites do player ($0200-$020F)");
+    L.push("  ADC #$20               ; pula os 8 sprites do player ($0200-$021F: base+overlay)");
     L.push("  STA oam_off");
     L.push("  RTS");
     L.push("");
@@ -1428,9 +1717,25 @@ const BUILD = (() => {
     L.push("  INY");
     L.push("  LDA (tmp0),Y");
     L.push("  STA cell_br");
+    L.push("  ; flip autoral por celula (editor: mirror dentro do metatile) - independente do flip");
+    L.push("  ; de direcao (inst_dir) que vem a seguir. Os dois se combinam por XOR na escrita.");
+    L.push("  JSR load_frame_flipptr");
+    L.push("  LDY #0");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA cell_tl_fl");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA cell_tr_fl");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA cell_bl_fl");
+    L.push("  INY");
+    L.push("  LDA (tmp0),Y");
+    L.push("  STA cell_br_fl");
     L.push("  LDA inst_dir,X");
     L.push("  BEQ uio_noflip");
-    L.push("  ; flip H: espelha o metasprite trocando TL<->TR e BL<->BR");
+    L.push("  ; flip H de direcao: espelha o metasprite trocando TL<->TR e BL<->BR (tile E flip");
+    L.push("  ; autoral viajam juntos - cada celula continua com seu proprio flip depois da troca)");
     L.push("  LDA cell_tl");
     L.push("  PHA");
     L.push("  LDA cell_tr");
@@ -1443,6 +1748,18 @@ const BUILD = (() => {
     L.push("  STA cell_bl");
     L.push("  PLA");
     L.push("  STA cell_br");
+    L.push("  LDA cell_tl_fl");
+    L.push("  PHA");
+    L.push("  LDA cell_tr_fl");
+    L.push("  STA cell_tl_fl");
+    L.push("  PLA");
+    L.push("  STA cell_tr_fl");
+    L.push("  LDA cell_bl_fl");
+    L.push("  PHA");
+    L.push("  LDA cell_br_fl");
+    L.push("  STA cell_bl_fl");
+    L.push("  PLA");
+    L.push("  STA cell_br_fl");
     L.push("uio_noflip:");
     L.push("  JSR uio_calc_off");
     L.push("  LDY oam_off");
@@ -1454,7 +1771,8 @@ const BUILD = (() => {
     L.push("  STA $0200,Y");
     L.push("  LDA cell_tl");
     L.push("  STA $0201,Y");
-    L.push("  LDA inst_dir,X");
+    L.push("  LDA cell_tl_fl");
+    L.push("  EOR inst_dir,X");
     L.push("  STA $0202,Y");
     L.push("  LDA inst_scr_x");
     L.push("  STA $0203,Y");
@@ -1471,7 +1789,8 @@ const BUILD = (() => {
     L.push("  STA $0204,Y");
     L.push("  LDA cell_tr");
     L.push("  STA $0205,Y");
-    L.push("  LDA inst_dir,X");
+    L.push("  LDA cell_tr_fl");
+    L.push("  EOR inst_dir,X");
     L.push("  STA $0206,Y");
     L.push("  LDA inst_scr_x");
     L.push("  CLC");
@@ -1492,7 +1811,8 @@ const BUILD = (() => {
     L.push("  STA $0208,Y");
     L.push("  LDA cell_bl");
     L.push("  STA $0209,Y");
-    L.push("  LDA inst_dir,X");
+    L.push("  LDA cell_bl_fl");
+    L.push("  EOR inst_dir,X");
     L.push("  STA $020A,Y");
     L.push("  LDA inst_scr_x");
     L.push("  STA $020B,Y");
@@ -1511,7 +1831,8 @@ const BUILD = (() => {
     L.push("  STA $020C,Y");
     L.push("  LDA cell_br");
     L.push("  STA $020D,Y");
-    L.push("  LDA inst_dir,X");
+    L.push("  LDA cell_br_fl");
+    L.push("  EOR inst_dir,X");
     L.push("  STA $020E,Y");
     L.push("  LDA inst_scr_x");
     L.push("  CLC");
@@ -2148,6 +2469,8 @@ const BUILD = (() => {
     L.push("uls_no_cross:");
     L.push("  LDA #1");
     L.push("  STA player_flip");
+    L.push("  JMP up_jump          ; NAO cair em up_left_move - senao o player anda De novo por");
+    L.push("  ; cima do que o scroll ja moveu (dobra a velocidade percebida - bug reportado)");
     L.push("up_left_move:");
     L.push("  ; tile X na borda esquerda proposta (x-3+2) - movimento livre dentro da deadzone");
     L.push("  LDA player_x");
@@ -2523,17 +2846,92 @@ const BUILD = (() => {
     enemySpawns.forEach((_, pi) => L.push(`  .byte >EnemyData_${pi}`));
     L.push("");
 
-    // ---- Camada 3: tabelas de sprite por personagem (CharFrameCells/Dur/Count) ----
+    // ---- Camada 3: tabelas de sprite por personagem (CharFrameCells/Dur/Count/Flips/Overlay) ----
     if(spritePack.charData.length){
       spritePack.charData.forEach((cd, ci) => {
         L.push(`CharCells_${ci}:  ; ${cd.name}`);
         const bytes = [];
+        const flipBytes = [];
+        const ovCellBytes = [];
+        const ovFlipBytes = [];
+        const ovDxBytes = [];
+        const ovDyBytes = [];
+        // variantes espelhadas (usadas quando player_flip != 0) - calculadas aqui em JS pra
+        // não arriscar erro de matemática de espelhamento em assembly. Espelha só H (a direção
+        // do personagem nunca usa V): troca TL<->TR e BL<->BR (conteúdo+flip, igual a base),
+        // e reposiciona dx em torno do eixo do personagem (16px), considerando a LARGURA real
+        // do overlay nesse frame (8 se usa só 1 coluna, 16 se usa as 2).
+        const ovCellBytesFlip = [];
+        const ovFlipBytesFlip = [];
+        const ovDxBytesFlip = [];
         cd.frames.forEach(fr => {
           const byCorner = [null,null,null,null];
-          fr.cells.forEach(c => { byCorner[c.corner] = c.tile; });
-          for(let k=0;k<4;k++) bytes.push(byCorner[k] == null ? 0xFF : (byCorner[k] & 0xFF));
+          const flipByCorner = [0,0,0,0];
+          fr.cells.forEach(c => { byCorner[c.corner] = c.tile; flipByCorner[c.corner] = c.flip || 0; });
+          for(let k=0;k<4;k++){
+            bytes.push(byCorner[k] == null ? 0xFF : (byCorner[k] & 0xFF));
+            // editor: bit0=H bit1=V -> atributo OAM: bit6=H bit7=V
+            const f = flipByCorner[k] & 3;
+            let attr = 0;
+            if(f & 1) attr |= 0x40;
+            if(f & 2) attr |= 0x80;
+            flipBytes.push(attr);
+          }
+          // sprites sobrepostos: mesma convenção (4 bytes/frame, $FF = célula ausente), com
+          // a paleta do overlay já OR'ada no byte de flip (bits 0-1, sem conflito com 6-7).
+          const ov = fr.overlay;
+          const ovByCorner = [null,null,null,null];
+          const ovFlipByCorner = [0,0,0,0];
+          const ovPalBits = ov ? (ov.palAttr & 3) : 0;
+          if(ov) ov.cells.forEach(c => { ovByCorner[c.corner] = c.tile; ovFlipByCorner[c.corner] = c.flip || 0; });
+          for(let k=0;k<4;k++){
+            ovCellBytes.push(ovByCorner[k] == null ? 0xFF : (ovByCorner[k] & 0xFF));
+            const f = ovFlipByCorner[k] & 3;
+            let attr = ovPalBits;
+            if(f & 1) attr |= 0x40;
+            if(f & 2) attr |= 0x80;
+            ovFlipBytes.push(attr);
+          }
+          ovDxBytes.push(ov ? (ov.dx & 0xFF) : 0);
+          ovDyBytes.push(ov ? (ov.dy & 0xFF) : 0);
+
+          // --- variante espelhada ---
+          // corner: 0=TL 1=TR 2=BL 3=BR. Espelho H troca 0<->1 e 2<->3 (conteúdo+flipH).
+          const SWAP = [1,0,3,2];
+          const usesLeft = byCornerHas(ovByCorner,0) || byCornerHas(ovByCorner,2);
+          const usesRight = byCornerHas(ovByCorner,1) || byCornerHas(ovByCorner,3);
+          const width = (usesLeft && usesRight) ? 16 : 8;
+          const mirroredDx = ov ? (16 - ov.dx - width) : 0;
+          for(let k=0;k<4;k++){
+            const src = SWAP[k];
+            const tile = ovByCorner[src];
+            ovCellBytesFlip.push(tile == null ? 0xFF : (tile & 0xFF));
+            const f = ovFlipByCorner[src] & 3;
+            let attr = ovPalBits;
+            if(!(f & 1)) attr |= 0x40; // espelha H de novo (inverte o que já tinha)
+            if(f & 2) attr |= 0x80;
+            ovFlipBytesFlip.push(attr);
+          }
+          ovDxBytesFlip.push(mirroredDx & 0xFF);
         });
+        function byCornerHas(arr, idx){ return arr[idx] != null; }
         L.push("  .byte " + bytes.map(b => "$" + b.toString(16).padStart(2,"0").toUpperCase()).join(", "));
+        L.push(`CharFlips_${ci}:  ; flip por celula ja convertido pra bits de atributo OAM (bit6=H bit7=V)`);
+        L.push("  .byte " + flipBytes.map(b => "$" + b.toString(16).padStart(2,"0").toUpperCase()).join(", "));
+        L.push(`CharOvCells_${ci}:  ; sprites sobrepostos (mt.overlay) - $FF em todas = sem overlay nesse frame`);
+        L.push("  .byte " + ovCellBytes.map(b => "$" + b.toString(16).padStart(2,"0").toUpperCase()).join(", "));
+        L.push(`CharOvFlips_${ci}:  ; flip+paleta do overlay ja combinados (bit0-1=paleta bit6-7=flip)`);
+        L.push("  .byte " + ovFlipBytes.map(b => "$" + b.toString(16).padStart(2,"0").toUpperCase()).join(", "));
+        L.push(`CharOvDx_${ci}:`);
+        L.push("  .byte " + ovDxBytes.map(b => "$" + b.toString(16).padStart(2,"0").toUpperCase()).join(", "));
+        L.push(`CharOvDy_${ci}:`);
+        L.push("  .byte " + ovDyBytes.map(b => "$" + b.toString(16).padStart(2,"0").toUpperCase()).join(", "));
+        L.push(`CharOvCellsFlip_${ci}:  ; variante espelhada (usada quando player_flip != 0)`);
+        L.push("  .byte " + ovCellBytesFlip.map(b => "$" + b.toString(16).padStart(2,"0").toUpperCase()).join(", "));
+        L.push(`CharOvFlipsFlip_${ci}:`);
+        L.push("  .byte " + ovFlipBytesFlip.map(b => "$" + b.toString(16).padStart(2,"0").toUpperCase()).join(", "));
+        L.push(`CharOvDxFlip_${ci}:`);
+        L.push("  .byte " + ovDxBytesFlip.map(b => "$" + b.toString(16).padStart(2,"0").toUpperCase()).join(", "));
         L.push(`CharDur_${ci}:`);
         L.push("  .byte " + cd.frames.map(fr => fr.duration & 0xFF).join(", "));
       });
@@ -2541,6 +2939,10 @@ const BUILD = (() => {
       spritePack.charData.forEach((_,ci) => L.push(`  .byte <CharCells_${ci}`));
       L.push("CharFrameCellsHi:");
       spritePack.charData.forEach((_,ci) => L.push(`  .byte >CharCells_${ci}`));
+      L.push("CharFrameFlipsLo:");
+      spritePack.charData.forEach((_,ci) => L.push(`  .byte <CharFlips_${ci}`));
+      L.push("CharFrameFlipsHi:");
+      spritePack.charData.forEach((_,ci) => L.push(`  .byte >CharFlips_${ci}`));
       L.push("CharFrameDurLo:");
       spritePack.charData.forEach((_,ci) => L.push(`  .byte <CharDur_${ci}`));
       L.push("CharFrameDurHi:");
@@ -2551,9 +2953,16 @@ const BUILD = (() => {
       // nenhum personagem não-herói - mantém as tabelas com 1 entrada dummy pra não quebrar
       // o linker (spawn_enemies nunca vai preencher charIdx>0 nesse caso).
       L.push("CharCells_0: .byte $FF,$FF,$FF,$FF");
+      L.push("CharFlips_0: .byte $00,$00,$00,$00");
+      L.push("CharOvCells_0: .byte $FF,$FF,$FF,$FF");
+      L.push("CharOvFlips_0: .byte $00,$00,$00,$00");
+      L.push("CharOvDx_0:   .byte 0");
+      L.push("CharOvDy_0:   .byte 0");
       L.push("CharDur_0:   .byte 8");
       L.push("CharFrameCellsLo: .byte <CharCells_0");
       L.push("CharFrameCellsHi: .byte >CharCells_0");
+      L.push("CharFrameFlipsLo: .byte <CharFlips_0");
+      L.push("CharFrameFlipsHi: .byte >CharFlips_0");
       L.push("CharFrameDurLo:   .byte <CharDur_0");
       L.push("CharFrameDurHi:   .byte >CharDur_0");
       L.push("CharFrameCount:   .byte 1");
