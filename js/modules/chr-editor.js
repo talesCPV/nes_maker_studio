@@ -23,13 +23,27 @@ const CHR = (() => {
 
   // ---- Import imagem → pixel art (passo 1: crop / resize / grid em tiles) ----
   let imgImport = {
-    img: null,           // HTMLImageElement ou Canvas (após crop)
-    // seleção atual em px da imagem (null = nenhuma)
+    img: null,
     sel: null,           // {x,y,w,h}
     gridTW: 2, gridTH: 2,
-    drag: null,          // {type:'new'|'move'|'resize', handle, x0,y0, orig}
+    drag: null,
     pendingMeta: null,
-    lastOutput: null
+    lastOutput: null,
+    viewZoom: 1,
+    bw: false,
+    contrast: 1,         // 0.2–3 · só no caminho PB / cinza
+    sampleN: 1,
+    previewPal: 0,
+    colorMap: [0,1,2,3],
+    // buffer editável na resolução de saída (após nearest); flood fill aqui
+    editCanvas: null,    // canvas outW×outH com índices já em cores da paleta (RGB)
+    editIndices: null,   // Uint8Array slot 0–3 por pixel
+    paintSlot: 1,        // cor ativa para flood/pen (0–3)
+    editMode: false,     // edição no preview ativa
+    editTool: 'flood',   // 'flood' | 'pen'
+    penSize: 1,          // tamanho em células do grid de saída (1 célula = 1 px da saída)
+    editUndo: [],        // snapshots de Uint8Array indices
+    previewZoom: 4       // escala de exibição do preview (CSS)
   };
 
   // Import de outro .nms (tiles + metatiles → fila)
@@ -162,9 +176,7 @@ const CHR = (() => {
               <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                 <button type="button" id="btnLayer0" class="btn-tool" onclick="CHR.setEditLayer(0)" style="font-size:11px;padding:3px 10px">Base</button>
                 <button type="button" id="btnLayer1" class="btn-tool" onclick="CHR.setEditLayer(1)" style="font-size:11px;padding:3px 10px">Overlay</button>
-                <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ccc;cursor:pointer;margin-left:6px">
-                  <input type="checkbox" id="chkOverlayEnabled" onchange="CHR.setOverlayEnabled(this.checked)"> Ativar overlay
-                </label>
+                <button type="button" class="btn-tool" onclick="CHR.removeOverlay()" title="Remove a camada overlay deste metatile" style="font-size:11px;padding:3px 10px;background:#7d2525;color:#fff;margin-left:6px">🗑 Remover overlay</button>
                 <span style="font-size:10px;color:#666;margin-left:4px">pal</span>
                 <select id="overlayPalSelect" onchange="CHR.setOverlayPal(this.value)" style="background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:2px 4px;font-size:11px">
                   <option value="4">SPR0</option>
@@ -200,71 +212,114 @@ const CHR = (() => {
         </div>
         <div style="height:24px;background:#007acc;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 10px;font-size:11px"><span id="statusLeft">Pronto - seletor rápido restaurado</span><span id="statusRight">PT0/PT1 + $102 fix</span></div>
 
-        <!-- MODAL: Import imagem (passo 1) -->
+        <!-- MODAL: Import imagem -->
         <div id="imgImportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:10000;align-items:center;justify-content:center">
-          <div style="background:#1e1e1e;border:1px solid #444;border-radius:10px;width:min(960px,96vw);max-height:92vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.6)">
-            <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #333;flex-wrap:wrap">
+          <div style="background:#1e1e1e;border:1px solid #444;border-radius:10px;width:min(1100px,98vw);max-height:94vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.6)">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #333;flex-wrap:wrap">
               <h3 style="margin:0;font-size:14px;color:#4ec9b0">🖼 Import imagem → tiles NES</h3>
-              <span style="font-size:11px;color:#888">Passo 1: crop · resize · grade em tiles (8×8 px)</span>
+              <span style="font-size:11px;color:#888">seleção · grid em pixels · preview live</span>
               <button class="btn-tool" onclick="CHR.closeImageImport()" style="margin-left:auto;background:#c0392b;color:#fff">✕ Fechar</button>
             </div>
             <div style="display:flex;flex:1;min-height:0;overflow:hidden">
-              <div style="flex:1;padding:12px;overflow:auto;display:flex;flex-direction:column;gap:8px;background:#111">
-                <canvas id="imgImportCanvas" width="512" height="384" style="max-width:100%;background:#000;border:1px solid #444;image-rendering:pixelated;cursor:crosshair;display:block;margin:0 auto"></canvas>
-                <div style="font-size:10px;color:#666;text-align:center">Arraste para selecionar · alças amarelas redimensionam · Crop descarta o resto · grade na imagem atual</div>
-              </div>
-              <div style="width:280px;min-width:280px;border-left:1px solid #333;padding:12px;overflow:auto;display:flex;flex-direction:column;gap:12px;background:#181818">
-                <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
-                  <h4 style="font-size:11px;color:#ffcc00;margin:0 0 8px">Arquivo</h4>
-                  <button class="btn-tool" onclick="document.getElementById('importImage_internal').click()" style="width:100%;background:#2980b9;color:#fff">📂 Escolher imagem</button>
-                  <div id="imgImportFileInfo" style="font-size:10px;color:#888;margin-top:8px;line-height:1.4">Nenhuma imagem</div>
+              <div style="flex:1;padding:10px;overflow:auto;display:flex;flex-direction:column;gap:6px;background:#111;min-width:0">
+                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                  <button class="btn-tool" onclick="CHR.imgImportZoom(1)" style="font-size:11px">🔍+ Zoom</button>
+                  <button class="btn-tool" onclick="CHR.imgImportZoom(-1)" style="font-size:11px">🔍− Zoom</button>
+                  <button class="btn-tool" onclick="CHR.imgImportZoom(0)" style="font-size:11px">100%</button>
+                  <span id="imgImportZoomLbl" style="font-size:10px;color:#888">zoom 1×</span>
+                  <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ccc;margin-left:8px;cursor:pointer">
+                    <input type="checkbox" id="imgImportBW" onchange="CHR.imgImportSetBW(this.checked)"> PB
+                  </label>
+                  <span style="font-size:10px;color:#888;margin-left:6px">Contraste</span>
+                  <input id="imgImportContrast" type="range" min="20" max="300" value="100" title="Contraste PB" oninput="CHR.imgImportSetContrast(this.value)" style="width:100px;vertical-align:middle">
+                  <span id="imgImportContrastLbl" style="font-size:9px;color:#666">1.00</span>
+                  <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ccc;cursor:pointer">
+                    <input type="checkbox" id="imgImportShowGrid" checked onchange="CHR.imgImportRedraw()"> Grid px
+                  </label>
                 </div>
-                <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
-                  <h4 style="font-size:11px;color:#4ec9b0;margin:0 0 8px">Seleção / Crop</h4>
-                  <div style="font-size:10px;color:#666;line-height:1.4;margin-bottom:8px">
-                    1. Arraste na imagem para selecionar<br>
-                    2. Arraste as <b style="color:#ffcc00">alças</b> para redimensionar<br>
-                    3. <b>Crop</b> descarta o resto (fica só a seleção)
-                  </div>
-                  <div style="display:grid;grid-template-columns:40px 1fr 40px 1fr;gap:4px 6px;align-items:center;font-size:10px;color:#888">
+                <div style="overflow:auto;flex:1;border:1px solid #333;background:#0a0a0a">
+                  <canvas id="imgImportCanvas" width="640" height="480" style="background:#000;image-rendering:pixelated;cursor:crosshair;display:block"></canvas>
+                </div>
+                <div style="font-size:10px;color:#666">Arraste = seleção · alças = redimensionar · grid de <b style="color:#7dcea0">pixels</b> dentro da seleção (tiles×8)</div>
+              </div>
+              <div style="width:320px;min-width:300px;border-left:1px solid #333;padding:10px;overflow:auto;display:flex;flex-direction:column;gap:10px;background:#181818">
+                <div style="background:#111;border:1px solid #333;border-radius:6px;padding:8px">
+                  <h4 style="font-size:11px;color:#ffcc00;margin:0 0 6px">Arquivo</h4>
+                  <button class="btn-tool" onclick="document.getElementById('importImage_internal').click()" style="width:100%;background:#2980b9;color:#fff">📂 Escolher imagem</button>
+                  <div id="imgImportFileInfo" style="font-size:10px;color:#888;margin-top:6px;line-height:1.4">Nenhuma imagem</div>
+                </div>
+                <div style="background:#111;border:1px solid #333;border-radius:6px;padding:8px">
+                  <h4 style="font-size:11px;color:#4ec9b0;margin:0 0 6px">Seleção (px)</h4>
+                  <div style="display:grid;grid-template-columns:28px 1fr 28px 1fr;gap:4px;align-items:center;font-size:10px;color:#888">
                     <span>X</span><input id="imgImportCropX" type="number" min="0" value="0" onchange="CHR.imgImportSetCropFromInputs()" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px">
                     <span>Y</span><input id="imgImportCropY" type="number" min="0" value="0" onchange="CHR.imgImportSetCropFromInputs()" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px">
                     <span>W</span><input id="imgImportCropW" type="number" min="1" value="16" onchange="CHR.imgImportSetCropFromInputs()" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px">
                     <span>H</span><input id="imgImportCropH" type="number" min="1" value="16" onchange="CHR.imgImportSetCropFromInputs()" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px">
                   </div>
-                  <button class="btn-tool" onclick="CHR.imgImportApplyCrop()" style="width:100%;margin-top:8px;background:#e67e22;color:#fff;font-weight:bold">✂ Crop (descartar resto)</button>
-                  <button class="btn-tool" onclick="CHR.imgImportClearSelection()" style="width:100%;margin-top:4px;font-size:10px">Limpar seleção</button>
-                  <button class="btn-tool" onclick="CHR.imgImportSelectAll()" style="width:100%;margin-top:4px;font-size:10px">Selecionar tudo</button>
-                </div>
-                <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
-                  <h4 style="font-size:11px;color:#7dcea0;margin:0 0 8px">Grade em tiles</h4>
-                  <div style="font-size:10px;color:#666;margin-bottom:6px">Sobre a <b>imagem atual</b> (após crop). 1 tile = 8×8 px na saída.</div>
-                  <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-                    <label style="font-size:10px;color:#888;width:40px">Cols</label>
-                    <input id="imgImportGridW" type="number" min="1" max="32" value="2" onchange="CHR.imgImportSetGrid()" style="width:60px;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:4px;font-size:12px">
-                    <label style="font-size:10px;color:#888">×</label>
-                    <input id="imgImportGridH" type="number" min="1" max="32" value="2" onchange="CHR.imgImportSetGrid()" style="width:60px;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:4px;font-size:12px">
-                    <label style="font-size:10px;color:#888">tiles</label>
+                  <button class="btn-tool" onclick="CHR.imgImportApplyCrop()" style="width:100%;margin-top:6px;background:#e67e22;color:#fff;font-weight:bold;font-size:11px">✂ Crop (descartar resto)</button>
+                  <div style="display:flex;gap:4px;margin-top:4px">
+                    <button class="btn-tool" onclick="CHR.imgImportClearSelection()" style="flex:1;font-size:10px">Limpar sel.</button>
+                    <button class="btn-tool" onclick="CHR.imgImportSelectAll()" style="flex:1;font-size:10px">Tudo</button>
                   </div>
-                  <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;cursor:pointer">
-                    <input type="checkbox" id="imgImportShowGrid" checked onchange="CHR.imgImportRedraw()"> Mostrar grade
-                  </label>
                 </div>
-                <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
-                  <h4 style="font-size:11px;color:#e67e22;margin:0 0 8px">Saída</h4>
-                  <div style="font-size:10px;color:#888;line-height:1.5" id="imgImportOutInfo">—</div>
-                  <div style="font-size:10px;color:#666;margin-top:6px">A imagem atual é redimensionada (nearest) para <b style="color:#e67e22" id="imgImportOutPx">16×16</b> px (= grade × 8).</div>
+                <div style="background:#111;border:1px solid #333;border-radius:6px;padding:8px">
+                  <h4 style="font-size:11px;color:#7dcea0;margin:0 0 6px">Grade (tiles → grid px)</h4>
+                  <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+                    <input id="imgImportGridW" type="number" min="1" max="32" value="2" onchange="CHR.imgImportSetGrid()" style="width:52px;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px">
+                    <span style="color:#888">×</span>
+                    <input id="imgImportGridH" type="number" min="1" max="32" value="2" onchange="CHR.imgImportSetGrid()" style="width:52px;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px">
+                    <span style="font-size:10px;color:#888">tiles</span>
+                  </div>
+                  <div style="font-size:10px;color:#666" id="imgImportGridPxInfo">Grid pixels: 16×16</div>
                 </div>
-                <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px">
-                  <button class="btn-tool" onclick="CHR.imgImportPreviewOutput()" style="background:#8e44ad;color:#fff;padding:8px">👁 Preview (quantize NES)</button>
-                  <button class="btn-tool" onclick="CHR.imgImportConfirmStep1()" style="background:#27ae60;color:#fff;padding:8px;font-weight:bold">→ Converter e enfileirar tiles</button>
-                  <div style="font-size:9px;color:#666;text-align:center;line-height:1.4">Usa a <b style="color:#7dcea0">subpalette ativa</b> (4 cores).<br>Tiles vão para a <b>fila</b> — cole com “Colar Tile”.<br>Ao colar todos, cria o <b>metatile</b> automaticamente.</div>
+                <div style="background:#111;border:1px solid #333;border-radius:6px;padding:8px">
+                  <h4 style="font-size:11px;color:#e67e22;margin:0 0 6px">Conversão</h4>
+                  <div style="font-size:10px;color:#888;line-height:1.4" id="imgImportOutInfo">—</div>
                 </div>
+                <div style="background:#111;border:1px solid #333;border-radius:6px;padding:8px">
+                  <h4 style="font-size:11px;color:#c39bd3;margin:0 0 6px">Paleta do preview (não altera o projeto)</h4>
+                  <div id="imgImportPalettes" style="display:flex;flex-direction:column;gap:4px"></div>
+                  <div style="font-size:10px;color:#888;margin-top:8px">Remap slots (troca cores no desenho):</div>
+                  <div id="imgImportColorMap" style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap"></div>
+                </div>
+                <div style="background:#0a0a0a;border:1px solid #333;border-radius:6px;padding:8px">
+                  <h4 style="font-size:11px;color:#4ec9b0;margin:0 0 6px">Preview live (só seleção → saída)</h4>
+                  <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;flex-wrap:wrap">
+                    <button type="button" class="btn-tool" onclick="CHR.imgImportPreviewZoom(1)" style="font-size:10px">🔍+</button>
+                    <button type="button" class="btn-tool" onclick="CHR.imgImportPreviewZoom(-1)" style="font-size:10px">🔍−</button>
+                    <button type="button" class="btn-tool" onclick="CHR.imgImportPreviewZoom(0)" style="font-size:10px">fit</button>
+                    <span id="imgImportPrevZoomLbl" style="font-size:9px;color:#888">zoom 4×</span>
+                    <span style="font-size:9px;color:#555">scroll no preview = zoom</span>
+                  </div>
+                  <div id="imgImportPrevScroll" style="max-height:220px;overflow:auto;border:1px solid #333;background:#0a0a0a;border-radius:4px;text-align:center">
+                    <canvas id="imgImportOutCanvas" width="64" height="64" style="image-rendering:pixelated;border:1px solid #555;background:#222;display:inline-block;vertical-align:middle;margin:8px"></canvas>
+                  </div>
+                  <div style="font-size:9px;color:#666;text-align:center;margin-top:4px" id="imgImportPrevLbl">—</div>
+                  <label style="font-size:10px;color:#888;display:block;margin-top:10px">Amostragem nearest (1–4)</label>
+                  <input id="imgImportSampleN" type="range" min="1" max="4" value="1" oninput="CHR.imgImportSetSample(this.value)" style="width:100%">
+                  <div style="font-size:10px;color:#666;margin-bottom:8px">N=<span id="imgImportSampleLbl">1</span> · supersample antes do shrink final</div>
+                  <div style="border-top:1px solid #333;padding-top:8px;margin-top:4px">
+                    <div style="font-size:10px;color:#4ec9b0;margin-bottom:4px">Editar cores (pré-import)</div>
+                    <button class="btn-tool" onclick="CHR.imgImportPosterize()" style="width:100%;font-size:10px;margin-bottom:4px;background:#8e44ad;color:#fff">PB / quantize → 4 cores no preview</button>
+                    <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ccc;cursor:pointer;margin:4px 0">
+                      <input type="checkbox" id="imgImportEditMode" onchange="CHR.imgImportSetEditMode(this.checked)"> Editar no preview
+                    </label>
+                    <div style="display:flex;gap:4px;margin:4px 0;flex-wrap:wrap">
+                      <button type="button" id="imgImportToolFlood" class="btn-tool" onclick="CHR.imgImportSetEditTool('flood')" style="flex:1;font-size:10px">🪣 Flood</button>
+                      <button type="button" id="imgImportToolPen" class="btn-tool" onclick="CHR.imgImportSetEditTool('pen')" style="flex:1;font-size:10px">⬜ Pen</button>
+                      <button type="button" class="btn-tool" onclick="CHR.imgImportEditUndo()" style="flex:1;font-size:10px;background:#555;color:#fff">↩️ Undo</button>
+                    </div>
+                    <div style="display:flex;gap:6px;align-items:center;margin:4px 0;font-size:10px;color:#888">
+                      <span>Pen size (células)</span>
+                      <input id="imgImportPenSize" type="number" min="1" max="8" value="1" onchange="CHR.imgImportSetPenSize(this.value)" style="width:44px;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:2px">
+                    </div>
+                    <div style="font-size:9px;color:#666;margin-bottom:4px">Cor ativa:</div>
+                    <div id="imgImportPaintSlots" style="display:flex;gap:4px"></div>
+                    <button class="btn-tool" onclick="CHR.imgImportClearEdit()" style="width:100%;font-size:10px;margin-top:6px">Descartar edições</button>
+                  </div>
+                </div>
+                <button class="btn-tool" onclick="CHR.imgImportConfirmStep1()" style="background:#27ae60;color:#fff;padding:10px;font-weight:bold">→ Converter e enfileirar tiles</button>
               </div>
-            </div>
-            <div id="imgImportPreviewBar" style="display:none;padding:10px;border-top:1px solid #333;background:#0a0a0a;align-items:center;gap:12px">
-              <span style="font-size:10px;color:#888">Preview saída:</span>
-              <canvas id="imgImportOutCanvas" width="16" height="16" style="image-rendering:pixelated;border:1px solid #555;background:#222"></canvas>
             </div>
           </div>
         </div>
@@ -434,6 +489,30 @@ const CHR = (() => {
     renderAll();
     updateLabels();
   }
+  function removeOverlay(){
+    if(!overlayEnabled && !overlayTiles.some(t => t != null && t >= 0)){
+      if(typeof Project!=='undefined' && Project.status) Project.status('Este metatile não tem overlay');
+      return;
+    }
+    if(!confirm('Remover a camada overlay deste metatile?')) return;
+    overlayEnabled = false;
+    overlayTiles = [];
+    overlayFlips = [];
+    overlayDx = 0;
+    overlayDy = 0;
+    editLayer = 0;
+    // se há metatile selecionado, já grava a remoção no objeto
+    const sel = document.getElementById('metatileSelect');
+    if(sel && sel.value){
+      const mt = metatiles.find(m => m.id === sel.value);
+      if(mt) delete mt.overlay;
+    }
+    updateLayerUI();
+    renderAll();
+    updateLabels();
+    if(typeof Project!=='undefined' && Project.status)
+      Project.status('Overlay removido — Salve o metatile / projeto para persistir no .nms');
+  }
   function setOverlayEnabled(on){
     overlayEnabled = !!on;
     if(overlayEnabled){
@@ -468,8 +547,7 @@ const CHR = (() => {
     const b0 = document.getElementById('btnLayer0');
     const b1 = document.getElementById('btnLayer1');
     const lbl = document.getElementById('lblEditLayer');
-    const chk = document.getElementById('chkOverlayEnabled');
-    if(chk) chk.checked = overlayEnabled;
+    // checkbox removido — Base/Overlay controlam a edição
     const op = document.getElementById('overlayPalSelect');
     if(op) op.value = String(overlayPal);
     const dx = document.getElementById('overlayDx');
@@ -1206,9 +1284,13 @@ const CHR = (() => {
       input._bound = true;
       input.onchange = handleImageImportFile;
     }
+    imgImport.colorMap = [0,1,2,3];
+    imgImport.previewPal = activePal;
     imgImportAttachCanvasEvents();
+    imgImportRenderPalettesUI();
+    imgImportRenderColorMapUI();
     imgImportRedraw();
-    imgImportUpdateOutInfo();
+    imgImportLivePreview();
   }
   function closeImageImport(){
     const modal = document.getElementById('imgImportModal');
@@ -1217,7 +1299,7 @@ const CHR = (() => {
   function imgImportNaturalSize(){
     if(!imgImport.img) return {w:0,h:0};
     if(imgImport.img.naturalWidth) return {w: imgImport.img.naturalWidth, h: imgImport.img.naturalHeight};
-    return {w: imgImport.img.width, h: imgImport.img.height};
+    return {w: imgImport.img.width|0, h: imgImport.img.height|0};
   }
   function handleImageImportFile(e){
     const file = e.target.files && e.target.files[0];
@@ -1228,6 +1310,7 @@ const CHR = (() => {
       URL.revokeObjectURL(url);
       imgImport.img = img;
       imgImport.sel = null;
+      imgImport.viewZoom = 1;
       imgImport.gridTW = Math.max(1, Math.min(16, Math.round(img.naturalWidth/32) || 2));
       imgImport.gridTH = Math.max(1, Math.min(16, Math.round(img.naturalHeight/32) || 2));
       const gw = document.getElementById('imgImportGridW');
@@ -1239,23 +1322,64 @@ const CHR = (() => {
       imgImportSyncSelInputs();
       imgImportUpdateOutInfo();
       imgImportRedraw();
+      imgImportLivePreview();
     };
     img.onerror = ()=> alert('Não foi possível carregar a imagem');
     img.src = url;
     e.target.value = '';
   }
+  function imgImportZoom(dir){
+    if(dir === 0) imgImport.viewZoom = 1;
+    else if(dir > 0) imgImport.viewZoom = Math.min(8, +(imgImport.viewZoom * 1.25).toFixed(3));
+    else imgImport.viewZoom = Math.max(0.25, +(imgImport.viewZoom / 1.25).toFixed(3));
+    const lbl = document.getElementById('imgImportZoomLbl');
+    if(lbl) lbl.textContent = `zoom ${imgImport.viewZoom}×`;
+    imgImportRedraw();
+  }
+  function imgImportSetBW(on){
+    imgImport.bw = !!on;
+    imgImport.editCanvas = null; imgImport.editIndices = null;
+    imgImportRedraw();
+    imgImportLivePreview();
+  }
+  function imgImportSetContrast(v){
+    // input 20–300 → 0.2–3.0
+    const n = Math.max(20, Math.min(300, parseInt(v,10)||100));
+    imgImport.contrast = n / 100;
+    const lbl = document.getElementById('imgImportContrastLbl');
+    if(lbl) lbl.textContent = imgImport.contrast.toFixed(2);
+    imgImport.editCanvas = null; imgImport.editIndices = null;
+    imgImportRedraw();
+    imgImportLivePreview();
+  }
+  /** Aplica contraste em torno do cinza médio 128. */
+  function imgImportApplyContrastGray(g){
+    const c = imgImport.contrast || 1;
+    let v = (g - 128) * c + 128;
+    if(v < 0) v = 0;
+    if(v > 255) v = 255;
+    return v|0;
+  }
+  function imgImportSetSample(v){
+    imgImport.sampleN = Math.max(1, Math.min(4, parseInt(v,10)||1));
+    const lbl = document.getElementById('imgImportSampleLbl');
+    if(lbl) lbl.textContent = String(imgImport.sampleN);
+    imgImport.editCanvas = null; imgImport.editIndices = null;
+    imgImportLivePreview();
+  }
   function imgImportSetGrid(){
-    const gw = parseInt(document.getElementById('imgImportGridW')?.value, 10) || 1;
-    const gh = parseInt(document.getElementById('imgImportGridH')?.value, 10) || 1;
-    imgImport.gridTW = Math.max(1, Math.min(32, gw));
-    imgImport.gridTH = Math.max(1, Math.min(32, gh));
+    imgImport.gridTW = Math.max(1, Math.min(32, parseInt(document.getElementById('imgImportGridW')?.value,10)||1));
+    imgImport.gridTH = Math.max(1, Math.min(32, parseInt(document.getElementById('imgImportGridH')?.value,10)||1));
+    imgImport.editCanvas = null; imgImport.editIndices = null;
     imgImportUpdateOutInfo();
     imgImportRedraw();
+    imgImportLivePreview();
   }
   function imgImportClearSelection(){
     imgImport.sel = null;
     imgImportSyncSelInputs();
     imgImportRedraw();
+    imgImportLivePreview();
   }
   function imgImportSelectAll(){
     const sz = imgImportNaturalSize();
@@ -1263,12 +1387,12 @@ const CHR = (() => {
     imgImport.sel = { x:0, y:0, w:sz.w, h:sz.h };
     imgImportSyncSelInputs();
     imgImportRedraw();
+    imgImportLivePreview();
   }
-  /** Descarta tudo fora da seleção: a imagem atual vira só o retângulo. */
   function imgImportApplyCrop(){
     if(!imgImport.img){ alert('Carregue uma imagem primeiro'); return; }
     if(!imgImport.sel || imgImport.sel.w < 1 || imgImport.sel.h < 1){
-      alert('Faça uma seleção antes de aplicar o Crop.');
+      alert('Faça uma seleção antes do Crop.');
       return;
     }
     const s = imgImport.sel;
@@ -1278,19 +1402,17 @@ const CHR = (() => {
     const ctx = c.getContext('2d');
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(imgImport.img, s.x, s.y, s.w, s.h, 0, 0, c.width, c.height);
-    // usa o canvas como nova "imagem"
     imgImport.img = c;
     imgImport.sel = null;
     const info = document.getElementById('imgImportFileInfo');
     if(info){
-      const prev = info.innerHTML.split('<br>')[0] || 'Imagem';
+      const prev = (info.innerHTML.split('<br>')[0]) || 'Imagem';
       info.innerHTML = prev + `<br>${c.width}×${c.height} px <span style="color:#e67e22">(cropado)</span>`;
     }
     imgImportSyncSelInputs();
     imgImportUpdateOutInfo();
     imgImportRedraw();
-    if(typeof Project !== 'undefined' && Project.status)
-      Project.status(`Crop aplicado: ${c.width}×${c.height} px`);
+    imgImportLivePreview();
   }
   function imgImportSetCropFromInputs(){
     if(!imgImport.img) return;
@@ -1299,13 +1421,14 @@ const CHR = (() => {
     let y = Math.max(0, parseInt(document.getElementById('imgImportCropY')?.value,10)||0);
     let w = Math.max(1, parseInt(document.getElementById('imgImportCropW')?.value,10)||1);
     let h = Math.max(1, parseInt(document.getElementById('imgImportCropH')?.value,10)||1);
-    if(x >= sz.w) x = sz.w - 1;
-    if(y >= sz.h) y = sz.h - 1;
-    if(x + w > sz.w) w = sz.w - x;
-    if(y + h > sz.h) h = sz.h - y;
+    if(x >= sz.w) x = Math.max(0, sz.w-1);
+    if(y >= sz.h) y = Math.max(0, sz.h-1);
+    if(x+w > sz.w) w = sz.w - x;
+    if(y+h > sz.h) h = sz.h - y;
     imgImport.sel = { x, y, w, h };
     imgImportSyncSelInputs();
     imgImportRedraw();
+    imgImportLivePreview();
   }
   function imgImportSyncSelInputs(){
     const s = imgImport.sel || { x:0, y:0, w:0, h:0 };
@@ -1314,35 +1437,65 @@ const CHR = (() => {
     set('imgImportCropW', s.w); set('imgImportCropH', s.h);
   }
   function imgImportUpdateOutInfo(){
-    const outW = imgImport.gridTW * 8;
-    const outH = imgImport.gridTH * 8;
+    const outW = imgImport.gridTW * 8, outH = imgImport.gridTH * 8;
     const sz = imgImportNaturalSize();
     const el = document.getElementById('imgImportOutInfo');
-    const px = document.getElementById('imgImportOutPx');
-    if(px) px.textContent = `${outW}×${outH}`;
+    const gpx = document.getElementById('imgImportGridPxInfo');
+    if(gpx) gpx.textContent = `Grid pixels na seleção: ${outW}×${outH} (1 tile = 8×8)`;
     if(el){
-      el.innerHTML = `Imagem atual: <b style="color:#fff">${sz.w}×${sz.h}</b> px<br>`+
-        `Grade: <b style="color:#7dcea0">${imgImport.gridTW}×${imgImport.gridTH}</b> tiles<br>`+
-        `Saída: <b style="color:#e67e22">${outW}×${outH}</b> px (nearest)<br>`+
-        `Tiles: <b>${imgImport.gridTW * imgImport.gridTH}</b>`;
+      const sw = imgImport.sel ? Math.round(imgImport.sel.w) : sz.w;
+      const sh = imgImport.sel ? Math.round(imgImport.sel.h) : sz.h;
+      el.innerHTML = `Fonte: <b style="color:#fff">${sw}×${sh}</b> px<br>Saída: <b style="color:#e67e22">${outW}×${outH}</b> px<br>Tiles: <b>${imgImport.gridTW*imgImport.gridTH}</b>`;
     }
   }
-  function imgImportGetViewMetrics(){
-    const canvas = document.getElementById('imgImportCanvas');
-    if(!canvas || !imgImport.img) return null;
+  function imgImportComputeMetrics(canvasW, canvasH){
+    // só calcula escala/offset — NÃO altera o canvas (setar width limpa o buffer)
+    if(!imgImport.img) return null;
     const sz = imgImportNaturalSize();
     const iw = sz.w, ih = sz.h;
     if(!iw || !ih) return null;
     const pad = 8;
-    const maxW = canvas.width - pad*2, maxH = canvas.height - pad*2;
-    const scale = Math.min(maxW/iw, maxH/ih, 8);
+    const maxW = Math.max(64, (canvasW||640) - pad*2);
+    const maxH = Math.max(64, (canvasH||480) - pad*2);
+    // fit base em 640×480, depois aplica viewZoom
+    const baseScale = Math.min((640-pad*2)/iw, (480-pad*2)/ih, 8);
+    const scale = baseScale * (imgImport.viewZoom || 1);
     const dw = iw * scale, dh = ih * scale;
-    const ox = (canvas.width - dw) / 2, oy = (canvas.height - dh) / 2;
-    return { scale, ox, oy, dw, dh, iw, ih };
+    const needW = Math.max(640, Math.ceil(dw + pad*2));
+    const needH = Math.max(480, Math.ceil(dh + pad*2));
+    const cw = canvasW || needW, ch = canvasH || needH;
+    const ox = (cw - dw) / 2, oy = (ch - dh) / 2;
+    return { scale, ox, oy, dw, dh, iw, ih, needW, needH };
   }
-  function imgImportHandleSize(m){
-    return Math.max(6, Math.min(12, 8));
+  function imgImportGetViewMetrics(){
+    const canvas = document.getElementById('imgImportCanvas');
+    if(!canvas || !imgImport.img) return null;
+    // usa tamanho atual do canvas — não redimensiona aqui
+    return imgImportComputeMetrics(canvas.width, canvas.height);
   }
+  function imgImportDrawSource(ctx, m){
+    // desenha imagem (opcional PB) no view
+    if(imgImport.bw){
+      const tmp = document.createElement('canvas');
+      tmp.width = m.iw; tmp.height = m.ih;
+      const tctx = tmp.getContext('2d');
+      tctx.imageSmoothingEnabled = false;
+      tctx.drawImage(imgImport.img, 0, 0);
+      const id = tctx.getImageData(0,0,m.iw,m.ih);
+      for(let i=0;i<id.data.length;i+=4){
+        let g = (id.data[i]*0.299 + id.data[i+1]*0.587 + id.data[i+2]*0.114)|0;
+        g = imgImportApplyContrastGray(g);
+        id.data[i]=id.data[i+1]=id.data[i+2]=g;
+      }
+      tctx.putImageData(id,0,0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(tmp, m.ox, m.oy, m.dw, m.dh);
+    } else {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(imgImport.img, m.ox, m.oy, m.dw, m.dh);
+    }
+  }
+  function imgImportHandleSize(){ return 8; }
   function imgImportGetHandles(m){
     if(!imgImport.sel) return [];
     const s = imgImport.sel;
@@ -1350,57 +1503,50 @@ const CHR = (() => {
     const x1 = m.ox + (s.x+s.w) * m.scale, y1 = m.oy + (s.y+s.h) * m.scale;
     const xm = (x0+x1)/2, ym = (y0+y1)/2;
     return [
-      { id:'nw', x:x0, y:y0 }, { id:'n', x:xm, y:y0 }, { id:'ne', x:x1, y:y0 },
-      { id:'e', x:x1, y:ym }, { id:'se', x:x1, y:y1 }, { id:'s', x:xm, y:y1 },
-      { id:'sw', x:x0, y:y1 }, { id:'w', x:x0, y:ym }
+      {id:'nw',x:x0,y:y0},{id:'n',x:xm,y:y0},{id:'ne',x:x1,y:y0},
+      {id:'e',x:x1,y:ym},{id:'se',x:x1,y:y1},{id:'s',x:xm,y:y1},
+      {id:'sw',x:x0,y:y1},{id:'w',x:x0,y:ym}
     ];
   }
-  function imgImportHitHandle(mx, my, m){
-    const hs = imgImportHandleSize(m);
+  function imgImportHitHandle(mx,my,m){
+    const hs = imgImportHandleSize()/2 + 2;
     for(const h of imgImportGetHandles(m)){
-      if(Math.abs(mx - h.x) <= hs && Math.abs(my - h.y) <= hs) return h.id;
+      if(Math.abs(mx-h.x)<=hs && Math.abs(my-h.y)<=hs) return h.id;
     }
     return null;
   }
-  function imgImportHitInsideSel(mx, my, m){
+  function imgImportHitInsideSel(mx,my,m){
     if(!imgImport.sel) return false;
     const s = imgImport.sel;
     const x0 = m.ox + s.x * m.scale, y0 = m.oy + s.y * m.scale;
     const x1 = m.ox + (s.x+s.w) * m.scale, y1 = m.oy + (s.y+s.h) * m.scale;
-    return mx >= x0 && mx <= x1 && my >= y0 && my <= y1;
+    return mx>=x0 && mx<=x1 && my>=y0 && my<=y1;
   }
   function imgImportRedraw(){
     const canvas = document.getElementById('imgImportCanvas');
     if(!canvas) return;
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#0a0a0a';
-    ctx.fillRect(0,0,canvas.width, canvas.height);
     if(!imgImport.img){
+      canvas.width = 640; canvas.height = 480;
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(0,0,640,480);
       ctx.fillStyle = '#555';
       ctx.font = '14px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('Escolha uma imagem…', canvas.width/2, canvas.height/2);
+      ctx.fillText('Escolha uma imagem…', 320, 240);
       return;
     }
-    const m = imgImportGetViewMetrics();
+    // dimensiona só no redraw (única vez que pode limpar o buffer)
+    let m = imgImportComputeMetrics();
     if(!m) return;
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(imgImport.img, m.ox, m.oy, m.dw, m.dh);
-
-    // grade sobre a IMAGEM INTEIRA (atual)
-    if(document.getElementById('imgImportShowGrid')?.checked !== false){
-      const tw = imgImport.gridTW, th = imgImport.gridTH;
-      ctx.strokeStyle = 'rgba(125,206,160,0.75)';
-      ctx.lineWidth = 1;
-      for(let i=0;i<=tw;i++){
-        const x = m.ox + (m.dw * i / tw);
-        ctx.beginPath(); ctx.moveTo(x+0.5, m.oy); ctx.lineTo(x+0.5, m.oy+m.dh); ctx.stroke();
-      }
-      for(let j=0;j<=th;j++){
-        const y = m.oy + (m.dh * j / th);
-        ctx.beginPath(); ctx.moveTo(m.ox, y+0.5); ctx.lineTo(m.ox+m.dw, y+0.5); ctx.stroke();
-      }
+    if(canvas.width !== m.needW || canvas.height !== m.needH){
+      canvas.width = m.needW;
+      canvas.height = m.needH;
+      m = imgImportComputeMetrics(canvas.width, canvas.height);
     }
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0,0,canvas.width, canvas.height);
+    imgImportDrawSource(ctx, m);
 
     // seleção
     if(imgImport.sel){
@@ -1409,7 +1555,6 @@ const CHR = (() => {
       const cy = m.oy + s.y * m.scale;
       const cw = s.w * m.scale;
       const ch = s.h * m.scale;
-      // escurece fora
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
       ctx.fillRect(m.ox, m.oy, m.dw, Math.max(0, cy - m.oy));
       ctx.fillRect(m.ox, cy+ch, m.dw, Math.max(0, m.oy+m.dh - (cy+ch)));
@@ -1418,8 +1563,33 @@ const CHR = (() => {
       ctx.strokeStyle = '#ffcc00';
       ctx.lineWidth = 2;
       ctx.strokeRect(cx+0.5, cy+0.5, cw, ch);
-      // alças
-      const hs = imgImportHandleSize(m);
+
+      // GRID EM PIXELS dentro da seleção: (gridTW*8) × (gridTH*8) células
+      if(document.getElementById('imgImportShowGrid')?.checked !== false){
+        const pxW = imgImport.gridTW * 8;
+        const pxH = imgImport.gridTH * 8;
+        ctx.strokeStyle = 'rgba(125,206,160,0.55)';
+        ctx.lineWidth = 1;
+        for(let i=0; i<=pxW; i++){
+          const x = cx + (cw * i / pxW);
+          ctx.beginPath(); ctx.moveTo(x+0.5, cy); ctx.lineTo(x+0.5, cy+ch); ctx.stroke();
+        }
+        for(let j=0; j<=pxH; j++){
+          const y = cy + (ch * j / pxH);
+          ctx.beginPath(); ctx.moveTo(cx, y+0.5); ctx.lineTo(cx+cw, y+0.5); ctx.stroke();
+        }
+        // linhas de tile a cada 8 px (mais fortes)
+        ctx.strokeStyle = 'rgba(125,206,160,0.95)';
+        for(let i=0; i<=imgImport.gridTW; i++){
+          const x = cx + (cw * (i*8) / pxW);
+          ctx.beginPath(); ctx.moveTo(x+0.5, cy); ctx.lineTo(x+0.5, cy+ch); ctx.stroke();
+        }
+        for(let j=0; j<=imgImport.gridTH; j++){
+          const y = cy + (ch * (j*8) / pxH);
+          ctx.beginPath(); ctx.moveTo(cx, y+0.5); ctx.lineTo(cx+cw, y+0.5); ctx.stroke();
+        }
+      }
+      const hs = imgImportHandleSize();
       ctx.fillStyle = '#ffcc00';
       for(const h of imgImportGetHandles(m)){
         ctx.fillRect(h.x - hs/2, h.y - hs/2, hs, hs);
@@ -1429,6 +1599,8 @@ const CHR = (() => {
         ctx.fillStyle = '#ffcc00';
       }
     }
+    const zl = document.getElementById('imgImportZoomLbl');
+    if(zl) zl.textContent = `zoom ${imgImport.viewZoom}×`;
   }
   function imgImportCanvasToImage(mx, my){
     const m = imgImportGetViewMetrics();
@@ -1440,8 +1612,8 @@ const CHR = (() => {
   }
   function imgImportAttachCanvasEvents(){
     const canvas = document.getElementById('imgImportCanvas');
-    if(!canvas || canvas._imgImpBound2) return;
-    canvas._imgImpBound2 = true;
+    if(!canvas || canvas._imgImpBound3) return;
+    canvas._imgImpBound3 = true;
     const pos = (e)=>{
       const r = canvas.getBoundingClientRect();
       return {
@@ -1451,49 +1623,46 @@ const CHR = (() => {
     };
     canvas.addEventListener('mousedown', e=>{
       if(!imgImport.img) return;
-      const { mx, my } = pos(e);
+      const {mx,my} = pos(e);
       const m = imgImportGetViewMetrics();
       if(!m) return;
-      const handle = imgImportHitHandle(mx, my, m);
+      const handle = imgImportHitHandle(mx,my,m);
       if(handle){
-        imgImport.drag = { type:'resize', handle, orig: { ...imgImport.sel } };
+        imgImport.drag = { type:'resize', handle, orig:{...imgImport.sel} };
         return;
       }
-      if(imgImportHitInsideSel(mx, my, m)){
-        const p = imgImportCanvasToImage(mx, my);
-        imgImport.drag = { type:'move', x0: p.x, y0: p.y, orig: { ...imgImport.sel } };
+      if(imgImportHitInsideSel(mx,my,m)){
+        const p = imgImportCanvasToImage(mx,my);
+        imgImport.drag = { type:'move', x0:p.x, y0:p.y, orig:{...imgImport.sel} };
         return;
       }
-      const p = imgImportCanvasToImage(mx, my);
+      const p = imgImportCanvasToImage(mx,my);
       if(!p) return;
-      imgImport.drag = { type:'new', x0: p.x, y0: p.y };
-      imgImport.sel = { x: p.x, y: p.y, w: 1, h: 1 };
+      imgImport.drag = { type:'new', x0:p.x, y0:p.y };
+      imgImport.sel = { x:p.x, y:p.y, w:1, h:1 };
       imgImportSyncSelInputs();
       imgImportRedraw();
     });
     canvas.addEventListener('mousemove', e=>{
       if(!imgImport.img) return;
-      const { mx, my } = pos(e);
+      const {mx,my} = pos(e);
       const m = imgImportGetViewMetrics();
       if(!m) return;
-      // cursor
-      const handle = imgImportHitHandle(mx, my, m);
+      const handle = imgImportHitHandle(mx,my,m);
       if(handle){
-        const cursors = { n:'ns-resize', s:'ns-resize', e:'ew-resize', w:'ew-resize', nw:'nwse-resize', se:'nwse-resize', ne:'nesw-resize', sw:'nesw-resize' };
+        const cursors = {n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize',nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize'};
         canvas.style.cursor = cursors[handle] || 'crosshair';
-      } else if(imgImportHitInsideSel(mx, my, m)) canvas.style.cursor = 'move';
+      } else if(imgImportHitInsideSel(mx,my,m)) canvas.style.cursor = 'move';
       else canvas.style.cursor = 'crosshair';
-
       if(!imgImport.drag) return;
-      const p = imgImportCanvasToImage(mx, my);
+      const p = imgImportCanvasToImage(mx,my);
       if(!p) return;
       const sz = imgImportNaturalSize();
-
       if(imgImport.drag.type === 'new'){
-        const x0 = imgImport.drag.x0, y0 = imgImport.drag.y0;
+        const x0=imgImport.drag.x0, y0=imgImport.drag.y0;
         imgImport.sel = {
-          x: Math.min(x0, p.x), y: Math.min(y0, p.y),
-          w: Math.max(1, Math.abs(p.x - x0)), h: Math.max(1, Math.abs(p.y - y0))
+          x: Math.min(x0,p.x), y: Math.min(y0,p.y),
+          w: Math.max(1, Math.abs(p.x-x0)), h: Math.max(1, Math.abs(p.y-y0))
         };
       } else if(imgImport.drag.type === 'move'){
         const o = imgImport.drag.orig;
@@ -1501,124 +1670,516 @@ const CHR = (() => {
         let ny = o.y + (p.y - imgImport.drag.y0);
         nx = Math.max(0, Math.min(sz.w - o.w, nx));
         ny = Math.max(0, Math.min(sz.h - o.h, ny));
-        imgImport.sel = { x: nx, y: ny, w: o.w, h: o.h };
+        imgImport.sel = { x:nx, y:ny, w:o.w, h:o.h };
       } else if(imgImport.drag.type === 'resize'){
         const o = imgImport.drag.orig;
-        let x0 = o.x, y0 = o.y, x1 = o.x + o.w, y1 = o.y + o.h;
+        let x0=o.x, y0=o.y, x1=o.x+o.w, y1=o.y+o.h;
         const h = imgImport.drag.handle;
-        if(h.includes('n')) y0 = Math.min(p.y, y1 - 1);
-        if(h.includes('s')) y1 = Math.max(p.y, y0 + 1);
-        if(h.includes('w')) x0 = Math.min(p.x, x1 - 1);
-        if(h.includes('e')) x1 = Math.max(p.x, x0 + 1);
-        x0 = Math.max(0, x0); y0 = Math.max(0, y0);
-        x1 = Math.min(sz.w, x1); y1 = Math.min(sz.h, y1);
-        imgImport.sel = { x: x0, y: y0, w: Math.max(1, x1-x0), h: Math.max(1, y1-y0) };
+        if(h.includes('n')) y0 = Math.min(p.y, y1-1);
+        if(h.includes('s')) y1 = Math.max(p.y, y0+1);
+        if(h.includes('w')) x0 = Math.min(p.x, x1-1);
+        if(h.includes('e')) x1 = Math.max(p.x, x0+1);
+        x0=Math.max(0,x0); y0=Math.max(0,y0);
+        x1=Math.min(sz.w,x1); y1=Math.min(sz.h,y1);
+        imgImport.sel = { x:x0, y:y0, w:Math.max(1,x1-x0), h:Math.max(1,y1-y0) };
       }
       imgImportSyncSelInputs();
       imgImportRedraw();
     });
-    window.addEventListener('mouseup', ()=>{ imgImport.drag = null; });
+    window.addEventListener('mouseup', ()=>{
+      if(imgImport.drag){
+        imgImport.drag = null;
+        imgImportUpdateOutInfo();
+        imgImportLivePreview();
+      }
+    });
   }
 
-  /** Saída = imagem ATUAL inteira → gridTW*8 × gridTH*8 nearest. */
+  /** Região fonte: seleção ou imagem inteira */
+  function imgImportSourceRect(){
+    const sz = imgImportNaturalSize();
+    if(imgImport.sel && imgImport.sel.w>=1 && imgImport.sel.h>=1) return {...imgImport.sel};
+    return { x:0, y:0, w:sz.w, h:sz.h };
+  }
+
+  /**
+   * Canvas da saída: seleção → (opcional supersample) → gridTW*8 × gridTH*8 nearest.
+   * PB aplicado se ativo. Não usa colorMap aqui (só RGB).
+   */
   function imgImportBuildOutputCanvas(){
     if(!imgImport.img) return null;
+    const rect = imgImportSourceRect();
+    if(!rect.w || !rect.h) return null;
     const outW = imgImport.gridTW * 8;
     const outH = imgImport.gridTH * 8;
-    const c = document.createElement('canvas');
-    c.width = outW; c.height = outH;
-    const ctx = c.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
-    const sz = imgImportNaturalSize();
-    ctx.drawImage(imgImport.img, 0, 0, sz.w, sz.h, 0, 0, outW, outH);
-    return c;
+    const N = Math.max(1, Math.min(4, imgImport.sampleN|0 || 1));
+    // 1) extrai seleção
+    const src = document.createElement('canvas');
+    src.width = Math.max(1, Math.round(rect.w));
+    src.height = Math.max(1, Math.round(rect.h));
+    const sctx = src.getContext('2d');
+    sctx.imageSmoothingEnabled = false;
+    sctx.drawImage(imgImport.img, rect.x, rect.y, rect.w, rect.h, 0, 0, src.width, src.height);
+    if(imgImport.bw){
+      const id = sctx.getImageData(0,0,src.width,src.height);
+      for(let i=0;i<id.data.length;i+=4){
+        let g = (id.data[i]*0.299 + id.data[i+1]*0.587 + id.data[i+2]*0.114)|0;
+        g = imgImportApplyContrastGray(g);
+        id.data[i]=id.data[i+1]=id.data[i+2]=g;
+      }
+      sctx.putImageData(id,0,0);
+    }
+    // 2) supersample nearest
+    const mid = document.createElement('canvas');
+    mid.width = outW * N;
+    mid.height = outH * N;
+    const mctx = mid.getContext('2d');
+    mctx.imageSmoothingEnabled = false;
+    mctx.drawImage(src, 0, 0, src.width, src.height, 0, 0, mid.width, mid.height);
+    // 3) final nearest
+    const out = document.createElement('canvas');
+    out.width = outW; out.height = outH;
+    const octx = out.getContext('2d');
+    octx.imageSmoothingEnabled = false;
+    octx.drawImage(mid, 0, 0, mid.width, mid.height, 0, 0, outW, outH);
+    return out;
   }
 
   function imgImportHexToRgb(hex){
     if(!hex || typeof hex !== 'string') return {r:0,g:0,b:0};
     const h = hex.replace('#','');
-    return {
-      r: parseInt(h.slice(0,2), 16) || 0,
-      g: parseInt(h.slice(2,4), 16) || 0,
-      b: parseInt(h.slice(4,6), 16) || 0
-    };
+    return { r:parseInt(h.slice(0,2),16)||0, g:parseInt(h.slice(2,4),16)||0, b:parseInt(h.slice(4,6),16)||0 };
   }
-  function imgImportActivePaletteRgb(){
-    const slots = palettes[activePal] || palettes[0];
-    return [0,1,2,3].map(i => {
-      const nesIdx = slots[i] & 63;
-      const hex = (typeof NES_PALETTE !== 'undefined' && NES_PALETTE[nesIdx]) ? NES_PALETTE[nesIdx] : '#000000';
+  function imgImportPreviewPaletteRgb(){
+    const slots = palettes[imgImport.previewPal] || palettes[activePal] || palettes[0];
+    return [0,1,2,3].map(i=>{
+      const nesIdx = (slots[i]&63);
+      const hex = (typeof NES_PALETTE!=='undefined' && NES_PALETTE[nesIdx]) ? NES_PALETTE[nesIdx] : '#000000';
       return imgImportHexToRgb(hex);
     });
   }
-  function imgImportNearestSlot(r, g, b, paletteRgb){
-    let best = 0, bestD = Infinity;
+  function imgImportNearestSlot(r,g,b, paletteRgb){
+    let best=0, bestD=Infinity;
     for(let i=0;i<4;i++){
-      const p = paletteRgb[i];
-      const dr = r - p.r, dg = g - p.g, db = b - p.b;
-      const d = dr*dr + dg*dg + db*db;
-      if(d < bestD){ bestD = d; best = i; }
+      const p=paletteRgb[i];
+      const dr=r-p.r, dg=g-p.g, db=b-p.b;
+      const d=dr*dr+dg*dg+db*db;
+      if(d<bestD){ bestD=d; best=i; }
     }
     return best;
   }
   function imgImportQuantizeToIndices(imageData){
     const { data, width, height } = imageData;
-    const pal = imgImportActivePaletteRgb();
+    const pal = imgImportPreviewPaletteRgb();
+    const map = imgImport.colorMap || [0,1,2,3];
     const indices = new Uint8Array(width * height);
-    for(let i=0, p=0; i<data.length; i+=4, p++){
-      if(data[i+3] < 128){ indices[p] = 0; continue; }
-      indices[p] = imgImportNearestSlot(data[i], data[i+1], data[i+2], pal);
+    for(let i=0,p=0; i<data.length; i+=4, p++){
+      if(data[i+3] < 128){ indices[p]=0; continue; }
+      const slot = imgImportNearestSlot(data[i], data[i+1], data[i+2], pal);
+      indices[p] = map[slot] & 3; // remap só no resultado
     }
     return { indices, width, height, pal };
   }
   function imgImportEncodeTile(indices, width, ox, oy){
     const bytes = new Array(16).fill(0);
     for(let y=0;y<8;y++){
-      let p0 = 0, p1 = 0;
+      let p0=0,p1=0;
       for(let x=0;x<8;x++){
-        const c = indices[(oy+y)*width + (ox+x)] & 3;
-        const sh = 7 - x;
-        if(c & 1) p0 |= (1 << sh);
-        if(c & 2) p1 |= (1 << sh);
+        const c = indices[(oy+y)*width+(ox+x)] & 3;
+        const sh = 7-x;
+        if(c&1) p0 |= (1<<sh);
+        if(c&2) p1 |= (1<<sh);
       }
-      bytes[y] = p0;
-      bytes[y+8] = p1;
+      bytes[y]=p0; bytes[y+8]=p1;
     }
     return bytes;
   }
   function imgImportQuantizeCanvas(srcCanvas){
     const ctx = srcCanvas.getContext('2d');
-    const imageData = ctx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
+    const imageData = ctx.getImageData(0,0,srcCanvas.width, srcCanvas.height);
     const { indices, width, height, pal } = imgImportQuantizeToIndices(imageData);
     const out = document.createElement('canvas');
     out.width = width; out.height = height;
     const octx = out.getContext('2d');
     const id = octx.createImageData(width, height);
+    // pal[i] is the RGB of slot i in the chosen subpalette; indices already remapped
     for(let p=0;p<indices.length;p++){
       const c = pal[indices[p]];
-      const i = p*4;
+      const i=p*4;
       id.data[i]=c.r; id.data[i+1]=c.g; id.data[i+2]=c.b; id.data[i+3]=255;
     }
-    octx.putImageData(id, 0, 0);
+    octx.putImageData(id,0,0);
     return { canvas: out, indices, width, height };
   }
-  function imgImportPreviewOutput(){
-    const raw = imgImportBuildOutputCanvas();
-    if(!raw){ alert('Carregue uma imagem primeiro'); return; }
-    const q = imgImportQuantizeCanvas(raw);
-    const bar = document.getElementById('imgImportPreviewBar');
-    const oc = document.getElementById('imgImportOutCanvas');
-    if(!oc) return;
-    oc.width = q.canvas.width; oc.height = q.canvas.height;
-    oc.style.width = Math.min(256, q.canvas.width * 4) + 'px';
-    oc.style.height = Math.min(256, q.canvas.height * 4) + 'px';
-    oc.getContext('2d').drawImage(q.canvas, 0, 0);
-    if(bar) bar.style.display = 'flex';
+
+  function imgImportClearEdit(){
+    imgImport.editCanvas = null;
+    imgImport.editIndices = null;
+    imgImport.editUndo = [];
+    imgImportLivePreview();
   }
-  function imgImportConfirmStep1(){
+  function imgImportSetEditMode(on){
+    imgImport.editMode = !!on;
+    imgImportUpdateEditToolUI();
+  }
+  function imgImportSetEditTool(t){
+    imgImport.editTool = (t === 'pen') ? 'pen' : 'flood';
+    imgImport.editMode = true;
+    const chk = document.getElementById('imgImportEditMode');
+    if(chk) chk.checked = true;
+    imgImportUpdateEditToolUI();
+  }
+  function imgImportSetPenSize(v){
+    imgImport.penSize = Math.max(1, Math.min(8, parseInt(v,10)||1));
+    const el = document.getElementById('imgImportPenSize');
+    if(el) el.value = imgImport.penSize;
+  }
+  function imgImportUpdateEditToolUI(){
+    const oc = document.getElementById('imgImportOutCanvas');
+    if(oc){
+      if(!imgImport.editMode) oc.style.cursor = 'default';
+      else oc.style.cursor = imgImport.editTool === 'pen' ? 'crosshair' : 'cell';
+    }
+    const bf = document.getElementById('imgImportToolFlood');
+    const bp = document.getElementById('imgImportToolPen');
+    if(bf){ bf.style.background = imgImport.editTool==='flood' && imgImport.editMode ? '#ffcc00' : ''; bf.style.color = imgImport.editTool==='flood' && imgImport.editMode ? '#000' : ''; }
+    if(bp){ bp.style.background = imgImport.editTool==='pen' && imgImport.editMode ? '#ffcc00' : ''; bp.style.color = imgImport.editTool==='pen' && imgImport.editMode ? '#000' : ''; }
+  }
+  function imgImportPushEditUndo(){
+    if(!imgImport.editIndices) return;
+    imgImport.editUndo.push(new Uint8Array(imgImport.editIndices));
+    if(imgImport.editUndo.length > 30) imgImport.editUndo.shift();
+  }
+  function imgImportEditUndo(){
+    if(!imgImport.editUndo.length){
+      if(typeof Project!=='undefined' && Project.status) Project.status('Nada para desfazer no preview');
+      return;
+    }
+    imgImport.editIndices = imgImport.editUndo.pop();
+    // reconstrói canvas RGB
+    if(imgImport.editCanvas && imgImport.editIndices){
+      const w = imgImport.editCanvas.width, h = imgImport.editCanvas.height;
+      const pal = imgImportPreviewPaletteRgb();
+      const ctx = imgImport.editCanvas.getContext('2d');
+      const id = ctx.createImageData(w,h);
+      for(let p=0;p<imgImport.editIndices.length;p++){
+        const c = pal[imgImport.editIndices[p]&3];
+        const o=p*4;
+        id.data[o]=c.r; id.data[o+1]=c.g; id.data[o+2]=c.b; id.data[o+3]=255;
+      }
+      ctx.putImageData(id,0,0);
+    }
+    imgImportLivePreview();
+  }
+  function imgImportSetPaintSlot(s){
+    imgImport.paintSlot = s & 3;
+    imgImportRenderPaintSlots();
+  }
+  function imgImportRenderPaintSlots(){
+    const cont = document.getElementById('imgImportPaintSlots');
+    if(!cont) return;
+    cont.innerHTML = '';
+    const pal = imgImportPreviewPaletteRgb();
+    for(let i=0;i<4;i++){
+      const rgb = pal[i];
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.style.cssText = `flex:1;height:28px;border:${imgImport.paintSlot===i?'2px solid #ffcc00':'1px solid #555'};border-radius:3px;background:rgb(${rgb.r},${rgb.g},${rgb.b});cursor:pointer;font-size:10px;font-weight:bold;color:${(rgb.r+rgb.g+rgb.b)>400?'#000':'#fff'}`;
+      b.textContent = String(i);
+      b.title = `Pintar / flood com slot ${i}`;
+      b.onclick = ()=> imgImportSetPaintSlot(i);
+      cont.appendChild(b);
+    }
+  }
+  /** Gera buffer editável: nearest → quantize 4 cores (slots). */
+  function imgImportPosterize(){
     const raw = imgImportBuildOutputCanvas();
-    if(!raw){ alert('Carregue uma imagem primeiro'); return; }
+    if(!raw){ alert('Carregue uma imagem e selecione a área'); return; }
+    // força caminho de quantize
     const q = imgImportQuantizeCanvas(raw);
+    imgImport.editCanvas = q.canvas;
+    imgImport.editIndices = q.indices;
+    imgImport.editUndo = [];
+    imgImport.editMode = true;
+    const chk = document.getElementById('imgImportEditMode');
+    if(chk) chk.checked = true;
+    imgImportRenderPaintSlots();
+    imgImportLivePreview();
+    if(typeof Project!=='undefined' && Project.status)
+      Project.status('Preview em 4 cores — ative flood e clique numa região');
+  }
+  function imgImportRebuildEditRGB(){
+    if(!imgImport.editCanvas || !imgImport.editIndices) return;
+    const w = imgImport.editCanvas.width, h = imgImport.editCanvas.height;
+    const pal = imgImportPreviewPaletteRgb();
+    const ctx = imgImport.editCanvas.getContext('2d');
+    const id = ctx.createImageData(w,h);
+    for(let p=0;p<imgImport.editIndices.length;p++){
+      const c = pal[imgImport.editIndices[p]&3];
+      const o=p*4;
+      id.data[o]=c.r; id.data[o+1]=c.g; id.data[o+2]=c.b; id.data[o+3]=255;
+    }
+    ctx.putImageData(id,0,0);
+  }
+  function imgImportFloodAt(px, py){
+    if(!imgImport.editIndices || !imgImport.editCanvas){
+      imgImportPosterize();
+      if(!imgImport.editIndices) return;
+    }
+    const w = imgImport.editCanvas.width, h = imgImport.editCanvas.height;
+    px = px|0; py = py|0;
+    if(px<0||py<0||px>=w||py>=h) return;
+    const idx = imgImport.editIndices;
+    const target = idx[py*w+px];
+    const fill = imgImport.paintSlot & 3;
+    if(target === fill) return;
+    imgImportPushEditUndo();
+    const stack = [[px,py]];
+    const seen = new Uint8Array(w*h);
+    while(stack.length){
+      const [x,y] = stack.pop();
+      const i = y*w+x;
+      if(x<0||y<0||x>=w||y>=h||seen[i]) continue;
+      if(idx[i] !== target) continue;
+      seen[i]=1;
+      idx[i]=fill;
+      stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+    }
+    imgImportRebuildEditRGB();
+    imgImportLivePreview();
+  }
+  /** Pen quadrada: size em células do grid de saída (1 célula = 1 px do preview). */
+  function imgImportPenAt(px, py){
+    if(!imgImport.editIndices || !imgImport.editCanvas){
+      imgImportPosterize();
+      if(!imgImport.editIndices) return;
+    }
+    const w = imgImport.editCanvas.width, h = imgImport.editCanvas.height;
+    px = px|0; py = py|0;
+    if(px<0||py<0||px>=w||py>=h) return;
+    const sz = Math.max(1, imgImport.penSize|0);
+    // centra o quadrado no clique o máximo possível
+    let x0 = px - Math.floor((sz-1)/2);
+    let y0 = py - Math.floor((sz-1)/2);
+    x0 = Math.max(0, Math.min(w-sz, x0));
+    y0 = Math.max(0, Math.min(h-sz, y0));
+    const fill = imgImport.paintSlot & 3;
+    imgImportPushEditUndo();
+    const idx = imgImport.editIndices;
+    for(let y=0;y<sz;y++) for(let x=0;x<sz;x++){
+      const xx=x0+x, yy=y0+y;
+      if(xx>=0&&yy>=0&&xx<w&&yy<h) idx[yy*w+xx]=fill;
+    }
+    imgImportRebuildEditRGB();
+    imgImportLivePreview();
+  }
+  function imgImportAttachPreviewPaint(){
+    const oc = document.getElementById('imgImportOutCanvas');
+    if(!oc || oc._paintBound2) return;
+    oc._paintBound2 = true;
+    const pos = (e)=>{
+      const r = oc.getBoundingClientRect();
+      return {
+        x: Math.floor((e.clientX - r.left) / r.width * oc.width),
+        y: Math.floor((e.clientY - r.top) / r.height * oc.height)
+      };
+    };
+    oc.addEventListener('mousedown', e=>{
+      if(!imgImport.editMode) return;
+      e.preventDefault();
+      const p = pos(e);
+      if(imgImport.editTool === 'pen'){
+        imgImport._penDrag = true;
+        imgImportPenAt(p.x, p.y);
+      } else {
+        imgImportFloodAt(p.x, p.y);
+      }
+    });
+    oc.addEventListener('mousemove', e=>{
+      if(!imgImport.editMode || !imgImport._penDrag || imgImport.editTool !== 'pen') return;
+      if(!(e.buttons & 1)){ imgImport._penDrag = false; return; }
+      const p = pos(e);
+      // pen drag: um undo por stroke — só push no mousedown
+      // paint without extra undo: temporary
+      const w = imgImport.editCanvas?.width||0, h = imgImport.editCanvas?.height||0;
+      const sz = Math.max(1, imgImport.penSize|0);
+      let x0 = p.x - Math.floor((sz-1)/2);
+      let y0 = p.y - Math.floor((sz-1)/2);
+      x0 = Math.max(0, Math.min(w-sz, x0));
+      y0 = Math.max(0, Math.min(h-sz, y0));
+      const fill = imgImport.paintSlot & 3;
+      const idx = imgImport.editIndices;
+      if(!idx) return;
+      for(let y=0;y<sz;y++) for(let x=0;x<sz;x++){
+        const xx=x0+x, yy=y0+y;
+        if(xx>=0&&yy>=0&&xx<w&&yy<h) idx[yy*w+xx]=fill;
+      }
+      imgImportRebuildEditRGB();
+      imgImportLivePreview();
+    });
+    window.addEventListener('mouseup', ()=>{ imgImport._penDrag = false; });
+  }
+  /** Preview live: usa editCanvas se existir, senão quantiza a seleção. */
+  function imgImportLivePreview(){
+    const oc = document.getElementById('imgImportOutCanvas');
+    const lbl = document.getElementById('imgImportPrevLbl');
+    if(!oc) return;
+    imgImportAttachPreviewPaint();
+    imgImportRenderPaintSlots();
+    let canvas = null;
+    let w=0,h=0;
+    if(imgImport.editCanvas){
+      canvas = imgImport.editCanvas;
+      w = canvas.width; h = canvas.height;
+      // se colorMap ou pal mudou, recolorir a partir de indices
+      if(imgImport.editIndices){
+        const pal = imgImportPreviewPaletteRgb();
+        const ctx = canvas.getContext('2d');
+        const id = ctx.createImageData(w,h);
+        for(let p=0;p<imgImport.editIndices.length;p++){
+          const c = pal[imgImport.editIndices[p]&3];
+          const o=p*4;
+          id.data[o]=c.r; id.data[o+1]=c.g; id.data[o+2]=c.b; id.data[o+3]=255;
+        }
+        ctx.putImageData(id,0,0);
+      }
+    } else {
+      const raw = imgImportBuildOutputCanvas();
+      if(!raw){
+        oc.width=64; oc.height=64;
+        const ctx=oc.getContext('2d');
+        ctx.fillStyle='#222'; ctx.fillRect(0,0,64,64);
+        if(lbl) lbl.textContent = 'sem imagem';
+        return;
+      }
+      const q = imgImportQuantizeCanvas(raw);
+      canvas = q.canvas; w=q.width; h=q.height;
+    }
+    oc.width = w; oc.height = h;
+    const z = Math.max(1, imgImport.previewZoom || 4);
+    oc.style.width = (w * z) + 'px';
+    oc.style.height = (h * z) + 'px';
+    oc.getContext('2d').drawImage(canvas, 0, 0);
+    const zl = document.getElementById('imgImportPrevZoomLbl');
+    if(zl) zl.textContent = `zoom ${z}×`;
+    if(lbl) lbl.textContent = `${w}×${h} · pal ${imgImport.previewPal}` + (imgImport.editIndices?' · editável':'');
+    imgImportAttachPreviewZoomWheel();
+  }
+  function imgImportPreviewZoom(dir){
+    if(dir === 0){
+      // fit: cabe em ~200px
+      const oc = document.getElementById('imgImportOutCanvas');
+      const w = oc?.width || 16, h = oc?.height || 16;
+      const fit = Math.max(1, Math.floor(180 / Math.max(w, h)));
+      imgImport.previewZoom = Math.min(32, Math.max(1, fit));
+    } else if(dir > 0){
+      imgImport.previewZoom = Math.min(32, (imgImport.previewZoom||4) + 1);
+    } else {
+      imgImport.previewZoom = Math.max(1, (imgImport.previewZoom||4) - 1);
+    }
+    imgImportLivePreview();
+  }
+  function imgImportAttachPreviewZoomWheel(){
+    const box = document.getElementById('imgImportPrevScroll');
+    if(!box || box._zoomWheel) return;
+    box._zoomWheel = true;
+    box.addEventListener('wheel', e=>{
+      // zoom com ctrl/meta ou sempre no preview
+      e.preventDefault();
+      if(e.deltaY < 0) imgImportPreviewZoom(1);
+      else imgImportPreviewZoom(-1);
+    }, { passive: false });
+  }
+  function imgImportPreviewOutput(){ imgImportLivePreview(); }
+
+  function imgImportRenderPalettesUI(){
+    const cont = document.getElementById('imgImportPalettes');
+    if(!cont) return;
+    cont.innerHTML = '';
+    // mostra 4 subpalettes de sprite (4–7) e permite BG 0–3 em linha secundária — 8 no total compacto
+    for(let pi=0; pi<8; pi++){
+      const row = document.createElement('div');
+      const active = (imgImport.previewPal === pi);
+      row.style.cssText = `display:flex;align-items:center;gap:4px;padding:3px;border-radius:3px;cursor:pointer;border:1px solid ${active?'#c39bd3':'#333'};background:${active?'#2a1a33':'#0a0a0a'}`;
+      row.onclick = ()=>{ imgImport.previewPal = pi; imgImportRenderPalettesUI(); imgImportLivePreview(); };
+      const lab = document.createElement('span');
+      lab.style.cssText = 'font-size:9px;color:#888;width:36px';
+      lab.textContent = pi<4 ? `BG${pi}` : `SPR${pi-4}`;
+      row.appendChild(lab);
+      const slots = palettes[pi] || [15,0,16,48];
+      for(let s=0;s<4;s++){
+        const sw = document.createElement('div');
+        const hex = NES_PALETTE[slots[s]&63] || '#000';
+        sw.style.cssText = `width:16px;height:16px;background:${hex};border:1px solid #444;border-radius:2px`;
+        sw.title = `slot ${s}`;
+        row.appendChild(sw);
+      }
+      cont.appendChild(row);
+    }
+  }
+  function imgImportRenderColorMapUI(){
+    const cont = document.getElementById('imgImportColorMap');
+    if(!cont) return;
+    cont.innerHTML = '';
+    const map = imgImport.colorMap || [0,1,2,3];
+    const pal = imgImportPreviewPaletteRgb();
+    // 4 slots: cada um é um select 0–3 (para onde o índice quantizado vai)
+    for(let src=0; src<4; src++){
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:2px';
+      const sw = document.createElement('div');
+      const dest = map[src]&3;
+      const rgb = pal[dest];
+      sw.style.cssText = `width:28px;height:20px;background:rgb(${rgb.r},${rgb.g},${rgb.b});border:1px solid #666;border-radius:2px`;
+      const sel = document.createElement('select');
+      sel.style.cssText = 'background:#000;color:#fff;border:1px solid #444;font-size:10px;width:40px';
+      for(let d=0;d<4;d++){
+        const o=document.createElement('option');
+        o.value=d; o.textContent=`${src}→${d}`;
+        if(d===dest) o.selected = true;
+        sel.appendChild(o);
+      }
+      const srcCap = src;
+      sel.onchange = ()=>{
+        imgImport.colorMap[srcCap] = parseInt(sel.value,10)&3;
+        imgImportRenderColorMapUI();
+        imgImportLivePreview();
+      };
+      // clique no sw troca com o próximo (atalho)
+      sw.onclick = ()=>{
+        const a = imgImport.colorMap[srcCap]&3;
+        const b = imgImport.colorMap[(srcCap+1)%4]&3;
+        imgImport.colorMap[srcCap] = b;
+        imgImport.colorMap[(srcCap+1)%4] = a;
+        imgImportRenderColorMapUI();
+        imgImportLivePreview();
+      };
+      wrap.appendChild(sw);
+      wrap.appendChild(sel);
+      cont.appendChild(wrap);
+    }
+    const reset = document.createElement('button');
+    reset.className = 'btn-tool';
+    reset.textContent = 'Reset map';
+    reset.style.cssText = 'font-size:9px;margin-left:4px';
+    reset.onclick = ()=>{ imgImport.colorMap=[0,1,2,3]; imgImportRenderColorMapUI(); imgImportLivePreview(); };
+    cont.appendChild(reset);
+  }
+
+  function imgImportConfirmStep1(){
+    let q;
+    if(imgImport.editIndices && imgImport.editCanvas){
+      q = {
+        indices: imgImport.editIndices,
+        width: imgImport.editCanvas.width,
+        height: imgImport.editCanvas.height,
+        canvas: imgImport.editCanvas
+      };
+    } else {
+      const raw = imgImportBuildOutputCanvas();
+      if(!raw){ alert('Carregue uma imagem e defina a seleção'); return; }
+      q = imgImportQuantizeCanvas(raw);
+    }
     const tw = imgImport.gridTW, th = imgImport.gridTH;
     const n = tw * th;
     if(n > TILE_QUEUE_MAX){
@@ -1647,21 +2208,20 @@ const CHR = (() => {
       slots: new Array(n).fill(null), remaining: n,
       name: `Import ${tw}x${th}`
     };
+    // opcional: aplicar previewPal como activePal? NÃO — user pediu não mexer na paleta do projeto
     updateTileQueueLabel();
     renderTileQueue();
-    imgImportPreviewOutput();
     closeImageImport();
     setToolImpl('sheetpaste');
     if(typeof Project !== 'undefined' && Project.status)
-      Project.status(`Import: ${n} tiles na fila (${tw}×${th}). Cole na folha CHR.`);
-    alert(`✓ ${n} tiles na fila.\nCole com “Colar Tile”. Ao terminar, o metatile é criado.`);
+      Project.status(`Import: ${n} tiles na fila (${tw}×${th}).`);
+    alert(`✓ ${n} tiles na fila.\nCole com “Colar Tile”.`);
   }
 
-  /** Chamado após cada paste: se o lote de import completou, grava metatile. */
   function imgImportNotePaste(layoutIndex, absIdx){
     const pm = imgImport.pendingMeta;
     if(!pm || layoutIndex == null) return;
-    if(pm.slots[layoutIndex] != null) return; // já colado
+    if(pm.slots[layoutIndex] != null) return;
     pm.slots[layoutIndex] = absIdx;
     pm.remaining--;
     if(pm.remaining > 0){
@@ -1669,25 +2229,16 @@ const CHR = (() => {
         Project.status(`Import metatile: ${pm.w*pm.h - pm.remaining}/${pm.w*pm.h} colados`);
       return;
     }
-    // completo
     const tiles = pm.slots.map(x => x|0);
     const flips = (pm.flips && pm.flips.length === tiles.length) ? [...pm.flips] : tiles.map(() => 0);
     const id = 'mt_' + Date.now();
     const mt = {
-      id,
-      name: pm.name,
-      w: pm.w,
-      h: pm.h,
-      tiles,
-      flips,
-      bank: currentBank,
-      palette: activePal,
-      created: Date.now()
+      id, name: pm.name, w: pm.w, h: pm.h, tiles, flips,
+      bank: currentBank, palette: activePal, created: Date.now()
     };
     metatiles.push(mt);
     imgImport.pendingMeta = null;
     updateMetatileSelect();
-    // carrega o metatile criado
     gridW = mt.w; gridH = mt.h;
     selectedTiles = [...mt.tiles];
     selectedFlips = [...mt.flips];
@@ -1698,11 +2249,9 @@ const CHR = (() => {
     renderAll();
     updateLabels();
     if(typeof Project !== 'undefined' && Project.status)
-      Project.status(`Metatile "${mt.name}" criado com ${tiles.length} tiles`);
+      Project.status(`Metatile "${mt.name}" criado`);
     alert(`Metatile "${mt.name}" criado (${mt.w}×${mt.h}).`);
   }
-
-
 
   // ========== IMPORT .NMS (tiles + metatiles → fila) ==========
   function openNmsImport(){
@@ -2035,12 +2584,14 @@ const CHR = (() => {
     saveMetatile, loadSelectedMetatile, deleteMetatile, renameMetatile, updateMetatileSelect, onMetatileSelectChange, newTile,
     setTool(t){ setToolImpl(t); },
     toggleSlotFlipH, toggleSlotFlipV,
-    setEditLayer, setOverlayEnabled, setOverlayPal, setOverlayOffset,
+    setEditLayer, setOverlayEnabled, setOverlayPal, setOverlayOffset, removeOverlay,
 
     openImageImport, closeImageImport,
-    imgImportSetGrid, imgImportRedraw,
+    imgImportSetGrid, imgImportRedraw, imgImportZoom, imgImportSetBW, imgImportSetContrast, imgImportSetSample,
     imgImportSetCropFromInputs, imgImportApplyCrop, imgImportClearSelection, imgImportSelectAll,
-    imgImportPreviewOutput, imgImportConfirmStep1,
+    imgImportPreviewOutput, imgImportLivePreview, imgImportConfirmStep1,
+    imgImportPosterize, imgImportSetEditMode, imgImportClearEdit, imgImportSetPaintSlot,
+    imgImportSetEditTool, imgImportEditUndo, imgImportSetPenSize, imgImportPreviewZoom,
     openNmsImport, closeNmsImport, nmsImportSetBank, nmsImportClearPicked, nmsImportConfirm
   };
 })();

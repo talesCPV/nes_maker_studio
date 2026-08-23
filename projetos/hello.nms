@@ -8482,24 +8482,7 @@
         1,
         0,
         0
-      ],
-      "overlay": {
-        "tiles": [
-          5,
-          6,
-          -1,
-          -1
-        ],
-        "flips": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "palette": 4,
-        "dx": 0,
-        "dy": 3
-      }
+      ]
     },
     {
       "id": "mt_1787147596356",
@@ -22228,6 +22211,12 @@
       "category": "input",
       "button": "P2-IDLE",
       "builtin": true
+    },
+    {
+      "id": "ev_1787457815932",
+      "name": "Tiro Inimigo",
+      "category": "custom",
+      "builtin": false
     }
   ],
   "rules": [
@@ -22433,6 +22422,41 @@
           "eventId": "",
           "actionId": "kill_character",
           "targetId": "char_1787148214942"
+        }
+      ]
+    },
+    {
+      "id": "rule_1787457825294",
+      "name": "tiro inimigo",
+      "scope": "global",
+      "steps": [
+        {
+          "type": "if_event",
+          "eventId": "ev_1787457815932"
+        },
+        {
+          "type": "action",
+          "eventId": "",
+          "actionId": "shoot",
+          "charId": "char_1787148214942",
+          "animId": "",
+          "direction": "front"
+        }
+      ]
+    },
+    {
+      "id": "rule_1787458607426",
+      "name": "Pause",
+      "scope": "phase_1787142538003",
+      "steps": [
+        {
+          "type": "if_event",
+          "eventId": "ev_start"
+        },
+        {
+          "type": "action",
+          "eventId": "",
+          "actionId": "pause_game"
         }
       ]
     }
@@ -27411,7 +27435,7 @@
     ],
     "asm": ""
   },
-  "savedAt": 1787445280579,
+  "savedAt": 1787458657739,
   "physicsTables": {
     "jumps": [
       {

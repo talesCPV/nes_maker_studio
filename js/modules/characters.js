@@ -1,5 +1,5 @@
 // ==========================================
-// MÓDULO PERSONAGENS / SPRITES • v0.7
+// MÓDULO PERSONAGENS / SPRITES • v0.8 — respeita flips/overlay dos metatiles
 // Usa os Metatiles do CHR Editor para montar
 // personagens, inimigos e itens em animações.
 // ==========================================
@@ -158,6 +158,39 @@ const CHAR = (() => {
       for(let x=0;x<8;x++){const bit=7-x;out[y*8+x]=((p0>>bit)&1)|(((p1>>bit)&1)<<1);}}
     return out;
   }
+  /** flip: 0=none 1=H 2=V 3=HV — mesmo encoding do CHR editor */
+  function drawTileFlipped(ctx, tile, dx, dy, scale, flip, pal){
+    if(tile==null || tile<0) return;
+    const pix = getTilePixels(tile);
+    flip = flip|0;
+    const fh = !!(flip & 1), fv = !!(flip & 2);
+    for(let y=0;y<8;y++){
+      const sy = fv ? (7-y) : y;
+      for(let x=0;x<8;x++){
+        const sx = fh ? (7-x) : x;
+        const c = pix[sy*8+sx];
+        if(c===0) continue; // transparente
+        ctx.fillStyle = NES_PALETTE[pal[c]??0] || '#000';
+        ctx.fillRect(dx + x*scale, dy + y*scale, scale, scale);
+      }
+    }
+    // cor 0 já pulada; se precisar fundo opaco, desenhar 0 antes — metatile base pode querer 0 opaco em alguns casos
+  }
+  function drawTileFlippedOpaque(ctx, tile, dx, dy, scale, flip, pal){
+    if(tile==null || tile<0) return;
+    const pix = getTilePixels(tile);
+    flip = flip|0;
+    const fh = !!(flip & 1), fv = !!(flip & 2);
+    for(let y=0;y<8;y++){
+      const sy = fv ? (7-y) : y;
+      for(let x=0;x<8;x++){
+        const sx = fh ? (7-x) : x;
+        const c = pix[sy*8+sx];
+        ctx.fillStyle = NES_PALETTE[pal[c]??0] || '#000';
+        ctx.fillRect(dx + x*scale, dy + y*scale, scale, scale);
+      }
+    }
+  }
   function draw(){
     const cv=document.getElementById('charCanvas'); if(!cv)return;
     const ctx=cv.getContext('2d'); ctx.imageSmoothingEnabled=false; ctx.clearRect(0,0,cv.width,cv.height);
@@ -167,9 +200,28 @@ const CHAR = (() => {
     const scale=Math.min(12,Math.floor(Math.min(460/(mt.w*8),300/(mt.h*8))))||1;
     const ox=Math.floor((cv.width-mt.w*8*scale)/2)+(f.offsetX||0)*scale;
     const oy=Math.floor((cv.height-mt.h*8*scale)/2)+(f.offsetY||0)*scale;
+    const flips = (mt.flips && mt.flips.length === (mt.tiles||[]).length) ? mt.flips : null;
+    // base
     for(let ty=0;ty<mt.h;ty++)for(let tx=0;tx<mt.w;tx++){
-      const tile=mt.tiles[ty*mt.w+tx]||0,pix=getTilePixels(tile);
-      for(let y=0;y<8;y++)for(let x=0;x<8;x++){const c=pix[y*8+x];ctx.fillStyle=NES_PALETTE[pal[c]??0];ctx.fillRect(ox+(tx*8+x)*scale,oy+(ty*8+y)*scale,scale,scale);}
+      const i = ty*mt.w+tx;
+      const tile = mt.tiles[i]||0;
+      const fl = flips ? (flips[i]|0) : 0;
+      drawTileFlippedOpaque(ctx, tile, ox+tx*8*scale, oy+ty*8*scale, scale, fl, pal);
+    }
+    // overlay (se existir) — cor 0 transparente
+    if(mt.overlay && Array.isArray(mt.overlay.tiles)){
+      const ov = mt.overlay;
+      const opal = pals[ov.palette!=null ? ov.palette : (mt.palette||0)] || pal;
+      const odx = (ov.dx|0)*scale, ody = (ov.dy|0)*scale;
+      const oflips = (ov.flips && ov.flips.length === ov.tiles.length) ? ov.flips : null;
+      for(let ty=0;ty<mt.h;ty++)for(let tx=0;tx<mt.w;tx++){
+        const i = ty*mt.w+tx;
+        if(i >= ov.tiles.length) continue;
+        const tile = ov.tiles[i];
+        if(tile==null || tile<0) continue;
+        const fl = oflips ? (oflips[i]|0) : 0;
+        drawTileFlipped(ctx, tile, ox+tx*8*scale+odx, oy+ty*8*scale+ody, scale, fl, opal);
+      }
     }
     ctx.strokeStyle='#4ec9b0';ctx.strokeRect(ox,oy,mt.w*8*scale,mt.h*8*scale);
     const c=current();

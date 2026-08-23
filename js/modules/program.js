@@ -1,4 +1,4 @@
-// PROGRAM MODULE v0.1.0 - Esboço inicial: Variáveis, Eventos e Regras (a "linguagem" do jogo)
+// PROGRAM MODULE v0.2.0 - Esboço inicial: Variáveis, Eventos e Regras (a "linguagem" do jogo)
 // Ainda não gera .asm - por enquanto só estrutura o dado que o build-rom vai consumir depois,
 // quando a fundação de loop principal + leitura de input existir.
 const PROGRAM = (() => {
@@ -32,6 +32,8 @@ const PROGRAM = (() => {
     toggle_hitbox: { label: 'Ligar/Desligar Hitbox' },
     kill_character: { label: 'Matar' },
     move_character: { label: 'Mover' },
+    shoot:       { label: 'Atirar' },
+    pause_game:  { label: 'Pausar o jogo' },
     custom:      { label: 'Personalizada (nome livre)' }
   };
   const OPS = ['==','!=','>','<','>=','<='];
@@ -680,8 +682,17 @@ const PROGRAM = (() => {
     const typeOptions = Object.entries(STEP_TYPES).map(([k,v]) => `<option value="${k}" ${step.type===k?'selected':''}>${v.label}</option>`).join('');
     let fields = '';
     if(step.type === 'if_event'){
+      const selEv = events.find(e => e.id === step.eventId);
+      const isIdle = selEv && (selEv.button === 'P1-IDLE' || selEv.button === 'P2-IDLE' ||
+        /P[12]-IDLE/i.test(selEv.name||'') || /P[12]-IDLE/i.test(selEv.button||''));
       fields = `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'eventId',this.value)" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:10px">
         <option value="">— evento —</option>${events.map(e=>`<option value="${e.id}" ${step.eventId===e.id?'selected':''}>${e.name}</option>`).join('')}</select>`;
+      if(isIdle){
+        fields += `<label style="font-size:9px;color:#888;display:flex;align-items:center;gap:4px">tempo (frames)
+          <input type="number" min="0" max="65535" value="${step.idleTime ?? 0}" title="Frames parado antes de disparar (0 = imediato)"
+            onchange="PROGRAM.updateStep('${rule.id}',${idx},'idleTime',Math.max(0,parseInt(this.value)||0))"
+            style="width:64px;background:#000;color:#4ec9b0;border:1px solid #444;border-radius:4px;padding:4px;font-size:10px;font-family:monospace"></label>`;
+      }
     } else if(step.type === 'if_hitbox'){
       const refs = allHitboxRefs();
       const selStyleH = "background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:10px";
@@ -755,10 +766,40 @@ const PROGRAM = (() => {
           { value:'down', label:'Baixo' },
           { value:'left', label:'Esquerda' },
           { value:'right', label:'Direita' },
-          { value:'jump', label:'Pulo' }
+          { value:'jump', label:'Pulo' },
+          { value:'zigzag', label:'Zig-zag' }
         ];
-        // Atributo OAM do NES: bit 6 = Flip H, bit 7 = Flip V (a Camada 6/compilador de
-        // regras usa esses valores exatamente assim: flip_h=$40 flip_v=$80 flip_both=$C0)
+        const flips = [
+          { value:'default', label:'Default' },
+          { value:'flip_v', label:'Flip V' },
+          { value:'flip_h', label:'Flip H' },
+          { value:'flip_both', label:'Flip Both' }
+        ];
+        fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'charId',this.value)" style="${selStyle}">
+          <option value="">— personagem —</option>${chars.map(c=>`<option value="${c.id}" ${step.charId===c.id?'selected':''}>${c.name}</option>`).join('')}</select>
+          <select onchange="PROGRAM.updateStep('${rule.id}',${idx},'direction',this.value)" style="${selStyle}">
+            <option value="">— direção —</option>${dirs.map(d=>`<option value="${d.value}" ${step.direction===d.value?'selected':''}>${d.label}</option>`).join('')}</select>`;
+        if(step.direction === 'zigzag'){
+          fields += `<label style="font-size:9px;color:#888;display:flex;align-items:center;gap:3px">range
+            <input type="number" min="1" max="255" value="${step.zigzagRange ?? 32}" title="Alcance do zig-zag em pixels"
+              onchange="PROGRAM.updateStep('${rule.id}',${idx},'zigzagRange',Math.max(1,Math.min(255,parseInt(this.value)||32)))"
+              style="width:52px;background:#000;color:#4ec9b0;border:1px solid #444;border-radius:4px;padding:4px;font-size:10px;font-family:monospace"></label>`;
+        }
+        fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'animId',this.value)" style="${selStyle}">
+            <option value="">— animação —</option>${anims.map(a=>`<option value="${a.id}" ${step.animId===a.id?'selected':''}>${a.name}</option>`).join('')}</select>
+          <select onchange="PROGRAM.updateStep('${rule.id}',${idx},'flip',this.value)" style="${selStyle}">
+            ${flips.map(f=>`<option value="${f.value}" ${(step.flip||'default')===f.value?'selected':''}>${f.label}</option>`).join('')}</select>`;
+      } else if(step.actionId === 'shoot'){
+        const chars = Project.data?.characters || [];
+        const selChar = chars.find(c => c.id === step.charId);
+        const anims = selChar?.animations || [];
+        const dirs = [
+          { value:'up', label:'Cima' },
+          { value:'down', label:'Baixo' },
+          { value:'left', label:'Esquerda' },
+          { value:'right', label:'Direita' },
+          { value:'front', label:'Frente (olhar do personagem)' }
+        ];
         const flips = [
           { value:'default', label:'Default' },
           { value:'flip_v', label:'Flip V' },
@@ -773,6 +814,8 @@ const PROGRAM = (() => {
             <option value="">— animação —</option>${anims.map(a=>`<option value="${a.id}" ${step.animId===a.id?'selected':''}>${a.name}</option>`).join('')}</select>
           <select onchange="PROGRAM.updateStep('${rule.id}',${idx},'flip',this.value)" style="${selStyle}">
             ${flips.map(f=>`<option value="${f.value}" ${(step.flip||'default')===f.value?'selected':''}>${f.label}</option>`).join('')}</select>`;
+      } else if(step.actionId === 'pause_game'){
+        fields += `<span style="font-size:9px;color:#666">Alterna pausa do jogo (ex.: botão Start)</span>`;
       } else if(step.actionId === 'open_menu' || step.actionId === 'close_menu'){
         fields += `<input type="text" placeholder="nome do menu (livre por enquanto)" value="${step.targetId||''}" onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="flex:1;${selStyle}">`;
       } else if(step.actionId === 'custom'){
@@ -816,8 +859,9 @@ const PROGRAM = (() => {
     const r = Project.data?.rules?.find(r=>r.id===ruleId); if(!r || !r.steps[idx]) return;
     r.steps[idx][field] = value;
     // tipo, ação ou personagem da ação Mover mudou -> o conjunto de campos da linha muda
-    if(field === 'type' || field === 'actionId' || (field === 'charId' && r.steps[idx].actionId === 'move_character')){
-      // limpa animação antiga quando o personagem muda (evita referência órfã)
+    const act = r.steps[idx].actionId;
+    if(field === 'type' || field === 'actionId' || field === 'eventId' || field === 'direction' ||
+       (field === 'charId' && (act === 'move_character' || act === 'shoot'))){
       if(field === 'charId') r.steps[idx].animId = '';
       renderTab();
     }
