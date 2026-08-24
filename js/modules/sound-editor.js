@@ -696,16 +696,16 @@ const SOUND = (() => {
     if(!host) return;
     // Hotspots em % sobre a foto top-down do kit (assets/drum-kit.webp)
     const spots = [
-      { id: "crash",  left: 8,  top: 6,  w: 22, h: 14 },
-      { id: "ride",   left: 70, top: 8,  w: 24, h: 16 },
-      { id: "hat_c",  left: 2,  top: 28, w: 18, h: 14 },
-      { id: "tom_hi", left: 28, top: 22, w: 18, h: 16 },
-      { id: "tom_lo", left: 52, top: 22, w: 20, h: 16 },
-      { id: "snare",  left: 18, top: 48, w: 22, h: 18 },
-      { id: "kick",   left: 38, top: 52, w: 26, h: 28 },
-      { id: "clap",   left: 68, top: 55, w: 16, h: 16 },
-      { id: "rim",    left: 18, top: 42, w: 10, h: 8 },
-      { id: "hat_o",  left: 2,  top: 40, w: 16, h: 10 }
+      { id: "crash",  left: 19,  top: 15,   w: 21, h: 15 },
+      { id: "ride",   left: 60,  top: 11,   w: 24, h: 17 },
+      { id: "hat_c",  left: 19,  top: 67,   w: 11, h: 18 },
+      { id: "tom_hi", left: 32,  top: 28,   w: 14, h: 11 },
+      { id: "tom_lo", left: 52,  top: 26,   w: 18, h: 13 },
+      { id: "snare",  left: 22,  top: 46,   w: 21, h: 18 },
+      { id: "kick",   left: 38,  top: 52,   w: 26, h: 28 },
+      { id: "clap",   left: 63,  top: 53,   w: 20, h: 17 },
+      { id: "rim",    left: 67,  top: 35,   w: 28, h: 22 },
+      { id: "hat_o",  left: 2,   top: 40.5, w: 22, h: 17 }
     ];
     let html = '<div class="drum-kit-photo" style="position:relative;width:100%;max-width:420px;margin:0 auto">';
     html += '<img src="assets/drum-kit.webp" alt="Drum kit" style="width:100%;display:block;border-radius:8px;border:1px solid #333;background:#111" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'">';
@@ -729,6 +729,22 @@ const SOUND = (() => {
         btn.style.borderColor = active ? "#ffcc00" : "transparent";
       });
     });
+
+    let bar = document.getElementById("drum-kit-bar");
+    if(!bar){
+      bar = document.createElement("div");
+      bar.id = "drum-kit-bar";
+      bar.className = "drum-kit-bar";
+      host.parentNode.insertBefore(bar, host.nextSibling);
+    }
+    bar.innerHTML =
+      '<label class="drum-show-areas"><input type="checkbox" id="chk-drum-areas"> mostrar áreas</label>' +
+      '<span id="drum-piece-info" class="drum-piece-info">clique num pad</span>';
+    const chk = document.getElementById("chk-drum-areas");
+    if(chk){
+      chk.onchange = ()=>{ host.classList.toggle("show-areas", chk.checked); };
+    }
+
     if(legend){
       legend.innerHTML = DRUM_KIT.map(p=>
         '<button type="button" class="drum-legend-btn" data-drum="'+p.id+'" title="$'
@@ -764,6 +780,13 @@ const SOUND = (() => {
     if(ch2.type !== "noise") return;
     pushUndo();
     ch2.notes[selectedIndex].note = piece.note;
+    
+    const info = document.getElementById("drum-piece-info");
+    if(info){
+      info.textContent = piece.label + " · period $" + piece.period.toString(16).toUpperCase()
+        + " · " + piece.mode + " · " + piece.note;
+    }
+
     playSingleNote(piece.note, "noise");
     renderAll();
   }

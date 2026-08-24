@@ -134,6 +134,7 @@ nmi_scroll_done:
 IRQ:
   RTI
 
+; ---- NGC MUSIC / APU ----
 music_update:
   LDA music_on
   BNE mu_run
@@ -156,7 +157,7 @@ mu_ch0_next:
 mu_ch0_nof:
   CMP #$FE
   BNE mu_ch0_play
-  LDA #%00110000
+  LDA %00110000
   STA $4000
   JMP mu_ch0_end
 mu_ch0_play:
@@ -167,11 +168,11 @@ mu_ch0_play:
   STY ch0_pos
   CPX #0
   BNE mu_ch0_tone
-  LDA #%00110000
+  LDA %00110000
   STA $4000
   JMP mu_ch0_end
 mu_ch0_tone:
-  LDA #%10111111
+  LDA %10111111
   STA $4000
   LDA PitchLo_ch0,X
   STA $4002
@@ -195,7 +196,7 @@ mu_ch1_next:
 mu_ch1_nof:
   CMP #$FE
   BNE mu_ch1_play
-  LDA #%00110000
+  LDA %00110000
   STA $4004
   JMP mu_ch1_end
 mu_ch1_play:
@@ -206,11 +207,11 @@ mu_ch1_play:
   STY ch1_pos
   CPX #0
   BNE mu_ch1_tone
-  LDA #%00110000
+  LDA %00110000
   STA $4004
   JMP mu_ch1_end
 mu_ch1_tone:
-  LDA #%01111111
+  LDA %01111111
   STA $4004
   LDA PitchLo_ch1,X
   STA $4006
@@ -234,7 +235,7 @@ mu_ch2_next:
 mu_ch2_nof:
   CMP #$FE
   BNE mu_ch2_play
-  LDA #%00000000
+  LDA %00000000
   STA $4008
   JMP mu_ch2_end
 mu_ch2_play:
@@ -245,11 +246,11 @@ mu_ch2_play:
   STY ch2_pos
   CPX #0
   BNE mu_ch2_tone
-  LDA #%00000000
+  LDA %00000000
   STA $4008
   JMP mu_ch2_end
 mu_ch2_tone:
-  LDA #%11111111
+  LDA %11111111
   STA $4008
   LDA PitchLo_ch2,X
   STA $400A
@@ -271,6 +272,7 @@ music_init:
   LDA #1
   STA music_on
   RTS
+
 
 ; Leitura do controle P1 (strobe padrão NES)
 read_pad:
@@ -2668,8 +2670,7 @@ Collision_5:
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
 
-; --- Music data ---
-; canal 0: pulse1
+; ---- NGC MUSIC DATA ----
 PitchLo_ch0:
   .byte $00, $26, $F8, $89, $F9, $56, $4D, $9D, $4C
 PitchHi_ch0:
@@ -2729,7 +2730,6 @@ Time_ch0:
   .byte $0B, $15, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $15, $0B, $0B, $0B, $0B, $15
   .byte $0B, $05, $05, $15, $15, $15, $15
 
-; canal 1: pulse2
 PitchLo_ch1:
   .byte $00, $52, $93, $0C, $2D, $67, $C9, $86, $70, $77, $64, $54, $7E, $A9, $6A, $59
   .byte $42, $E1, $FD
@@ -2791,7 +2791,6 @@ Time_ch1:
   .byte $0B, $15, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $15, $0B, $0B, $0B, $0B, $15
   .byte $0B, $05, $05, $15, $15, $15, $15
 
-; canal 2: triangle
 PitchLo_ch2:
   .byte $00, $1A, $5C, $C4, $FB, $A6, $CE, $93, $52, $0C, $2D, $67
 PitchHi_ch2:
