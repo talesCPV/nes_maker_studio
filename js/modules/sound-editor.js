@@ -1,5 +1,5 @@
 // ==========================================
-// SOUND EDITOR v3 — Biblioteca de musicas + SFX
+// SOUND EDITOR v3.2 — Kit imagem + MIDI perc → drums
 // Multi-canal NES (Pulse1/2, Triangle, Noise)
 // Timeline compartilhada + seletor de tipo por canal
 // Formato antigo (song[] / v2 single) migrado ou limpo
@@ -26,6 +26,38 @@ const SOUND = (() => {
     { id: "noise",    label: "Noise",     color: "#fbbf24", wave: "noise",    duty: null },
     { id: "none",     label: "None",      color: "#64748b", wave: null,       duty: null }
   ];
+
+  // Kit de bateria padrão (canal Noise). note = chave em notes[].note
+  const DRUM_KIT = [
+    { id: "kick",   label: "Kick",         note: "DKICK",  period: 0x0C, mode: "long",  freq: 95  },
+    { id: "snare",  label: "Snare",        note: "DSNARE", period: 0x08, mode: "short", freq: 320 },
+    { id: "hat_c",  label: "Hi-Hat fech.", note: "DHATC",  period: 0x02, mode: "long",  freq: 1200 },
+    { id: "hat_o",  label: "Hi-Hat aber.", note: "DHATO",  period: 0x03, mode: "long",  freq: 900 },
+    { id: "tom_hi", label: "Tom agudo",    note: "DTOMH",  period: 0x0A, mode: "long",  freq: 180 },
+    { id: "tom_lo", label: "Tom grave",    note: "DTOML",  period: 0x0D, mode: "long",  freq: 120 },
+    { id: "crash",  label: "Crash",        note: "DCRASH", period: 0x05, mode: "long",  freq: 600 },
+    { id: "ride",   label: "Ride",         note: "DRIDE",  period: 0x06, mode: "long",  freq: 480 },
+    { id: "clap",   label: "Clap",         note: "DCLAP",  period: 0x07, mode: "short", freq: 400 },
+    { id: "rim",    label: "Rim",          note: "DRIM",   period: 0x04, mode: "short", freq: 700 }
+  ];
+  const DRUM_BY_NOTE = {};
+  DRUM_KIT.forEach(p => { DRUM_BY_NOTE[p.note] = p; });
+
+  // General MIDI percussion (canal 10) → id do kit
+  const GM_DRUM_TO_PIECE = {
+    35: "kick", 36: "kick",
+    38: "snare", 40: "snare",
+    37: "rim",
+    39: "clap",
+    42: "hat_c", 44: "hat_c",
+    46: "hat_o",
+    41: "tom_lo", 43: "tom_lo", 45: "tom_lo",
+    47: "tom_hi", 48: "tom_hi", 50: "tom_hi",
+    49: "crash", 57: "crash", 55: "crash",
+    51: "ride", 59: "ride", 53: "ride"
+  };
+
+
 
 
   // General MIDI program names (para label de faixa no import)
@@ -84,6 +116,14 @@ const SOUND = (() => {
       });
     }
   })();
+
+  DRUM_KIT.forEach(p => {
+    const lo = "$" + (p.period & 0x0F).toString(16).padStart(2, "0").toUpperCase();
+    NOTE_MAP[p.note] = {
+      lo, hi: "$00", freq: p.freq, isRest: false,
+      drum: true, period: p.period, mode: p.mode, label: p.label
+    };
+  });
 
   // ===== ESTADO =====
   // Biblioteca de pecas (musicas + sfx)
@@ -534,11 +574,21 @@ const SOUND = (() => {
               <button id="delete-cell-btn" class="btn-del">\u2716 Remover</button>
             </div>
           </div>
-          <div>
-            <label style="font-size:.8rem;color:#94a3b8">Nota (piano) \u2014 canal ativo:</label>
-            <div class="piano-container">
-              <button class="rest-btn" id="rest-btn">\u{1F507} REST</button>
-              <div class="piano-scroll-wrapper"><div class="piano-keyboard" id="piano-keyboard"></div></div>
+          <div id="instrument-views">
+            <div id="piano-view">
+              <label style="font-size:.8rem;color:#888">Piano \u2014 canal melódico</label>
+              <div class="piano-container">
+                <button class="rest-btn" id="rest-btn">\u{1F507} REST</button>
+                <div class="piano-scroll-wrapper"><div class="piano-keyboard" id="piano-keyboard"></div></div>
+              </div>
+            </div>
+            <div id="drum-view" style="display:none">
+              <label style="font-size:.8rem;color:#888">Kit de bateria \u2014 canal Noise (clique no pad)</label>
+              <div class="drum-kit-wrap">
+                <button class="rest-btn" id="rest-btn-drum">\u{1F507} REST</button>
+                <div id="drum-kit-svg" class="drum-kit-svg"></div>
+                <div class="drum-kit-legend" id="drum-kit-legend"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -556,6 +606,7 @@ const SOUND = (() => {
     cacheEls();
     initFigureSelect();
     buildFullPiano();
+    buildDrumKitUI();
     attachEvents();
     renderLibrarySelect();
     renderAll();
@@ -638,6 +689,85 @@ const SOUND = (() => {
     }
   }
 
+
+  function buildDrumKitUI(){
+    const host = document.getElementById("drum-kit-svg");
+    const legend = document.getElementById("drum-kit-legend");
+    if(!host) return;
+    // Hotspots em % sobre a foto top-down do kit (assets/drum-kit.webp)
+    const spots = [
+      { id: "crash",  left: 8,  top: 6,  w: 22, h: 14 },
+      { id: "ride",   left: 70, top: 8,  w: 24, h: 16 },
+      { id: "hat_c",  left: 2,  top: 28, w: 18, h: 14 },
+      { id: "tom_hi", left: 28, top: 22, w: 18, h: 16 },
+      { id: "tom_lo", left: 52, top: 22, w: 20, h: 16 },
+      { id: "snare",  left: 18, top: 48, w: 22, h: 18 },
+      { id: "kick",   left: 38, top: 52, w: 26, h: 28 },
+      { id: "clap",   left: 68, top: 55, w: 16, h: 16 },
+      { id: "rim",    left: 18, top: 42, w: 10, h: 8 },
+      { id: "hat_o",  left: 2,  top: 40, w: 16, h: 10 }
+    ];
+    let html = '<div class="drum-kit-photo" style="position:relative;width:100%;max-width:420px;margin:0 auto">';
+    html += '<img src="assets/drum-kit.webp" alt="Drum kit" style="width:100%;display:block;border-radius:8px;border:1px solid #333;background:#111" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'">';
+    html += '<div class="drum-kit-fallback" style="display:none;padding:20px;text-align:center;color:#666;border:1px solid #333;border-radius:8px">Imagem do kit não encontrada (assets/drum-kit.webp). Use a legenda abaixo.</div>';
+    spots.forEach(s=>{
+      const piece = DRUM_KIT.find(d => d.id === s.id);
+      const title = piece ? (piece.label + " · $" + piece.period.toString(16).toUpperCase() + " " + piece.mode) : s.id;
+      html += '<button type="button" class="drum-hotspot" data-drum="'+s.id+'" title="'+title+'" '
+        + 'style="position:absolute;left:'+s.left+'%;top:'+s.top+'%;width:'+s.w+'%;height:'+s.h+'%;'
+        + 'border:1px solid transparent;border-radius:50%;background:transparent;cursor:pointer;padding:0"></button>';
+    });
+    html += '</div>';
+    host.innerHTML = html;
+    host.querySelectorAll(".drum-hotspot").forEach(btn=>{
+      btn.addEventListener("click", ()=> selectDrumPiece(btn.getAttribute("data-drum")));
+      btn.addEventListener("mouseenter", ()=> { btn.style.background = "rgba(78,201,176,0.25)"; btn.style.borderColor = "#4ec9b0"; });
+      btn.addEventListener("mouseleave", ()=> {
+        const cur = channels[activeChannel] && channels[activeChannel].notes[selectedIndex];
+        const active = cur && DRUM_BY_NOTE[cur.note] && DRUM_BY_NOTE[cur.note].id === btn.getAttribute("data-drum");
+        btn.style.background = active ? "rgba(255,204,0,0.2)" : "transparent";
+        btn.style.borderColor = active ? "#ffcc00" : "transparent";
+      });
+    });
+    if(legend){
+      legend.innerHTML = DRUM_KIT.map(p=>
+        '<button type="button" class="drum-legend-btn" data-drum="'+p.id+'" title="$'
+        + p.period.toString(16).toUpperCase()+' '+p.mode+'">'+p.label+'</button>'
+      ).join("");
+      legend.querySelectorAll(".drum-legend-btn").forEach(btn=>{
+        btn.onclick = ()=> selectDrumPiece(btn.getAttribute("data-drum"));
+      });
+    }
+    const restD = document.getElementById("rest-btn-drum");
+    if(restD){
+      restD.onclick = ()=>{
+        const ch = channels[activeChannel];
+        if(!ch || !ch.notes[selectedIndex]) return;
+        pushUndo();
+        ch.notes[selectedIndex].note = "REST";
+        renderAll();
+      };
+    }
+  }
+
+  function selectDrumPiece(pieceId){
+    const piece = DRUM_KIT.find(p => p.id === pieceId);
+    if(!piece) return;
+    const ch = channels[activeChannel];
+    if(!ch || ch.type !== "noise"){
+      // força canal noise se o usuário clicou no kit
+      const ni = channels.findIndex(c => c.type === "noise");
+      if(ni >= 0) activeChannel = ni;
+    }
+    const ch2 = channels[activeChannel];
+    if(!ch2 || !ch2.notes[selectedIndex]) return;
+    if(ch2.type !== "noise") return;
+    pushUndo();
+    ch2.notes[selectedIndex].note = piece.note;
+    playSingleNote(piece.note, "noise");
+    renderAll();
+  }
+
   function selectNoteFromPiano(fullNote){
     const ch = channels[activeChannel];
     if(!ch || !ch.notes[selectedIndex]) return;
@@ -717,9 +847,11 @@ const SOUND = (() => {
   }
 
   // Noise periodizado em buffer curto com loop (barato)
-  function getNesNoiseBuffer(ctx, freqHint){
+  function getNesNoiseBuffer(ctx, freqHint, mode){
+    const shortMode = mode === "short";
     const hold = Math.max(1, Math.floor(ctx.sampleRate / Math.max(80, Math.min(6000, (freqHint || 400) * 2))));
-    if(noiseBufCache.has(hold)) return noiseBufCache.get(hold);
+    const key = (shortMode ? "s" : "l") + hold;
+    if(noiseBufCache.has(key)) return noiseBufCache.get(key);
     const len = Math.max(hold * 32, Math.floor(ctx.sampleRate * 0.08));
     const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
     const out = buffer.getChannelData(0);
@@ -727,19 +859,19 @@ const SOUND = (() => {
     let sample = 0;
     for(let i=0; i<len; i++){
       if(i % hold === 0){
-        const bit = (reg ^ (reg >> 1)) & 1;
+        const bit = shortMode ? ((reg ^ (reg >> 6)) & 1) : ((reg ^ (reg >> 1)) & 1);
         reg = (reg >> 1) | (bit << 14);
         sample = (reg & 1) ? 0.7 : -0.7;
       }
       out[i] = sample;
     }
-    noiseBufCache.set(hold, buffer);
+    noiseBufCache.set(key, buffer);
     return buffer;
   }
 
   // when = audioCtx.currentTime para agendar no futuro
   // legato = nao corta o volume no fim (proxima nota no mesmo pitch/canal)
-  function playTone(ctx, info, freq, durSec, peak, when, legato){
+  function playTone(ctx, info, freq, durSec, peak, when, legato, noiseMode){
     const t0 = (when != null) ? when : ctx.currentTime;
     const dur = Math.max(0.025, durSec);
     // leve overlap no legato evita "buraco" entre celulas
@@ -750,7 +882,7 @@ const SOUND = (() => {
     let src;
     if(info.wave === "noise"){
       src = ctx.createBufferSource();
-      src.buffer = getNesNoiseBuffer(ctx, freq);
+      src.buffer = getNesNoiseBuffer(ctx, freq, noiseMode || "long");
       src.loop = true;
       applyNesEnvelope(gain, t0, peak * 0.7, dur, !!legato);
       src.connect(gain);
@@ -790,7 +922,7 @@ const SOUND = (() => {
     if(!data || data.isRest) return;
     const info = typeInfo(channelType);
     const ctx = getAudioCtx();
-    playTone(ctx, info, data.freq || 200, 0.18, 0.14, ctx.currentTime);
+    playTone(ctx, info, data.freq || 200, 0.18, 0.14, ctx.currentTime, false, data.mode || "long");
   }
 
   function stepDurationSec(stepIndex){
@@ -1090,7 +1222,9 @@ const SOUND = (() => {
 
         const label = document.createElement("div");
         label.className = "cell-label" + (noteObj.note === "REST" ? " rest" : "");
-        label.textContent = noteObj.note === "REST" ? "R" : noteObj.note;
+        if(noteObj.note === "REST") label.textContent = "R";
+        else if(DRUM_BY_NOTE[noteObj.note]) label.textContent = DRUM_BY_NOTE[noteObj.note].label.split(" ")[0].slice(0,5);
+        else label.textContent = noteObj.note;
         label.style.color = noteObj.note === "REST" ? "#ffb703" : info.color;
 
         const dur = document.createElement("div");
@@ -1211,13 +1345,32 @@ const SOUND = (() => {
     const cur = ch.notes[selectedIndex];
     if(!cur) return;
     const info = typeInfo(ch.type);
-    if(title) title.textContent = info.label + " \u2014 #" + selectedIndex + " \u2014 " + cur.note + " / " + cur.figure;
+    const noteLbl = (DRUM_BY_NOTE[cur.note] ? DRUM_BY_NOTE[cur.note].label : cur.note);
+    if(title) title.textContent = info.label + " \u2014 #" + selectedIndex + " \u2014 " + noteLbl + " / " + cur.figure;
     setFigureRangeFromId(cur.figure);
+    const isNoise = ch.type === "noise";
+    const pianoView = document.getElementById("piano-view");
+    const drumView = document.getElementById("drum-view");
+    if(pianoView) pianoView.style.display = isNoise ? "none" : "block";
+    if(drumView) drumView.style.display = isNoise ? "block" : "none";
+
     const restBtn = document.getElementById("rest-btn");
     if(restBtn) restBtn.classList.toggle("active", cur.note === "REST");
+    const restDrum = document.getElementById("rest-btn-drum");
+    if(restDrum) restDrum.classList.toggle("active", cur.note === "REST");
+
     document.querySelectorAll("#mod-sound .piano-key").forEach(k=>{
       const n = k.getAttribute("data-note");
       if(cur.note === n) k.classList.add("active"); else k.classList.remove("active");
+    });
+    const activeDrum = DRUM_BY_NOTE[cur.note];
+    document.querySelectorAll("#mod-sound .drum-hotspot").forEach(btn=>{
+      const on = activeDrum && btn.getAttribute("data-drum") === activeDrum.id;
+      btn.style.background = on ? "rgba(255,204,0,0.25)" : "transparent";
+      btn.style.borderColor = on ? "#ffcc00" : "transparent";
+    });
+    document.querySelectorAll("#mod-sound .drum-legend-btn").forEach(b=>{
+      b.classList.toggle("active", activeDrum && b.getAttribute("data-drum") === activeDrum.id);
     });
   }
 
@@ -1266,7 +1419,7 @@ const SOUND = (() => {
       const samePitch = next && next.note === n.note;
       const legato = !nextIsRest && (samePitch || info.wave !== "noise");
 
-      playTone(ctx, info, freq, dur, peak, when, legato);
+      playTone(ctx, info, freq, dur, peak, when, legato, data.mode || "long");
     });
   }
 
@@ -1585,21 +1738,42 @@ const SOUND = (() => {
   }
 
   // Rasteriza notas de uma track numa grade de steps (todos os canais compartilham a mesma grade)
-  function rasterizeTrackToGrid(notes, stepTicks, numSteps){
+  function midiDrumToNoteKey(midi){
+    const pieceId = GM_DRUM_TO_PIECE[midi|0];
+    if(!pieceId) return null;
+    const p = DRUM_KIT.find(d => d.id === pieceId);
+    return p ? p.note : null;
+  }
+
+  function rasterizeTrackToGrid(notes, stepTicks, numSteps, asDrums){
     const cells = new Array(numSteps);
+    // Prioridade se vários hits no mesmo step (snare > kick > hat...)
+    const drumPri = { snare: 5, kick: 4, clap: 4, rim: 3, tom_hi: 3, tom_lo: 3, crash: 2, ride: 2, hat_o: 1, hat_c: 1 };
     for(let s=0; s<numSteps; s++){
       const t0 = s * stepTicks;
       const t1 = t0 + stepTicks;
       let best = null;
+      let bestPri = -1;
       for(let i=0; i<notes.length; i++){
         const n = notes[i];
-        // nota cobre este step se intersecta [t0,t1)
         if(n.start < t1 && n.end > t0){
-          if(!best || n.midi > best.midi) best = n;
+          if(asDrums){
+            const key = midiDrumToNoteKey(n.midi);
+            if(!key) continue;
+            const piece = DRUM_BY_NOTE[key];
+            const pri = (piece && drumPri[piece.id] != null) ? drumPri[piece.id] : 0;
+            // velocity desempata
+            const score = pri * 1000 + (n.velocity || 0);
+            if(score > bestPri){ bestPri = score; best = { note: key }; }
+          } else {
+            if(!best || n.midi > best.midi) best = n;
+          }
         }
       }
       if(best){
-        cells[s] = { note: midiNoteToName(best.midi), figure: "sixteenth" };
+        cells[s] = asDrums
+          ? { note: best.note, figure: "sixteenth" }
+          : { note: midiNoteToName(best.midi), figure: "sixteenth" };
       } else {
         cells[s] = { note: "REST", figure: "sixteenth" };
       }
@@ -1698,11 +1872,12 @@ const SOUND = (() => {
     parsed.tracks.forEach((tr, trackIdx)=>{
       let nesCh = (mapping && mapping[trackIdx]) || "none";
       if(!orderRank.hasOwnProperty(nesCh)) nesCh = "none";
+      const asDrums = (nesCh === "noise") || !!tr.isPercussion;
       entries.push({
         trackIdx,
         type: nesCh,
         name: tr.name || ("Track " + (trackIdx + 1)),
-        notes: rasterizeTrackToGrid(tr.notes, stepTicks, numSteps)
+        notes: rasterizeTrackToGrid(tr.notes, stepTicks, numSteps, asDrums)
       });
     });
 
