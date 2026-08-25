@@ -157,7 +157,7 @@ mu_ch0_next:
 mu_ch0_nof:
   CMP #$FE
   BNE mu_ch0_play
-  LDA %00110000
+  LDA #%00110000
   STA $4000
   JMP mu_ch0_end
 mu_ch0_play:
@@ -168,11 +168,11 @@ mu_ch0_play:
   STY ch0_pos
   CPX #0
   BNE mu_ch0_tone
-  LDA %00110000
+  LDA #%00110000
   STA $4000
   JMP mu_ch0_end
 mu_ch0_tone:
-  LDA %10111111
+  LDA #%10111111
   STA $4000
   LDA PitchLo_ch0,X
   STA $4002
@@ -196,7 +196,7 @@ mu_ch1_next:
 mu_ch1_nof:
   CMP #$FE
   BNE mu_ch1_play
-  LDA %00110000
+  LDA #%00110000
   STA $4004
   JMP mu_ch1_end
 mu_ch1_play:
@@ -207,11 +207,11 @@ mu_ch1_play:
   STY ch1_pos
   CPX #0
   BNE mu_ch1_tone
-  LDA %00110000
+  LDA #%00110000
   STA $4004
   JMP mu_ch1_end
 mu_ch1_tone:
-  LDA %01111111
+  LDA #%01111111
   STA $4004
   LDA PitchLo_ch1,X
   STA $4006
@@ -235,7 +235,7 @@ mu_ch2_next:
 mu_ch2_nof:
   CMP #$FE
   BNE mu_ch2_play
-  LDA %00000000
+  LDA #%00000000
   STA $4008
   JMP mu_ch2_end
 mu_ch2_play:
@@ -246,11 +246,11 @@ mu_ch2_play:
   STY ch2_pos
   CPX #0
   BNE mu_ch2_tone
-  LDA %00000000
+  LDA #%00000000
   STA $4008
   JMP mu_ch2_end
 mu_ch2_tone:
-  LDA %11111111
+  LDA #%11111111
   STA $4008
   LDA PitchLo_ch2,X
   STA $400A
@@ -261,12 +261,21 @@ mu_ch2_end:
 
 music_init:
   LDA #0
+  LDA #0
   STA ch0_timer
   STA ch0_pos
+  LDA #%00000000
+  STA $4008
+  LDA #0
   STA ch1_timer
   STA ch1_pos
+  LDA #%00000000
+  STA $4008
+  LDA #0
   STA ch2_timer
   STA ch2_pos
+  LDA #%00000000
+  STA $4008
   LDA #$0F
   STA $4015
   LDA #1

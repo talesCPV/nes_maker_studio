@@ -1,5 +1,5 @@
 // ==========================================
-// SOUND EDITOR v3.2 — Kit imagem + MIDI perc → drums
+// SOUND EDITOR v3.3 — spots calibrados + layout inspector/selection
 // Multi-canal NES (Pulse1/2, Triangle, Noise)
 // Timeline compartilhada + seletor de tipo por canal
 // Formato antigo (song[] / v2 single) migrado ou limpo
@@ -552,11 +552,16 @@ const SOUND = (() => {
         </div>
         <div class="selection-hint" id="selection-hint">Selecao: 1o clique = inicio · 2o = fim · Esc limpa · Com tipos duplicados, clique numa celula inativa para ativar essa voz daqui ate a proxima troca · Mesclar consolida</div>
 
-        <div class="selection-actions" id="selection-actions" style="display:none">
+        <div class="selection-actions" id="selection-actions" style="display:flex">
+          <button id="fig-up-selected-btn" class="secondary" title="Aumentar duracao em todas as colunas selecionadas (todos os canais)">+</button>
+          <div class="figure-range-wrap">
+            <label>Duracao</label>
+            <input type="range" id="figure-range" min="0" max="6" step="1" value="2">
+            <span id="figure-label">Seminima (1x)</span>
+          </div>
+          <button id="fig-down-selected-btn" class="secondary" title="Diminuir duracao em todas as colunas selecionadas (todos os canais)">-</button>
           <button id="clone-selected-btn" class="btn-clone">\u{1F4CB} Clonar</button>
           <button id="delete-selected-btn" class="btn-del">\u2716 Remover</button>
-          <button id="fig-down-selected-btn" class="secondary" title="Diminuir duracao em todas as colunas selecionadas (todos os canais)">-</button>
-          <button id="fig-up-selected-btn" class="secondary" title="Aumentar duracao em todas as colunas selecionadas (todos os canais)">+</button>
           <button id="clear-selection-btn" class="secondary">Limpar Selecao</button>
           <span id="selection-info" style="font-size:11px;color:#888"></span>
         </div>
@@ -564,15 +569,6 @@ const SOUND = (() => {
         <div class="inspector-panel" id="inspector-panel">
           <div class="inspector-header">
             <div class="inspector-title" id="inspector-title">Celula #0</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-              <div class="figure-range-wrap">
-                <label>Duracao</label>
-                <input type="range" id="figure-range" min="0" max="6" step="1" value="2">
-                <span id="figure-label">Seminima (1x)</span>
-              </div>
-              <button id="clone-cell-btn" class="btn-clone">\u{1F4CB} Clonar</button>
-              <button id="delete-cell-btn" class="btn-del">\u2716 Remover</button>
-            </div>
           </div>
           <div id="instrument-views">
             <div id="piano-view">
@@ -595,11 +591,6 @@ const SOUND = (() => {
       </div>
 
       <div class="sound-card">
-        <div class="controls">
-          <button id="export-asm-btn">\u{1F4BE} Export .asm</button>
-          <button onclick="SOUND.saveToProject()" style="background:#007acc;color:#fff">\u{1F4BE} Salvar no .NMS</button>
-          <span style="font-size:11px;color:#666;margin-left:auto">ASM de todas as pecas da biblioteca</span>
-        </div>
         <textarea id="asm-output" readonly placeholder="Assembly gerado..."></textarea>
       </div>
     `;
@@ -696,16 +687,16 @@ const SOUND = (() => {
     if(!host) return;
     // Hotspots em % sobre a foto top-down do kit (assets/drum-kit.webp)
     const spots = [
-      { id: "crash",  left: 19,  top: 15,   w: 21, h: 15 },
-      { id: "ride",   left: 60,  top: 11,   w: 24, h: 17 },
-      { id: "hat_c",  left: 19,  top: 67,   w: 11, h: 18 },
-      { id: "tom_hi", left: 32,  top: 28,   w: 14, h: 11 },
-      { id: "tom_lo", left: 52,  top: 26,   w: 18, h: 13 },
-      { id: "snare",  left: 22,  top: 46,   w: 21, h: 18 },
-      { id: "kick",   left: 38,  top: 52,   w: 26, h: 28 },
-      { id: "clap",   left: 63,  top: 53,   w: 20, h: 17 },
-      { id: "rim",    left: 67,  top: 35,   w: 28, h: 22 },
-      { id: "hat_o",  left: 2,   top: 40.5, w: 22, h: 17 }
+      { id: "crash", left: 19, top: 15, w: 21, h: 15 },
+      { id: "ride", left: 60, top: 11, w: 24, h: 17 },
+      { id: "hat_c", left: 19, top: 67, w: 11, h: 18 },
+      { id: "tom_hi", left: 32, top: 28, w: 14, h: 11 },
+      { id: "tom_lo", left: 52, top: 26, w: 18, h: 13 },
+      { id: "snare", left: 22, top: 46, w: 21, h: 18 },
+      { id: "kick", left: 38, top: 52, w: 26, h: 28 },
+      { id: "clap", left: 63, top: 53, w: 20, h: 17 },
+      { id: "rim", left: 67, top: 35, w: 28, h: 22 },
+      { id: "hat_o", left: 2, top: 40.5, w: 22, h: 17 }
     ];
     let html = '<div class="drum-kit-photo" style="position:relative;width:100%;max-width:420px;margin:0 auto">';
     html += '<img src="assets/drum-kit.webp" alt="Drum kit" style="width:100%;display:block;border-radius:8px;border:1px solid #333;background:#111" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'">';
@@ -729,22 +720,6 @@ const SOUND = (() => {
         btn.style.borderColor = active ? "#ffcc00" : "transparent";
       });
     });
-
-    let bar = document.getElementById("drum-kit-bar");
-    if(!bar){
-      bar = document.createElement("div");
-      bar.id = "drum-kit-bar";
-      bar.className = "drum-kit-bar";
-      host.parentNode.insertBefore(bar, host.nextSibling);
-    }
-    bar.innerHTML =
-      '<label class="drum-show-areas"><input type="checkbox" id="chk-drum-areas"> mostrar áreas</label>' +
-      '<span id="drum-piece-info" class="drum-piece-info">clique num pad</span>';
-    const chk = document.getElementById("chk-drum-areas");
-    if(chk){
-      chk.onchange = ()=>{ host.classList.toggle("show-areas", chk.checked); };
-    }
-
     if(legend){
       legend.innerHTML = DRUM_KIT.map(p=>
         '<button type="button" class="drum-legend-btn" data-drum="'+p.id+'" title="$'
@@ -780,13 +755,6 @@ const SOUND = (() => {
     if(ch2.type !== "noise") return;
     pushUndo();
     ch2.notes[selectedIndex].note = piece.note;
-    
-    const info = document.getElementById("drum-piece-info");
-    if(info){
-      info.textContent = piece.label + " · period $" + piece.period.toString(16).toUpperCase()
-        + " · " + piece.mode + " · " + piece.note;
-    }
-
     playSingleNote(piece.note, "noise");
     renderAll();
   }
@@ -1191,13 +1159,39 @@ const SOUND = (() => {
         if(channels.length <= 1) delBtn.disabled = true;
         actions.appendChild(muteBtn);
         actions.appendChild(delBtn);
-        // Nome do instrumento (MIDI) em destaque no cabeçalho
+        // Nome do instrumento — duplo clique renomeia (não pode renderAll no 1º clique)
         const nm = document.createElement("div");
         nm.className = "trk-inst";
         const instLabel = (ch.name && String(ch.name).trim()) || typeInfo(ch.type).label;
-        nm.title = instLabel;
+        nm.title = instLabel + " (duplo clique para renomear)";
         nm.textContent = instLabel;
         nm.style.color = info.color;
+        nm.style.cursor = "text";
+        // Atrasa o clique simples para o dblclick não perder o nó no renderAll
+        let nmClickTimer = null;
+        nm.onclick = (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          if(nmClickTimer) return;
+          nmClickTimer = setTimeout(() => {
+            nmClickTimer = null;
+            activeChannel = chIdx;
+            renderAll();
+          }, 280);
+        };
+        nm.ondblclick = (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          if(nmClickTimer){ clearTimeout(nmClickTimer); nmClickTimer = null; }
+          activeChannel = chIdx;
+          const cur = (channels[chIdx].name && String(channels[chIdx].name).trim())
+            || typeInfo(channels[chIdx].type).label;
+          const n = prompt("Nome do canal:", cur);
+          if(n === null) return;
+          pushUndo();
+          channels[chIdx].name = n.trim();
+          renderAll();
+        };
         header.appendChild(nm);
         header.appendChild(sel);
         header.appendChild(actions);
@@ -1207,7 +1201,11 @@ const SOUND = (() => {
           const same = channelsOfType(ch.type).map(x => x.i);
           if(same.indexOf(chIdx) > 0) header.classList.add("stack-continue");
         }
-        header.onclick = () => { activeChannel = chIdx; renderAll(); };
+        header.onclick = (e) => {
+          if(e.target && e.target.closest && e.target.closest(".trk-inst")) return;
+          activeChannel = chIdx;
+          renderAll();
+        };
         headersCol.appendChild(header);
       }
 
@@ -1347,15 +1345,18 @@ const SOUND = (() => {
     const actions = document.getElementById("selection-actions");
     const info = document.getElementById("selection-info");
     if(actions){
-      if(selectedCells.size > 0){
-        actions.style.display = "flex";
-        if(info){
+      // sempre visível (duração fica aqui); só atualiza o texto da seleção
+      actions.style.display = "flex";
+      if(info){
+        if(selectedCells.size > 0){
           const lo = selectionStart !== null && selectionEnd !== null
             ? Math.min(selectionStart, selectionEnd) + "–" + Math.max(selectionStart, selectionEnd)
             : String(selectedIndex);
           info.textContent = selectedCells.size + " colunas [" + lo + "]";
+        } else {
+          info.textContent = "";
         }
-      } else actions.style.display = "none";
+      }
     }
   }
 
@@ -2373,7 +2374,7 @@ Time_${label}:
       };
     }
 
-    document.getElementById("clone-cell-btn").onclick = ()=>{
+    const _cloneCellBtn = document.getElementById("clone-cell-btn"); if(_cloneCellBtn) _cloneCellBtn.onclick = ()=>{
       const ch = channels[activeChannel];
       if(!ch || !ch.notes[selectedIndex]) return;
       pushUndo();
@@ -2387,7 +2388,7 @@ Time_${label}:
       renderAll();
     };
 
-    document.getElementById("delete-cell-btn").onclick = ()=>{
+    const _delCellBtn = document.getElementById("delete-cell-btn"); if(_delCellBtn) _delCellBtn.onclick = ()=>{
       if(timelineLength() <= 1) return;
       pushUndo();
       channels.forEach(c => { if(selectedIndex < c.notes.length) c.notes.splice(selectedIndex, 1); });
@@ -2421,7 +2422,7 @@ Time_${label}:
       generateASM();
     };
 
-    document.getElementById("export-asm-btn").onclick = ()=>{
+    const _exportAsmBtn = document.getElementById("export-asm-btn"); if(_exportAsmBtn) _exportAsmBtn.onclick = ()=>{
       generateASM();
       const blob = new Blob([els.asmOutput.value], { type:"text/plain;charset=utf-8" });
       const a = document.createElement("a");
