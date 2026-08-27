@@ -2418,26 +2418,58 @@ const CHR = (() => {
       }
       unique.push(c);
     };
-    // ordem: células em row-major; dentro da célula, pixels row-major
+    // 1º passo: só o pixel do CENTRO de cada célula (evita borda mal alinhada)
+    // ordem das células: esq→dir, cima→baixo
     for(let ty=0; ty<th && unique.length<4; ty++){
       for(let tx=0; tx<tw && unique.length<4; tx++){
         const x0 = tx * cellW, y0 = ty * cellH;
         const x1 = Math.min(sw, x0 + cellW);
         const y1 = Math.min(sh, y0 + cellH);
-        for(let y=y0; y<y1 && unique.length<4; y++){
-          for(let x=x0; x<x1 && unique.length<4; x++){
-            const i = (y*sw + x) * 4;
+        if(x1 <= x0 || y1 <= y0) continue;
+        // centro = origem + metade da célula (floor)
+        const cx = Math.min(x1 - 1, x0 + Math.floor((x1 - x0) / 2));
+        const cy = Math.min(y1 - 1, y0 + Math.floor((y1 - y0) / 2));
+        const i = (cy * sw + cx) * 4;
+        consider(data[i], data[i+1], data[i+2], data[i+3]);
+      }
+    }
+    // 2º passo (se < 4): pequena cruz em torno do centro (±1 px), ainda longe da borda
+    if(unique.length < 4){
+      for(let ty=0; ty<th && unique.length<4; ty++){
+        for(let tx=0; tx<tw && unique.length<4; tx++){
+          const x0 = tx * cellW, y0 = ty * cellH;
+          const x1 = Math.min(sw, x0 + cellW);
+          const y1 = Math.min(sh, y0 + cellH);
+          if(x1 <= x0 || y1 <= y0) continue;
+          const cx = Math.min(x1 - 1, x0 + Math.floor((x1 - x0) / 2));
+          const cy = Math.min(y1 - 1, y0 + Math.floor((y1 - y0) / 2));
+          const pts = [
+            [cx, cy],
+            [cx-1, cy], [cx+1, cy], [cx, cy-1], [cx, cy+1]
+          ];
+          for(const [x,y] of pts){
+            if(x < x0 || y < y0 || x >= x1 || y >= y1) continue;
+            const i = (y * sw + x) * 4;
             consider(data[i], data[i+1], data[i+2], data[i+3]);
+            if(unique.length >= 4) break;
           }
         }
       }
     }
-    // fallback: se achou pouco, varre a seleção inteira
+    // 3º passo (último recurso): varre o miolo da célula (ignora 1px de borda se célula >= 3)
     if(unique.length < 4){
-      for(let y=0; y<sh && unique.length<4; y++){
-        for(let x=0; x<sw && unique.length<4; x++){
-          const i = (y*sw + x) * 4;
-          consider(data[i], data[i+1], data[i+2], data[i+3]);
+      for(let ty=0; ty<th && unique.length<4; ty++){
+        for(let tx=0; tx<tw && unique.length<4; tx++){
+          const x0 = tx * cellW, y0 = ty * cellH;
+          const x1 = Math.min(sw, x0 + cellW);
+          const y1 = Math.min(sh, y0 + cellH);
+          const pad = (x1-x0 >= 3 && y1-y0 >= 3) ? 1 : 0;
+          for(let y=y0+pad; y<y1-pad && unique.length<4; y++){
+            for(let x=x0+pad; x<x1-pad && unique.length<4; x++){
+              const i = (y*sw + x) * 4;
+              consider(data[i], data[i+1], data[i+2], data[i+3]);
+            }
+          }
         }
       }
     }
