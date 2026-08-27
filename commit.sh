@@ -12,11 +12,15 @@ then
 
     git add asm/
     git add assets/
+    git add backend/
     git add css/
     git add js/
     git add projetos/
     git add ngc/
     git add commit.sh
+    git add dashboard.html
+    git add login.html
+    git add register.html
     git add index.html
     git add historico.txt
     git add backup.zip
