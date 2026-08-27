@@ -8,8 +8,11 @@ require_once __DIR__ . '/../config/database.php';
 header('Content-Type: application/json; charset=utf-8');
 
 
-function response(array $data, int $status = 200): never
-{
+function response(
+    array $data,
+    int $status = 200
+): never {
+
     http_response_code($status);
 
     echo json_encode(
@@ -23,9 +26,7 @@ function response(array $data, int $status = 200): never
 
 
 /*
- * ---------------------------------------------------------
- * MÉTODO
- * ---------------------------------------------------------
+ * Somente GET.
  */
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
@@ -38,16 +39,19 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 
 
 /*
- * ---------------------------------------------------------
- * PROJETO
- * ---------------------------------------------------------
+ * ID do projeto.
+ *
+ * Exemplo:
+ *
+ * load.php?id=12
  */
 
-$projectId = filter_input(
-    INPUT_GET,
-    'id',
-    FILTER_VALIDATE_INT
-);
+$projectId =
+    filter_input(
+        INPUT_GET,
+        'id',
+        FILTER_VALIDATE_INT
+    );
 
 
 if (
@@ -63,13 +67,8 @@ if (
 }
 
 
-/*
- * ---------------------------------------------------------
- * USUÁRIO
- * ---------------------------------------------------------
- */
-
-$userId = (int) $_SESSION['user_id'];
+$userId =
+    (int) $_SESSION['user_id'];
 
 
 try {
@@ -78,10 +77,12 @@ try {
 
 
     /*
-     * Somente o proprietário pode carregar
-     * o projeto.
+     * IMPORTANTE:
      *
-     * Projetos na lixeira não são carregados.
+     * O projeto só pode ser carregado pelo
+     * usuário que é seu proprietário.
+     *
+     * Também ignoramos projetos na lixeira.
      */
 
     $stmt = $pdo->prepare(
@@ -105,12 +106,17 @@ try {
 
 
     $stmt->execute([
-        ':id' => $projectId,
-        ':user_id' => $userId
+
+        ':id' =>
+            $projectId,
+
+        ':user_id' =>
+            $userId
     ]);
 
 
-    $project = $stmt->fetch(PDO::FETCH_ASSOC);
+    $project =
+        $stmt->fetch();
 
 
     if (!$project) {
@@ -123,53 +129,63 @@ try {
 
 
     /*
-     * -----------------------------------------------------
-     * NOME DO ARQUIVO
-     * -----------------------------------------------------
+     * Nome do arquivo vem do banco.
      *
-     * O filename vem do banco, mas usamos basename()
-     * para impedir que ele seja utilizado como caminho.
+     * Não aceitamos caminho enviado pelo navegador.
      */
 
-    $filename = basename(
-        (string) $project['filename']
-    );
+    $filename =
+        basename(
+            (string) $project['filename']
+        );
 
 
     if ($filename === '') {
 
         response([
             'success' => false,
-            'message' => 'Arquivo NMS não definido.'
+            'message' =>
+                'O projeto não possui arquivo NMS.'
         ], 500);
     }
 
 
     /*
-     * -----------------------------------------------------
-     * CAMINHO DO PROJETO
-     * -----------------------------------------------------
+     * Caminho físico:
+     *
+     * data/
+     *   users/
+     *     USER_ID/
+     *       projects/
+     *         PROJECT_ID/
+     *           filename.nms
      */
 
     $projectDir =
-        dirname(__DIR__, 2)
-        . DIRECTORY_SEPARATOR . 'data'
-        . DIRECTORY_SEPARATOR . 'users'
-        . DIRECTORY_SEPARATOR . $userId
-        . DIRECTORY_SEPARATOR . 'projects'
-        . DIRECTORY_SEPARATOR . $projectId;
+        dirname(__DIR__, 2) .
+        DIRECTORY_SEPARATOR .
+        'data' .
+        DIRECTORY_SEPARATOR .
+        'users' .
+        DIRECTORY_SEPARATOR .
+        $userId .
+        DIRECTORY_SEPARATOR .
+        'projects' .
+        DIRECTORY_SEPARATOR .
+        $projectId;
 
 
     $nmsPath =
-        $projectDir
-        . DIRECTORY_SEPARATOR
-        . $filename;
+        $projectDir .
+        DIRECTORY_SEPARATOR .
+        $filename;
 
 
     /*
-     * -----------------------------------------------------
-     * ARQUIVO
-     * -----------------------------------------------------
+     * Segurança adicional:
+     *
+     * O arquivo precisa existir e estar
+     * dentro da pasta do projeto.
      */
 
     if (!is_file($nmsPath)) {
@@ -177,10 +193,14 @@ try {
         response([
             'success' => false,
             'message' =>
-                'O arquivo NMS do projeto não foi encontrado.'
+                'Arquivo do projeto não encontrado.'
         ], 404);
     }
 
+
+    /*
+     * Lê o NMS.
+     */
 
     $contents =
         file_get_contents($nmsPath);
@@ -191,79 +211,70 @@ try {
         response([
             'success' => false,
             'message' =>
-                'Não foi possível ler o arquivo NMS.'
+                'Não foi possível ler o arquivo do projeto.'
         ], 500);
     }
 
 
     /*
-     * -----------------------------------------------------
-     * JSON
-     * -----------------------------------------------------
+     * Valida o JSON.
      */
 
-    try {
-
-        $nms = json_decode(
+    $nms =
+        json_decode(
             $contents,
-            true,
-            512,
-            JSON_THROW_ON_ERROR
+            true
         );
 
-    } catch (JsonException $e) {
+
+    if (
+        !is_array($nms) ||
+        json_last_error() !== JSON_ERROR_NONE
+    ) {
 
         response([
             'success' => false,
             'message' =>
-                'O arquivo NMS possui JSON inválido.',
-            'debug' =>
-                $e->getMessage()
-        ], 500);
-    }
-
-
-    if (!is_array($nms)) {
-
-        response([
-            'success' => false,
-            'message' =>
-                'O conteúdo do NMS é inválido.'
+                'O arquivo NMS contém JSON inválido.'
         ], 500);
     }
 
 
     /*
-     * -----------------------------------------------------
-     * ATUALIZA ÚLTIMO ACESSO
-     * -----------------------------------------------------
+     * Atualiza o último acesso.
+     *
+     * Não fazemos isso antes da leitura para
+     * evitar alterar o banco se o arquivo estiver
+     * corrompido ou ausente.
      */
 
-    $update = $pdo->prepare(
-        'UPDATE projects
-         SET last_opened_at = NOW()
-         WHERE id = :id
-           AND user_id = :user_id'
-    );
+    $update =
+        $pdo->prepare(
+            'UPDATE projects
+             SET last_opened_at = NOW()
+             WHERE id = :id
+               AND user_id = :user_id'
+        );
 
 
     $update->execute([
-        ':id' => $projectId,
-        ':user_id' => $userId
+
+        ':id' =>
+            $projectId,
+
+        ':user_id' =>
+            $userId
     ]);
 
 
     /*
-     * -----------------------------------------------------
-     * RETORNO
-     * -----------------------------------------------------
-     *
-     * O objeto "nms" contém o projeto completo.
+     * Retorno.
      */
 
     response([
 
-        'success' => true,
+        'success' =>
+            true,
 
         'project' => [
 
@@ -292,8 +303,15 @@ try {
 
             'last_opened_at' =>
                 $project['last_opened_at']
-
         ],
+
+        /*
+         * Aqui está o projeto NMS real.
+         *
+         * Mais adiante o editor NGC usará
+         * diretamente este objeto para reconstruir
+         * o AppState.
+         */
 
         'nms' =>
             $nms
@@ -311,10 +329,16 @@ try {
 
     response([
 
-        'success' => false,
+        'success' =>
+            false,
 
         'message' =>
             'Não foi possível carregar o projeto.',
+
+        /*
+         * Temporário durante desenvolvimento.
+         * Remover antes da produção.
+         */
 
         'debug' =>
             $e->getMessage()

@@ -377,58 +377,49 @@ async function loadProjects() {
                 id.textContent =
                     `Projeto #${project.id}`;
 
-
                     item.appendChild(title);
 
-                    item.appendChild(description);
+item.appendChild(description);
 
-                    item.appendChild(id);
-
-
-                    /* =========================================================
-                    AÇÕES DO PROJETO
-                    ========================================================= */
-
-                    const projectActions =
-                        document.createElement('div');
-
-                    projectActions.className =
-                        'project-actions';
+item.appendChild(id);
 
 
-                    const openButton =
-                        document.createElement('button');
+/* =========================================================
+   AÇÕES DO PROJETO
+   ========================================================= */
 
-                    openButton.type =
-                        'button';
+    const projectActions =
+        document.createElement('div');
 
-                    openButton.textContent =
-                        'Abrir';
-
-
-                    openButton.addEventListener(
-                        'click',
-                        () => {
-
-                            openProject(
-                                project.id
-                            );
-
-                        }
-                    );
+        projectActions.className =
+            'project-actions';
 
 
-                    projectActions.appendChild(
-                        openButton
-                    );
+        const openButton =
+            document.createElement('button');
+
+        openButton.type = 'button';
+
+        openButton.textContent = 'Abrir';
 
 
-                    item.appendChild(
-                        projectActions
-                    );
+        openButton.addEventListener(
+            'click',
+            () => openProject(project.id)
+        );
 
 
-                    projectList.appendChild(item);
+        projectActions.appendChild(
+            openButton
+        );
+
+
+        item.appendChild(
+            projectActions
+        );
+
+
+        projectList.appendChild(item);
             }
         );
 
@@ -622,6 +613,7 @@ projectForm.addEventListener(
     }
 );
 
+
 /* =========================================================
    ABRIR PROJETO NO NGC
    ========================================================= */
@@ -766,6 +758,7 @@ projectForm.addEventListener(
         }
     }
 
+
 /* =========================================================
    LOGOUT
    ========================================================= */
@@ -805,82 +798,6 @@ document
         }
     );
 
-
-    /* =========================================================
-    ABRIR PROJETO
-    ========================================================= */
-
-    async function openProject(projectId) {
-
-        try {
-
-            /*
-            * Evita cliques repetidos enquanto
-            * o projeto está sendo carregado.
-            */
-
-            const response =
-                await fetch(
-                    `backend/projects/load.php?id=${encodeURIComponent(projectId)}`,
-                    {
-                        method: 'GET',
-
-                        credentials:
-                            'same-origin'
-                    }
-                );
-
-
-            const data =
-                await response.json();
-
-
-            if (!response.ok || !data.success) {
-
-                alert(
-                    data.message ||
-                    'Não foi possível carregar o projeto.'
-                );
-
-                return;
-            }
-
-
-            /*
-            * Temporariamente guardamos o projeto
-            * na sessão do navegador.
-            *
-            * Na próxima etapa vamos substituir isso
-            * pela integração direta com AppState.
-            */
-
-            sessionStorage.setItem(
-                'ngc_open_project',
-                JSON.stringify(data)
-            );
-
-
-            /*
-            * Abre o editor.
-            */
-
-            window.location.href =
-                'index.html';
-
-
-        } catch (error) {
-
-            console.error(
-                'Erro ao abrir projeto:',
-                error
-            );
-
-
-            alert(
-                'Erro de comunicação com o servidor.'
-            );
-        }
-    }
 
 /* =========================================================
    INICIALIZAÇÃO

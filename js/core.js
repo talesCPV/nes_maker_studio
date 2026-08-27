@@ -45,6 +45,17 @@ const Project = {
       scrollType: "static",
       created: Date.now(),
       palettes: [[15,0,16,48],[15,6,22,38],[15,10,26,42],[15,2,18,34],[15,22,48,15],[15,25,41,57],[15,3,19,35],[15,9,25,41]],
+      paletteBank: [
+        { id:'pal_1', name:'BG0', colors:[15,0,16,48] },
+        { id:'pal_2', name:'BG1', colors:[15,6,22,38] },
+        { id:'pal_3', name:'BG2', colors:[15,10,26,42] },
+        { id:'pal_4', name:'BG3', colors:[15,2,18,34] },
+        { id:'pal_5', name:'SPR0', colors:[15,22,48,15] },
+        { id:'pal_6', name:'SPR1', colors:[15,25,41,57] },
+        { id:'pal_7', name:'SPR2', colors:[15,3,19,35] },
+        { id:'pal_8', name:'SPR3', colors:[15,9,25,41] }
+      ],
+      paletteActive: ['pal_1','pal_2','pal_3','pal_4','pal_5','pal_6','pal_7','pal_8'],
       chr: Array.from(new Uint8Array(8192)),
       metatiles: [],
       backgrounds: [],
@@ -152,6 +163,7 @@ const Project = {
     if(!silent && !confirm("Criar novo projeto? Progresso não salvo será perdido.")) return;
     this.data = this.defaultData();
     this.fileName = "meu-jogo.nms";
+/*    
     try{
       const resp = await fetch('assets/novo.chr');
       if(resp.ok){
@@ -165,6 +177,7 @@ const Project = {
         }
       }
     }catch(e){}
+*/
     this.stampDefaultUtilityTiles(this.data.chr);
     this.loadIntoEditors();
     this.updateUI();
@@ -174,7 +187,10 @@ const Project = {
   loadIntoEditors(){
     const chrU8 = new Uint8Array(this.data.chr);
     if(typeof CHR !== 'undefined'){
-      CHR.loadBuffer(chrU8, this.data.palettes);
+      CHR.loadBuffer(chrU8, this.data.palettes, {
+        paletteBank: this.data.paletteBank,
+        paletteActive: this.data.paletteActive
+      });
       if(this.data.metatiles) CHR.loadMetatiles(this.data.metatiles);
     }
     if(this.data.backgrounds && typeof BG !== 'undefined'){
@@ -231,6 +247,8 @@ const Project = {
       this.data.palettes = CHR.getPalettes();
       this.data.chr = Array.from(CHR.getBuffer());
       this.data.metatiles = CHR.getMetatiles ? CHR.getMetatiles() : (this.data.metatiles || []);
+      if(CHR.getPaletteBank) this.data.paletteBank = CHR.getPaletteBank();
+      if(CHR.getPaletteActive) this.data.paletteActive = CHR.getPaletteActive();
     }
     this.data.characters = typeof CHAR !== 'undefined' ? (this.data.characters || []) : (this.data.characters || []);
     if(typeof BG !== 'undefined'){
@@ -390,8 +408,7 @@ document.getElementById('openNMS')?.addEventListener('change', e=>{
   
     /*
      * Remove imediatamente da sessão.
-     * Assim um refresh não reabre o projeto
-     * automaticamente.
+     * Um refresh não deve reabrir o projeto.
      */
   
     sessionStorage.removeItem(
@@ -405,16 +422,83 @@ document.getElementById('openNMS')?.addEventListener('change', e=>{
   
     try {
   
+      /*
+       * IMPORTANTE:
+       *
+       * O Dashboard deve entregar o JSON NMS
+       * completo, incluindo:
+       *
+       *   chr
+       *   palettes
+       *   metatiles
+       *   backgrounds
+       *   phases
+       *   characters
+       *   sounds
+       *   etc.
+       */
+  
+      const json =
+        typeof nmsText === 'string'
+          ? JSON.parse(nmsText)
+          : nmsText;
+  
+  
+      /*
+       * Não aceita projeto sem CHR.
+       *
+       * NÃO usamos assets/novo.chr aqui.
+       *
+       * O novo.chr é somente para projetos NOVOS.
+       */
+  
+      if(
+        !Array.isArray(json.chr) ||
+        json.chr.length === 0
+      ){
+  
+        console.error(
+          'NMS recebido do backend não possui CHR válido.',
+          json
+        );
+  
+  
+        alert(
+          'Erro: o projeto recebido do servidor não possui dados CHR válidos.'
+        );
+  
+  
+        return;
+      }
+  
+  
+      /*
+       * Cria um File em memória para reutilizar
+       * exatamente o mesmo fluxo usado pelo
+       * botão "Abrir .nms".
+       */
+  
       const file =
         new File(
-          [nmsText],
-          fileName,
+          [JSON.stringify(json)],
+          fileName.endsWith('.nms')
+            ? fileName
+            : fileName + '.nms',
           {
-            type:
-              'application/json'
+            type: 'application/json'
           }
         );
   
+  
+      /*
+       * IMPORTANTE:
+       *
+       * Não chamamos newProject().
+       * Não carregamos assets/novo.chr.
+       *
+       * O loadFromFile() passa a ser o único
+       * responsável pelo projeto existente.
+       */
   
       await Project.loadFromFile(file);
   
@@ -429,7 +513,7 @@ document.getElementById('openNMS')?.addEventListener('change', e=>{
   
       alert(
         'Erro ao abrir o projeto: ' +
-        error
+        (error.message || error)
       );
   
     }

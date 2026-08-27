@@ -142,7 +142,7 @@ $userName =
 $templatePath =
     dirname(__DIR__) .
     DIRECTORY_SEPARATOR .
-    'templates' .
+    'projects/templates' .
     DIRECTORY_SEPARATOR .
     'new-game.nms';
 

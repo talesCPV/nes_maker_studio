@@ -2,7 +2,12 @@
 const CHR = (() => {
   let chrBuffer = new Uint8Array(8192);
   let palettes = [[15,0,16,48],[15,6,22,38],[15,10,26,42],[15,2,18,34],[15,22,48,15],[15,25,41,57],[15,3,19,35],[15,9,25,41]];
+  // Banco de paletas (biblioteca) — só 8 slots PPU ativos (palettes[0..7])
+  let paletteBank = [];
+  // paletteActive[i] = id da entrada do banco ligada ao slot PPU i (0-3 BG, 4-7 SPR)
+  let paletteActive = [null,null,null,null,null,null,null,null];
   let activePal = 0, activeSlot = 1;
+  let _palBankSel = 0; // índice selecionado na lista do banco
   let currentBank = 0, gridW=2, gridH=2, selectedTiles=[0,1,16,17], selectedFlips=[0,0,0,0], activeSlotIdx=0, isDrawing=false, undoStack=[];
   // selectedFlips: 0=none 1=H 2=V 3=HV — flip de OAM por célula (não altera pixels do CHR)
   // Camada overlay (máx. 1): segunda pilha de tiles/paleta para mais cores em runtime
@@ -210,7 +215,21 @@ const CHR = (() => {
         </div>
 
         <div style="display:flex;gap:16px;padding:10px 14px;background:#252526;border-top:2px solid #007acc;overflow:auto;max-height:220px">
-          <div style="min-width:360px"><h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">PALETAS PPU (BG + SPR)</h4><div id="subpalettesContainer" style="display:flex;flex-direction:column;gap:8px"></div></div>
+          <div style="min-width:200px;max-width:240px">
+            <h4 style="font-size:11px;color:#c39bd3;margin-bottom:6px">BANCO DE PALETAS</h4>
+            <div id="paletteBankList" style="max-height:120px;overflow:auto;border:1px solid #333;border-radius:4px;background:#0a0a0a;margin-bottom:6px"></div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">
+              <button type="button" class="btn-tool" onclick="CHR.paletteBankAdd()" style="font-size:9px;flex:1" title="Nova entrada no banco">+ Nova</button>
+              <button type="button" class="btn-tool" onclick="CHR.paletteBankApply()" style="font-size:9px;flex:1;background:#007acc;color:#fff" title="Aplicar no slot PPU ativo">→ Ativo</button>
+              <button type="button" class="btn-tool" onclick="CHR.paletteBankRename()" style="font-size:9px">✎</button>
+              <button type="button" class="btn-tool" onclick="CHR.paletteBankDelete()" style="font-size:9px;background:#c0392b;color:#fff">✕</button>
+            </div>
+            <div style="font-size:9px;color:#666;margin-bottom:2px">Ativas BG</div>
+            <div id="paletteActiveBG" style="margin-bottom:6px"></div>
+            <div style="font-size:9px;color:#666;margin-bottom:2px">Ativas SPR</div>
+            <div id="paletteActiveSPR"></div>
+          </div>
+          <div style="min-width:280px"><h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">PALETAS PPU (BG + SPR)</h4><div id="subpalettesContainer" style="display:flex;flex-direction:column;gap:8px"></div></div>
           <div style="flex:1;min-width:400px"><h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">PALETA MASTER NES (clique pra trocar cor do slot)</h4><div id="masterPaletteGrid" style="display:flex;flex-direction:column;gap:2px;background:#111;padding:8px;border-radius:6px;border:1px solid #333;width:fit-content"></div></div>
           <div style="min-width:200px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;font-size:10px;color:#888;line-height:1.4">PT0 = $0000 BG padrão<br>PT1 = $1000 segunda página<br>Build detecta automaticamente<br><br>Tools: Pen, Line, Rect, Circle, Fill, Copy, Paste</div>
         </div>
@@ -337,6 +356,9 @@ const CHR = (() => {
                     <button class="btn-tool" onclick="CHR.imgImportClearEdit()" style="width:100%;font-size:10px;margin-top:4px">Descartar edições</button>
                   </div>
                 </div>
+                <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;cursor:pointer;margin:4px 0">
+                  <input type="checkbox" id="imgImportAddToBank" checked> Adicionar paleta ao banco no converter
+                </label>
                 <button class="btn-tool" onclick="CHR.imgImportConfirmStep1()" style="background:#27ae60;color:#fff;padding:10px;font-weight:bold">→ Converter e enfileirar tiles</button>
               </div>
             </div>
@@ -461,11 +483,178 @@ const CHR = (() => {
     if(wantsSprite && !activeIsSprite) activePal=4;
     else if(!wantsSprite && activeIsSprite) activePal=0;
   }
+
+  function defaultPaletteBankFromPalettes(){
+    const names = ['BG0','BG1','BG2','BG3','SPR0','SPR1','SPR2','SPR3'];
+    paletteBank = (palettes || []).slice(0,8).map((p,i)=>({
+      id: 'pal_' + (i+1),
+      name: names[i] || ('Pal ' + (i+1)),
+      colors: [p[0]&63, p[1]&63, p[2]&63, p[3]&63]
+    }));
+    while(paletteBank.length < 8){
+      const i = paletteBank.length;
+      paletteBank.push({ id:'pal_'+(i+1), name: names[i]||('Pal '+(i+1)), colors:[15,0,16,48] });
+    }
+    paletteActive = paletteBank.slice(0,8).map(e => e.id);
+  }
+  function ensurePaletteBank(){
+    if(!Array.isArray(paletteBank) || paletteBank.length === 0){
+      defaultPaletteBankFromPalettes();
+    }
+    if(!Array.isArray(paletteActive) || paletteActive.length < 8){
+      paletteActive = (paletteBank.slice(0,8).map(e=>e.id));
+      while(paletteActive.length < 8) paletteActive.push(paletteBank[0]?.id || null);
+    }
+  }
+  function bankEntryById(id){
+    return paletteBank.find(e => e.id === id) || null;
+  }
+  function syncPpuFromActive(){
+    ensurePaletteBank();
+    for(let i=0;i<8;i++){
+      const e = bankEntryById(paletteActive[i]);
+      if(e && e.colors){
+        palettes[i] = [e.colors[0]&63, e.colors[1]&63, e.colors[2]&63, e.colors[3]&63];
+      }
+    }
+  }
+  function syncActiveBankEntryFromPpu(){
+    // ao editar a paleta PPU, grava de volta na entrada do banco ligada
+    ensurePaletteBank();
+    const id = paletteActive[activePal];
+    const e = bankEntryById(id);
+    if(e){
+      const p = palettes[activePal] || [15,0,16,48];
+      e.colors = [p[0]&63, p[1]&63, p[2]&63, p[3]&63];
+    }
+  }
+  function genPalBankId(){
+    return 'pal_' + Date.now().toString(36) + '_' + Math.floor(Math.random()*1000);
+  }
+  function addPaletteToBank(colors, name){
+    ensurePaletteBank();
+    const cols = (colors || [15,0,16,48]).map(c => c&63);
+    while(cols.length < 4) cols.push(0);
+    const entry = {
+      id: genPalBankId(),
+      name: name || ('Pal ' + (paletteBank.length+1)),
+      colors: cols.slice(0,4)
+    };
+    paletteBank.push(entry);
+    _palBankSel = paletteBank.length - 1;
+    renderPaletteBankUI();
+    if(typeof Project!=='undefined' && Project.status)
+      Project.status('Paleta "' + entry.name + '" adicionada ao banco');
+    return entry;
+  }
+  function applyBankEntryToActiveSlot(bankIdx){
+    ensurePaletteBank();
+    const e = paletteBank[bankIdx];
+    if(!e) return;
+    paletteActive[activePal] = e.id;
+    palettes[activePal] = [e.colors[0]&63, e.colors[1]&63, e.colors[2]&63, e.colors[3]&63];
+    initPalUI();
+    renderAll();
+    renderPaletteBankUI();
+  }
+  function deleteBankEntry(idx){
+    ensurePaletteBank();
+    if(paletteBank.length <= 1){ alert('Mantenha ao menos 1 paleta no banco'); return; }
+    const e = paletteBank[idx];
+    if(!e) return;
+    if(!confirm('Remover "' + e.name + '" do banco?')) return;
+    const id = e.id;
+    paletteBank.splice(idx, 1);
+    // slots que usavam esta entrada apontam para a primeira
+    const fallback = paletteBank[0].id;
+    for(let i=0;i<8;i++){
+      if(paletteActive[i] === id) paletteActive[i] = fallback;
+    }
+    syncPpuFromActive();
+    _palBankSel = Math.min(_palBankSel, paletteBank.length-1);
+    initPalUI();
+    renderAll();
+    renderPaletteBankUI();
+  }
+  function renameBankEntry(idx){
+    const e = paletteBank[idx];
+    if(!e) return;
+    const n = prompt('Nome da paleta:', e.name);
+    if(n === null) return;
+    e.name = n.trim() || e.name;
+    renderPaletteBankUI();
+  }
+  function renderPaletteBankUI(){
+    ensurePaletteBank();
+    const list = document.getElementById('paletteBankList');
+    if(!list) return;
+    list.innerHTML = '';
+    paletteBank.forEach((e, idx)=>{
+      const row = document.createElement('div');
+      const on = idx === _palBankSel;
+      row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:4px;cursor:pointer;border:1px solid '+(on?'#007acc':'#333')+';background:'+(on?'#1a2a3a':'#111');
+      row.onclick = ()=>{ _palBankSel = idx; renderPaletteBankUI(); };
+      const lab = document.createElement('span');
+      lab.style.cssText = 'font-size:10px;color:#ccc;min-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      lab.textContent = e.name;
+      lab.title = e.name + ' (' + e.id + ')';
+      row.appendChild(lab);
+      for(let c=0;c<4;c++){
+        const sw = document.createElement('div');
+        const hex = (typeof NES_PALETTE!=='undefined' && NES_PALETTE[e.colors[c]&63]) ? NES_PALETTE[e.colors[c]&63] : '#000';
+        sw.style.cssText = 'width:14px;height:14px;border-radius:2px;border:1px solid #444;background:'+hex;
+        row.appendChild(sw);
+      }
+      const used = [];
+      for(let i=0;i<8;i++){ if(paletteActive[i]===e.id) used.push(i<4?('BG'+i):('SPR'+(i-4))); }
+      if(used.length){
+        const u = document.createElement('span');
+        u.style.cssText = 'font-size:8px;color:#4ec9b0;margin-left:4px';
+        u.textContent = used.join(',');
+        row.appendChild(u);
+      }
+      list.appendChild(row);
+    });
+    // selects for active slots
+    const renderSlotSelects = (containerId, start, count, prefix)=>{
+      const cont = document.getElementById(containerId);
+      if(!cont) return;
+      cont.innerHTML = '';
+      for(let i=0;i<count;i++){
+        const slot = start + i;
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'display:flex;align-items:center;gap:4px;margin-bottom:3px';
+        const lab = document.createElement('span');
+        lab.style.cssText = 'font-size:9px;color:#888;width:36px';
+        lab.textContent = prefix + i;
+        const sel = document.createElement('select');
+        sel.style.cssText = 'flex:1;background:#000;color:#fff;border:1px solid #444;font-size:10px;border-radius:3px;padding:2px';
+        paletteBank.forEach((e)=>{
+          const o = document.createElement('option');
+          o.value = e.id; o.textContent = e.name;
+          if(paletteActive[slot] === e.id) o.selected = true;
+          sel.appendChild(o);
+        });
+        sel.onchange = ()=>{
+          paletteActive[slot] = sel.value;
+          const e = bankEntryById(sel.value);
+          if(e) palettes[slot] = [e.colors[0]&63,e.colors[1]&63,e.colors[2]&63,e.colors[3]&63];
+          initPalUI(); renderAll(); renderPaletteBankUI();
+        };
+        wrap.appendChild(lab);
+        wrap.appendChild(sel);
+        cont.appendChild(wrap);
+      }
+    };
+    renderSlotSelects('paletteActiveBG', 0, 4, 'BG');
+    renderSlotSelects('paletteActiveSPR', 4, 4, 'SPR');
+  }
+
   function initPalUI(){
     const cont=document.getElementById('subpalettesContainer'); if(!cont) return; cont.innerHTML="";
     if(isSpriteBank(currentBank)) createRow("SPR",[4,5,6,7]); else createRow("BG",[0,1,2,3]);
     const grid=document.getElementById('masterPaletteGrid'); grid.innerHTML=""; let line=null;
-    NES_PALETTE.forEach((col,idx)=>{ if(idx%16===0){ line=document.createElement('div'); line.style.display='flex'; line.style.gap='2px'; grid.appendChild(line); } const b=document.createElement('div'); b.style.cssText=`width:18px;height:18px;background:${col};border:1px solid #333;border-radius:2px;cursor:pointer`; b.title=`NES $${idx.toString(16).padStart(2,'0').toUpperCase()}`; b.onclick=()=>{ palettes[activePal][activeSlot]=idx; initPalUI(); renderAll(); }; line.appendChild(b); });
+    NES_PALETTE.forEach((col,idx)=>{ if(idx%16===0){ line=document.createElement('div'); line.style.display='flex'; line.style.gap='2px'; grid.appendChild(line); } const b=document.createElement('div'); b.style.cssText=`width:18px;height:18px;background:${col};border:1px solid #333;border-radius:2px;cursor:pointer`; b.title=`NES $${idx.toString(16).padStart(2,'0').toUpperCase()}`; b.onclick=()=>{ palettes[activePal][activeSlot]=idx; syncActiveBankEntryFromPpu(); initPalUI(); renderAll(); renderPaletteBankUI(); }; line.appendChild(b); });
     const qc=document.getElementById('quickColors'); if(qc){ qc.innerHTML=''; for(let c=0;c<4;c++){ const isActive=c===activeSlot; const btn=document.createElement('div'); btn.style.cssText=`width:32px;height:24px;background:${NES_PALETTE[palettes[activePal][c]]};border:${isActive?'2px solid #ffcc00':'1px solid #555'};border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:#000;font-weight:bold`; btn.textContent=c+1; btn.onclick=()=>{ activeSlot=c; initPalUI(); renderAll(); updateLabels(); }; qc.appendChild(btn); } }
   }
   function createRow(label, idxs){ const cont=document.getElementById('subpalettesContainer'); const row=document.createElement('div'); row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px'; const lab=document.createElement('div'); lab.textContent=label; lab.style.width='28px'; lab.style.fontSize='10px'; lab.style.fontWeight='700'; lab.style.color='#4ec9b0'; row.appendChild(lab); const group=document.createElement('div'); group.style.display='flex'; group.style.gap='6px'; idxs.forEach(g=>{ const box=document.createElement('div'); box.style.cssText=`display:flex;gap:2px;padding:3px;border:2px solid ${g===activePal?'#007acc':'transparent'};border-radius:4px;background:#111;cursor:pointer`; box.onclick=()=>{ activePal=g; initPalUI(); renderAll(); }; for(let c=0;c<4;c++){ const slot=document.createElement('div'); const isActive=g===activePal&&c===activeSlot; slot.style.cssText=`width:20px;height:20px;background:${NES_PALETTE[palettes[g][c]]};border:${isActive?'2px solid #ffcc00':'1px solid #444'};border-radius:2px;cursor:pointer`; slot.onclick=e=>{ e.stopPropagation(); activePal=g; activeSlot=c; initPalUI(); renderAll(); updateLabels(); }; box.appendChild(slot); } group.appendChild(box); }); row.appendChild(group); cont.appendChild(row); }
@@ -2613,6 +2802,16 @@ const CHR = (() => {
   }
 
   function imgImportConfirmStep1(){
+    // opcional: manda importPal ao banco antes de enfileirar
+    try{
+      const addBank = document.getElementById('imgImportAddToBank')?.checked !== false;
+      if(addBank && imgImport.importPal){
+        const nm = prompt('Nome da paleta no banco:', 'Import ' + (paletteBank.length+1));
+        if(nm !== null){
+          addPaletteToBank(imgImport.importPal, nm.trim() || ('Import ' + (paletteBank.length+1)));
+        }
+      }
+    }catch(e){}
     let q;
     if(imgImport.editIndices && imgImport.editCanvas){
       q = {
@@ -3012,8 +3211,34 @@ const CHR = (() => {
 
   return {
     init(){ buildHTML(); setTimeout(()=>tryLoadDefaultCHR(), 100); },
-    loadBuffer(buf, pals){ let newBuf = buf.length>=8192?buf:(()=>{let n=new Uint8Array(8192); n.set(buf); return n;})(); const hasData = newBuf.some(b=>b!==0); if(!hasData){ console.log('Buffer vazio recebido, mantendo atual e tentando carregar novo.chr'); tryLoadDefaultCHR(); } else { chrBuffer = newBuf; } if(pals) palettes=pals.map(p=>[...p]); if(!document.getElementById('sheetCanvas')) buildHTML(); else { updateBankSelect(); ensurePaletteMatchesBank(); initPalUI(); updateMetatileSelect(); renderAll(); } },
-    getBuffer(){ return chrBuffer; }, getPalettes(){ return palettes; }, getMetatiles(){ return [...metatiles]; }, loadMetatiles(arr){ metatiles = Array.isArray(arr)?[...arr]:[]; updateMetatileSelect(); renderAll(); },
+    loadBuffer(buf, pals, bankData){
+      let newBuf = buf.length>=8192?buf:(()=>{let n=new Uint8Array(8192); n.set(buf); return n;})();
+      const hasData = newBuf.some(b=>b!==0);
+      if(!hasData){ console.log('Buffer vazio recebido, mantendo atual e tentando carregar novo.chr'); tryLoadDefaultCHR(); }
+      else { chrBuffer = newBuf; }
+      if(pals) palettes=pals.map(p=>[...p]);
+      if(bankData && Array.isArray(bankData.paletteBank) && bankData.paletteBank.length){
+        paletteBank = bankData.paletteBank.map(e=>({
+          id: e.id || genPalBankId(),
+          name: e.name || 'Pal',
+          colors: (e.colors||[15,0,16,48]).map(c=>c&63).slice(0,4)
+        }));
+        paletteActive = Array.isArray(bankData.paletteActive) && bankData.paletteActive.length>=8
+          ? bankData.paletteActive.slice(0,8)
+          : paletteBank.slice(0,8).map(e=>e.id);
+        while(paletteActive.length<8) paletteActive.push(paletteBank[0].id);
+        syncPpuFromActive();
+      } else {
+        defaultPaletteBankFromPalettes();
+      }
+      if(!document.getElementById('sheetCanvas')) buildHTML();
+      else { updateBankSelect(); ensurePaletteMatchesBank(); initPalUI(); updateMetatileSelect(); renderPaletteBankUI(); renderAll(); }
+    },
+    getBuffer(){ return chrBuffer; },
+    getPalettes(){ return palettes; },
+    getPaletteBank(){ ensurePaletteBank(); return paletteBank.map(e=>({id:e.id,name:e.name,colors:[...e.colors]})); },
+    getPaletteActive(){ ensurePaletteBank(); return [...paletteActive]; },
+    getMetatiles(){ return [...metatiles]; }, loadMetatiles(arr){ metatiles = Array.isArray(arr)?[...arr]:[]; updateMetatileSelect(); renderAll(); },
     renderAll(){ renderSheet(); renderZoom(); renderQuickTileSelector(); renderMetatilePreview(); renderTileQueue(); }, setGrid(w,h){ gridW=w; gridH=h; const first=selectedTiles[0]||currentBank*256; selectedTiles=[]; selectedFlips=[]; for(let i=0;i<w*h;i++){ selectedTiles.push(first+i); selectedFlips.push(0); } activeSlotIdx=0; if(zoomCanvas){ zoomCanvas.width=w*8*16; zoomCanvas.height=h*8*16; } renderAll(); updateLabels(); },
     clearTileQueue, selectTileQueueItem, removeTileQueueItem,
     addBank(){ const nb=new Uint8Array(chrBuffer.length+8192); nb.set(chrBuffer); chrBuffer=nb; updateBankSelect(); renderAll(); },
@@ -3027,6 +3252,15 @@ const CHR = (() => {
     clearGroup(){ pushUndo(); selectedTiles.forEach(ti=>chrBuffer.fill(0,ti*16,ti*16+16)); renderAll(); },
     undo(){ if(undoStack.length){ chrBuffer=undoStack.pop(); renderAll(); } },
     importCHR(){ document.getElementById('importCHR_internal')?.click(); },
+    paletteBankAdd(){
+      const n = prompt('Nome da nova paleta:', 'Pal ' + (paletteBank.length+1));
+      if(n===null) return;
+      const src = palettes[activePal] || [15,0,16,48];
+      addPaletteToBank(src, n.trim()||'Pal');
+    },
+    paletteBankApply(){ applyBankEntryToActiveSlot(_palBankSel); },
+    paletteBankRename(){ renameBankEntry(_palBankSel); },
+    paletteBankDelete(){ deleteBankEntry(_palBankSel); },
     saveMetatile, loadSelectedMetatile, deleteMetatile, renameMetatile, updateMetatileSelect, onMetatileSelectChange, newTile,
     setTool(t){ setToolImpl(t); },
     toggleSlotFlipH, toggleSlotFlipV,
