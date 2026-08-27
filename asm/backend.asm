@@ -1,18 +1,3 @@
-; NES Maker Studio - BUILD v0.9.17 - fix: sprite do herói volta a usar arte real (pool unificado)
-; NROM-256 | player e inimigos compartilham o mesmo empacotador de CHR $0000
-; Telas: 6 · CHR tiles (fundo): 27/256
-; CHR tiles (sprites): 13/256
-; Instâncias: 5
-; AVISO: frame maior que 2x2 truncado - Simon / Idle / frame 1 (2x4 → 2x2)
-; Herói: "Hero" (charIdx 0, 1 frame(s))
-;   [0] splash · Splash 1
-;   [1] play · Tela 1
-;   [2] play · Tela 2
-;   [3] play · Tela 3
-;   [4] play · Tela 4
-;   [5] play · tela final fase 1
-; Musica: dr-wily-stage-1 · 3 canal(is)
-
 .segment "HEADER"
   .byte $4E,$45,$53,$1A,2,1,$01,0,0,0,0,0,0,0,0,0  ; NROM-256 (32KB PRG), vertical mirroring
 
@@ -134,6 +119,7 @@ nmi_scroll_done:
 IRQ:
   RTI
 
+; ---- NGC MUSIC / APU ----
 music_update:
   LDA music_on
   BNE mu_run
@@ -260,10 +246,19 @@ mu_ch2_end:
 
 music_init:
   LDA #0
+  LDA #0
   STA ch0_timer
   STA ch0_pos
+  STA ch0_timer
+  STA ch0_pos
+  LDA #0
   STA ch1_timer
   STA ch1_pos
+  STA ch1_timer
+  STA ch1_pos
+  LDA #0
+  STA ch2_timer
+  STA ch2_pos
   STA ch2_timer
   STA ch2_pos
   LDA #$0F
@@ -297,17 +292,16 @@ rp_loop:
   STA pad1_edge
   RTS
 
+; ---- Background / Screen Loading (NGC) ----
 ; Carrega nametable+attrs da tela A (hard cut, rendering off)
 load_screen:
   STA cur_screen
-  ; desliga rendering E a geracao de NMI (bit 7 do $2000) - a escrita de ~1000 bytes
-  ; leva mais de um frame; sem isso, o NMI (que agora escreve $2005 todo frame por
-  ; causa do scroll da Camada 5) pode disparar NO MEIO da sequencia $2006/$2007 e
-  ; embaralhar o latch de escrita da PPU, corrompendo a nametable inteira.
+  ; desliga rendering E a geracao de NMI - a escrita de ~1000 bytes
+  ; leva mais de um frame; sem isso, o NMI pode disparar no meio da sequencia $2006/$2007.
   LDA #0
   STA $2001
   STA $2000
-  ; ponteiro da nametable (tabela de 1 byte por tela — SEM ASL)
+  ; ponteiro da nametable (tabela de 1 byte por tela)
   LDX cur_screen
   LDA ScreenNtLo,X
   STA tmp0
@@ -319,7 +313,7 @@ load_screen:
   LDA #$00
   STA $2006
   LDY #0
-  LDX #4          ; 4×240 = 960 tiles
+  LDX #4
 ls_nt_outer:
   LDA #240
   STA ls_count
@@ -357,17 +351,18 @@ ls_at:
   LDA #0
   STA $2005
   STA $2005
-  ; religa NMI (o NMI corrige $2000/nt_page sozinho no proximo frame) + rendering
+  ; religa NMI + rendering
   LDA #%10010000
   STA $2000
   LDA #%00011110
   STA $2001
   RTS
 
+; Escreve uma tela numa das duas nametables fisicas ($2000/$2400), sem alterar scroll_x.
+; Entrada: A = indice global da tela; psn_base_hi = $20 ou $24.
 preload_screen_nt:
   STA psn_screen
-  ; desliga rendering E geracao de NMI - mesmo motivo do load_screen (evita o NMI
-  ; corromper o latch $2006/$2007 no meio da escrita longa)
+  ; desliga rendering E NMI para evitar conflito com $2006/$2007 durante a escrita longa.
   LDA #0
   STA $2001
   STA $2000
@@ -377,7 +372,7 @@ preload_screen_nt:
   LDA ScreenNtHi,X
   STA tmp1
   BIT $2002
-  LDA psn_base_hi     ; $20 ou $24, setado pelo chamador
+  LDA psn_base_hi
   STA $2006
   LDA #$00
   STA $2006
@@ -404,7 +399,7 @@ psn_nt_noinc:
   STA tmp1
   BIT $2002
   LDA psn_base_hi
-  ORA #$03            ; mesma pagina, offset $3C0 dentro dela
+  ORA #$03
   STA $2006
   LDA #$C0
   STA $2006
@@ -415,7 +410,7 @@ psn_at:
   INY
   CPY #64
   BNE psn_at
-  ; religa NMI (com nt_page atual) + rendering
+  ; religa NMI preservando nt_page + rendering
   LDA #%10010000
   ORA nt_page
   STA $2000
@@ -822,6 +817,9 @@ spawn_player:
   STA player_on
   JSR update_player_oam
   RTS
+
+; ---- NGC: screen transitions / continuous scrolling ----
+; Hard-cut helpers at the level edges plus the dual-nametable 256px traversal.
 
 goto_play_screen:
   ; A = play_idx -> carrega PlayScreenTable[A]
@@ -1494,12 +1492,20 @@ check_player_enemy_hit:
 cpe_loop:
   LDA inst_on,X
   BEQ cpe_next
+  ; posicao do inimigo NA TELA (mesma logica de update_instances_oam): inst_x - scroll_x.
+  ; Sem isso, a colisao usava a posicao "de nascimento" do inimigo e desalinhava
+  ; do sprite visivel conforme o scroll avançava (bug: só batia certo no instante do spawn).
+  LDA inst_x,X
+  SEC
+  SBC scroll_x
+  BCC cpe_next        ; saiu da tela pela esquerda - sem colisao possivel
+  STA en_tmp
   LDA player_x
   CLC
   ADC #12
-  CMP inst_x,X
+  CMP en_tmp
   BCC cpe_next
-  LDA inst_x,X
+  LDA en_tmp
   CLC
   ADC #12
   CMP player_x
@@ -1539,6 +1545,8 @@ hide_player:
   JSR update_player_oam
   RTS
 
+; ---- Collision lookup ----
+; col_x (0-31), col_y (0-29) -> col_result (tipo 0-5)
 get_collision:
   LDA col_y
   CMP #30
@@ -2047,9 +2055,7 @@ clroam:
   STA $2001
 
 ; ---- Main loop ----
-; Bits do pad (após ROR x8): A=0 B=1 Select=2 Start=3 Up=4 Down=5 Left=6 Right=7
-; START no splash → Fase 1 + spawn Hero
-; SELECT no play → Game Over (atalho de teste)
+; O fluxo de estados (Splash/Play/Game Over) vem do bloco game_flow do NGC.
 MainLoop:
   LDA nmi_flag
   BEQ MainLoop
@@ -2063,32 +2069,33 @@ MainLoop:
   BEQ st_play
   JMP st_gameover
 
+; ---- NGC GAME FLOW ----
+; 0=splash 1=play 2=gameover
 st_splash:
-  ; bit 3 = START
+  ; START no splash -> Fase 1 + spawn Hero
   LDA pad1_edge
   AND #%00001000
   BEQ MainLoop
   LDA #1
   STA game_state
   LDA #1
-  JSR load_screen        ; tela 0 vai pra $2000 (hard cut, igual antes)
+  JSR load_screen
   LDA #0
   STA scroll_x
-  STA nt_page            ; tela esquerda (play_idx=0) fica na pagina $2000
+  STA nt_page
   LDA #2
   LDX #$24
   STX psn_base_hi
-  JSR preload_screen_nt  ; tela 1 pré-carregada em $2400 (pra scroll já funcionar)
+  JSR preload_screen_nt
   JSR spawn_player
   JSR spawn_enemies
   JSR music_init
   JMP MainLoop
 
 st_play:
-  ; fisica + input + inimigos
   JSR update_player
   JSR update_enemies
-  ; SELECT → Game Over (teste)
+  ; SELECT -> Game Over
   LDA pad1_edge
   AND #%00000100
   BEQ st_play_done
@@ -2101,7 +2108,7 @@ st_play_done:
   JMP MainLoop
 
 st_gameover:
-  ; START no game over → volta pro splash
+  ; START no Game Over -> Splash
   LDA pad1_edge
   AND #%00001000
   BEQ MainLoop
@@ -2668,8 +2675,7 @@ Collision_5:
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
 
-; --- Music data ---
-; canal 0: pulse1
+; ---- NGC MUSIC DATA ----
 PitchLo_ch0:
   .byte $00, $26, $F8, $89, $F9, $56, $4D, $9D, $4C
 PitchHi_ch0:
@@ -2729,7 +2735,6 @@ Time_ch0:
   .byte $0B, $15, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $15, $0B, $0B, $0B, $0B, $15
   .byte $0B, $05, $05, $15, $15, $15, $15
 
-; canal 1: pulse2
 PitchLo_ch1:
   .byte $00, $52, $93, $0C, $2D, $67, $C9, $86, $70, $77, $64, $54, $7E, $A9, $6A, $59
   .byte $42, $E1, $FD
@@ -2791,7 +2796,6 @@ Time_ch1:
   .byte $0B, $15, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $15, $0B, $0B, $0B, $0B, $15
   .byte $0B, $05, $05, $15, $15, $15, $15
 
-; canal 2: triangle
 PitchLo_ch2:
   .byte $00, $1A, $5C, $C4, $FB, $A6, $CE, $93, $52, $0C, $2D, $67
 PitchHi_ch2:
@@ -2857,6 +2861,7 @@ Time_ch2:
   .word IRQ
 
 .segment "CHARS"
+
 ; pg0 sprites empacotado pelo NGC
   .byte $00, $00, $00, $1F, $10, $10, $12, $10, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $14, $13, $10, $10, $1F, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
@@ -3115,7 +3120,9 @@ Time_ch2:
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
 
-  ; $1000 background
+; $1000 background
+
+; $1000 background
   .byte $00, $00, $00, $1F, $10, $10, $12, $10, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $FF, $01, $01, $01, $FF, $10, $10, $FF, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $FF, $21, $21, $21, $FF, $01, $01, $01, $00, $00, $00, $00, $00, $00, $00, $00

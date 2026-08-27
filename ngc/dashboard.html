@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>NGC - Dashboard</title>
+
+    <link rel="stylesheet" href="css/auth.css">
+
+    <style>
+        .project-list {
+            display: grid;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .project {
+            padding: 16px;
+            border: 1px solid #303744;
+            border-radius: 8px;
+            background: #11151c;
+        }
+
+        .project h3 {
+            margin: 0 0 6px;
+        }
+
+        .project p {
+            margin: 5px 0;
+            color: #b8c0cc;
+        }
+
+        .project small {
+            color: #7f8998;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal.open {
+            display: flex;
+        }
+
+        .modal .card {
+            width: min(500px, 100%);
+        }
+
+        .close {
+            float: right;
+            background: #343b48;
+        }
+
+        .project-actions {
+            margin-top: 12px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <!-- CABEÇALHO -->
+
+    <div class="card">
+
+        <h1>NGC Dashboard</h1>
+
+        <p id="welcome">
+            Verificando sessão...
+        </p>
+
+        <div class="actions">
+
+            <button id="newProjectButton">
+                + Novo projeto
+            </button>
+
+            <button id="logoutButton" class="secondary">
+                Sair
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <!-- PROJETOS -->
+
+    <div class="card">
+
+        <h2>Meus projetos</h2>
+
+        <div
+            id="projectMessage"
+            class="message"
+        >
+            Carregando projetos...
+        </div>
+
+        <div
+            id="projectList"
+            class="project-list"
+        ></div>
+
+    </div>
+
+</div>
+
+
+<!-- =========================================================
+     MODAL - NOVO PROJETO
+     ========================================================= -->
+
+<div
+    id="newProjectModal"
+    class="modal"
+>
+
+    <div class="card">
+
+        <button
+            id="closeModal"
+            class="close"
+            type="button"
+        >
+            Fechar
+        </button>
+
+        <h2>Novo projeto</h2>
+
+
+        <form id="projectForm">
+
+            <label for="projectName">
+                Nome
+            </label>
+
+            <input
+                id="projectName"
+                type="text"
+                maxlength="150"
+                required
+                autocomplete="off"
+            >
+
+
+            <label for="projectDescription">
+                Descrição
+            </label>
+
+            <input
+                id="projectDescription"
+                type="text"
+                maxlength="1000"
+                autocomplete="off"
+            >
+
+
+            <button type="submit">
+                Criar projeto
+            </button>
+
+        </form>
+
+
+        <div
+            id="createMessage"
+            class="message"
+        ></div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+/* =========================================================
+   ELEMENTOS DA INTERFACE
+   ========================================================= */
+
+const welcome =
+    document.getElementById('welcome');
+
+const projectMessage =
+    document.getElementById('projectMessage');
+
+const projectList =
+    document.getElementById('projectList');
+
+const modal =
+    document.getElementById('newProjectModal');
+
+const projectForm =
+    document.getElementById('projectForm');
+
+const createMessage =
+    document.getElementById('createMessage');
+
+
+/* =========================================================
+   SESSÃO
+   ========================================================= */
+
+async function loadSession() {
+
+    try {
+
+        const response = await fetch(
+            'backend/auth/session.php',
+            {
+                credentials: 'same-origin'
+            }
+        );
+
+
+        if (!response.ok) {
+
+            window.location.href =
+                'login.html';
+
+            return;
+        }
+
+
+        const data =
+            await response.json();
+
+
+        if (!data.authenticated) {
+
+            window.location.href =
+                'login.html';
+
+            return;
+        }
+
+
+        welcome.textContent =
+            `Olá, ${data.user.name}!`;
+
+
+        /*
+         * Sessão válida.
+         * Agora carregamos os projetos.
+         */
+
+        await loadProjects();
+
+
+    } catch (error) {
+
+        console.error(
+            'Erro ao verificar sessão:',
+            error
+        );
+
+        window.location.href =
+            'login.html';
+    }
+}
+
+
+/* =========================================================
+   LISTAR PROJETOS
+   ========================================================= */
+
+async function loadProjects() {
+
+    projectMessage.textContent =
+        'Carregando projetos...';
+
+    projectList.innerHTML = '';
+
+
+    try {
+
+        const response =
+            await fetch(
+                'backend/projects/list.php',
+                {
+                    credentials:
+                        'same-origin'
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!data.success) {
+
+            projectMessage.textContent =
+                data.message ||
+                'Erro ao carregar projetos.';
+
+            return;
+        }
+
+
+        /*
+         * Nenhum projeto ainda.
+         */
+
+        if (
+            !data.projects ||
+            data.projects.length === 0
+        ) {
+
+            projectMessage.textContent =
+                'Você ainda não possui projetos.';
+
+            return;
+        }
+
+
+        projectMessage.textContent =
+            '';
+
+
+        /*
+         * Cria os cards dos projetos.
+         */
+
+        data.projects.forEach(
+            project => {
+
+                const item =
+                    document.createElement(
+                        'div'
+                    );
+
+                item.className =
+                    'project';
+
+
+                const title =
+                    document.createElement(
+                        'h3'
+                    );
+
+                title.textContent =
+                    project.name;
+
+
+                const description =
+                    document.createElement(
+                        'p'
+                    );
+
+                description.textContent =
+                    project.description ||
+                    'Sem descrição.';
+
+
+                const id =
+                    document.createElement(
+                        'small'
+                    );
+
+                id.textContent =
+                    `Projeto #${project.id}`;
+
+
+                item.appendChild(title);
+
+                item.appendChild(
+                    description
+                );
+
+                item.appendChild(id);
+
+
+                projectList.appendChild(
+                    item
+                );
+            }
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            'Erro ao carregar projetos:',
+            error
+        );
+
+
+        projectMessage.textContent =
+            'Erro de comunicação com o servidor.';
+    }
+}
+
+
+/* =========================================================
+   ABRIR MODAL
+   ========================================================= */
+
+document
+    .getElementById(
+        'newProjectButton'
+    )
+    .addEventListener(
+        'click',
+        () => {
+
+            createMessage.textContent =
+                '';
+
+            projectForm.reset();
+
+            modal.classList.add(
+                'open'
+            );
+        }
+    );
+
+
+/* =========================================================
+   FECHAR MODAL
+   ========================================================= */
+
+document
+    .getElementById(
+        'closeModal'
+    )
+    .addEventListener(
+        'click',
+        () => {
+
+            modal.classList.remove(
+                'open'
+            );
+        }
+    );
+
+
+/*
+ * Também permite fechar clicando
+ * fora do cartão.
+ */
+
+modal.addEventListener(
+    'click',
+    event => {
+
+        if (
+            event.target === modal
+        ) {
+
+            modal.classList.remove(
+                'open'
+            );
+        }
+    }
+);
+
+
+/* =========================================================
+   CRIAR PROJETO
+   ========================================================= */
+
+projectForm.addEventListener(
+    'submit',
+    async event => {
+
+        event.preventDefault();
+
+
+        const name =
+            document
+                .getElementById(
+                    'projectName'
+                )
+                .value
+                .trim();
+
+
+        const description =
+            document
+                .getElementById(
+                    'projectDescription'
+                )
+                .value
+                .trim();
+
+
+        if (!name) {
+
+            createMessage.textContent =
+                'Informe o nome do projeto.';
+
+            return;
+        }
+
+
+        createMessage.textContent =
+            'Criando projeto...';
+
+
+        try {
+
+            const response =
+                await fetch(
+                    'backend/projects/create.php',
+                    {
+                        method: 'POST',
+
+                        headers: {
+                            'Content-Type':
+                                'application/json'
+                        },
+
+                        credentials:
+                            'same-origin',
+
+                        body:
+                            JSON.stringify({
+                                name:
+                                    name,
+
+                                description:
+                                    description
+                            })
+                    }
+                );
+
+
+            const data =
+                await response.json();
+
+
+            if (!data.success) {
+
+                createMessage.textContent =
+                    data.message ||
+                    'Não foi possível criar o projeto.';
+
+                return;
+            }
+
+
+            /*
+             * Projeto criado.
+             * Fecha o modal e atualiza a lista.
+             */
+
+            modal.classList.remove(
+                'open'
+            );
+
+
+            await loadProjects();
+
+
+        } catch (error) {
+
+            console.error(
+                'Erro ao criar projeto:',
+                error
+            );
+
+
+            createMessage.textContent =
+                'Erro de comunicação com o servidor.';
+        }
+    }
+);
+
+
+/* =========================================================
+   LOGOUT
+   ========================================================= */
+
+document
+    .getElementById(
+        'logoutButton'
+    )
+    .addEventListener(
+        'click',
+        async () => {
+
+            try {
+
+                await fetch(
+                    'backend/auth/logout.php',
+                    {
+                        method: 'POST',
+
+                        credentials:
+                            'same-origin'
+                    }
+                );
+
+            } catch (error) {
+
+                console.error(
+                    'Erro no logout:',
+                    error
+                );
+
+            } finally {
+
+                window.location.href =
+                    'login.html';
+            }
+        }
+    );
+
+
+/* =========================================================
+   INICIALIZAÇÃO
+   ========================================================= */
+
+loadSession();
+
+</script>
+
+</body>
+</html>

@@ -15,6 +15,7 @@ then
     git add css/
     git add js/
     git add projetos/
+    git add ngc/
     git add commit.sh
     git add index.html
     git add historico.txt
