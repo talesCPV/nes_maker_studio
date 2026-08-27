@@ -69,6 +69,11 @@ ch1_pos:   .res 1
 ch2_timer: .res 1
 ch2_pos:   .res 1
 
+.segment "ZEROPAGE"
+pv_idle:        .res 2  ; Camada 6: frames desde o ultimo input (P1-IDLE)
+pv_game_paused: .res 1  ; Camada 6: acao Pausar o jogo
+pv_z_Vidas_3681: .res 1  ; var "Vidas" (byte)
+
 .segment "CODE"
 
 NMI:
@@ -2014,6 +2019,7 @@ clrram:
   STA $0700,X
   INX
   BNE clrram
+  JSR program_init_vars   ; Camada 6: valores iniciais != 0 das variaveis do usuario
 vblankwait2:
   BIT $2002
   BPL vblankwait2
@@ -2054,6 +2060,11 @@ clroam:
   LDA #%00011110
   STA $2001
 
+program_init_vars:
+  LDA #3
+  STA pv_z_Vidas_3681
+  RTS
+
 ; ---- Main loop ----
 ; O fluxo de estados (Splash/Play/Game Over) vem do bloco game_flow do NGC.
 MainLoop:
@@ -2093,8 +2104,29 @@ st_splash:
   JMP MainLoop
 
 st_play:
+  ; Camada 6: contador de idle (frames seguidos sem nenhum botao segurado)
+  LDA pad1
+  BNE prog_idle_reset
+  LDA pv_idle
+  CLC
+  ADC #1
+  STA pv_idle
+  BCC prog_idle_done
+  INC pv_idle+1
+  JMP prog_idle_done
+prog_idle_reset:
+  LDA #0
+  STA pv_idle
+  STA pv_idle+1
+prog_idle_done:
+  ; Camada 6: Acao "Pausar o jogo" congela player+inimigos, mas regras e
+  ; leitura de input continuam - senao nao teria como despausar.
+  LDA pv_game_paused
+  BNE st_play_paused
   JSR update_player
   JSR update_enemies
+st_play_paused:
+  JSR run_rules
   ; SELECT -> Game Over
   LDA pad1_edge
   AND #%00000100
@@ -2118,6 +2150,179 @@ st_gameover:
   LDA #0
   JSR load_screen
   JMP MainLoop
+
+; ---- NGC Camada 6: motor de regras ----
+ScreenPhase:
+  .byte 1, 1, 1, 1, 1
+
+run_rules:
+  LDX play_idx
+  LDA ScreenPhase,X
+  CMP #1
+  BNE prule_0_scope_skip
+  JSR prule_0
+prule_0_scope_skip:
+  LDX play_idx
+  LDA ScreenPhase,X
+  CMP #1
+  BNE prule_1_scope_skip
+  JSR prule_1
+prule_1_scope_skip:
+  LDX play_idx
+  LDA ScreenPhase,X
+  CMP #0
+  BNE prule_2_scope_skip
+  JSR prule_2
+prule_2_scope_skip:
+  LDX play_idx
+  LDA ScreenPhase,X
+  CMP #1
+  BNE prule_3_scope_skip
+  JSR prule_3
+prule_3_scope_skip:
+  JSR prule_4
+  JSR prule_5
+  LDX play_idx
+  LDA ScreenPhase,X
+  CMP #1
+  BNE prule_6_scope_skip
+  JSR prule_6
+prule_6_scope_skip:
+  JSR prule_7
+  JSR prule_8
+  JSR prule_9
+  LDX play_idx
+  LDA ScreenPhase,X
+  CMP #1
+  BNE prule_10_scope_skip
+  JSR prule_10
+prule_10_scope_skip:
+  RTS
+
+; regra: Cair no buraco
+prule_0:
+  ; SE hitbox: Fase 2 (motor de colisao generico ainda nao existe) - sempre falso
+  JMP prule_0_end
+  ; SUBTRAIR byte Vidas 1 (sem clamp - estoura como aritmetica 6502 padrao)
+  SEC
+  LDA pv_z_Vidas_3681
+  SBC #1
+  STA pv_z_Vidas_3681
+  ; Acao 'spawn_character': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'play_sound': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+  ; SE hitbox: Fase 2 (motor de colisao generico ainda nao existe) - sempre falso
+  JMP prule_0_end
+prule_0_end:
+  RTS
+
+; regra: rigth
+prule_1:
+  ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
+  JMP prule_1_end
+  ; Acao 'move_character': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+prule_1_end:
+  RTS
+
+; regra: press start
+prule_2:
+  ; SE evento: nao-input (custom/menu) - Fase 2, sempre falso
+  JMP prule_2_end
+  ; Acao 'spawn_character': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'play_sound': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+prule_2_end:
+  RTS
+
+; regra: jump
+prule_3:
+  ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
+  JMP prule_3_end
+  ; Acao 'move_character': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+prule_3_end:
+  RTS
+
+; regra: left
+prule_4:
+  ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
+  JMP prule_4_end
+  ; Acao 'move_character': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+prule_4_end:
+  RTS
+
+; regra: Morrer
+prule_5:
+  ; SE variavel byte: Vidas == 0
+  LDA pv_z_Vidas_3681
+  CMP #0
+  BNE prule_5_end
+  ; Acao: Matar (heroi) - mesma logica de respawn da queda
+  LDA #40
+  STA player_x
+  LDA #32
+  STA player_y
+  LDA #0
+  STA jump_cnt
+  ; Acao 'goto_warp': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+prule_5_end:
+  RTS
+
+; regra: tocar inimigo
+prule_6:
+  ; SE hitbox: Fase 2 (motor de colisao generico ainda nao existe) - sempre falso
+  JMP prule_6_end
+  ; SUBTRAIR byte Vidas 1 (sem clamp - estoura como aritmetica 6502 padrao)
+  SEC
+  LDA pv_z_Vidas_3681
+  SBC #1
+  STA pv_z_Vidas_3681
+  ; Acao 'spawn_character': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+prule_6_end:
+  RTS
+
+; regra: spaw enemy
+prule_7:
+  ; SE hitbox: Fase 2 (motor de colisao generico ainda nao existe) - sempre falso
+  JMP prule_7_end
+  ; Acao 'spawn_character': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+prule_7_end:
+  RTS
+
+; regra: matar inimigo
+prule_8:
+  ; SE hitbox: Fase 2 (motor de colisao generico ainda nao existe) - sempre falso
+  JMP prule_8_end
+  ; Acao: Matar (todas as instancias do personagem-alvo)
+  LDX #0
+prule_8_s1_loop:
+  LDA inst_char,X
+  CMP #1
+  BNE prule_8_s1_next
+  LDA #0
+  STA inst_on,X
+prule_8_s1_next:
+  INX
+  CPX #5
+  BNE prule_8_s1_loop
+prule_8_end:
+  RTS
+
+; regra: tiro inimigo
+prule_9:
+  ; SE evento: nao-input (custom/menu) - Fase 2, sempre falso
+  JMP prule_9_end
+  ; Acao 'shoot': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+prule_9_end:
+  RTS
+
+; regra: Pause
+prule_10:
+  ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
+  JMP prule_10_end
+  ; Acao: Pausar/despausar o jogo
+  LDA pv_game_paused
+  EOR #1
+  STA pv_game_paused
+prule_10_end:
+  RTS
 
 PaletteData:
   .byte $0F, $00, $10, $30, $0F, $06, $16, $26, $0F, $00, $16, $30, $0F, $02, $12, $22

@@ -366,3 +366,72 @@ document.getElementById('openNMS')?.addEventListener('change', e=>{
   const f = e.target.files[0];
   if(f) Project.loadFromFile(f);
 });
+
+/* =========================================================
+   ABERTURA DE PROJETO VINDO DO DASHBOARD
+   ========================================================= */
+
+   (async function loadProjectFromDashboard() {
+
+    const nmsText =
+      sessionStorage.getItem(
+        'ngc_open_project'
+      );
+  
+    if(!nmsText) return;
+  
+  
+    const fileName =
+      sessionStorage.getItem(
+        'ngc_open_project_filename'
+      ) ||
+      'projeto.nms';
+  
+  
+    /*
+     * Remove imediatamente da sessão.
+     * Assim um refresh não reabre o projeto
+     * automaticamente.
+     */
+  
+    sessionStorage.removeItem(
+      'ngc_open_project'
+    );
+  
+    sessionStorage.removeItem(
+      'ngc_open_project_filename'
+    );
+  
+  
+    try {
+  
+      const file =
+        new File(
+          [nmsText],
+          fileName,
+          {
+            type:
+              'application/json'
+          }
+        );
+  
+  
+      await Project.loadFromFile(file);
+  
+  
+    } catch(error) {
+  
+      console.error(
+        'Erro ao abrir projeto vindo do Dashboard:',
+        error
+      );
+  
+  
+      alert(
+        'Erro ao abrir o projeto: ' +
+        error
+      );
+  
+    }
+  
+  })();
