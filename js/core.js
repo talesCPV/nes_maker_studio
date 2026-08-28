@@ -3,6 +3,7 @@ const NES_PALETTE = ["#666666","#002A88","#1412A7","#3B00A4","#5C007E","#6E0040"
 const Project = {
   data: null,
   projectId: null,
+  serverSaved: false,
   fileName: "sem-titulo.nms",
   status(msg){
     const el = document.getElementById('projStatus');
@@ -164,21 +165,8 @@ const Project = {
     if(!silent && !confirm("Criar novo projeto? Progresso não salvo será perdido.")) return;
     this.data = this.defaultData();
     this.fileName = "meu-jogo.nms";
-/*    
-    try{
-      const resp = await fetch('assets/novo.chr');
-      if(resp.ok){
-        const buf = new Uint8Array(await resp.arrayBuffer());
-        if(buf.length >= 4096){
-          this.data.chr = Array.from(
-            buf.length >= 8192
-              ? buf.slice(0, 8192)
-              : (()=>{ const n = new Uint8Array(8192); n.set(buf); return n; })()
-          );
-        }
-      }
-    }catch(e){}
-*/
+    this.projectId = null;
+    this.serverSaved = false;
     this.stampDefaultUtilityTiles(this.data.chr);
     this.loadIntoEditors();
     this.updateUI();
@@ -294,93 +282,261 @@ const Project = {
   },
   async loadFromFile(file){
     const text = await file.text();
+  
     try{
       const json = JSON.parse(text);
-      if(!json.chr || !json.palettes) throw "Arquivo .nms inválido";
-      if(!json.metatiles) json.metatiles = [];
-      if(!json.backgrounds) json.backgrounds = [];
-      if(!json.splashScreens) json.splashScreens = [];
+  
+      if(!json.chr || !json.palettes)
+        throw "Arquivo .nms inválido";
+  
+      if(!json.metatiles)
+        json.metatiles = [];
+  
+      if(!json.backgrounds)
+        json.backgrounds = [];
+  
+      if(!json.splashScreens)
+        json.splashScreens = [];
+  
       if(!json.phases){
         json.phases = [{
-          id: 'phase_1', name: 'Fase 1', gravity: 'down', mapper: 0, bank: 0,
-          scroll: 'static', mirroring: 'vertical', background: '', splash: '', levelMap: null
+          id: 'phase_1',
+          name: 'Fase 1',
+          gravity: 'down',
+          mapper: 0,
+          bank: 0,
+          scroll: 'static',
+          mirroring: 'vertical',
+          background: '',
+          splash: '',
+          levelMap: null
         }];
       }
+  
       // Migração level-design: levels[] solto → phase.levelMap
       if(json.levels && json.levels.length){
         json.levels.forEach(lvl=>{
-          const phase = json.phases.find(p => p.name === lvl.name);
-          if(phase){ const { name, ...mapData } = lvl; phase.levelMap = mapData; }
+          const phase =
+            json.phases.find(p => p.name === lvl.name);
+  
+          if(phase){
+            const { name, ...mapData } = lvl;
+            phase.levelMap = mapData;
+          }
         });
       }
+  
       delete json.levels;
+  
       json.phases.forEach(p=>{
-        if(p.levelMap === undefined) p.levelMap = null;
-        if(p.scroll === 'free') p.scroll = 'static';
-        if(!p.scroll) p.scroll = 'static';
-        if(p.bank === undefined || p.bank === null) p.bank = 0;
-        // Mirroring por fase (migra do global se necessario)
+  
+        if(p.levelMap === undefined)
+          p.levelMap = null;
+  
+        if(p.scroll === 'free')
+          p.scroll = 'static';
+  
+        if(!p.scroll)
+          p.scroll = 'static';
+  
+        if(p.bank === undefined || p.bank === null)
+          p.bank = 0;
+  
+        // Mirroring por fase
         if(!p.mirroring){
-          if(p.scroll === 'scroll_v') p.mirroring = 'horizontal';
-          else if(p.scroll === 'scroll_h') p.mirroring = 'vertical';
-          else p.mirroring = json.mirroring || 'vertical';
+  
+          if(p.scroll === 'scroll_v')
+            p.mirroring = 'horizontal';
+  
+          else if(p.scroll === 'scroll_h')
+            p.mirroring = 'vertical';
+  
+          else
+            p.mirroring =
+              json.mirroring || 'vertical';
         }
       });
-      // Sound: formato antigo (song[]) e descartado
-      json.sounds = this.normalizeSounds(json.sounds);
-      if(!json.cheats) json.cheats = [];
-      if(!json.characters) json.characters = [];
-      if(!json.gameConfig) json.gameConfig = { lives:3, continues:3, energy:16 };
-      if(!json.variables) json.variables = [];
-      if(!json.events) json.events = this.defaultData().events;
-      if(!json.rules) json.rules = [];
-      if(!json.hitboxObjects) json.hitboxObjects = [];
-      if(!json.hitboxInstances) json.hitboxInstances = [];
-      if(!json.menus) json.menus = [];
-      if(!json.jumpForces) json.jumpForces = [];
-      if(!json.speedLevels) json.speedLevels = [];
-      // Garante eventos nativos P1-IDLE / P2-IDLE em projetos antigos
-      const ensureIdle = (id, name, button) => {
-        if(!(json.events||[]).some(e => e.id === id || e.button === button)){
-          json.events.push({ id, name, category:'input', button, builtin:true });
-        }
-      };
-      ensureIdle('ev_p1_idle', 'P1 Idle', 'P1-IDLE');
-      ensureIdle('ev_p2_idle', 'P2 Idle', 'P2-IDLE');
-      // Migração: categoria 'hitbox' em Eventos foi substituída pelo passo dedicado
-      // "Se hitbox" em Regras (dois seletores: qual hitbox toca qual). Passos antigos
-      // que checavam "SE evento = Hitbox: X" viram "SE hitbox [vazio] toca [vazio]" -
-      // a checagem específica (qual toca qual) não existia no formato antigo, então o
-      // usuário precisa escolher o par depois de carregar, mas a regra não se perde.
-      const hitboxEventIds = new Set((json.events||[]).filter(e=>e.category==='hitbox').map(e=>e.id));
+  
+      // Sound
+      json.sounds =
+        this.normalizeSounds(json.sounds);
+  
+      if(!json.cheats)
+        json.cheats = [];
+  
+      if(!json.characters)
+        json.characters = [];
+  
+      if(!json.gameConfig)
+        json.gameConfig = {
+          lives: 3,
+          continues: 3,
+          energy: 16
+        };
+  
+      if(!json.variables)
+        json.variables = [];
+  
+      if(!json.events)
+        json.events = this.defaultData().events;
+  
+      if(!json.rules)
+        json.rules = [];
+  
+      if(!json.hitboxObjects)
+        json.hitboxObjects = [];
+  
+      if(!json.hitboxInstances)
+        json.hitboxInstances = [];
+  
+      if(!json.menus)
+        json.menus = [];
+  
+      if(!json.jumpForces)
+        json.jumpForces = [];
+  
+      if(!json.speedLevels)
+        json.speedLevels = [];
+  
+      // Garante eventos nativos P1-IDLE / P2-IDLE
+      const ensureIdle =
+        (id, name, button) => {
+  
+          if(!(json.events || []).some(
+            e => e.id === id || e.button === button
+          )){
+            json.events.push({
+              id,
+              name,
+              category: 'input',
+              button,
+              builtin: true
+            });
+          }
+        };
+  
+      ensureIdle(
+        'ev_p1_idle',
+        'P1 Idle',
+        'P1-IDLE'
+      );
+  
+      ensureIdle(
+        'ev_p2_idle',
+        'P2 Idle',
+        'P2-IDLE'
+      );
+  
+      // Migração de hitbox
+      const hitboxEventIds =
+        new Set(
+          (json.events || [])
+            .filter(e => e.category === 'hitbox')
+            .map(e => e.id)
+        );
+  
       if(hitboxEventIds.size > 0){
-        (json.rules||[]).forEach(r=>{
-          (r.steps||[]).forEach(s=>{
-            if(s.type==='if_event' && hitboxEventIds.has(s.eventId)){
-              s.type='if_hitbox'; s.hitboxA=''; s.hitboxB=''; delete s.eventId;
+  
+        (json.rules || []).forEach(r=>{
+  
+          (r.steps || []).forEach(s=>{
+  
+            if(
+              s.type === 'if_event' &&
+              hitboxEventIds.has(s.eventId)
+            ){
+              s.type = 'if_hitbox';
+              s.hitboxA = '';
+              s.hitboxB = '';
+              delete s.eventId;
             }
+  
           });
+  
         });
-        json.events = (json.events||[]).filter(e=>e.category!=='hitbox');
+  
+        json.events =
+          (json.events || [])
+            .filter(e => e.category !== 'hitbox');
       }
-      if(json.maxInstances == null) json.maxInstances = 10;
-      json.maxInstances = Math.max(1, Math.min(20, parseInt(json.maxInstances) || 10));
+  
+      if(json.maxInstances == null)
+        json.maxInstances = 10;
+  
+      json.maxInstances =
+        Math.max(
+          1,
+          Math.min(
+            20,
+            parseInt(json.maxInstances) || 10
+          )
+        );
+  
+      /*
+       * IMPORTANTE:
+       *
+       * A partir daqui o projeto já está
+       * completamente reconstruído.
+       *
+       * O CHR vem exclusivamente do JSON.
+       *
+       * Não existe nenhum carregamento de
+       * assets/novo.chr aqui.
+       */
+  
       this.data = json;
       this.fileName = file.name;
+  
       this.loadIntoEditors();
       this.updateUI();
-      const itemCount = this.data.sounds?.items?.length || 0;
-      this.status(`carregado v${json.version||'0.4'} - ${json.splashScreens.length} splash • ${itemCount} peca(s) de som`);
+  
+      const itemCount =
+        this.data.sounds?.items?.length || 0;
+  
+      this.status(
+        `carregado v${json.version || '0.4'} - ` +
+        `${json.splashScreens.length} splash • ` +
+        `${itemCount} peca(s) de som`
+      );
+  
       setTimeout(()=>{
-        try{ BG.loadSplashScreens(json.splashScreens); }catch(e){}
-        if(typeof UI !== 'undefined' && UI.switchModule) UI.switchModule('dashboard');
-        else { try{ DASHBOARD.init(); }catch(e){} }
+  
+        try{
+          BG.loadSplashScreens(
+            json.splashScreens
+          );
+        }catch(e){}
+  
+        if(
+          typeof UI !== 'undefined' &&
+          UI.switchModule
+        ){
+          UI.switchModule('dashboard');
+        }
+        else{
+          try{
+            DASHBOARD.init();
+          }catch(e){}
+        }
+  
       }, 300);
+  
     }catch(e){
-      alert("Erro ao abrir .nms: " + e);
+  
+      alert(
+        "Erro ao abrir .nms: " + e
+      );
+  
     }
   },
   async loadProjectFromBackend(projectId) {
+
+    this.projectId = parseInt(projectId, 10) || null;
+
+    if(!this.projectId){
+      alert('ID de projeto inválido.');
+      return false;
+    }
 
     try {
   

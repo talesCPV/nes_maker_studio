@@ -55,8 +55,10 @@ body {
   max-width: 420px;
   margin: 0 auto;
   display: flex;
+  flex-direction: column;
   justify-content: center;
-  align-items: center;  
+  align-items: center;
+  gap: 20px;
 }
 
 .card {
@@ -115,6 +117,11 @@ body {
   font-weight: 600;
   color: var(--text);
   text-align: center;
+}
+
+.card button{
+  padding: 5px 10px;
+  cursor: pointer;
 }
 
 form {
@@ -227,8 +234,18 @@ button[type="submit"]:active {
     max-width: 180px;
 }
 
-#loginForm{
+.dash-card{
+    width: 80vw;
+}
 
+.project-list{
+  width: 100%;
+}
+
+.project-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
 }
 
 @media (max-width: 480px) {
@@ -238,4 +255,9 @@ button[type="submit"]:active {
   .brand-logo {
     width: min(180px, 65vw);
   }
+
+  .dash-card{
+        width: 100vw;
+    }
+
 }
