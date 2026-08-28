@@ -97,9 +97,9 @@ final class NGC
         $builder->add($collision);
         $builder->add($player);
         $builder->add($reset);
-        $builder->add($programInit);
         $builder->add($mainLoop);
         $builder->add($gameFlow);
+        $builder->add($programInit);
         $builder->add($programHitboxEngine);
         $builder->add($programRules);
         $builder->add($paletteData);

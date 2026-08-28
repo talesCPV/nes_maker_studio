@@ -2073,11 +2073,6 @@ clroam:
   LDA #%00011110
   STA $2001
 
-program_init_vars:
-  LDA #3
-  STA pv_z_Vidas_3681
-  RTS
-
 ; ---- Main loop ----
 ; O fluxo de estados (Splash/Play/Game Over) vem do bloco game_flow do NGC.
 MainLoop:
@@ -2171,6 +2166,11 @@ st_gameover_restart:
   LDA #0
   JSR load_screen
   JMP MainLoop
+
+program_init_vars:
+  LDA #3
+  STA pv_z_Vidas_3681
+  RTS
 
 ; ---- NGC Camada 6 Fase 2: motor de hitbox ----
 HbTriggerScr:
