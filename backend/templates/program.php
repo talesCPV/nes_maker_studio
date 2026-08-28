@@ -20,6 +20,11 @@ return [
         $lines = ['.segment "ZEROPAGE"'];
         $lines[] = 'pv_idle:        .res 2  ; Camada 6: frames desde o ultimo input (P1-IDLE)';
         $lines[] = 'pv_game_paused: .res 1  ; Camada 6: acao Pausar o jogo';
+        $lines[] = 'pv_ev_oob:      .res 1  ; Camada 6 Fase 2: flag nativa "Fora dos limites" (pulso)';
+        $lines[] = 'pv_ev_enter:    .res 1  ; Camada 6 Fase 2: flag nativa "Entrou na tela" (pulso)';
+        $lines[] = 'pv_hb_target:   .res 1  ; Camada 6 Fase 2: scratch do check_hbobj_hit';
+        $lines[] = 'pv_hb_scr_x:    .res 1  ; Camada 6 Fase 2: scratch do check_hbobj_hit';
+        $lines[] = 'pv_terr_target: .res 1  ; Camada 6 Fase 2: scratch do check_terrain_type';
         $seen = [];
         foreach ($alloc['vars'] as $v) {
             if (!($v['zeroPage'] ?? false)) continue;
@@ -80,6 +85,103 @@ return [
                 }
             }
         }
+        $lines[] = '  RTS';
+        return implode("\n", $lines);
+    },
+
+    'program_hitbox_engine' => static function (array $ctx): string {
+        $prog = $ctx['program'] ?? ['hbTriggers' => []];
+        $triggers = $prog['hbTriggers'] ?? [];
+        $lines = [];
+        $lines[] = '; ---- NGC Camada 6 Fase 2: motor de hitbox ----';
+
+        $lines[] = 'HbTriggerScr:';
+        $lines[] = $triggers ? ('  .byte ' . implode(', ', array_map(static fn($t) => (string)$t['scr'], $triggers))) : '  .byte 0';
+        $lines[] = 'HbTriggerX:';
+        $lines[] = $triggers ? ('  .byte ' . implode(', ', array_map(static fn($t) => (string)$t['x'], $triggers))) : '  .byte 0';
+        $lines[] = 'HbTriggerY:';
+        $lines[] = $triggers ? ('  .byte ' . implode(', ', array_map(static fn($t) => (string)$t['y'], $triggers))) : '  .byte 0';
+        $lines[] = 'HbTriggerObj:';
+        $lines[] = $triggers ? ('  .byte ' . implode(', ', array_map(static fn($t) => (string)$t['obj'], $triggers))) : '  .byte 0';
+        $lines[] = '';
+
+        $lines[] = '; A(entrada) = tipo de terreno esperado (1=solido, 2=plataforma).';
+        $lines[] = '; Devolve em A: 1 se o tile sob os pes do heroi bate, senao 0.';
+        $lines[] = '; Sub-rotina isolada (scratch proprio) - nao mexe no estado que';
+        $lines[] = '; check_ground/check_wall_at ja usam pro motor de fisica.';
+        $lines[] = 'check_terrain_type:';
+        $lines[] = '  STA pv_terr_target';
+        $lines[] = '  LDA player_y';
+        $lines[] = '  CLC';
+        $lines[] = '  ADC #16';
+        $lines[] = '  LSR A';
+        $lines[] = '  LSR A';
+        $lines[] = '  LSR A';
+        $lines[] = '  STA col_y';
+        $lines[] = '  LDA player_x';
+        $lines[] = '  CLC';
+        $lines[] = '  ADC #7';
+        $lines[] = '  JSR world_col_from';
+        $lines[] = '  JSR get_collision2';
+        $lines[] = '  LDA col_result';
+        $lines[] = '  CMP pv_terr_target';
+        $lines[] = '  BEQ ctt_yes';
+        $lines[] = '  LDA #0';
+        $lines[] = '  RTS';
+        $lines[] = 'ctt_yes:';
+        $lines[] = '  LDA #1';
+        $lines[] = '  RTS';
+        $lines[] = '';
+
+        $lines[] = '; A(entrada) = id numerico do objeto de hitbox (dano/warp) procurado.';
+        $lines[] = '; Devolve em A: 1 se alguma instancia desse objeto na tela atual';
+        $lines[] = '; esta sobrepondo o corpo do heroi, senao 0.';
+        $lines[] = 'check_hbobj_hit:';
+        $lines[] = '  STA pv_hb_target';
+        $lines[] = '  LDX #0';
+        $lines[] = 'chh_loop:';
+        $lines[] = '  CPX #' . count($triggers) . '  ; sem triggers -> CPX #0, o loop nunca entra';
+        $lines[] = '  BEQ chh_no';
+        $lines[] = '  LDA HbTriggerObj,X';
+        $lines[] = '  CMP pv_hb_target';
+        $lines[] = '  BNE chh_next';
+        $lines[] = '  LDA HbTriggerScr,X';
+        $lines[] = '  CMP cur_screen';
+        $lines[] = '  BNE chh_next';
+        $lines[] = '  ; posicao na tela do trigger (mesma logica dos inimigos): x - scroll_x';
+        $lines[] = '  LDA HbTriggerX,X';
+        $lines[] = '  SEC';
+        $lines[] = '  SBC scroll_x';
+        $lines[] = '  BCC chh_next';
+        $lines[] = '  STA pv_hb_scr_x';
+        $lines[] = '  ; AABB vs corpo do heroi (mesma convencao de check_player_enemy_hit)';
+        $lines[] = '  LDA player_x';
+        $lines[] = '  CLC';
+        $lines[] = '  ADC #14';
+        $lines[] = '  CMP pv_hb_scr_x';
+        $lines[] = '  BCC chh_next';
+        $lines[] = '  LDA pv_hb_scr_x';
+        $lines[] = '  CLC';
+        $lines[] = '  ADC #14';
+        $lines[] = '  CMP player_x';
+        $lines[] = '  BCC chh_next';
+        $lines[] = '  LDA player_y';
+        $lines[] = '  CLC';
+        $lines[] = '  ADC #16';
+        $lines[] = '  CMP HbTriggerY,X';
+        $lines[] = '  BCC chh_next';
+        $lines[] = '  LDA HbTriggerY,X';
+        $lines[] = '  CLC';
+        $lines[] = '  ADC #16';
+        $lines[] = '  CMP player_y';
+        $lines[] = '  BCC chh_next';
+        $lines[] = '  LDA #1';
+        $lines[] = '  RTS';
+        $lines[] = 'chh_next:';
+        $lines[] = '  INX';
+        $lines[] = '  JMP chh_loop';
+        $lines[] = 'chh_no:';
+        $lines[] = '  LDA #0';
         $lines[] = '  RTS';
         return implode("\n", $lines);
     },

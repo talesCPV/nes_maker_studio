@@ -8,7 +8,7 @@ body { font-family:'Segoe UI', Tahoma, sans-serif; background:#121212; color:#d4
 .top-logo { font-family:monospace; font-weight:900; letter-spacing:2px; font-size:14px; color:#fff; margin-right:12px; display:flex; align-items:center; gap:8px }
 .top-logo span { color:#ffcc00 }
 .divider { width:1px; height:24px; background:#333; margin:0 6px }
-.icon-btn { width:36px; height:36px; background:#252526; border:1px solid #333; border-radius:6px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:16px; transition:.15s; position:relative; color: #FFF;}
+.icon-btn { width:36px; height:36px; background:#252526; border:1px solid #333; border-radius:6px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:16px; transition:.15s; position:relative; color:#FFF; max-width: 35px;}
 .icon-btn:hover { background:#2a2a2a; border-color:#007acc; transform:translateY(-1px) }
 .icon-btn:active { transform:translateY(0) }
 .icon-btn.primary { background:#007acc; border-color:#007acc }
@@ -373,3 +373,96 @@ select { background:#1e1e1e; border:1px solid #444; color:#fff; padding:5px 8px;
 #sidebar.collapsed .side-label { display:none; }
 #sidebar.collapsed .side-footer { display:none; }
 .side-footer { margin-top:auto; padding:12px; border-top:1px solid #222; font-size:11px; color:#666; line-height:1.4; }
+
+
+/* CHR — painel de paletas recolhível */
+.chr-palette-panel {
+  background:#252526;
+  border-top:2px solid #007acc;
+  display:flex;
+  flex-direction:column;
+  max-height:42vh;
+  transition: max-height .2s ease;
+}
+.chr-palette-panel.collapsed {
+  max-height:52px;
+  overflow:hidden;
+}
+.chr-palette-bar {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:6px 12px;
+  min-height:48px;
+  flex-shrink:0;
+  background:#1e1e1e;
+  border-bottom:1px solid #333;
+}
+.chr-palette-bar-title {
+  font-size:12px;
+  font-weight:700;
+  color:#4ec9b0;
+}
+.chr-palette-bar-hint {
+  font-size:10px;
+  color:#666;
+  margin-left:auto;
+}
+.chr-palette-panel:not(.collapsed) .chr-palette-bar-hint { display:none; }
+.chr-palette-compact {
+  display:flex;
+  gap:12px;
+  align-items:center;
+  flex-wrap:wrap;
+  flex:1;
+  min-width:0;
+}
+.chr-pal-compact-group {
+  display:flex;
+  align-items:center;
+  gap:4px;
+}
+.chr-pal-compact-lab {
+  font-size:9px;
+  color:#888;
+  width:22px;
+}
+.chr-pal-compact-slot {
+  display:flex;
+  gap:1px;
+  padding:2px;
+  border:1px solid #444;
+  border-radius:3px;
+  cursor:pointer;
+  background:#111;
+}
+.chr-pal-compact-slot.active {
+  border-color:#ffcc00;
+  box-shadow:0 0 0 1px #ffcc00;
+}
+.chr-pal-compact-slot div {
+  width:12px;
+  height:12px;
+  border-radius:1px;
+}
+.chr-palette-body {
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  padding:10px 14px;
+  overflow:auto;
+  flex:1;
+  min-height:0;
+}
+.chr-palette-panel.collapsed .chr-palette-body {
+  display:none;
+}
+
+#chrMetatileToolbar {
+  flex-wrap: nowrap !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+#chrMetatileToolbar::-webkit-scrollbar { height: 6px; }
+#chrMetatileToolbar::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }

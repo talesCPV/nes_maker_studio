@@ -1,33 +1,35 @@
 <?php
 /**
- * Camada 6 - Fase 1: Variáveis + motor de Regras (SE/ENTÃO).
+ * Camada 6: Variáveis + motor de Regras (SE/ENTÃO).
  *
- * Escopo desta fase (o que JÁ compila pra 6502 de verdade):
- *  - Variáveis: bool (empacotado 8/byte), byte, word - em zero page ou RAM,
- *    com valor inicial. Endereços são atribuídos pelo PRÓPRIO ca65 (.res
- *    sequencial dentro de um segmento novo) - nada de aritmética manual de
- *    endereço, então nunca colide com os outros bytes já reservados.
- *  - SE evento: só categoria "input" (botão pressionado nesse frame, ou
- *    P1-IDLE com contador de frames parado). P2 e eventos custom/menu ainda
- *    não têm origem no runtime - compilam como sempre-falso.
- *  - SE variável / DEFINIR / SOMAR / SUBTRAIR variável: completo.
- *  - Ações com suporte real no jogo hoje: Definir On Ground (só no herói),
- *    Pausar o jogo (novo flag - pausa player+inimigos, mantém regras e
- *    input rodando), Matar (herói -> mesma lógica de respawn da queda;
- *    outro personagem -> desliga todas as instâncias desse tipo), e
- *    Personalizada (é um no-op por definição, o catálogo já descreve assim).
- *  - Escopo de regra: Global (roda todo frame em st_play) ou por Fase
- *    (consulta ScreenPhase[play_idx] em runtime, sem precisar guardar
- *    estado extra em lugar nenhum).
+ * Fase 1 (o que já compilava): variáveis, SE evento (input P1), SE/DEFINIR/
+ * SOMAR/SUBTRAIR variável, ações Definir On Ground/Pausar/Matar/Personalizada,
+ * escopo de regra Global ou por Fase.
  *
- * Fora do escopo desta fase (compila como sempre-falso/no-op com comentário
- * - nunca quebra a build, só não faz nada ainda): SE hitbox... toca... (é
- * seu próprio motor de colisão genérico - native flags/terreno/objetos/
- * hitboxes de personagem, Fase 2), Ir para Warp, Spawnar Personagem,
- * Aplicar Força de Pulo/Nível de Velocidade (o jogo ainda usa valores fixos
- * pro pulo/velocidade, não lê de variável), Tocar Som (não existe motor de
- * SFX ainda, só música), Abrir/Fechar Menu, Ligar/Desligar Hitbox, Mover,
- * Atirar.
+ * Fase 2 (novo): SE hitbox... toca...:
+ *  - Flags nativas (on_ground/out_of_bounds/enter_screen): checagem de estado
+ *    simples - o lado B da comparação é ignorado (a UI usa o mesmo step pra
+ *    tudo, mas uma flag nativa não é geometricamente uma "colisão").
+ *  - Terreno (Sólido/Plataforma): reaproveita world_col_from/get_collision2
+ *    (mesmo mecanismo do check_ground do player) numa sub-rotina própria e
+ *    isolada, pra checar o tile sob os pés do herói sem mexer no estado que
+ *    o motor de física já usa.
+ *  - Objetos de hitbox (dano/warp): as instâncias viram uma tabela plana
+ *    (tela global, x, y, id numérico do objeto) e uma sub-rotina reutilizável
+ *    faz AABB contra o corpo do herói, com o mesmo ajuste de scroll_x que os
+ *    inimigos já usam (posição na tela = x - scroll_x, esconde se saiu pela
+ *    esquerda).
+ *  - Ação Ir para Warp: totalmente resolvida em tempo de compilação (destino
+ *    já é conhecido) - troca de tela + reposiciona o herói +, se o destino
+ *    fizer parte da sequência principal de fases, também realinha play_idx,
+ *    pré-carrega a próxima tela do par de scroll e re-spawna os inimigos
+ *    (mesma sequência que o st_splash já faz ao entrar na fase 1ª vez).
+ *
+ * Ainda fora do escopo (sempre-falso/no-op, não quebra a build): hitbox de
+ * personagem (body/attack/hurt - depende de offsets por frame de animação,
+ * Fase 3), Spawnar Personagem, Aplicar Força de Pulo/Nível de Velocidade
+ * (valores fixos no jogo hoje), Tocar Som (sem motor de SFX), Abrir/Fechar
+ * Menu, Ligar/Desligar Hitbox, Mover, Atirar, eventos P2/custom/menu.
  */
 final class ProgramCompiler
 {
@@ -81,13 +83,53 @@ final class ProgramCompiler
         $rules = is_array($project['rules'] ?? null) ? $project['rules'] : [];
         $numInstances = (int)($spriteCtx['numInstances'] ?? 10);
 
+        // Fase 2: tabela plana de triggers de hitbox (objetos dano/warp
+        // colocados no mapa). Cada objeto referenciado ganha um id numérico
+        // pequeno (0..N-1), usado tanto nos triggers quanto no SE hitbox.
+        $objects = is_array($project['hitboxObjects'] ?? null) ? $project['hitboxObjects'] : [];
+        $objectById = [];
+        foreach ($objects as $o) if (is_array($o) && isset($o['id'])) $objectById[(string)$o['id']] = $o;
+
+        $globalIdxByScreenKey = [];
+        foreach ($screenData as $gi => $sc) {
+            if (!is_array($sc) || !isset($sc['id'])) continue;
+            $globalIdxByScreenKey[(string)$sc['id']] = (int)$gi;
+        }
+
+        $hbObjNumericId = [];
+        $triggers = [];
+        $instances = is_array($project['hitboxInstances'] ?? null) ? $project['hitboxInstances'] : [];
+        foreach ($instances as $inst) {
+            if (!is_array($inst)) continue;
+            $oid = (string)($inst['objectId'] ?? ($inst['hitboxObjectId'] ?? ''));
+            $obj = $objectById[$oid] ?? null;
+            if (!is_array($obj) || !in_array($obj['kind'] ?? '', ['dano', 'warp'], true)) continue;
+            $sid = (string)($inst['screenId'] ?? '');
+            if (!isset($globalIdxByScreenKey[$sid])) continue;
+            if (!isset($hbObjNumericId[$oid])) $hbObjNumericId[$oid] = count($hbObjNumericId);
+            $triggers[] = [
+                'scr' => $globalIdxByScreenKey[$sid],
+                'x' => (int)($inst['x'] ?? 0) & 0xFF,
+                'y' => (int)($inst['y'] ?? 0) & 0xFF,
+                'obj' => $hbObjNumericId[$oid],
+            ];
+        }
+        $hbCtx = [
+            'objNumericId' => $hbObjNumericId,
+            'objectById' => $objectById,
+            'triggers' => $triggers,
+            'globalIdxByScreenKey' => $globalIdxByScreenKey,
+            'playIdxs' => $playIdxs,
+            'screenData' => $screenData,
+        ];
+
         $ruleBodies = [];
         $dispatch = [];
         $ri = 0;
         foreach ($rules as $rule) {
             if (!is_array($rule) || empty($rule['steps']) || !is_array($rule['steps'])) continue;
             $label = "prule_{$ri}";
-            $ruleBodies[] = $this->compileRule($label, $ri, $rule, $alloc, $eventById, $charIndexById, $heroIds, $numInstances);
+            $ruleBodies[] = $this->compileRule($label, $ri, $rule, $alloc, $eventById, $charIndexById, $heroIds, $numInstances, $hbCtx);
             $scope = (string)($rule['scope'] ?? 'global');
             if ($scope === 'global') {
                 $dispatch[] = "  JSR {$label}";
@@ -109,6 +151,7 @@ final class ProgramCompiler
             'ruleBodies' => $ruleBodies,
             'dispatch' => $dispatch,
             'screenPhase' => $screenPhase,
+            'hbTriggers' => $triggers,
         ];
     }
 
@@ -159,7 +202,7 @@ final class ProgramCompiler
         return ['vars' => $list, 'groupInitial' => $groupInitial];
     }
 
-    private function compileRule(string $label, int $ri, array $rule, array $alloc, array $eventById, array $charIndexById, array $heroIds, int $numInstances): string
+    private function compileRule(string $label, int $ri, array $rule, array $alloc, array $eventById, array $charIndexById, array $heroIds, int $numInstances, array $hbCtx): string
     {
         $lines = [];
         $lines[] = "; regra: " . (string)($rule['name'] ?? $label);
@@ -172,20 +215,59 @@ final class ProgramCompiler
             if ($type === 'if_event') {
                 $lines = array_merge($lines, $this->compileIfEvent($tag, $label, $step, $eventById));
             } elseif ($type === 'if_hitbox') {
-                $lines[] = "  ; SE hitbox: Fase 2 (motor de colisao generico ainda nao existe) - sempre falso";
-                $lines[] = "  JMP {$label}_end";
+                $lines = array_merge($lines, $this->compileIfHitbox($tag, $label, $step, $hbCtx));
             } elseif ($type === 'if_var') {
                 $lines = array_merge($lines, $this->compileIfVar($tag, $label, $step, $alloc));
             } elseif (in_array($type, ['set_var', 'add_var', 'sub_var'], true)) {
                 $lines = array_merge($lines, $this->compileVarEffect($tag, $type, $step, $alloc));
             } elseif ($type === 'action') {
-                $lines = array_merge($lines, $this->compileAction($tag, $step, $charIndexById, $heroIds, $numInstances));
+                $lines = array_merge($lines, $this->compileAction($tag, $step, $charIndexById, $heroIds, $numInstances, $hbCtx));
             }
             $si++;
         }
         $lines[] = "{$label}_end:";
         $lines[] = "  RTS";
         return implode("\n", $lines);
+    }
+
+    private function compileIfHitbox(string $tag, string $ruleEnd, array $step, array $hbCtx): array
+    {
+        $a = (string)($step['hitboxA'] ?? '');
+        $b = (string)($step['hitboxB'] ?? '');
+        // Convenção da UI: um "SE hitbox... toca..." com um lado nativo (flag
+        // de estado, não geometria) checa só esse lado - o outro é ignorado.
+        $ref = str_starts_with($a, 'native:') ? $a : (str_starts_with($b, 'native:') ? $b : null);
+        if ($ref !== null) {
+            $flag = substr($ref, 7);
+            $var = $flag === 'on_ground' ? 'on_ground' : ($flag === 'out_of_bounds' ? 'pv_ev_oob' : ($flag === 'enter_screen' ? 'pv_ev_enter' : null));
+            if ($var === null) return ["  ; SE hitbox nativo desconhecido '{$flag}' - sempre falso", "  JMP {$ruleEnd}_end"];
+            return ["  ; SE hitbox nativo: {$flag}", "  LDA {$var}", "  BEQ {$ruleEnd}_end"];
+        }
+        $ref = str_starts_with($a, 'terrain:') ? $a : (str_starts_with($b, 'terrain:') ? $b : null);
+        if ($ref !== null) {
+            $terrType = (int)substr($ref, 8);
+            return [
+                "  ; SE hitbox terreno tipo {$terrType} (sob os pes do heroi)",
+                "  LDA #{$terrType}",
+                "  JSR check_terrain_type",
+                "  BEQ {$ruleEnd}_end",
+            ];
+        }
+        $ref = str_starts_with($a, 'hbobj:') ? $a : (str_starts_with($b, 'hbobj:') ? $b : null);
+        if ($ref !== null) {
+            $objId = substr($ref, 6);
+            if (!isset($hbCtx['objNumericId'][$objId])) {
+                return ["  ; SE hitbox objeto '{$objId}' sem instancia colocada no mapa - sempre falso", "  JMP {$ruleEnd}_end"];
+            }
+            $numId = $hbCtx['objNumericId'][$objId];
+            return [
+                "  ; SE hitbox objeto (dano/warp) toca o heroi",
+                "  LDA #{$numId}",
+                "  JSR check_hbobj_hit",
+                "  BEQ {$ruleEnd}_end",
+            ];
+        }
+        return ["  ; SE hitbox de personagem (body/attack/hurt): Fase 3 (depende de offsets por frame) - sempre falso", "  JMP {$ruleEnd}_end"];
     }
 
     private function compileIfEvent(string $tag, string $ruleEnd, array $step, array $eventById): array
@@ -338,7 +420,7 @@ final class ProgramCompiler
         return ["  ; {$opLabel} byte {$v['name']} {$value} (sem clamp - estoura como aritmetica 6502 padrao)", "  {$carry}", "  LDA {$label}", "  {$op1} #{$value}", "  STA {$label}"];
     }
 
-    private function compileAction(string $tag, array $step, array $charIndexById, array $heroIds, int $numInstances): array
+    private function compileAction(string $tag, array $step, array $charIndexById, array $heroIds, int $numInstances, array $hbCtx): array
     {
         $actionId = (string)($step['actionId'] ?? '');
         $targetId = (string)($step['targetId'] ?? '');
@@ -377,10 +459,66 @@ final class ProgramCompiler
                     ];
                 }
                 return ["  ; Acao: Matar - alvo nao encontrado, ignorado"];
+            case 'goto_warp':
+                return $this->compileGotoWarp($tag, $targetId, $hbCtx);
             case 'custom':
                 return ["  ; Acao personalizada: " . (string)($step['params'] ?? '') . " (sem semantica definida - no-op por design)"];
             default:
-                return ["  ; Acao '{$actionId}': Fase 2 (subsistema ainda nao existe no jogo) - no-op"];
+                return ["  ; Acao '{$actionId}': Fase 3 (subsistema ainda nao existe no jogo) - no-op"];
         }
+    }
+
+    /**
+     * Ação "Ir para Warp": o destino já é 100% conhecido em tempo de
+     * compilação (targetScreenType/targetScreenId/spawnX/spawnY do objeto),
+     * então não precisa de tabela em runtime - só emite a mesma sequência
+     * que st_splash já usa pra entrar numa tela pela primeira vez.
+     */
+    private function compileGotoWarp(string $tag, string $targetId, array $hbCtx): array
+    {
+        $obj = $hbCtx['objectById'][$targetId] ?? null;
+        if (!is_array($obj) || ($obj['kind'] ?? '') !== 'warp' || empty($obj['targetScreenId'])) {
+            return ["  ; Acao: Ir para Warp - objeto sem destino configurado, ignorado"];
+        }
+        $key = (string)$obj['targetScreenId'];
+        if (!isset($hbCtx['globalIdxByScreenKey'][$key])) {
+            return ["  ; Acao: Ir para Warp - tela de destino nao encontrada, ignorado"];
+        }
+        $gi = $hbCtx['globalIdxByScreenKey'][$key];
+        $spawnX = max(0, min(31, (int)($obj['spawnX'] ?? 0))) * 8;
+        $spawnY = max(0, min(29, (int)($obj['spawnY'] ?? 0))) * 8;
+
+        $lines = [
+            "  ; Acao: Ir para Warp",
+            "  LDA #{$gi}",
+            "  JSR load_screen",
+            "  LDA #0",
+            "  STA scroll_x",
+            "  STA nt_page",
+            "  LDA #{$spawnX}",
+            "  STA player_x",
+            "  LDA #{$spawnY}",
+            "  STA player_y",
+        ];
+
+        $pos = array_search($gi, $hbCtx['playIdxs'], true);
+        if ($pos !== false) {
+            $lines[] = "  LDA #{$pos}";
+            $lines[] = "  STA play_idx";
+            $nextPos = $pos + 1;
+            if (isset($hbCtx['playIdxs'][$nextPos])) {
+                $nextGi = $hbCtx['playIdxs'][$nextPos];
+                $lines[] = "  ; pre-carrega a proxima tela do par de scroll (mesma logica do st_splash)";
+                $lines[] = "  LDA #{$nextGi}";
+                $lines[] = "  LDX #\$24";
+                $lines[] = "  STX psn_base_hi";
+                $lines[] = "  JSR preload_screen_nt";
+            }
+            $lines[] = "  JSR spawn_enemies";
+        } else {
+            $lines[] = "  ; destino fora da sequencia principal de fases - play_idx nao realinhado,";
+            $lines[] = "  ; inimigos nao re-spawnados nesta tela (evita usar play_idx incoerente)";
+        }
+        return $lines;
     }
 }

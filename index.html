@@ -127,7 +127,63 @@ window.addEventListener('keydown', e=>{
   if(e.ctrlKey && e.key.toLowerCase()==='o'){ e.preventDefault(); document.getElementById('openNMS').click(); }
   if(e.ctrlKey && e.key.toLowerCase()==='z'){ e.preventDefault(); CHR.undo(); }
 });
-window.addEventListener('DOMContentLoaded', ()=>{ UI.restoreSidebar(); Project.newProject(true); setTimeout(()=>UI.switchModule('dashboard'), 100); });
+
+window.addEventListener('DOMContentLoaded', async () => {
+
+    UI.restoreSidebar();
+
+    /*
+    * Se existe ?project=ID na URL, o core.js
+    * carregará o projeto do backend.
+    *
+    * NÃO criamos um novo projeto aqui.
+    */
+
+    const params =
+      new URLSearchParams(
+        window.location.search
+      );
+
+    const projectId =
+      params.get('project');
+
+    if (projectId) {
+
+      /*
+      * O loader do backend será executado
+      * pelo core.js depois que todos os
+      * módulos estiverem disponíveis.
+      */
+
+      if (typeof Project.loadProjectFromBackend === 'function') {
+
+        await Project.loadProjectFromBackend(
+          projectId
+        );
+
+      }
+
+    } else {
+
+      /*
+      * Acesso normal ao editor sem projeto.
+      *
+      * Mantém o comportamento antigo:
+      * cria um projeto novo somente quando
+      * não existe projeto vindo do Dashboard.
+      */
+
+      Project.newProject(true);
+
+    }
+
+    setTimeout(() => {
+
+      UI.switchModule('dashboard');
+
+    }, 100);
+
+  });
 </script>
 </body>
 </html>

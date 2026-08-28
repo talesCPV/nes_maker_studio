@@ -748,6 +748,8 @@ up_fall:
   STA player_y
   LDA #0
   STA jump_cnt
+  LDA #1
+  STA pv_ev_oob   ; Camada 6: flag nativa "Fora dos limites" (pulso de 1 frame)
 up_done:
   JSR animate_player
   JSR update_player_oam
@@ -829,6 +831,8 @@ asr_noload:
   LDA PlayScreenTable,X
   STA cur_screen
   JSR spawn_enemies
+  LDA #1
+  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela" (pulso de 1 frame)
   RTS
 
 advance_screen_left:
@@ -860,6 +864,8 @@ asl_noload:
   LDA PlayScreenTable,X
   STA cur_screen
   JSR spawn_enemies
+  LDA #1
+  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela" (pulso de 1 frame)
   RTS
 ASM;
         // Keep the same limits used by the current frontend generator.

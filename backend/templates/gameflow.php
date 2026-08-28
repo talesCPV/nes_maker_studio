@@ -21,7 +21,9 @@ return [
         $lines[] = '  ; START no splash -> Fase 1 + spawn Hero';
         $lines[] = '  LDA pad1_edge';
         $lines[] = '  AND #%00001000';
-        $lines[] = '  BEQ MainLoop';
+        $lines[] = '  BNE st_splash_start';
+        $lines[] = '  JMP MainLoop';
+        $lines[] = 'st_splash_start:';
         $lines[] = '  LDA #1';
         $lines[] = '  STA game_state';
         $lines[] = "  LDA #{$playStart}";
@@ -65,6 +67,10 @@ return [
         $lines[] = '  JSR update_enemies';
         $lines[] = 'st_play_paused:';
         $lines[] = '  JSR run_rules';
+        $lines[] = '  ; Camada 6: flags nativas sao pulso de 1 frame - zera depois das regras rodarem';
+        $lines[] = '  LDA #0';
+        $lines[] = '  STA pv_ev_oob';
+        $lines[] = '  STA pv_ev_enter';
         $lines[] = '  ; SELECT -> Game Over';
         $lines[] = '  LDA pad1_edge';
         $lines[] = '  AND #%00000100';
@@ -82,7 +88,9 @@ return [
         $lines[] = '  ; START no Game Over -> Splash';
         $lines[] = '  LDA pad1_edge';
         $lines[] = '  AND #%00001000';
-        $lines[] = '  BEQ MainLoop';
+        $lines[] = '  BNE st_gameover_restart';
+        $lines[] = '  JMP MainLoop';
+        $lines[] = 'st_gameover_restart:';
         $lines[] = '  LDA #0';
         $lines[] = '  STA game_state';
         $lines[] = '  JSR hide_player';

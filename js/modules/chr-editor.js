@@ -88,7 +88,7 @@ const CHR = (() => {
           <span style="font-size:10px;color:#888">Tiles: <b id="lblTileIndices" style="color:#ffcc00">$00</b></span>
         </div>
 
-        <div id="chrMetatileToolbar" style="display:flex;gap:6px;align-items:center;padding:6px 10px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
+        <div id="chrMetatileToolbar" style="display:flex;gap:6px;align-items:center;padding:6px 10px;background:#252526;border-bottom:1px solid #333;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;white-space:nowrap">
           <span style="font-size:10px;color:#888;margin-right:2px">TOOLS</span>
           <button type="button" class="icon-btn tool-btn active" data-tool="pen" onclick="CHR.setTool('pen')" title="Pen">🖊️</button>
           <button type="button" class="icon-btn tool-btn" data-tool="erase" onclick="CHR.setTool('erase')" title="Erase">🧹</button>
@@ -214,24 +214,49 @@ const CHR = (() => {
           </div>
         </div>
 
-        <div style="display:flex;gap:16px;padding:10px 14px;background:#252526;border-top:2px solid #007acc;overflow:auto;max-height:220px">
-          <div style="min-width:200px;max-width:240px">
-            <h4 style="font-size:11px;color:#c39bd3;margin-bottom:6px">BANCO DE PALETAS</h4>
-            <div id="paletteBankList" style="max-height:120px;overflow:auto;border:1px solid #333;border-radius:4px;background:#0a0a0a;margin-bottom:6px"></div>
-            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">
-              <button type="button" class="btn-tool" onclick="CHR.paletteBankAdd()" style="font-size:9px;flex:1" title="Nova entrada no banco">+ Nova</button>
-              <button type="button" class="btn-tool" onclick="CHR.paletteBankApply()" style="font-size:9px;flex:1;background:#007acc;color:#fff" title="Aplicar no slot PPU ativo">→ Ativo</button>
-              <button type="button" class="btn-tool" onclick="CHR.paletteBankRename()" style="font-size:9px">✎</button>
-              <button type="button" class="btn-tool" onclick="CHR.paletteBankDelete()" style="font-size:9px;background:#c0392b;color:#fff">✕</button>
-            </div>
-            <div style="font-size:9px;color:#666;margin-bottom:2px">Ativas BG</div>
-            <div id="paletteActiveBG" style="margin-bottom:6px"></div>
-            <div style="font-size:9px;color:#666;margin-bottom:2px">Ativas SPR</div>
-            <div id="paletteActiveSPR"></div>
+        <div id="chrPalettePanel" class="chr-palette-panel collapsed">
+          <div class="chr-palette-bar">
+            <button type="button" id="chrPaletteToggle" class="icon-btn" title="Expandir / recolher paletas" onclick="CHR.togglePalettePanel()">▸</button>
+            <span class="chr-palette-bar-title">Paletas</span>
+            <div id="chrPaletteCompact" class="chr-palette-compact" title="Slots PPU ativos"></div>
+            <span id="chrPaletteBarHint" class="chr-palette-bar-hint">clique ▸ para expandir banco e master</span>
           </div>
-          <div style="min-width:280px"><h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">PALETAS PPU (BG + SPR)</h4><div id="subpalettesContainer" style="display:flex;flex-direction:column;gap:8px"></div></div>
-          <div style="flex:1;min-width:400px"><h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">PALETA MASTER NES (clique pra trocar cor do slot)</h4><div id="masterPaletteGrid" style="display:flex;flex-direction:column;gap:2px;background:#111;padding:8px;border-radius:6px;border:1px solid #333;width:fit-content"></div></div>
-          <div style="min-width:200px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;font-size:10px;color:#888;line-height:1.4">PT0 = $0000 BG padrão<br>PT1 = $1000 segunda página<br>Build detecta automaticamente<br><br>Tools: Pen, Line, Rect, Circle, Fill, Copy, Paste</div>
+          <div class="chr-palette-body">
+            <!-- 1) Paletas PPU -->
+            <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+              <div style="min-width:280px">
+                <h4 style="font-size:11px;color:#4ec9b0;margin:0 0 8px">PALETAS PPU (BG + SPR)</h4>
+                <div id="subpalettesContainer" style="display:flex;flex-direction:column;gap:8px"></div>
+              </div>
+              <div style="min-width:160px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;font-size:10px;color:#888;line-height:1.4">PT0 = $0000 BG padrão<br>PT1 = $1000 segunda página<br>Build detecta automaticamente<br><br>Tools: Pen, Line, Rect, Circle, Fill, Copy, Paste</div>
+            </div>
+            <!-- 2) Master NES -->
+            <div>
+              <h4 style="font-size:11px;color:#4ec9b0;margin:0 0 8px">PALETA MASTER NES (clique pra trocar cor do slot)</h4>
+              <div id="masterPaletteGrid" style="display:flex;flex-direction:column;gap:2px;background:#111;padding:8px;border-radius:6px;border:1px solid #333;width:fit-content"></div>
+            </div>
+            <!-- 3) Banco -->
+            <div style="border:1px solid #333;border-radius:6px;background:#1a1a1a;padding:10px">
+              <h4 style="font-size:11px;color:#c39bd3;margin:0 0 8px">BANCO DE PALETAS</h4>
+              <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+                <div style="flex:1;min-width:220px">
+                  <div id="paletteBankList" style="max-height:140px;overflow:auto;border:1px solid #333;border-radius:4px;background:#0a0a0a;margin-bottom:6px"></div>
+                  <div style="display:flex;gap:4px;flex-wrap:wrap">
+                    <button type="button" class="btn-tool" onclick="CHR.paletteBankAdd()" style="font-size:9px;flex:1" title="Nova entrada no banco">+ Nova</button>
+                    <button type="button" class="btn-tool" onclick="CHR.paletteBankApply()" style="font-size:9px;flex:1;background:#007acc;color:#fff" title="Aplicar no slot PPU ativo">→ Ativo</button>
+                    <button type="button" class="btn-tool" onclick="CHR.paletteBankRename()" style="font-size:9px">✎</button>
+                    <button type="button" class="btn-tool" onclick="CHR.paletteBankDelete()" style="font-size:9px;background:#c0392b;color:#fff">✕</button>
+                  </div>
+                </div>
+                <div style="min-width:200px;flex:0 0 220px">
+                  <div style="font-size:9px;color:#666;margin-bottom:2px">Ativas BG</div>
+                  <div id="paletteActiveBG" style="margin-bottom:8px"></div>
+                  <div style="font-size:9px;color:#666;margin-bottom:2px">Ativas SPR</div>
+                  <div id="paletteActiveSPR"></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         <div style="height:24px;background:#007acc;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 10px;font-size:11px"><span id="statusLeft">Pronto - seletor rápido restaurado</span><span id="statusRight">PT0/PT1 + $102 fix</span></div>
 
@@ -584,6 +609,42 @@ const CHR = (() => {
     e.name = n.trim() || e.name;
     renderPaletteBankUI();
   }
+  function renderPaletteCompact(){
+    const cont = document.getElementById('chrPaletteCompact');
+    if(!cont) return;
+    cont.innerHTML = '';
+    const makeGroup = (label, start)=>{
+      const g = document.createElement('div');
+      g.className = 'chr-pal-compact-group';
+      const lab = document.createElement('span');
+      lab.className = 'chr-pal-compact-lab';
+      lab.textContent = label;
+      g.appendChild(lab);
+      for(let i=0;i<4;i++){
+        const slot = start + i;
+        const box = document.createElement('div');
+        box.className = 'chr-pal-compact-slot' + (slot === activePal ? ' active' : '');
+        box.title = (start===0?'BG':'SPR') + i;
+        box.onclick = (e)=>{
+          e.stopPropagation();
+          activePal = slot;
+          initPalUI();
+          renderAll();
+          renderPaletteCompact();
+        };
+        for(let c=0;c<4;c++){
+          const sw = document.createElement('div');
+          const idx = (palettes[slot]||[15,0,16,48])[c]&63;
+          sw.style.background = (typeof NES_PALETTE!=='undefined' && NES_PALETTE[idx]) ? NES_PALETTE[idx] : '#000';
+          box.appendChild(sw);
+        }
+        g.appendChild(box);
+      }
+      cont.appendChild(g);
+    };
+    makeGroup('BG', 0);
+    makeGroup('SPR', 4);
+  }
   function renderPaletteBankUI(){
     ensurePaletteBank();
     const list = document.getElementById('paletteBankList');
@@ -656,6 +717,8 @@ const CHR = (() => {
     const grid=document.getElementById('masterPaletteGrid'); grid.innerHTML=""; let line=null;
     NES_PALETTE.forEach((col,idx)=>{ if(idx%16===0){ line=document.createElement('div'); line.style.display='flex'; line.style.gap='2px'; grid.appendChild(line); } const b=document.createElement('div'); b.style.cssText=`width:18px;height:18px;background:${col};border:1px solid #333;border-radius:2px;cursor:pointer`; b.title=`NES $${idx.toString(16).padStart(2,'0').toUpperCase()}`; b.onclick=()=>{ palettes[activePal][activeSlot]=idx; syncActiveBankEntryFromPpu(); initPalUI(); renderAll(); renderPaletteBankUI(); }; line.appendChild(b); });
     const qc=document.getElementById('quickColors'); if(qc){ qc.innerHTML=''; for(let c=0;c<4;c++){ const isActive=c===activeSlot; const btn=document.createElement('div'); btn.style.cssText=`width:32px;height:24px;background:${NES_PALETTE[palettes[activePal][c]]};border:${isActive?'2px solid #ffcc00':'1px solid #555'};border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:#000;font-weight:bold`; btn.textContent=c+1; btn.onclick=()=>{ activeSlot=c; initPalUI(); renderAll(); updateLabels(); }; qc.appendChild(btn); } }
+    ensurePaletteBank();
+    renderPaletteBankUI();
   }
   function createRow(label, idxs){ const cont=document.getElementById('subpalettesContainer'); const row=document.createElement('div'); row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px'; const lab=document.createElement('div'); lab.textContent=label; lab.style.width='28px'; lab.style.fontSize='10px'; lab.style.fontWeight='700'; lab.style.color='#4ec9b0'; row.appendChild(lab); const group=document.createElement('div'); group.style.display='flex'; group.style.gap='6px'; idxs.forEach(g=>{ const box=document.createElement('div'); box.style.cssText=`display:flex;gap:2px;padding:3px;border:2px solid ${g===activePal?'#007acc':'transparent'};border-radius:4px;background:#111;cursor:pointer`; box.onclick=()=>{ activePal=g; initPalUI(); renderAll(); }; for(let c=0;c<4;c++){ const slot=document.createElement('div'); const isActive=g===activePal&&c===activeSlot; slot.style.cssText=`width:20px;height:20px;background:${NES_PALETTE[palettes[g][c]]};border:${isActive?'2px solid #ffcc00':'1px solid #444'};border-radius:2px;cursor:pointer`; slot.onclick=e=>{ e.stopPropagation(); activePal=g; activeSlot=c; initPalUI(); renderAll(); updateLabels(); }; box.appendChild(slot); } group.appendChild(box); }); row.appendChild(group); cont.appendChild(row); }
 
@@ -3261,6 +3324,23 @@ const CHR = (() => {
     paletteBankApply(){ applyBankEntryToActiveSlot(_palBankSel); },
     paletteBankRename(){ renameBankEntry(_palBankSel); },
     paletteBankDelete(){ deleteBankEntry(_palBankSel); },
+    togglePalettePanel(){
+      const panel = document.getElementById('chrPalettePanel');
+      const btn = document.getElementById('chrPaletteToggle');
+      if(!panel) return;
+      panel.classList.toggle('collapsed');
+      const open = !panel.classList.contains('collapsed');
+      if(btn){
+        btn.textContent = open ? '▾' : '▸';
+        btn.title = open ? 'Recolher paletas' : 'Expandir paletas';
+      }
+      if(open){
+        if(typeof initPalUI === 'function') initPalUI();
+        if(typeof renderPaletteBankUI === 'function') renderPaletteBankUI();
+      } else if(typeof renderPaletteCompact === 'function'){
+        renderPaletteCompact();
+      }
+    },
     saveMetatile, loadSelectedMetatile, deleteMetatile, renameMetatile, updateMetatileSelect, onMetatileSelectChange, newTile,
     setTool(t){ setToolImpl(t); },
     toggleSlotFlipH, toggleSlotFlipV,

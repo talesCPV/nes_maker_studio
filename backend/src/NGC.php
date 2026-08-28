@@ -61,6 +61,7 @@ final class NGC
         $programVarsZp = $this->renderTemplate('program_vars_zp', $context);
         $programVarsRam = $this->renderTemplate('program_vars_ram', $context);
         $programInit = $this->renderTemplate('program_init', $context);
+        $programHitboxEngine = $this->renderTemplate('program_hitbox_engine', $context);
         $programRules = $this->renderTemplate('program_rules', $context);
 
         // O bloco 'music' traz motor + dados juntos, separados por um marcador
@@ -99,6 +100,7 @@ final class NGC
         $builder->add($programInit);
         $builder->add($mainLoop);
         $builder->add($gameFlow);
+        $builder->add($programHitboxEngine);
         $builder->add($programRules);
         $builder->add($paletteData);
         $builder->add($backgroundTables);
@@ -116,11 +118,11 @@ final class NGC
             'ready' => true,
             'partial' => false,
             'compiler' => 'NGC',
-            'version' => '0.22.0',
+            'version' => '0.23.0',
             'buildMode' => $context['buildMode'],
             'projectName' => $context['project']['name'] ?? 'meu-jogo',
             'asm' => $builder->build(),
-            'migrated' => ['header', 'vectors', 'zeropage', 'nmi', 'reset', 'input', 'main_loop', 'collision', 'player', 'scroll', 'background', 'background_tables', 'background_data', 'sprite_player', 'sprite_entities', 'sprite_data', 'sprite_chr', 'background_chr', 'music', 'game_flow', 'palette_data', 'program_vars', 'program_rules'],
+            'migrated' => ['header', 'vectors', 'zeropage', 'nmi', 'reset', 'input', 'main_loop', 'collision', 'player', 'scroll', 'background', 'background_tables', 'background_data', 'sprite_player', 'sprite_entities', 'sprite_data', 'sprite_chr', 'background_chr', 'music', 'game_flow', 'palette_data', 'program_vars', 'program_rules', 'program_hitbox_engine'],
         ];
 
         if (!empty($request['debug'])) {

@@ -378,112 +378,82 @@ const Project = {
     }catch(e){
       alert("Erro ao abrir .nms: " + e);
     }
-  }
-};
-document.getElementById('openNMS')?.addEventListener('change', e=>{
-  const f = e.target.files[0];
-  if(f) Project.loadFromFile(f);
-});
+  },
+  async loadProjectFromBackend(projectId) {
 
-/* =========================================================
-   ABERTURA DE PROJETO VINDO DO DASHBOARD
-   ========================================================= */
-
-   (async function loadProjectFromDashboard() {
-
-    const nmsText =
-      sessionStorage.getItem(
-        'ngc_open_project'
-      );
-  
-    if(!nmsText) return;
-  
-  
-    const fileName =
-      sessionStorage.getItem(
-        'ngc_open_project_filename'
-      ) ||
-      'projeto.nms';
-  
-  
-    /*
-     * Remove imediatamente da sessão.
-     * Um refresh não deve reabrir o projeto.
-     */
-  
-    sessionStorage.removeItem(
-      'ngc_open_project'
-    );
-  
-    sessionStorage.removeItem(
-      'ngc_open_project_filename'
-    );
-  
-  
     try {
   
-      /*
-       * IMPORTANTE:
-       *
-       * O Dashboard deve entregar o JSON NMS
-       * completo, incluindo:
-       *
-       *   chr
-       *   palettes
-       *   metatiles
-       *   backgrounds
-       *   phases
-       *   characters
-       *   sounds
-       *   etc.
-       */
-  
-      const json =
-        typeof nmsText === 'string'
-          ? JSON.parse(nmsText)
-          : nmsText;
-  
-  
-      /*
-       * Não aceita projeto sem CHR.
-       *
-       * NÃO usamos assets/novo.chr aqui.
-       *
-       * O novo.chr é somente para projetos NOVOS.
-       */
-  
-      if(
-        !Array.isArray(json.chr) ||
-        json.chr.length === 0
-      ){
-  
-        console.error(
-          'NMS recebido do backend não possui CHR válido.',
-          json
+      const response =
+        await fetch(
+          `backend/projects/load.php?id=${encodeURIComponent(projectId)}`,
+          {
+            method: 'GET',
+            credentials: 'same-origin'
+          }
         );
   
+  
+      const data =
+        await response.json();
+  
+  
+      if (
+        !response.ok ||
+        !data.success
+      ) {
   
         alert(
-          'Erro: o projeto recebido do servidor não possui dados CHR válidos.'
+          data.message ||
+          'Não foi possível carregar o projeto.'
         );
   
+        return false;
+      }
   
-        return;
+  
+      const nmsData =
+        data.nms;
+  
+  
+      if (!nmsData) {
+  
+        alert(
+          'O servidor não retornou o conteúdo NMS do projeto.'
+        );
+  
+        return false;
       }
   
   
       /*
-       * Cria um File em memória para reutilizar
-       * exatamente o mesmo fluxo usado pelo
-       * botão "Abrir .nms".
+       * O backend entrega o NMS completo.
+       *
+       * NÃO usamos:
+       *
+       *   assets/novo.chr
+       *   template
+       *   newProject()
+       *
+       * O CHR vem exclusivamente do projeto.
        */
+  
+      const nmsText =
+        typeof nmsData === 'string'
+          ? nmsData
+          : JSON.stringify(nmsData);
+  
+  
+      const fileName =
+        data.project?.filename ||
+        'projeto.nms';
+  
   
       const file =
         new File(
-          [JSON.stringify(json)],
+          [nmsText],
           fileName.endsWith('.nms')
             ? fileName
-            : fileName + '.nms',
+            : `${fileName}.nms`,
           {
             type: 'application/json'
           }
@@ -491,31 +461,62 @@ document.getElementById('openNMS')?.addEventListener('change', e=>{
   
   
       /*
-       * IMPORTANTE:
-       *
-       * Não chamamos newProject().
-       * Não carregamos assets/novo.chr.
-       *
-       * O loadFromFile() passa a ser o único
-       * responsável pelo projeto existente.
+       * Carrega exatamente pelo mesmo
+       * caminho usado para abrir um .nms
+       * localmente.
        */
   
-      await Project.loadFromFile(file);
+      await this.loadFromFile(file);
+  
+  
+      /*
+       * Remove o parâmetro da URL depois
+       * que o projeto foi carregado.
+       *
+       * Assim um refresh não precisa
+       * necessariamente repetir o carregamento.
+       */
+  
+      try {
+  
+        const cleanUrl =
+          window.location.pathname;
+  
+        window.history.replaceState(
+          {},
+          document.title,
+          cleanUrl
+        );
+  
+      } catch(e) {}
+  
+  
+      return true;
   
   
     } catch(error) {
   
       console.error(
-        'Erro ao abrir projeto vindo do Dashboard:',
+        'Erro ao carregar projeto do backend:',
         error
       );
   
   
       alert(
-        'Erro ao abrir o projeto: ' +
+        'Erro ao carregar o projeto: ' +
         (error.message || error)
       );
   
+  
+      return false;
     }
   
-  })();
+  }
+
+
+};
+document.getElementById('openNMS')?.addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(f) Project.loadFromFile(f);
+});
+

@@ -72,6 +72,11 @@ ch2_pos:   .res 1
 .segment "ZEROPAGE"
 pv_idle:        .res 2  ; Camada 6: frames desde o ultimo input (P1-IDLE)
 pv_game_paused: .res 1  ; Camada 6: acao Pausar o jogo
+pv_ev_oob:      .res 1  ; Camada 6 Fase 2: flag nativa "Fora dos limites" (pulso)
+pv_ev_enter:    .res 1  ; Camada 6 Fase 2: flag nativa "Entrou na tela" (pulso)
+pv_hb_target:   .res 1  ; Camada 6 Fase 2: scratch do check_hbobj_hit
+pv_hb_scr_x:    .res 1  ; Camada 6 Fase 2: scratch do check_hbobj_hit
+pv_terr_target: .res 1  ; Camada 6 Fase 2: scratch do check_terrain_type
 pv_z_Vidas_3681: .res 1  ; var "Vidas" (byte)
 
 .segment "CODE"
@@ -891,6 +896,8 @@ asr_noload:
   LDA PlayScreenTable,X
   STA cur_screen
   JSR spawn_enemies
+  LDA #1
+  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela" (pulso de 1 frame)
   RTS
 
 advance_screen_left:
@@ -922,6 +929,8 @@ asl_noload:
   LDA PlayScreenTable,X
   STA cur_screen
   JSR spawn_enemies
+  LDA #1
+  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela" (pulso de 1 frame)
   RTS
 
 clear_instances:
@@ -1986,6 +1995,8 @@ up_fall:
   STA player_y
   LDA #0
   STA jump_cnt
+  LDA #1
+  STA pv_ev_oob   ; Camada 6: flag nativa "Fora dos limites" (pulso de 1 frame)
 up_done:
   JSR animate_player
   JSR update_player_oam
@@ -2086,7 +2097,9 @@ st_splash:
   ; START no splash -> Fase 1 + spawn Hero
   LDA pad1_edge
   AND #%00001000
-  BEQ MainLoop
+  BNE st_splash_start
+  JMP MainLoop
+st_splash_start:
   LDA #1
   STA game_state
   LDA #1
@@ -2127,6 +2140,10 @@ prog_idle_done:
   JSR update_enemies
 st_play_paused:
   JSR run_rules
+  ; Camada 6: flags nativas sao pulso de 1 frame - zera depois das regras rodarem
+  LDA #0
+  STA pv_ev_oob
+  STA pv_ev_enter
   ; SELECT -> Game Over
   LDA pad1_edge
   AND #%00000100
@@ -2143,13 +2160,103 @@ st_gameover:
   ; START no Game Over -> Splash
   LDA pad1_edge
   AND #%00001000
-  BEQ MainLoop
+  BNE st_gameover_restart
+  JMP MainLoop
+st_gameover_restart:
   LDA #0
   STA game_state
   JSR hide_player
   LDA #0
   JSR load_screen
   JMP MainLoop
+
+; ---- NGC Camada 6 Fase 2: motor de hitbox ----
+HbTriggerScr:
+  .byte 0
+HbTriggerX:
+  .byte 0
+HbTriggerY:
+  .byte 0
+HbTriggerObj:
+  .byte 0
+
+; A(entrada) = tipo de terreno esperado (1=solido, 2=plataforma).
+; Devolve em A: 1 se o tile sob os pes do heroi bate, senao 0.
+; Sub-rotina isolada (scratch proprio) - nao mexe no estado que
+; check_ground/check_wall_at ja usam pro motor de fisica.
+check_terrain_type:
+  STA pv_terr_target
+  LDA player_y
+  CLC
+  ADC #16
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  LDA player_x
+  CLC
+  ADC #7
+  JSR world_col_from
+  JSR get_collision2
+  LDA col_result
+  CMP pv_terr_target
+  BEQ ctt_yes
+  LDA #0
+  RTS
+ctt_yes:
+  LDA #1
+  RTS
+
+; A(entrada) = id numerico do objeto de hitbox (dano/warp) procurado.
+; Devolve em A: 1 se alguma instancia desse objeto na tela atual
+; esta sobrepondo o corpo do heroi, senao 0.
+check_hbobj_hit:
+  STA pv_hb_target
+  LDX #0
+chh_loop:
+  CPX #0  ; sem triggers -> CPX #0, o loop nunca entra
+  BEQ chh_no
+  LDA HbTriggerObj,X
+  CMP pv_hb_target
+  BNE chh_next
+  LDA HbTriggerScr,X
+  CMP cur_screen
+  BNE chh_next
+  ; posicao na tela do trigger (mesma logica dos inimigos): x - scroll_x
+  LDA HbTriggerX,X
+  SEC
+  SBC scroll_x
+  BCC chh_next
+  STA pv_hb_scr_x
+  ; AABB vs corpo do heroi (mesma convencao de check_player_enemy_hit)
+  LDA player_x
+  CLC
+  ADC #14
+  CMP pv_hb_scr_x
+  BCC chh_next
+  LDA pv_hb_scr_x
+  CLC
+  ADC #14
+  CMP player_x
+  BCC chh_next
+  LDA player_y
+  CLC
+  ADC #16
+  CMP HbTriggerY,X
+  BCC chh_next
+  LDA HbTriggerY,X
+  CLC
+  ADC #16
+  CMP player_y
+  BCC chh_next
+  LDA #1
+  RTS
+chh_next:
+  INX
+  JMP chh_loop
+chh_no:
+  LDA #0
+  RTS
 
 ; ---- NGC Camada 6: motor de regras ----
 ScreenPhase:
@@ -2201,16 +2308,17 @@ prule_10_scope_skip:
 
 ; regra: Cair no buraco
 prule_0:
-  ; SE hitbox: Fase 2 (motor de colisao generico ainda nao existe) - sempre falso
-  JMP prule_0_end
+  ; SE hitbox nativo: out_of_bounds
+  LDA pv_ev_oob
+  BEQ prule_0_end
   ; SUBTRAIR byte Vidas 1 (sem clamp - estoura como aritmetica 6502 padrao)
   SEC
   LDA pv_z_Vidas_3681
   SBC #1
   STA pv_z_Vidas_3681
-  ; Acao 'spawn_character': Fase 2 (subsistema ainda nao existe no jogo) - no-op
-  ; Acao 'play_sound': Fase 2 (subsistema ainda nao existe no jogo) - no-op
-  ; SE hitbox: Fase 2 (motor de colisao generico ainda nao existe) - sempre falso
+  ; Acao 'spawn_character': Fase 3 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'play_sound': Fase 3 (subsistema ainda nao existe no jogo) - no-op
+  ; SE hitbox de personagem (body/attack/hurt): Fase 3 (depende de offsets por frame) - sempre falso
   JMP prule_0_end
 prule_0_end:
   RTS
@@ -2219,7 +2327,7 @@ prule_0_end:
 prule_1:
   ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
   JMP prule_1_end
-  ; Acao 'move_character': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'move_character': Fase 3 (subsistema ainda nao existe no jogo) - no-op
 prule_1_end:
   RTS
 
@@ -2227,8 +2335,8 @@ prule_1_end:
 prule_2:
   ; SE evento: nao-input (custom/menu) - Fase 2, sempre falso
   JMP prule_2_end
-  ; Acao 'spawn_character': Fase 2 (subsistema ainda nao existe no jogo) - no-op
-  ; Acao 'play_sound': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'spawn_character': Fase 3 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'play_sound': Fase 3 (subsistema ainda nao existe no jogo) - no-op
 prule_2_end:
   RTS
 
@@ -2236,7 +2344,7 @@ prule_2_end:
 prule_3:
   ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
   JMP prule_3_end
-  ; Acao 'move_character': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'move_character': Fase 3 (subsistema ainda nao existe no jogo) - no-op
 prule_3_end:
   RTS
 
@@ -2244,7 +2352,7 @@ prule_3_end:
 prule_4:
   ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
   JMP prule_4_end
-  ; Acao 'move_character': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'move_character': Fase 3 (subsistema ainda nao existe no jogo) - no-op
 prule_4_end:
   RTS
 
@@ -2261,34 +2369,35 @@ prule_5:
   STA player_y
   LDA #0
   STA jump_cnt
-  ; Acao 'goto_warp': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao: Ir para Warp - tela de destino nao encontrada, ignorado
 prule_5_end:
   RTS
 
 ; regra: tocar inimigo
 prule_6:
-  ; SE hitbox: Fase 2 (motor de colisao generico ainda nao existe) - sempre falso
+  ; SE hitbox de personagem (body/attack/hurt): Fase 3 (depende de offsets por frame) - sempre falso
   JMP prule_6_end
   ; SUBTRAIR byte Vidas 1 (sem clamp - estoura como aritmetica 6502 padrao)
   SEC
   LDA pv_z_Vidas_3681
   SBC #1
   STA pv_z_Vidas_3681
-  ; Acao 'spawn_character': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'spawn_character': Fase 3 (subsistema ainda nao existe no jogo) - no-op
 prule_6_end:
   RTS
 
 ; regra: spaw enemy
 prule_7:
-  ; SE hitbox: Fase 2 (motor de colisao generico ainda nao existe) - sempre falso
-  JMP prule_7_end
-  ; Acao 'spawn_character': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+  ; SE hitbox nativo: enter_screen
+  LDA pv_ev_enter
+  BEQ prule_7_end
+  ; Acao 'spawn_character': Fase 3 (subsistema ainda nao existe no jogo) - no-op
 prule_7_end:
   RTS
 
 ; regra: matar inimigo
 prule_8:
-  ; SE hitbox: Fase 2 (motor de colisao generico ainda nao existe) - sempre falso
+  ; SE hitbox de personagem (body/attack/hurt): Fase 3 (depende de offsets por frame) - sempre falso
   JMP prule_8_end
   ; Acao: Matar (todas as instancias do personagem-alvo)
   LDX #0
@@ -2309,7 +2418,7 @@ prule_8_end:
 prule_9:
   ; SE evento: nao-input (custom/menu) - Fase 2, sempre falso
   JMP prule_9_end
-  ; Acao 'shoot': Fase 2 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'shoot': Fase 3 (subsistema ainda nao existe no jogo) - no-op
 prule_9_end:
   RTS
 

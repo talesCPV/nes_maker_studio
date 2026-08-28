@@ -16,7 +16,7 @@ then
     git add css/
     git add js/
     git add projetos/
-    git add ngc/
+    git add data/
     git add commit.sh
     git add dashboard.html
     git add login.html
