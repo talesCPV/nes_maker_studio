@@ -1,3 +1,51 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NGC - Login</title><link rel="stylesheet" href="css/auth.css"></head><body><div class="container"><div class="card"><h1>NGC</h1><h2>Entrar</h2><form id="loginForm"><label for="email">E-mail</label><input id="email" type="email" required autocomplete="email"><label for="password">Senha</label><input id="password" type="password" required autocomplete="current-password"><button type="submit">Entrar</button></form><div id="message" class="message"></div><p>Ainda não possui conta? <a href="register.html">Criar conta</a></p></div></div><script>
-document.getElementById('loginForm').addEventListener('submit',async e=>{e.preventDefault();const m=document.getElementById('message');m.textContent='Entrando...';try{const r=await fetch('backend/auth/login.php',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({email:email.value,password:password.value})});const d=await r.json();if(d.success){location.href='dashboard.html';return}m.textContent=d.message||'Não foi possível entrar.'}catch(x){m.textContent='Erro de comunicação com o servidor.'}});
-</script></body></html>
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>NGC - Login</title>
+    <link rel="stylesheet" href="css/auth.css">
+</head>
+
+<body>
+    <div class="container">
+        <div class="card">
+            <img class="img-logo" src="assets/logo.png" alt="NGC">
+            <h2>Entrar</h2>
+            <form id="loginForm"><label for="email">E-mail</label><input id="email" type="email" required autocomplete="email"><label for="password">Senha</label><input id="password" type="password" required autocomplete="current-password"><button type="submit">Entrar</button></form>
+            <div id="message" class="message"></div>
+            <p>Ainda não possui conta? <a href="register.html">Criar conta</a></p>
+        </div>
+    </div>
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const m = document.getElementById('message');
+            m.textContent = 'Entrando...';
+            try {
+                const r = await fetch('backend/auth/login.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        email: email.value,
+                        password: password.value
+                    })
+                });
+                const d = await r.json();
+                if (d.success) {
+                    location.href = 'dashboard.html';
+                    return
+                }
+                m.textContent = d.message || 'Não foi possível entrar.'
+            } catch (x) {
+                m.textContent = 'Erro de comunicação com o servidor.'
+            }
+        });
+    </script>
+</body>
+
+</html>

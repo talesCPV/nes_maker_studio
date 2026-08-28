@@ -25,6 +25,10 @@ return [
         $lines[] = 'pv_hb_target:   .res 1  ; Camada 6 Fase 2: scratch do check_hbobj_hit';
         $lines[] = 'pv_hb_scr_x:    .res 1  ; Camada 6 Fase 2: scratch do check_hbobj_hit';
         $lines[] = 'pv_terr_target: .res 1  ; Camada 6 Fase 2: scratch do check_terrain_type';
+        $ruleStateBytes = (int)($ctx['program']['ruleStateBytes'] ?? 0);
+        for ($i = 0; $i < $ruleStateBytes; $i++) {
+            $lines[] = "pv_rs{$i}: .res 1  ; Camada 6 Fase 2.1: bit de estado (disparo por borda) de ate 8 regra(s)";
+        }
         $seen = [];
         foreach ($alloc['vars'] as $v) {
             if (!($v['zeroPage'] ?? false)) continue;

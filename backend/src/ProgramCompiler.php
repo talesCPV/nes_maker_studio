@@ -129,7 +129,18 @@ final class ProgramCompiler
         foreach ($rules as $rule) {
             if (!is_array($rule) || empty($rule['steps']) || !is_array($rule['steps'])) continue;
             $label = "prule_{$ri}";
-            $ruleBodies[] = $this->compileRule($label, $ri, $rule, $alloc, $eventById, $charIndexById, $heroIds, $numInstances, $hbCtx);
+            // Fase 2.1: 1 bit de estado por regra (empacotado 8/byte, mesma
+            // convenção das variáveis bool) - a regra só EXECUTA os efeitos/
+            // ações na transição falso->verdadeiro das condições, não em todo
+            // frame em que elas continuarem batendo. Sem isso, uma regra tipo
+            // "SE vida == 0 ENTÃO Matar + Ir para Warp" dispara sem parar
+            // enquanto a vida ficar em 0 (ex: Matar/Warp toda vez, muitas
+            // vezes por segundo) - causa real de comportamento errático e,
+            // se a ação mexe em PPU (ex: goto_warp -> load_screen), pode
+            // corromper a tela.
+            $bitGroup = 'pv_rs' . intdiv($ri, 8);
+            $bitIdx = $ri % 8;
+            $ruleBodies[] = $this->compileRule($label, $ri, $rule, $alloc, $eventById, $charIndexById, $heroIds, $numInstances, $hbCtx, $bitGroup, $bitIdx);
             $scope = (string)($rule['scope'] ?? 'global');
             if ($scope === 'global') {
                 $dispatch[] = "  JSR {$label}";
@@ -152,6 +163,7 @@ final class ProgramCompiler
             'dispatch' => $dispatch,
             'screenPhase' => $screenPhase,
             'hbTriggers' => $triggers,
+            'ruleStateBytes' => intdiv($ri + 7, 8),
         ];
     }
 
@@ -202,29 +214,66 @@ final class ProgramCompiler
         return ['vars' => $list, 'groupInitial' => $groupInitial];
     }
 
-    private function compileRule(string $label, int $ri, array $rule, array $alloc, array $eventById, array $charIndexById, array $heroIds, int $numInstances, array $hbCtx): string
+    private function compileRule(string $label, int $ri, array $rule, array $alloc, array $eventById, array $charIndexById, array $heroIds, int $numInstances, array $hbCtx, string $bitGroup, int $bitIdx): string
     {
-        $lines = [];
-        $lines[] = "; regra: " . (string)($rule['name'] ?? $label);
-        $lines[] = "{$label}:";
+        $mask = 1 << $bitIdx;
+        $condFail = "{$label}_cond";  // {$condFail}_end = alvo de falha das condicoes (ver compileIf*)
+        $condLines = [];
+        $restLines = [];
         $si = 0;
+        $inLeadingConditions = true;
+        $hasLeadingCondition = false;
         foreach ($rule['steps'] as $step) {
             if (!is_array($step)) continue;
             $tag = "{$label}_s{$si}";
             $type = (string)($step['type'] ?? '');
-            if ($type === 'if_event') {
-                $lines = array_merge($lines, $this->compileIfEvent($tag, $label, $step, $eventById));
-            } elseif ($type === 'if_hitbox') {
-                $lines = array_merge($lines, $this->compileIfHitbox($tag, $label, $step, $hbCtx));
-            } elseif ($type === 'if_var') {
-                $lines = array_merge($lines, $this->compileIfVar($tag, $label, $step, $alloc));
-            } elseif (in_array($type, ['set_var', 'add_var', 'sub_var'], true)) {
-                $lines = array_merge($lines, $this->compileVarEffect($tag, $type, $step, $alloc));
-            } elseif ($type === 'action') {
-                $lines = array_merge($lines, $this->compileAction($tag, $step, $charIndexById, $heroIds, $numInstances, $hbCtx));
+            $isCondition = in_array($type, ['if_event', 'if_hitbox', 'if_var'], true);
+            if ($isCondition && $inLeadingConditions) {
+                $hasLeadingCondition = true;
+                if ($type === 'if_event') $condLines = array_merge($condLines, $this->compileIfEvent($tag, $condFail, $step, $eventById));
+                elseif ($type === 'if_hitbox') $condLines = array_merge($condLines, $this->compileIfHitbox($tag, $condFail, $step, $hbCtx));
+                else $condLines = array_merge($condLines, $this->compileIfVar($tag, $condFail, $step, $alloc));
+            } else {
+                $inLeadingConditions = false;
+                if ($type === 'if_event') $restLines = array_merge($restLines, $this->compileIfEvent($tag, $condFail, $step, $eventById));
+                elseif ($type === 'if_hitbox') $restLines = array_merge($restLines, $this->compileIfHitbox($tag, $condFail, $step, $hbCtx));
+                elseif ($type === 'if_var') $restLines = array_merge($restLines, $this->compileIfVar($tag, $condFail, $step, $alloc));
+                elseif (in_array($type, ['set_var', 'add_var', 'sub_var'], true)) $restLines = array_merge($restLines, $this->compileVarEffect($tag, $type, $step, $alloc));
+                elseif ($type === 'action') $restLines = array_merge($restLines, $this->compileAction($tag, $step, $charIndexById, $heroIds, $numInstances, $hbCtx));
             }
             $si++;
         }
+
+        $lines = [];
+        $lines[] = "; regra: " . (string)($rule['name'] ?? $label);
+        $lines[] = "{$label}:";
+        $lines = array_merge($lines, $condLines);
+
+        if (!$hasLeadingCondition) {
+            // Regra sem nenhuma condicao de entrada (só efeitos, ou começa
+            // direto com um efeito) - não tem "borda" pra detectar, mantém
+            // disparando todo frame como antes.
+            $lines = array_merge($lines, $restLines);
+            $lines[] = "{$label}_end:";
+            $lines[] = "  RTS";
+            return implode("\n", $lines);
+        }
+
+        // Chegou aqui = as condicoes de entrada bateram este frame.
+        $lines[] = "  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro";
+        $lines[] = "  LDA {$bitGroup}";
+        $lines[] = sprintf('  AND #$%02X', $mask);
+        $lines[] = "  BNE {$label}_end   ; ja estava ativa - nao repete";
+        $lines[] = "  LDA {$bitGroup}";
+        $lines[] = sprintf('  ORA #$%02X', $mask);
+        $lines[] = "  STA {$bitGroup}";
+        $lines = array_merge($lines, $restLines);
+        $lines[] = "  JMP {$label}_end";
+        $lines[] = "{$label}_cond_end:";
+        $lines[] = "  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)";
+        $lines[] = "  LDA {$bitGroup}";
+        $lines[] = sprintf('  AND #$%02X', (~$mask) & 0xFF);
+        $lines[] = "  STA {$bitGroup}";
         $lines[] = "{$label}_end:";
         $lines[] = "  RTS";
         return implode("\n", $lines);

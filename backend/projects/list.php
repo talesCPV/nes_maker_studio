@@ -20,6 +20,7 @@ try {
             updated_at
          FROM projects
          WHERE user_id = :user_id
+         AND is_deleted = 0
          ORDER BY updated_at DESC, id DESC'
     );
 

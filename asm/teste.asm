@@ -77,6 +77,8 @@ pv_ev_enter:    .res 1  ; Camada 6 Fase 2: flag nativa "Entrou na tela" (pulso)
 pv_hb_target:   .res 1  ; Camada 6 Fase 2: scratch do check_hbobj_hit
 pv_hb_scr_x:    .res 1  ; Camada 6 Fase 2: scratch do check_hbobj_hit
 pv_terr_target: .res 1  ; Camada 6 Fase 2: scratch do check_terrain_type
+pv_rs0: .res 1  ; Camada 6 Fase 2.1: bit de estado (disparo por borda) de ate 8 regra(s)
+pv_rs1: .res 1  ; Camada 6 Fase 2.1: bit de estado (disparo por borda) de ate 8 regra(s)
 pv_z_Vidas_3681: .res 1  ; var "Vidas" (byte)
 
 .segment "CODE"
@@ -2310,7 +2312,14 @@ prule_10_scope_skip:
 prule_0:
   ; SE hitbox nativo: out_of_bounds
   LDA pv_ev_oob
-  BEQ prule_0_end
+  BEQ prule_0_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs0
+  AND #$01
+  BNE prule_0_end   ; ja estava ativa - nao repete
+  LDA pv_rs0
+  ORA #$01
+  STA pv_rs0
   ; SUBTRAIR byte Vidas 1 (sem clamp - estoura como aritmetica 6502 padrao)
   SEC
   LDA pv_z_Vidas_3681
@@ -2319,40 +2328,98 @@ prule_0:
   ; Acao 'spawn_character': Fase 3 (subsistema ainda nao existe no jogo) - no-op
   ; Acao 'play_sound': Fase 3 (subsistema ainda nao existe no jogo) - no-op
   ; SE hitbox de personagem (body/attack/hurt): Fase 3 (depende de offsets por frame) - sempre falso
+  JMP prule_0_cond_end
   JMP prule_0_end
+prule_0_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs0
+  AND #$FE
+  STA pv_rs0
 prule_0_end:
   RTS
 
 ; regra: rigth
 prule_1:
   ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
-  JMP prule_1_end
+  JMP prule_1_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs0
+  AND #$02
+  BNE prule_1_end   ; ja estava ativa - nao repete
+  LDA pv_rs0
+  ORA #$02
+  STA pv_rs0
   ; Acao 'move_character': Fase 3 (subsistema ainda nao existe no jogo) - no-op
+  JMP prule_1_end
+prule_1_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs0
+  AND #$FD
+  STA pv_rs0
 prule_1_end:
   RTS
 
 ; regra: press start
 prule_2:
   ; SE evento: nao-input (custom/menu) - Fase 2, sempre falso
-  JMP prule_2_end
+  JMP prule_2_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs0
+  AND #$04
+  BNE prule_2_end   ; ja estava ativa - nao repete
+  LDA pv_rs0
+  ORA #$04
+  STA pv_rs0
   ; Acao 'spawn_character': Fase 3 (subsistema ainda nao existe no jogo) - no-op
   ; Acao 'play_sound': Fase 3 (subsistema ainda nao existe no jogo) - no-op
+  JMP prule_2_end
+prule_2_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs0
+  AND #$FB
+  STA pv_rs0
 prule_2_end:
   RTS
 
 ; regra: jump
 prule_3:
   ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
-  JMP prule_3_end
+  JMP prule_3_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs0
+  AND #$08
+  BNE prule_3_end   ; ja estava ativa - nao repete
+  LDA pv_rs0
+  ORA #$08
+  STA pv_rs0
   ; Acao 'move_character': Fase 3 (subsistema ainda nao existe no jogo) - no-op
+  JMP prule_3_end
+prule_3_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs0
+  AND #$F7
+  STA pv_rs0
 prule_3_end:
   RTS
 
 ; regra: left
 prule_4:
   ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
-  JMP prule_4_end
+  JMP prule_4_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs0
+  AND #$10
+  BNE prule_4_end   ; ja estava ativa - nao repete
+  LDA pv_rs0
+  ORA #$10
+  STA pv_rs0
   ; Acao 'move_character': Fase 3 (subsistema ainda nao existe no jogo) - no-op
+  JMP prule_4_end
+prule_4_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs0
+  AND #$EF
+  STA pv_rs0
 prule_4_end:
   RTS
 
@@ -2361,7 +2428,14 @@ prule_5:
   ; SE variavel byte: Vidas == 0
   LDA pv_z_Vidas_3681
   CMP #0
-  BNE prule_5_end
+  BNE prule_5_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs0
+  AND #$20
+  BNE prule_5_end   ; ja estava ativa - nao repete
+  LDA pv_rs0
+  ORA #$20
+  STA pv_rs0
   ; Acao: Matar (heroi) - mesma logica de respawn da queda
   LDA #40
   STA player_x
@@ -2370,19 +2444,38 @@ prule_5:
   LDA #0
   STA jump_cnt
   ; Acao: Ir para Warp - tela de destino nao encontrada, ignorado
+  JMP prule_5_end
+prule_5_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs0
+  AND #$DF
+  STA pv_rs0
 prule_5_end:
   RTS
 
 ; regra: tocar inimigo
 prule_6:
   ; SE hitbox de personagem (body/attack/hurt): Fase 3 (depende de offsets por frame) - sempre falso
-  JMP prule_6_end
+  JMP prule_6_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs0
+  AND #$40
+  BNE prule_6_end   ; ja estava ativa - nao repete
+  LDA pv_rs0
+  ORA #$40
+  STA pv_rs0
   ; SUBTRAIR byte Vidas 1 (sem clamp - estoura como aritmetica 6502 padrao)
   SEC
   LDA pv_z_Vidas_3681
   SBC #1
   STA pv_z_Vidas_3681
   ; Acao 'spawn_character': Fase 3 (subsistema ainda nao existe no jogo) - no-op
+  JMP prule_6_end
+prule_6_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs0
+  AND #$BF
+  STA pv_rs0
 prule_6_end:
   RTS
 
@@ -2390,15 +2483,35 @@ prule_6_end:
 prule_7:
   ; SE hitbox nativo: enter_screen
   LDA pv_ev_enter
-  BEQ prule_7_end
+  BEQ prule_7_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs0
+  AND #$80
+  BNE prule_7_end   ; ja estava ativa - nao repete
+  LDA pv_rs0
+  ORA #$80
+  STA pv_rs0
   ; Acao 'spawn_character': Fase 3 (subsistema ainda nao existe no jogo) - no-op
+  JMP prule_7_end
+prule_7_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs0
+  AND #$7F
+  STA pv_rs0
 prule_7_end:
   RTS
 
 ; regra: matar inimigo
 prule_8:
   ; SE hitbox de personagem (body/attack/hurt): Fase 3 (depende de offsets por frame) - sempre falso
-  JMP prule_8_end
+  JMP prule_8_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs1
+  AND #$01
+  BNE prule_8_end   ; ja estava ativa - nao repete
+  LDA pv_rs1
+  ORA #$01
+  STA pv_rs1
   ; Acao: Matar (todas as instancias do personagem-alvo)
   LDX #0
 prule_8_s1_loop:
@@ -2411,25 +2524,57 @@ prule_8_s1_next:
   INX
   CPX #5
   BNE prule_8_s1_loop
+  JMP prule_8_end
+prule_8_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs1
+  AND #$FE
+  STA pv_rs1
 prule_8_end:
   RTS
 
 ; regra: tiro inimigo
 prule_9:
   ; SE evento: nao-input (custom/menu) - Fase 2, sempre falso
-  JMP prule_9_end
+  JMP prule_9_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs1
+  AND #$02
+  BNE prule_9_end   ; ja estava ativa - nao repete
+  LDA pv_rs1
+  ORA #$02
+  STA pv_rs1
   ; Acao 'shoot': Fase 3 (subsistema ainda nao existe no jogo) - no-op
+  JMP prule_9_end
+prule_9_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs1
+  AND #$FD
+  STA pv_rs1
 prule_9_end:
   RTS
 
 ; regra: Pause
 prule_10:
   ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
-  JMP prule_10_end
+  JMP prule_10_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs1
+  AND #$04
+  BNE prule_10_end   ; ja estava ativa - nao repete
+  LDA pv_rs1
+  ORA #$04
+  STA pv_rs1
   ; Acao: Pausar/despausar o jogo
   LDA pv_game_paused
   EOR #1
   STA pv_game_paused
+  JMP prule_10_end
+prule_10_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs1
+  AND #$FB
+  STA pv_rs1
 prule_10_end:
   RTS
 

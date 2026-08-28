@@ -90,10 +90,32 @@
                 + Novo projeto
             </button>
 
+            <button id="trashButton" class="secondary">
+                🗑 Lixeira
+            </button>
+
             <button id="logoutButton" class="secondary">
                 Sair
             </button>
 
+        </div>
+
+        <div class="card" id="trashCard" style="display:none">
+
+            <h2>🗑 Lixeira</h2>
+        
+            <div
+                id="trashMessage"
+                class="message"
+            >
+                Carregando...
+            </div>
+        
+            <div
+                id="trashList"
+                class="project-list"
+            ></div>
+        
         </div>
 
     </div>
@@ -341,87 +363,75 @@ async function loadProjects() {
         data.projects.forEach(
             project => {
 
-                const item =
-                    document.createElement(
-                        'div'
-                    );
-
-                item.className =
-                    'project';
-
-
-                const title =
-                    document.createElement(
-                        'h3'
-                    );
-
-                title.textContent =
-                    project.name;
-
-
-                const description =
-                    document.createElement(
-                        'p'
-                    );
-
-                description.textContent =
-                    project.description ||
-                    'Sem descrição.';
-
-
-                const id =
-                    document.createElement(
-                        'small'
-                    );
-
-                id.textContent =
-                    `Projeto #${project.id}`;
-
-                    item.appendChild(title);
-
-item.appendChild(description);
-
-item.appendChild(id);
+                const item = document.createElement('div');
+                item.className = 'project';
+                const title = document.createElement('h3');
+                title.textContent =project.name;
+                const description =document.createElement('p');
+                description.textContent =project.description ||'Sem descrição.';
+                const id = document.createElement('small');
+                id.textContent =`Projeto #${project.id}`;
+                item.appendChild(title);
+                item.appendChild(description);
+                item.appendChild(id);
 
 
 /* =========================================================
    AÇÕES DO PROJETO
    ========================================================= */
 
+
     const projectActions =
         document.createElement('div');
 
-        projectActions.className =
-            'project-actions';
+    projectActions.className =
+        'project-actions';
 
 
-        const openButton =
-            document.createElement('button');
+    const openButton =
+        document.createElement('button');
 
-        openButton.type = 'button';
+    openButton.textContent =
+        'Abrir';
 
-        openButton.textContent = 'Abrir';
-
-
-        openButton.addEventListener(
-            'click',
-            () => openProject(project.id)
-        );
+    openButton.addEventListener(
+        'click',
+        () => openProject(project.id)
+    );
 
 
-        projectActions.appendChild(
-            openButton
-        );
+    const deleteButton =
+        document.createElement('button');
+
+    deleteButton.textContent =
+        '🗑 Excluir';
+
+    deleteButton.className =
+        'secondary';
+
+    deleteButton.addEventListener(
+        'click',
+        () => deleteProject(
+            project.id,
+            project.name
+        )
+    );
 
 
-        item.appendChild(
-            projectActions
-        );
+    projectActions.appendChild(
+        openButton
+    );
+
+    projectActions.appendChild(
+        deleteButton
+    );
+
+    item.appendChild(
+        projectActions
+    );
 
 
-        projectList.appendChild(item);
-            }
-        );
+    projectList.appendChild(item);});
 
 
     } catch (error) {
@@ -437,6 +447,320 @@ item.appendChild(id);
     }
 }
 
+/* =========================================================
+   DELETAR PROJETOS
+   ========================================================= */
+
+async function deleteProject(
+    projectId,
+    projectName) {
+
+    const confirmed =
+        confirm(
+            `Enviar o projeto "${projectName}" para a lixeira?`
+        );
+
+    if (!confirmed) return;
+
+
+    try {
+
+        const response =
+            await fetch(
+                'backend/projects/delete.php',
+                {
+                    method: 'POST',
+
+                    headers: {
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    credentials:
+                        'same-origin',
+
+                    body:
+                        JSON.stringify({
+                            id: projectId
+                        })
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (
+            !response.ok ||
+            !data.success
+        ) {
+
+            alert(
+                data.message ||
+                'Não foi possível excluir o projeto.'
+            );
+
+            return;
+        }
+
+
+        await loadProjects();
+
+        /*
+         * Se a lixeira estiver aberta,
+         * atualiza também.
+         */
+
+        if (
+            typeof loadTrash === 'function'
+        ) {
+
+            await loadTrash();
+        }
+
+
+    } catch (error) {
+
+        console.error(
+            'Erro ao excluir projeto:',
+            error
+        );
+
+        alert(
+            'Erro de comunicação com o servidor.'
+        );
+    }
+}
+
+/* =========================================================
+   LIXEIRA
+   ========================================================= */
+
+async function loadTrash() {
+
+    const trashMessage =
+        document.getElementById(
+            'trashMessage'
+        );
+
+    const trashList =
+        document.getElementById(
+            'trashList'
+        );
+
+    if (!trashMessage || !trashList)
+        return;
+
+
+    trashMessage.textContent =
+        'Carregando lixeira...';
+
+    trashList.innerHTML = '';
+
+
+    try {
+
+        const response =
+            await fetch(
+                'backend/projects/trash.php',
+                {
+                    method: 'GET',
+                    credentials: 'same-origin'
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (
+            !response.ok ||
+            !data.success
+        ) {
+
+            trashMessage.textContent =
+                data.message ||
+                'Não foi possível carregar a lixeira.';
+
+            return;
+        }
+
+
+        if (
+            !data.projects ||
+            data.projects.length === 0
+        ) {
+
+            trashMessage.textContent =
+                'A lixeira está vazia.';
+
+            return;
+        }
+
+
+        trashMessage.textContent =
+            '';
+
+
+        data.projects.forEach(
+            project => {
+
+                const item =
+                    document.createElement('div');
+
+                item.className =
+                    'project';
+
+
+                const title =
+                    document.createElement('h3');
+
+                title.textContent =
+                    project.name;
+
+
+                const description =
+                    document.createElement('p');
+
+                description.textContent =
+                    project.description ||
+                    'Sem descrição.';
+
+
+                const id =
+                    document.createElement('small');
+
+                id.textContent =
+                    `Projeto #${project.id}`;
+
+
+                const actions =
+                    document.createElement('div');
+
+                actions.className =
+                    'project-actions';
+
+
+                const restore =
+                    document.createElement('button');
+
+                restore.textContent =
+                    '♻ Restaurar';
+
+
+                restore.addEventListener(
+                    'click',
+                    () => restoreProject(
+                        project.id,
+                        project.name
+                    )
+                );
+
+
+                actions.appendChild(
+                    restore
+                );
+
+
+                item.appendChild(title);
+                item.appendChild(description);
+                item.appendChild(id);
+                item.appendChild(actions);
+
+                trashList.appendChild(item);
+            }
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            'Erro ao carregar lixeira:',
+            error
+        );
+
+        trashMessage.textContent =
+            'Erro de comunicação com o servidor.';
+    }
+}
+
+/* =========================================================
+   RESTAURAR PROJETOS
+   ========================================================= */
+
+   async function restoreProject(
+    projectId,
+    projectName) {
+
+    const confirmed =
+        confirm(
+            `Restaurar o projeto "${projectName}"?`
+        );
+
+    if (!confirmed) return;
+
+
+    try {
+
+        const response =
+            await fetch(
+                'backend/projects/restore.php',
+                {
+                    method: 'POST',
+
+                    headers: {
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    credentials:
+                        'same-origin',
+
+                    body:
+                        JSON.stringify({
+                            id: projectId
+                        })
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (
+            !response.ok ||
+            !data.success
+        ) {
+
+            alert(
+                data.message ||
+                'Não foi possível restaurar o projeto.'
+            );
+
+            return;
+        }
+
+
+        await loadProjects();
+
+        await loadTrash();
+
+
+    } catch (error) {
+
+        console.error(
+            'Erro ao restaurar projeto:',
+            error
+        );
+
+        alert(
+            'Erro de comunicação com o servidor.'
+        );
+    }
+}
 
 /* =========================================================
    ABRIR MODAL
@@ -501,6 +825,44 @@ modal.addEventListener(
     }
 );
 
+
+/* =========================================================
+   ABRIR E FECHAR LIXEIRA
+   ========================================================= */
+
+   document
+    .getElementById('trashButton')
+    ?.addEventListener(
+        'click',
+        async () => {
+
+            const card =
+                document.getElementById(
+                    'trashCard'
+                );
+
+            if (!card) return;
+
+
+            const visible =
+                card.style.display !== 'none';
+
+
+            if (visible) {
+
+                card.style.display =
+                    'none';
+
+                return;
+            }
+
+
+            card.style.display =
+                'block';
+
+            await loadTrash();
+        }
+    );
 
 /* =========================================================
    CRIAR PROJETO

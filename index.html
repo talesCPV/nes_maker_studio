@@ -13,6 +13,8 @@
   <button class="icon-btn primary" title="Novo Projeto (Ctrl+N)" onclick="Project.newProject()">📄</button>
   <label class="icon-btn" title="Abrir Projeto .NMS (Ctrl+O)" style="cursor:pointer">📂<input type="file" id="openNMS" accept=".nms,.json" style="display:none"></label>
   <button class="icon-btn" title="Salvar Projeto .NMS (Ctrl+S)" onclick="Project.save()">💾</button>
+  <button class="icon-btn" title="Voltar para o Dashboard" onclick="goToDashboard()">🏠</button>
+
   <div class="divider"></div>
   <span style="font-size:11px;color:#00ff00">v0.6.5 FINAL - Scroll Fix Exato + CHR Page - FUNCIONANDO</span>
   <button class="icon-btn" title="Sobre" onclick="alert('NES Maker Studio v0.6.5 FINAL\nScroll fix exato do usuário\nCHR Page Selector\nOAM DMA removido conforme exemplo\nFUNCIONANDO PERFEITAMENTE')" style="margin-left:auto">❓</button>
@@ -184,6 +186,19 @@ window.addEventListener('DOMContentLoaded', async () => {
     }, 100);
 
   });
+
+  function goToDashboard() {
+
+    /*
+    * O usuário já está autenticado
+    * na sessão PHP.
+    */
+
+    window.location.href =
+        'dashboard.html';
+  }
+
+
 </script>
 </body>
 </html>
