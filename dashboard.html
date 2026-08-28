@@ -9,7 +9,6 @@
     <link rel="stylesheet" href="css/auth.css">
     <link rel="icon" href="assets/icon.png" type="image/png">
 
-
     <style>
         .project-list {
             display: grid;
@@ -53,7 +52,15 @@
             padding: 20px;
         }
 
-        .modal.open {
+        .trashCard, .newprojCard{
+            display: none;
+        }
+
+        .trashCard{
+            width: 80vw !important;
+        }
+
+        .open {
             display: flex;
         }
 
@@ -62,12 +69,23 @@
         }
 
         .close {
-            float: right;
-            background: #343b48;
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            font-size: 2em;
+            background: unset;
+            color: white;
+            border: unset;
         }
 
         .project-actions {
             margin-top: 12px;
+        }
+
+        @media (max-width: 480px) {
+            .trashCard{
+                width: 100vw;
+            }
         }
     </style>
 </head>
@@ -78,9 +96,9 @@
 
     <!-- CABEÇALHO -->
 
-    <div class="card dash-card">
+    <div class="card dash-card dash-head" >
 
-        <h1>NGC Dashboard</h1>
+        <img class="img-logo" src="assets/icon.png" alt="NGC">
 
         <p id="welcome">
             Verificando sessão...
@@ -97,28 +115,12 @@
             </button>
 
             <button id="logoutButton" class="secondary">
-                Sair
+                Logout
             </button>
 
         </div>
 
-        <div class="card dash-card" id="trashCard" style="display:none">
 
-            <h2>🗑 Lixeira</h2>
-        
-            <div
-                id="trashMessage"
-                class="message"
-            >
-                Carregando...
-            </div>
-        
-            <div
-                id="trashList"
-                class="project-list"
-            ></div>
-        
-        </div>
 
     </div>
 
@@ -155,14 +157,15 @@
     class="modal"
 >
 
-    <div class="card">
+    <div class="card newprojCard">
 
         <button
             id="closeModal"
             class="close"
             type="button"
+            onkeyup="closeModal"
         >
-            Fechar
+        &times;
         </button>
 
         <h2>Novo projeto</h2>
@@ -209,6 +212,24 @@
 
     </div>
 
+    <div class="card dash-card trashCard" >
+
+        <h2>🗑 Lixeira</h2>
+    
+        <div
+            id="trashMessage"
+            class="message"
+        >
+            Carregando...
+        </div>
+    
+        <div
+            id="trashList"
+            class="project-list"
+        ></div>
+    
+    </div>
+
 </div>
 
 
@@ -218,23 +239,21 @@
    ELEMENTOS DA INTERFACE
    ========================================================= */
 
-const welcome =
-    document.getElementById('welcome');
+const welcome = document.getElementById('welcome');
 
-const projectMessage =
-    document.getElementById('projectMessage');
+const projectMessage = document.getElementById('projectMessage');
 
-const projectList =
-    document.getElementById('projectList');
+const projectList = document.getElementById('projectList');
 
-const modal =
-    document.getElementById('newProjectModal');
+const modal = document.getElementById('newProjectModal');
 
-const projectForm =
-    document.getElementById('projectForm');
+const trashCard = document.querySelector('.trashCard');
 
-const createMessage =
-    document.getElementById('createMessage');
+const newprojCard = document.querySelector('.newprojCard');
+
+const projectForm = document.getElementById('projectForm');
+
+const createMessage = document.getElementById('createMessage');
 
 
 /* =========================================================
@@ -541,6 +560,10 @@ async function deleteProject(
 
 async function loadTrash() {
 
+    modal.classList.add(
+                'open'
+            );
+
     const trashMessage =
         document.getElementById(
             'trashMessage'
@@ -775,15 +798,11 @@ document
     .addEventListener(
         'click',
         () => {
-
-            createMessage.textContent =
-                '';
-
+            createMessage.textContent = '';
             projectForm.reset();
+            modal.classList.add('open');
+            newprojCard.classList.add('open');
 
-            modal.classList.add(
-                'open'
-            );
         }
     );
 
@@ -796,16 +815,11 @@ document
     .getElementById(
         'closeModal'
     )
-    .addEventListener(
-        'click',
-        () => {
-
-            modal.classList.remove(
-                'open'
-            );
-        }
-    );
-
+    .addEventListener('click',() => { 
+        modal.classList.remove('open');
+        trashCard.classList.remove('open');
+        newprojCard.classList.remove('open');
+    });
 
 /*
  * Também permite fechar clicando
@@ -820,9 +834,9 @@ modal.addEventListener(
             event.target === modal
         ) {
 
-            modal.classList.remove(
-                'open'
-            );
+            modal.classList.remove('open');
+            trashCard.classList.remove('open');
+            newprojCard.classList.remove('open');
         }
     }
 );
@@ -838,6 +852,10 @@ modal.addEventListener(
         'click',
         async () => {
 
+
+            modal.classList.add('open');
+            trashCard.classList.add('open');
+/*
             const card =
                 document.getElementById(
                     'trashCard'
@@ -861,7 +879,7 @@ modal.addEventListener(
 
             card.style.display =
                 'block';
-
+*/
             await loadTrash();
         }
     );

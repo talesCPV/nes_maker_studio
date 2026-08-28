@@ -238,6 +238,15 @@ button[type="submit"]:active {
     width: 80vw;
 }
 
+.dash-head{
+  flex-direction: row;
+  justify-content: space-between;
+}
+
+.dash-head .img-logo{
+  max-height: 100px;
+}
+
 .project-list{
   width: 100%;
 }
