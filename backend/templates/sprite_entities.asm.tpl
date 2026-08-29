@@ -560,63 +560,12 @@ ami_3:
 update_enemies:
   JSR update_instances_ai
   JSR animate_instances
-  JSR check_player_enemy_hit
   JSR update_instances_oam
   RTS
 
-check_player_enemy_hit:
-  LDA player_on
-  BEQ cpe_done
-  LDX #0
-cpe_loop:
-  LDA inst_on,X
-  BEQ cpe_next
-  ; posicao do inimigo NA TELA (mesma logica de update_instances_oam): inst_x - scroll_x.
-  ; Sem isso, a colisao usava a posicao "de nascimento" do inimigo e desalinhava
-  ; do sprite visivel conforme o scroll avançava (bug: só batia certo no instante do spawn).
-  LDA inst_x,X
-  SEC
-  SBC scroll_x
-  BCC cpe_next        ; saiu da tela pela esquerda - sem colisao possivel
-  STA en_tmp
-  LDA player_x
-  CLC
-  ADC #12
-  CMP en_tmp
-  BCC cpe_next
-  LDA en_tmp
-  CLC
-  ADC #12
-  CMP player_x
-  BCC cpe_next
-  LDA player_y
-  CLC
-  ADC #14
-  CMP inst_y,X
-  BCC cpe_next
-  LDA inst_y,X
-  CLC
-  ADC #14
-  CMP player_y
-  BCC cpe_next
-  JMP player_hurt
-cpe_next:
-  INX
-  CPX #@@NUM_INSTANCES@@
-  BEQ cpe_done
-  JMP cpe_loop
-cpe_done:
-  RTS
-
-player_hurt:
-  ; respawn simples na tela atual
-  LDA #40
-  STA player_x
-  LDA #160
-  STA player_y
-  LDA #0
-  STA jump_cnt
-  RTS
+; check_player_enemy_hit/player_hurt removidos (Camada 6 Fase 3) - a colisão
+; herói-inimigo agora é 100% controlada pelas regras (SE hitbox de
+; personagem... toca...), não tem mais bump-back automático embutido.
 
 hide_player:
   LDA #0
