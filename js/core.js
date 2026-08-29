@@ -167,6 +167,21 @@ const Project = {
     this.fileName = "meu-jogo.nms";
     this.projectId = null;
     this.serverSaved = false;
+
+    // Novo projeto: carrega assets/novo.chr de forma explícita (force),
+    // depois carimba os tiles utilitários em cima.
+    if(typeof CHR !== 'undefined'){
+      try {
+        if(CHR.setSuppressDefaultChr) CHR.setSuppressDefaultChr(false);
+        if(typeof CHR.loadDefaultCHR === 'function'){
+          await CHR.loadDefaultCHR(true);
+          this.data.chr = Array.from(CHR.getBuffer());
+        }
+      } catch(e) {
+        console.log('Falha ao carregar novo.chr no novo projeto:', e);
+      }
+    }
+
     this.stampDefaultUtilityTiles(this.data.chr);
     this.loadIntoEditors();
     this.updateUI();
@@ -218,8 +233,12 @@ const Project = {
     const spEl = document.getElementById('infoSplash');
     if(spEl) spEl.textContent = (this.data.splashScreens?.length || 0);
   },
-  save(){
-    if(!this.data){ alert("Nenhum projeto"); return; }
+  /**
+   * Sincroniza o estado dos editores em this.data
+   * (sem gravar em lugar nenhum).
+   */
+  collectProjectData(){
+    if(!this.data) return null;
     try{
       this.data.name = document.getElementById('dashProjName')?.value || this.data.name || "Meu Jogo";
       this.data.author = document.getElementById('dashAuthor')?.value || this.data.author || "";
@@ -271,15 +290,244 @@ const Project = {
     }
     this.data.savedAt = Date.now();
     this.data.version = "0.7.1";
-    const blob = new Blob([JSON.stringify(this.data, null, 2)], { type: "application/json" });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = this.fileName.endsWith('.nms') ? this.fileName : this.fileName.replace('.json','') + ".nms";
-    a.click();
-    localStorage.setItem('nms_autosave', JSON.stringify(this.data));
-    const itemCount = this.data.sounds?.items?.length || 0;
-    this.status(`salvo v0.7.1 - ${this.data.splashScreens?.length||0} splash • ${itemCount} peca(s) de som`);
+    return this.data;
   },
+
+  /**
+   * Cria um projeto vazio no backend (template) e devolve o id.
+   * parentProjectId opcional → grava parent_project_id (fork).
+   */
+  async createProjectOnBackend(name, description, parentProjectId){
+    const body = {
+      name: name || 'Meu Jogo',
+      description: description || ''
+    };
+    if(parentProjectId){
+      body.parent_project_id = parentProjectId;
+    }
+    const response = await fetch('backend/projects/create.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(body)
+    });
+    const data = await response.json().catch(() => ({}));
+    if(!response.ok || !data.success){
+      const err = new Error(data.message || 'Não foi possível criar o projeto no servidor.');
+      err.status = response.status;
+      err.payload = data;
+      throw err;
+    }
+    return data.project;
+  },
+
+  /**
+   * Envia thumbnail PNG (data URL) para o backend.
+   * O servidor só grava se ainda não existir arquivo.
+   */
+  async uploadThumbnailIfMissing(dataUrl){
+    if(!this.projectId || !dataUrl) return { skipped: true };
+    try {
+      const response = await fetch('backend/projects/thumbnail.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          project_id: this.projectId,
+          image: dataUrl
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      return data;
+    } catch(e) {
+      console.warn('Falha ao enviar thumbnail:', e);
+      return { success: false, message: String(e) };
+    }
+  },
+
+  /**
+   * Sobrescreve o .nms de um projeto existente no backend.
+   */
+  async saveProjectToBackend(projectId, nms){
+    const response = await fetch('backend/projects/save.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        project_id: projectId,
+        nms: nms
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if(!response.ok || !data.success){
+      const err = new Error(data.message || 'Não foi possível salvar o projeto no servidor.');
+      err.status = response.status;
+      err.payload = data;
+      throw err;
+    }
+    return data;
+  },
+
+  /**
+   * Salva no backend.
+   * - Com projectId: sobrescreve o arquivo.
+   * - Sem projectId: pede nome, cria no backend e grava o NMS atual.
+   */
+  async save(){
+    if(!this.data){ alert("Nenhum projeto"); return false; }
+
+    const nms = this.collectProjectData();
+    if(!nms){ alert("Nenhum projeto"); return false; }
+
+    // Sem id: precisa criar o projeto no servidor primeiro
+    if(!this.projectId){
+      const suggested = (nms.name || 'Meu Jogo').trim() || 'Meu Jogo';
+      const name = prompt('Nome do projeto para salvar no servidor:', suggested);
+      if(name === null) return false; // cancelou
+      const trimmed = name.trim();
+      if(!trimmed){
+        alert('Informe um nome para o projeto.');
+        return false;
+      }
+      nms.name = trimmed;
+      this.data.name = trimmed;
+      this.updateUI();
+
+      this.status('criando projeto no servidor...');
+      try {
+        const project = await this.createProjectOnBackend(
+          trimmed,
+          nms.description || ''
+        );
+        this.projectId = parseInt(project.id, 10) || null;
+        if(project.filename){
+          this.fileName = project.filename.endsWith('.nms')
+            ? project.filename
+            : `${project.filename}.nms`;
+        }
+      } catch(e) {
+        console.error('Erro ao criar projeto:', e);
+        if(e.status === 401 || e.status === 403){
+          alert('Sessão expirada ou não autenticado. Faça login no dashboard e tente novamente.');
+        } else {
+          alert(e.message || 'Erro ao criar projeto no servidor.');
+        }
+        this.status('erro ao criar');
+        return false;
+      }
+    }
+
+    if(!this.projectId){
+      alert('ID de projeto inválido após criação.');
+      return false;
+    }
+
+    this.status('salvando no servidor...');
+    try {
+      await this.saveProjectToBackend(this.projectId, nms);
+      this.serverSaved = true;
+      try {
+        localStorage.setItem('nms_autosave', JSON.stringify(nms));
+      } catch(e) {}
+      const itemCount = nms.sounds?.items?.length || 0;
+      this.status(
+        `salvo no servidor (#${this.projectId}) - ` +
+        `${nms.splashScreens?.length||0} splash • ${itemCount} peça(s) de som`
+      );
+      this.updateUI();
+      return true;
+    } catch(e) {
+      console.error('Erro ao salvar projeto:', e);
+      if(e.status === 401 || e.status === 403){
+        alert('Sessão expirada ou não autenticado. Faça login no dashboard e tente novamente.');
+      } else {
+        alert(e.message || 'Erro ao salvar no servidor.');
+      }
+      this.status('erro ao salvar');
+      return false;
+    }
+  },
+
+  /**
+   * Fork = "Salvar como…": cria um NOVO projeto no backend
+   * com o NMS atual e passa o editor a apontar para ele.
+   * O projeto original (se houver) permanece intacto.
+   */
+  async fork(){
+    if(!this.data){ alert("Nenhum projeto"); return false; }
+
+    const nms = this.collectProjectData();
+    if(!nms){ alert("Nenhum projeto"); return false; }
+
+    const baseName = (nms.name || 'Meu Jogo').trim() || 'Meu Jogo';
+    const suggested = baseName.startsWith('Cópia de ')
+      ? baseName
+      : `Cópia de ${baseName}`;
+    const name = prompt('Nome do fork (novo projeto):', suggested);
+    if(name === null) return false;
+    const trimmed = name.trim();
+    if(!trimmed){
+      alert('Informe um nome para o fork.');
+      return false;
+    }
+
+    nms.name = trimmed;
+
+    this.status('criando fork no servidor...');
+    try {
+      // Origem do fork = projeto atual no servidor (se houver)
+      const parentId = this.projectId || null;
+      const project = await this.createProjectOnBackend(
+        trimmed,
+        nms.description || '',
+        parentId
+      );
+      const newId = parseInt(project.id, 10) || null;
+      if(!newId){
+        alert('Servidor não retornou ID do novo projeto.');
+        this.status('erro no fork');
+        return false;
+      }
+
+      await this.saveProjectToBackend(newId, nms);
+
+      // Passa a editar o fork
+      this.projectId = newId;
+      this.serverSaved = true;
+      this.data.name = trimmed;
+      if(project.filename){
+        this.fileName = project.filename.endsWith('.nms')
+          ? project.filename
+          : `${project.filename}.nms`;
+      } else {
+        this.fileName = `project_${newId}.nms`;
+      }
+
+      try {
+        localStorage.setItem('nms_autosave', JSON.stringify(nms));
+      } catch(e) {}
+
+      // Atualiza campo do dashboard do editor, se existir
+      try {
+        const nameEl = document.getElementById('dashProjName');
+        if(nameEl) nameEl.value = trimmed;
+      } catch(e) {}
+
+      this.updateUI();
+      this.status(`fork criado (#${newId}) — editando a cópia`);
+      return true;
+    } catch(e) {
+      console.error('Erro ao fazer fork:', e);
+      if(e.status === 401 || e.status === 403){
+        alert('Sessão expirada ou não autenticado. Faça login no dashboard e tente novamente.');
+      } else {
+        alert(e.message || 'Erro ao criar o fork no servidor.');
+      }
+      this.status('erro no fork');
+      return false;
+    }
+  },
+
   async loadFromFile(file){
     const text = await file.text();
   
@@ -482,10 +730,16 @@ const Project = {
        *
        * Não existe nenhum carregamento de
        * assets/novo.chr aqui.
+       *
+       * Import local (.nms do disco) não tem
+       * projectId no servidor — quem carrega
+       * do backend redefine projectId depois.
        */
   
       this.data = json;
       this.fileName = file.name;
+      this.projectId = null;
+      this.serverSaved = false;
   
       this.loadIntoEditors();
       this.updateUI();
@@ -537,6 +791,12 @@ const Project = {
       alert('ID de projeto inválido.');
       return false;
     }
+
+    // Bloqueia assets/novo.chr o quanto antes (evita corrida com CHR.init).
+    try {
+      if(typeof CHR !== 'undefined' && CHR.setSuppressDefaultChr)
+        CHR.setSuppressDefaultChr(true);
+    } catch(e) {}
 
     try {
   
@@ -621,10 +881,26 @@ const Project = {
        * Carrega exatamente pelo mesmo
        * caminho usado para abrir um .nms
        * localmente.
+       *
+       * loadFromFile zera projectId (import
+       * local); restauramos o id do backend
+       * em seguida.
        */
+  
+      const backendProjectId = this.projectId;
   
       await this.loadFromFile(file);
   
+      this.projectId = backendProjectId;
+      this.serverSaved = true;
+  
+      if(data.project?.filename){
+        this.fileName = data.project.filename.endsWith('.nms')
+          ? data.project.filename
+          : `${data.project.filename}.nms`;
+      }
+  
+      this.updateUI();
   
       /*
        * Remove o parâmetro da URL depois

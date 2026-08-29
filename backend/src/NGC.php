@@ -118,7 +118,7 @@ final class NGC
             'ready' => true,
             'partial' => false,
             'compiler' => 'NGC',
-            'version' => '0.23.1',
+            'version' => '0.24.0',
             'buildMode' => $context['buildMode'],
             'projectName' => $context['project']['name'] ?? 'meu-jogo',
             'asm' => $builder->build(),

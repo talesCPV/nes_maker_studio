@@ -106,6 +106,25 @@ if (mb_strlen($description) > 65535) {
 
 
 /*
+ * parent_project_id opcional (fork).
+ * Null / ausente = projeto raiz.
+ */
+$parentProjectId = null;
+if (array_key_exists('parent_project_id', $data) && $data['parent_project_id'] !== null && $data['parent_project_id'] !== '') {
+    $parentProjectId = filter_var(
+        $data['parent_project_id'],
+        FILTER_VALIDATE_INT
+    );
+    if ($parentProjectId === false || $parentProjectId <= 0) {
+        response([
+            'success' => false,
+            'message' => 'parent_project_id inválido.'
+        ], 422);
+    }
+}
+
+
+/*
  * ---------------------------------------------------------
  * USUÁRIO
  * ---------------------------------------------------------
@@ -263,6 +282,35 @@ try {
 
 
     /*
+     * Se for fork, o projeto pai precisa existir,
+     * pertencer ao usuário e não estar na lixeira.
+     */
+    if ($parentProjectId !== null) {
+        $parentStmt = $pdo->prepare(
+            'SELECT id
+             FROM projects
+             WHERE id = :id
+               AND user_id = :user_id
+               AND is_deleted = 0
+             LIMIT 1'
+        );
+        $parentStmt->execute([
+            ':id' => $parentProjectId,
+            ':user_id' => $userId
+        ]);
+        if (!$parentStmt->fetch()) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            response([
+                'success' => false,
+                'message' => 'Projeto de origem do fork não encontrado.'
+            ], 404);
+        }
+    }
+
+
+    /*
      * Nome físico do arquivo.
      *
      * Não utilizamos o nome do projeto diretamente no nome
@@ -297,7 +345,7 @@ try {
             VALUES
             (
                 :user_id,
-                NULL,
+                :parent_project_id,
                 :name,
                 :description,
                 :filename
@@ -309,6 +357,9 @@ try {
 
         ':user_id' =>
             $userId,
+
+        ':parent_project_id' =>
+            $parentProjectId,
 
         ':name' =>
             $name,
@@ -440,7 +491,10 @@ try {
                 $description,
 
             'filename' =>
-                $filename
+                $filename,
+
+            'parent_project_id' =>
+                $parentProjectId
 
         ]
 

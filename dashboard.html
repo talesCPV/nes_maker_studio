@@ -10,10 +10,96 @@
     <link rel="icon" href="assets/icon.png" type="image/png">
 
     <style>
+        /* Layout dashboard: barra superior + conteúdo */
+        body {
+            overflow: hidden;
+        }
+
+        .container {
+            max-width: none;
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            margin: 0;
+            padding: 0;
+            gap: 0;
+            justify-content: flex-start;
+            align-items: stretch;
+        }
+
+        /* Barra superior (não é mais card) */
+        .dash-head {
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 12px 24px;
+            background: rgba(18, 21, 28, 0.95);
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .dash-head .img-logo {
+            max-height: 48px;
+            max-width: 48px;
+            width: auto;
+            height: auto;
+            border-radius: 8px;
+            flex-shrink: 0;
+        }
+
+        .dash-head #welcome {
+            margin: 0;
+            flex: 1;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .dash-head .actions {
+            flex-shrink: 0;
+        }
+
+        /* Card de projetos */
+        .projects-panel {
+            flex: 1 1 auto;
+            min-height: 0;
+            width: min(80vw, 1100px);
+            margin: 20px auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: stretch;
+            overflow: hidden;
+        }
+
+        .projects-panel h2 {
+            flex: 0 0 auto;
+            margin: 0 0 8px;
+            align-self: flex-start;
+        }
+
+        .projects-panel .message {
+            flex: 0 0 auto;
+        }
+
         .project-list {
             display: grid;
             gap: 12px;
-            margin-top: 20px;
+            margin-top: 12px;
+            width: 100%;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            padding-right: 4px;
         }
 
         .project {
@@ -21,6 +107,34 @@
             border: 1px solid #303744;
             border-radius: 8px;
             background: #11151c;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .project-main {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 14px;
+            width: 100%;
+        }
+
+        .project-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .project-thumb {
+            width: 96px;
+            height: 90px;
+            flex-shrink: 0;
+            border-radius: 6px;
+            border: 1px solid #303744;
+            background: #0a0c10;
+            object-fit: contain;
+            image-rendering: pixelated;
+            display: block;
         }
 
         .project h3 {
@@ -36,10 +150,86 @@
             color: #7f8998;
         }
 
+        .project-fork {
+            display: block;
+            margin-top: 4px;
+            font-size: 0.8rem;
+            color: #8b9bb4;
+        }
+
+        .project-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            width: 100%;
+        }
+
+        .project-actions-left,
+        .project-actions-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .project-actions-right {
+            margin-left: auto;
+        }
+
+        .project-actions .icon-btn {
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+        }
+
         .actions {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: linear-gradient(180deg, #4b8fff, var(--accent));
+            color: #fff;
+            font-size: 1.15rem;
+            line-height: 1;
+            cursor: pointer;
+            transition: transform 0.12s ease, filter 0.15s ease, box-shadow 0.15s ease;
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
+        }
+
+        .icon-btn:hover {
+            filter: brightness(1.08);
+            transform: translateY(-1px);
+        }
+
+        .icon-btn:active {
+            transform: translateY(0);
+            filter: brightness(0.96);
+        }
+
+        .icon-btn.secondary {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.12);
+            color: var(--text);
+            box-shadow: none;
+        }
+
+        .icon-btn.secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            filter: none;
         }
 
         .modal {
@@ -50,14 +240,39 @@
             align-items: center;
             justify-content: center;
             padding: 20px;
+            z-index: 100;
         }
 
-        .trashCard, .newprojCard{
+        .trashCard,
+        .newprojCard {
             display: none;
         }
 
-        .trashCard{
+        .trashCard {
             width: 80vw !important;
+            max-width: 900px;
+            max-height: 85vh;
+            overflow: hidden;
+            justify-content: flex-start;
+            align-items: stretch;
+        }
+
+        .trashCard h2 {
+            flex: 0 0 auto;
+            margin: 0 0 8px;
+            align-self: flex-start;
+            padding-right: 36px;
+        }
+
+        .trashCard .message {
+            flex: 0 0 auto;
+        }
+
+        .trashCard #trashList {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            margin-top: 12px;
         }
 
         .open {
@@ -76,15 +291,31 @@
             background: unset;
             color: white;
             border: unset;
+            cursor: pointer;
+            line-height: 1;
+            z-index: 2;
         }
 
-        .project-actions {
-            margin-top: 12px;
-        }
+        @media (max-width: 640px) {
+            .dash-head {
+                padding: 10px 12px;
+                flex-wrap: wrap;
+            }
 
-        @media (max-width: 480px) {
-            .trashCard{
-                width: 100vw;
+            .dash-head .img-logo {
+                max-height: 40px;
+                max-width: 40px;
+            }
+
+            .projects-panel {
+                width: 100%;
+                margin: 12px 0;
+                border-radius: 0;
+            }
+
+            .trashCard {
+                width: 100% !important;
+                max-height: 90vh;
             }
         }
     </style>
@@ -94,9 +325,9 @@
 
 <div class="container">
 
-    <!-- CABEÇALHO -->
+    <!-- CABEÇALHO (barra superior) -->
 
-    <div class="card dash-card dash-head" >
+    <header class="dash-head">
 
         <img class="img-logo" src="assets/icon.png" alt="NGC">
 
@@ -106,28 +337,44 @@
 
         <div class="actions">
 
-            <button id="newProjectButton">
-                + Novo projeto
+            <button
+                id="newProjectButton"
+                class="icon-btn"
+                type="button"
+                title="Novo projeto"
+                aria-label="Novo projeto"
+            >
+                +
             </button>
 
-            <button id="trashButton" class="secondary">
-                🗑 Lixeira
+            <button
+                id="trashButton"
+                class="icon-btn secondary"
+                type="button"
+                title="Lixeira"
+                aria-label="Lixeira"
+            >
+                🗑
             </button>
 
-            <button id="logoutButton" class="secondary">
-                Logout
+            <button
+                id="logoutButton"
+                class="icon-btn secondary"
+                type="button"
+                title="Logout"
+                aria-label="Logout"
+            >
+                ⏻
             </button>
 
         </div>
 
-
-
-    </div>
+    </header>
 
 
     <!-- PROJETOS -->
 
-    <div class="card dash-card">
+    <div class="card dash-card projects-panel">
 
         <h2>Meus projetos</h2>
 
@@ -168,10 +415,12 @@
         &times;
         </button>
 
-        <h2>Novo projeto</h2>
+        <h2 id="projectModalTitle">Novo projeto</h2>
 
 
         <form id="projectForm">
+
+            <input type="hidden" id="projectEditId" value="">
 
             <label for="projectName">
                 Nome
@@ -198,7 +447,7 @@
             >
 
 
-            <button type="submit">
+            <button type="submit" id="projectFormSubmit">
                 Criar projeto
             </button>
 
@@ -213,6 +462,14 @@
     </div>
 
     <div class="card dash-card trashCard" >
+
+        <button
+            id="closeTrashModal"
+            class="close"
+            type="button"
+        >
+        &times;
+        </button>
 
         <h2>🗑 Lixeira</h2>
     
@@ -386,73 +643,155 @@ async function loadProjects() {
 
                 const item = document.createElement('div');
                 item.className = 'project';
+
+                // Parte superior: dados + thumbnail
+                const main = document.createElement('div');
+                main.className = 'project-main';
+
+                const info = document.createElement('div');
+                info.className = 'project-info';
+
                 const title = document.createElement('h3');
-                title.textContent =project.name;
-                const description =document.createElement('p');
-                description.textContent =project.description ||'Sem descrição.';
+                title.textContent = project.name;
+                info.appendChild(title);
+
+                const description = document.createElement('p');
+                description.textContent = project.description || 'Sem descrição.';
+                info.appendChild(description);
+
                 const id = document.createElement('small');
-                id.textContent =`Projeto #${project.id}`;
-                item.appendChild(title);
-                item.appendChild(description);
-                item.appendChild(id);
+                id.textContent = `Projeto #${project.id}`;
+                info.appendChild(id);
 
+                if (project.parent_project_id) {
+                    const fork = document.createElement('span');
+                    fork.className = 'project-fork';
+                    const parentLabel = project.parent_name
+                        ? `${project.parent_name} (#${project.parent_project_id})`
+                        : `#${project.parent_project_id}`;
+                    fork.textContent = `⑂ Fork de ${parentLabel}`;
+                    info.appendChild(fork);
+                }
 
-/* =========================================================
-   AÇÕES DO PROJETO
-   ========================================================= */
+                const thumb = document.createElement('img');
+                thumb.className = 'project-thumb';
+                thumb.alt = project.name || 'Thumbnail';
+                thumb.loading = 'lazy';
+                if (project.has_thumbnail) {
+                    thumb.src = `backend/projects/thumbnail.php?id=${encodeURIComponent(project.id)}&t=${Date.now()}`;
+                } else {
+                    thumb.src = 'assets/cartridge.png';
+                    thumb.title = 'Sem thumbnail — faça um Build ou altere a capa';
+                }
 
+                main.appendChild(info);
+                main.appendChild(thumb);
+                item.appendChild(main);
 
-    const projectActions =
-        document.createElement('div');
+                // Barra inferior: ações principais à esquerda, capa à direita
+                const projectActions = document.createElement('div');
+                projectActions.className = 'project-actions';
 
-    projectActions.className =
-        'project-actions';
+                const leftActions = document.createElement('div');
+                leftActions.className = 'project-actions-left';
 
+                const openButton = document.createElement('button');
+                openButton.type = 'button';
+                openButton.className = 'icon-btn';
+                openButton.textContent = '▶';
+                openButton.title = 'Abrir no editor';
+                openButton.setAttribute('aria-label', 'Abrir no editor');
+                openButton.addEventListener(
+                    'click',
+                    () => openProject(project.id)
+                );
 
-    const openButton =
-        document.createElement('button');
+                const editButton = document.createElement('button');
+                editButton.type = 'button';
+                editButton.className = 'icon-btn secondary';
+                editButton.textContent = '✎';
+                editButton.title = 'Editar nome e descrição';
+                editButton.setAttribute('aria-label', 'Editar projeto');
+                editButton.addEventListener(
+                    'click',
+                    () => openEditProjectModal(project)
+                );
 
-    openButton.textContent =
-        'Abrir';
+                const exportButton = document.createElement('button');
+                exportButton.type = 'button';
+                exportButton.className = 'icon-btn secondary';
+                exportButton.textContent = '⬇';
+                exportButton.title = 'Exportar .nms';
+                exportButton.setAttribute('aria-label', 'Exportar projeto');
+                exportButton.addEventListener(
+                    'click',
+                    () => exportProject(project)
+                );
 
-    openButton.addEventListener(
-        'click',
-        () => openProject(project.id)
-    );
+                const forkButton = document.createElement('button');
+                forkButton.type = 'button';
+                forkButton.className = 'icon-btn secondary';
+                forkButton.textContent = '⑂';
+                forkButton.title = 'Fork — criar cópia';
+                forkButton.setAttribute('aria-label', 'Fork do projeto');
+                forkButton.addEventListener(
+                    'click',
+                    () => forkProjectFromDashboard(project)
+                );
 
+                const deleteButton = document.createElement('button');
+                deleteButton.type = 'button';
+                deleteButton.className = 'icon-btn secondary';
+                deleteButton.textContent = '🗑';
+                deleteButton.title = 'Excluir projeto';
+                deleteButton.setAttribute('aria-label', 'Excluir projeto');
+                deleteButton.addEventListener(
+                    'click',
+                    () => deleteProject(
+                        project.id,
+                        project.name
+                    )
+                );
 
-    const deleteButton =
-        document.createElement('button');
+                leftActions.appendChild(openButton);
+                leftActions.appendChild(editButton);
+                leftActions.appendChild(exportButton);
+                leftActions.appendChild(forkButton);
+                leftActions.appendChild(deleteButton);
 
-    deleteButton.textContent =
-        '🗑 Excluir';
+                const rightActions = document.createElement('div');
+                rightActions.className = 'project-actions-right';
 
-    deleteButton.className =
-        'secondary';
+                const changeThumbBtn = document.createElement('button');
+                changeThumbBtn.type = 'button';
+                changeThumbBtn.className = 'icon-btn secondary';
+                changeThumbBtn.textContent = '🖼';
+                changeThumbBtn.title = 'Alterar thumbnail';
+                changeThumbBtn.setAttribute('aria-label', 'Alterar thumbnail');
+                changeThumbBtn.addEventListener('click', () => {
+                    pickProjectThumbnail(project.id, thumb);
+                });
 
-    deleteButton.addEventListener(
-        'click',
-        () => deleteProject(
-            project.id,
-            project.name
-        )
-    );
+                const clearThumbBtn = document.createElement('button');
+                clearThumbBtn.type = 'button';
+                clearThumbBtn.className = 'icon-btn secondary';
+                clearThumbBtn.textContent = '✕';
+                clearThumbBtn.title = 'Remover thumbnail';
+                clearThumbBtn.setAttribute('aria-label', 'Remover thumbnail');
+                clearThumbBtn.addEventListener('click', () => {
+                    clearProjectThumbnail(project.id, thumb);
+                });
 
+                rightActions.appendChild(changeThumbBtn);
+                rightActions.appendChild(clearThumbBtn);
 
-    projectActions.appendChild(
-        openButton
-    );
+                projectActions.appendChild(leftActions);
+                projectActions.appendChild(rightActions);
+                item.appendChild(projectActions);
 
-    projectActions.appendChild(
-        deleteButton
-    );
-
-    item.appendChild(
-        projectActions
-    );
-
-
-    projectList.appendChild(item);});
+                projectList.appendChild(item);
+            }
+        );
 
 
     } catch (error) {
@@ -466,6 +805,264 @@ async function loadProjects() {
         projectMessage.textContent =
             'Erro de comunicação com o servidor.';
     }
+}
+
+/* =========================================================
+   EXPORTAR / FORK (dashboard)
+   ========================================================= */
+
+async function fetchProjectNms(projectId) {
+    const response = await fetch(
+        `backend/projects/load.php?id=${encodeURIComponent(projectId)}`,
+        { credentials: 'same-origin' }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success || !data.nms) {
+        const err = new Error(
+            data.message || 'Não foi possível carregar o projeto.'
+        );
+        err.status = response.status;
+        throw err;
+    }
+    return data;
+}
+
+async function exportProject(project) {
+    if (!project || !project.id) return;
+    try {
+        const data = await fetchProjectNms(project.id);
+        const nms = data.nms;
+        const baseName = (
+            (nms && nms.name) ||
+            project.name ||
+            `projeto_${project.id}`
+        ).replace(/[\\/:*?"<>|]+/g, '_').trim() || `projeto_${project.id}`;
+        const filename = baseName.endsWith('.nms')
+            ? baseName
+            : `${baseName}.nms`;
+
+        const blob = new Blob(
+            [JSON.stringify(nms, null, 2)],
+            { type: 'application/json' }
+        );
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    } catch (err) {
+        console.error('Erro ao exportar:', err);
+        alert(err.message || 'Erro ao exportar o projeto.');
+    }
+}
+
+async function forkProjectFromDashboard(project) {
+    if (!project || !project.id) return;
+
+    const baseName = (project.name || 'Meu Jogo').trim() || 'Meu Jogo';
+    const suggested = baseName.startsWith('Cópia de ')
+        ? baseName
+        : `Cópia de ${baseName}`;
+    const name = prompt('Nome do fork (novo projeto):', suggested);
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed) {
+        alert('Informe um nome para o fork.');
+        return;
+    }
+
+    try {
+        const loaded = await fetchProjectNms(project.id);
+        const nms = loaded.nms;
+        if (!nms || typeof nms !== 'object') {
+            alert('Conteúdo do projeto inválido.');
+            return;
+        }
+        nms.name = trimmed;
+
+        const createRes = await fetch(
+            'backend/projects/create.php',
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    name: trimmed,
+                    description: nms.description || project.description || '',
+                    parent_project_id: project.id
+                })
+            }
+        );
+        const createData = await createRes.json().catch(() => ({}));
+        if (!createRes.ok || !createData.success || !createData.project?.id) {
+            alert(
+                createData.message ||
+                'Não foi possível criar o fork.'
+            );
+            return;
+        }
+
+        const newId = createData.project.id;
+        const saveRes = await fetch(
+            'backend/projects/save.php',
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    project_id: newId,
+                    nms: nms
+                })
+            }
+        );
+        const saveData = await saveRes.json().catch(() => ({}));
+        if (!saveRes.ok || !saveData.success) {
+            alert(
+                saveData.message ||
+                'Fork criado, mas falhou ao gravar o conteúdo NMS.'
+            );
+            await loadProjects();
+            return;
+        }
+
+        await loadProjects();
+    } catch (err) {
+        console.error('Erro no fork:', err);
+        alert(err.message || 'Erro ao criar o fork.');
+    }
+}
+
+/* =========================================================
+   THUMBNAIL MANUAL
+   ========================================================= */
+
+async function clearProjectThumbnail(projectId, imgEl) {
+    const confirmed = confirm(
+        'Remover o thumbnail deste projeto?\nA capa padrão (cartucho) voltará a ser usada.'
+    );
+    if (!confirmed) return;
+
+    try {
+        const response = await fetch(
+            'backend/projects/thumbnail.php',
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    project_id: projectId,
+                    action: 'clear'
+                })
+            }
+        );
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || !data.success) {
+            alert(
+                data.message ||
+                'Não foi possível remover o thumbnail.'
+            );
+            return;
+        }
+
+        if (imgEl) {
+            imgEl.src = 'assets/cartridge.png';
+            imgEl.title = 'Sem thumbnail — faça um Build ou altere a capa';
+        }
+    } catch (err) {
+        console.error(err);
+        alert('Erro de comunicação com o servidor.');
+    }
+}
+
+function pickProjectThumbnail(projectId, imgEl) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/webp,image/gif';
+    input.style.display = 'none';
+
+    input.addEventListener('change', async () => {
+        const file = input.files && input.files[0];
+        input.remove();
+        if (!file) return;
+
+        try {
+            const dataUrl = await fileToPngDataUrl(file, 256, 240);
+            const response = await fetch(
+                'backend/projects/thumbnail.php',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        project_id: projectId,
+                        image: dataUrl,
+                        force: true
+                    })
+                }
+            );
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok || !data.success) {
+                alert(
+                    data.message ||
+                    'Não foi possível salvar o thumbnail.'
+                );
+                return;
+            }
+
+            if (imgEl) {
+                imgEl.src =
+                    `backend/projects/thumbnail.php?id=${encodeURIComponent(projectId)}&t=${Date.now()}`;
+                imgEl.title = '';
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Erro ao processar a imagem.');
+        }
+    });
+
+    document.body.appendChild(input);
+    input.click();
+}
+
+/**
+ * Redimensiona a imagem para caber em maxW x maxH
+ * e devolve data URL PNG.
+ */
+function fileToPngDataUrl(file, maxW, maxH) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Falha ao ler arquivo'));
+        reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+                let w = img.naturalWidth || img.width;
+                let h = img.naturalHeight || img.height;
+                if (!w || !h) {
+                    reject(new Error('Imagem inválida'));
+                    return;
+                }
+                const scale = Math.min(maxW / w, maxH / h, 1);
+                w = Math.max(1, Math.round(w * scale));
+                h = Math.max(1, Math.round(h * scale));
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => reject(new Error('Não foi possível decodificar a imagem'));
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    });
 }
 
 /* =========================================================
@@ -483,6 +1080,7 @@ async function deleteProject(
 
     if (!confirmed) return;
 
+    closeDashboardModal();
 
     try {
 
@@ -530,13 +1128,12 @@ async function deleteProject(
 
         /*
          * Se a lixeira estiver aberta,
-         * atualiza também.
+         * atualiza a lista sem reabrir o modal.
          */
-
         if (
+            trashCard.classList.contains('open') &&
             typeof loadTrash === 'function'
         ) {
-
             await loadTrash();
         }
 
@@ -671,9 +1268,11 @@ async function loadTrash() {
                 const restore =
                     document.createElement('button');
 
-                restore.textContent =
-                    '♻ Restaurar';
-
+                restore.type = 'button';
+                restore.className = 'icon-btn';
+                restore.textContent = '♻';
+                restore.title = 'Restaurar';
+                restore.setAttribute('aria-label', 'Restaurar');
 
                 restore.addEventListener(
                     'click',
@@ -791,6 +1390,39 @@ async function loadTrash() {
    ABRIR MODAL
    ========================================================= */
 
+function setProjectModalMode(mode) {
+    const titleEl = document.getElementById('projectModalTitle');
+    const submitEl = document.getElementById('projectFormSubmit');
+    const editIdEl = document.getElementById('projectEditId');
+
+    if (mode === 'edit') {
+        if (titleEl) titleEl.textContent = 'Editar projeto';
+        if (submitEl) submitEl.textContent = 'Salvar alterações';
+    } else {
+        if (titleEl) titleEl.textContent = 'Novo projeto';
+        if (submitEl) submitEl.textContent = 'Criar projeto';
+        if (editIdEl) editIdEl.value = '';
+    }
+}
+
+function openEditProjectModal(project) {
+    createMessage.textContent = '';
+    projectForm.reset();
+    setProjectModalMode('edit');
+
+    const editIdEl = document.getElementById('projectEditId');
+    const nameEl = document.getElementById('projectName');
+    const descEl = document.getElementById('projectDescription');
+
+    if (editIdEl) editIdEl.value = String(project.id || '');
+    if (nameEl) nameEl.value = project.name || '';
+    if (descEl) descEl.value = project.description || '';
+
+    trashCard.classList.remove('open');
+    modal.classList.add('open');
+    newprojCard.classList.add('open');
+}
+
 document
     .getElementById(
         'newProjectButton'
@@ -800,9 +1432,10 @@ document
         () => {
             createMessage.textContent = '';
             projectForm.reset();
+            setProjectModalMode('create');
+            trashCard.classList.remove('open');
             modal.classList.add('open');
             newprojCard.classList.add('open');
-
         }
     );
 
@@ -811,15 +1444,19 @@ document
    FECHAR MODAL
    ========================================================= */
 
+function closeDashboardModal() {
+    modal.classList.remove('open');
+    trashCard.classList.remove('open');
+    newprojCard.classList.remove('open');
+}
+
 document
-    .getElementById(
-        'closeModal'
-    )
-    .addEventListener('click',() => { 
-        modal.classList.remove('open');
-        trashCard.classList.remove('open');
-        newprojCard.classList.remove('open');
-    });
+    .getElementById('closeModal')
+    .addEventListener('click', closeDashboardModal);
+
+document
+    .getElementById('closeTrashModal')
+    .addEventListener('click', closeDashboardModal);
 
 /*
  * Também permite fechar clicando
@@ -829,14 +1466,8 @@ document
 modal.addEventListener(
     'click',
     event => {
-
-        if (
-            event.target === modal
-        ) {
-
-            modal.classList.remove('open');
-            trashCard.classList.remove('open');
-            newprojCard.classList.remove('open');
+        if (event.target === modal) {
+            closeDashboardModal();
         }
     }
 );
@@ -851,35 +1482,9 @@ modal.addEventListener(
     ?.addEventListener(
         'click',
         async () => {
-
-
+            newprojCard.classList.remove('open');
             modal.classList.add('open');
             trashCard.classList.add('open');
-/*
-            const card =
-                document.getElementById(
-                    'trashCard'
-                );
-
-            if (!card) return;
-
-
-            const visible =
-                card.style.display !== 'none';
-
-
-            if (visible) {
-
-                card.style.display =
-                    'none';
-
-                return;
-            }
-
-
-            card.style.display =
-                'block';
-*/
             await loadTrash();
         }
     );
@@ -894,7 +1499,6 @@ projectForm.addEventListener(
 
         event.preventDefault();
 
-
         const name =
             document
                 .getElementById(
@@ -902,7 +1506,6 @@ projectForm.addEventListener(
                 )
                 .value
                 .trim();
-
 
         const description =
             document
@@ -912,83 +1515,97 @@ projectForm.addEventListener(
                 .value
                 .trim();
 
+        const editIdRaw =
+            document
+                .getElementById(
+                    'projectEditId'
+                )
+                ?.value
+                ?.trim() || '';
+
+        const editId = parseInt(editIdRaw, 10) || 0;
+        const isEdit = editId > 0;
 
         if (!name) {
-
             createMessage.textContent =
                 'Informe o nome do projeto.';
-
             return;
         }
 
-
-        createMessage.textContent =
-            'Criando projeto...';
-
+        createMessage.textContent = isEdit
+            ? 'Salvando alterações...'
+            : 'Criando projeto...';
 
         try {
+            const endpoint = isEdit
+                ? 'backend/projects/update.php'
+                : 'backend/projects/create.php';
+
+            const payload = isEdit
+                ? {
+                    id: editId,
+                    name: name,
+                    description: description
+                }
+                : {
+                    name: name,
+                    description: description
+                };
 
             const response =
                 await fetch(
-                    'backend/projects/create.php',
+                    endpoint,
                     {
                         method: 'POST',
-
                         headers: {
                             'Content-Type':
                                 'application/json'
                         },
-
                         credentials:
                             'same-origin',
-
                         body:
-                            JSON.stringify({
-                                name:
-                                    name,
-
-                                description:
-                                    description
-                            })
+                            JSON.stringify(payload)
                     }
                 );
 
-
-            const data =
-                await response.json();
-
-
-            if (!data.success) {
-
+            const rawText = await response.text();
+            let data = null;
+            try {
+                data = rawText ? JSON.parse(rawText) : null;
+            } catch (parseErr) {
+                console.error(
+                    isEdit
+                        ? 'Erro ao atualizar projeto (resposta não-JSON):'
+                        : 'Erro ao criar projeto (resposta não-JSON):',
+                    response.status,
+                    rawText.slice(0, 300)
+                );
                 createMessage.textContent =
-                    data.message ||
-                    'Não foi possível criar o projeto.';
-
+                    response.status === 404
+                        ? 'Endpoint não encontrado (backend/projects/update.php). Verifique se o arquivo está no servidor.'
+                        : `Resposta inválida do servidor (HTTP ${response.status}).`;
                 return;
             }
 
+            if (!data || !data.success) {
+                createMessage.textContent =
+                    (data && data.message) ||
+                    (isEdit
+                        ? 'Não foi possível atualizar o projeto.'
+                        : 'Não foi possível criar o projeto.');
+                return;
+            }
 
-            /*
-             * Projeto criado.
-             * Fecha o modal e atualiza a lista.
-             */
-
-            modal.classList.remove(
-                'open'
-            );
-
-
+            closeDashboardModal();
             await loadProjects();
 
-
         } catch (error) {
-
             console.error(
-                'Erro ao criar projeto:',
+                isEdit
+                    ? 'Erro ao atualizar projeto:'
+                    : 'Erro ao criar projeto:',
                 error
             );
-
-
             createMessage.textContent =
                 'Erro de comunicação com o servidor.';
         }

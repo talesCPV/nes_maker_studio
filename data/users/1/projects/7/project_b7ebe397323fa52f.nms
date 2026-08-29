@@ -1,8 +1,8 @@
 {
     "version": "0.7.1",
-    "name": "Teste 2",
+    "name": "Cópia de Hello NMS",
     "author": "Tales C. Dantas",
-    "description": "teste 12345",
+    "description": "Hello World",
     "genre": "platformer",
     "mapper": 0,
     "mirroring": "vertical",
@@ -27435,7 +27435,7 @@
         ],
         "asm": ""
     },
-    "savedAt": 1787458657739,
+    "savedAt": 1787973911060,
     "physicsTables": {
         "jumps": [
             {
@@ -27543,5 +27543,97 @@
             "x": 207,
             "y": 127
         }
+    ],
+    "paletteBank": [
+        {
+            "id": "pal_1",
+            "name": "BG0",
+            "colors": [
+                15,
+                0,
+                16,
+                48
+            ]
+        },
+        {
+            "id": "pal_2",
+            "name": "BG1",
+            "colors": [
+                15,
+                6,
+                22,
+                38
+            ]
+        },
+        {
+            "id": "pal_3",
+            "name": "BG2",
+            "colors": [
+                15,
+                0,
+                22,
+                48
+            ]
+        },
+        {
+            "id": "pal_4",
+            "name": "BG3",
+            "colors": [
+                15,
+                2,
+                18,
+                34
+            ]
+        },
+        {
+            "id": "pal_5",
+            "name": "SPR0",
+            "colors": [
+                15,
+                22,
+                48,
+                7
+            ]
+        },
+        {
+            "id": "pal_6",
+            "name": "SPR1",
+            "colors": [
+                15,
+                25,
+                41,
+                57
+            ]
+        },
+        {
+            "id": "pal_7",
+            "name": "SPR2",
+            "colors": [
+                15,
+                3,
+                19,
+                35
+            ]
+        },
+        {
+            "id": "pal_8",
+            "name": "SPR3",
+            "colors": [
+                15,
+                9,
+                25,
+                41
+            ]
+        }
+    ],
+    "paletteActive": [
+        "pal_1",
+        "pal_2",
+        "pal_3",
+        "pal_4",
+        "pal_5",
+        "pal_6",
+        "pal_7",
+        "pal_8"
     ]
 }

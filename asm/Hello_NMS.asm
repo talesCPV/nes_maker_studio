@@ -1,18 +1,3 @@
-; NES Maker Studio - BUILD v0.9.17 - fix: sprite do herói volta a usar arte real (pool unificado)
-; NROM-256 | player e inimigos compartilham o mesmo empacotador de CHR $0000
-; Telas: 6 · CHR tiles (fundo): 27/256
-; CHR tiles (sprites): 13/256
-; Instâncias: 5
-; AVISO: frame maior que 2x2 truncado - Simon / Idle / frame 1 (2x4 → 2x2)
-; Herói: "Hero" (charIdx 0, 1 frame(s))
-;   [0] splash · Splash 1
-;   [1] play · Tela 1
-;   [2] play · Tela 2
-;   [3] play · Tela 3
-;   [4] play · Tela 4
-;   [5] play · tela final fase 1
-; Musica: dr-wily-stage-1 · 3 canal(is)
-
 .segment "HEADER"
   .byte $4E,$45,$53,$1A,2,1,$01,0,0,0,0,0,0,0,0,0  ; NROM-256 (32KB PRG), vertical mirroring
 
@@ -84,6 +69,31 @@ ch1_pos:   .res 1
 ch2_timer: .res 1
 ch2_pos:   .res 1
 
+.segment "ZEROPAGE"
+pv_idle:        .res 2  ; Camada 6: frames desde o ultimo input (P1-IDLE)
+pv_game_paused: .res 1  ; Camada 6: acao Pausar o jogo
+pv_ev_oob:      .res 1  ; Camada 6 Fase 2: flag nativa "Fora dos limites" (pulso)
+pv_ev_enter:    .res 1  ; Camada 6 Fase 2: flag nativa "Entrou na tela" (pulso)
+pv_hb_target:   .res 1  ; Camada 6 Fase 2: scratch do check_hbobj_hit
+pv_hb_scr_x:    .res 1  ; Camada 6 Fase 2: scratch do check_hbobj_hit
+pv_terr_target: .res 1  ; Camada 6 Fase 2: scratch do check_terrain_type
+pv_hbA_x:       .res 1  ; Camada 6 Fase 3: retangulo A (heroi) do check_aabb_overlap
+pv_hbA_y:       .res 1
+pv_hbA_w:       .res 1
+pv_hbA_h:       .res 1
+pv_hbB_x:       .res 1  ; Camada 6 Fase 3: retangulo B (personagem-alvo) do check_aabb_overlap
+pv_hbB_y:       .res 1
+pv_hbB_w:       .res 1
+pv_hbB_h:       .res 1
+pv_char_hb_x:   .res 1  ; Camada 6 Fase 3: offset da hitbox do personagem-alvo (somado a inst_x/y no loop)
+pv_char_hb_y:   .res 1
+pv_char_target: .res 1  ; Camada 6 Fase 3: scratch do check_char_hero_hit (indice do personagem-alvo)
+pv_char_save_x: .res 1  ; Camada 6 Fase 3: scratch do check_char_hero_hit (preserva X do loop)
+pv_hb_matched_inst: .res 1  ; Camada 6 Fase 3: slot da instancia que bateu no ultimo SE hitbox de personagem
+pv_rs0: .res 1  ; Camada 6 Fase 2.1: bit de estado (disparo por borda) de ate 8 regra(s)
+pv_rs1: .res 1  ; Camada 6 Fase 2.1: bit de estado (disparo por borda) de ate 8 regra(s)
+pv_z_Vidas_3681: .res 1  ; var "Vidas" (byte)
+
 .segment "CODE"
 
 NMI:
@@ -134,6 +144,7 @@ nmi_scroll_done:
 IRQ:
   RTI
 
+; ---- NGC MUSIC / APU ----
 music_update:
   LDA music_on
   BNE mu_run
@@ -260,10 +271,19 @@ mu_ch2_end:
 
 music_init:
   LDA #0
+  LDA #0
   STA ch0_timer
   STA ch0_pos
+  STA ch0_timer
+  STA ch0_pos
+  LDA #0
   STA ch1_timer
   STA ch1_pos
+  STA ch1_timer
+  STA ch1_pos
+  LDA #0
+  STA ch2_timer
+  STA ch2_pos
   STA ch2_timer
   STA ch2_pos
   LDA #$0F
@@ -297,17 +317,16 @@ rp_loop:
   STA pad1_edge
   RTS
 
+; ---- Background / Screen Loading (NGC) ----
 ; Carrega nametable+attrs da tela A (hard cut, rendering off)
 load_screen:
   STA cur_screen
-  ; desliga rendering E a geracao de NMI (bit 7 do $2000) - a escrita de ~1000 bytes
-  ; leva mais de um frame; sem isso, o NMI (que agora escreve $2005 todo frame por
-  ; causa do scroll da Camada 5) pode disparar NO MEIO da sequencia $2006/$2007 e
-  ; embaralhar o latch de escrita da PPU, corrompendo a nametable inteira.
+  ; desliga rendering E a geracao de NMI - a escrita de ~1000 bytes
+  ; leva mais de um frame; sem isso, o NMI pode disparar no meio da sequencia $2006/$2007.
   LDA #0
   STA $2001
   STA $2000
-  ; ponteiro da nametable (tabela de 1 byte por tela — SEM ASL)
+  ; ponteiro da nametable (tabela de 1 byte por tela)
   LDX cur_screen
   LDA ScreenNtLo,X
   STA tmp0
@@ -319,7 +338,7 @@ load_screen:
   LDA #$00
   STA $2006
   LDY #0
-  LDX #4          ; 4×240 = 960 tiles
+  LDX #4
 ls_nt_outer:
   LDA #240
   STA ls_count
@@ -357,17 +376,18 @@ ls_at:
   LDA #0
   STA $2005
   STA $2005
-  ; religa NMI (o NMI corrige $2000/nt_page sozinho no proximo frame) + rendering
+  ; religa NMI + rendering
   LDA #%10010000
   STA $2000
   LDA #%00011110
   STA $2001
   RTS
 
+; Escreve uma tela numa das duas nametables fisicas ($2000/$2400), sem alterar scroll_x.
+; Entrada: A = indice global da tela; psn_base_hi = $20 ou $24.
 preload_screen_nt:
   STA psn_screen
-  ; desliga rendering E geracao de NMI - mesmo motivo do load_screen (evita o NMI
-  ; corromper o latch $2006/$2007 no meio da escrita longa)
+  ; desliga rendering E NMI para evitar conflito com $2006/$2007 durante a escrita longa.
   LDA #0
   STA $2001
   STA $2000
@@ -377,7 +397,7 @@ preload_screen_nt:
   LDA ScreenNtHi,X
   STA tmp1
   BIT $2002
-  LDA psn_base_hi     ; $20 ou $24, setado pelo chamador
+  LDA psn_base_hi
   STA $2006
   LDA #$00
   STA $2006
@@ -404,7 +424,7 @@ psn_nt_noinc:
   STA tmp1
   BIT $2002
   LDA psn_base_hi
-  ORA #$03            ; mesma pagina, offset $3C0 dentro dela
+  ORA #$03
   STA $2006
   LDA #$C0
   STA $2006
@@ -415,7 +435,7 @@ psn_at:
   INY
   CPY #64
   BNE psn_at
-  ; religa NMI (com nt_page atual) + rendering
+  ; religa NMI preservando nt_page + rendering
   LDA #%10010000
   ORA nt_page
   STA $2000
@@ -602,7 +622,7 @@ upo_br_hide:
   STA $020C
 
 ; --- sprites sobrepostos do player (mt.overlay) - $0210-$021F. Le do MESMO indice de
-; frame que a camada base (CharOv*_${heroCharIdx}), independente do flip de direcao (v1:
+; frame que a camada base (CharOv*_0), independente do flip de direcao (v1:
 ; overlay nao espelha automaticamente com a direcao - desenha sempre como autorado).
 upo_overlay:
   ; Camada 3 fix: escolhe a tabela normal ou espelhada (*Flip) dependendo da direcao -
@@ -823,8 +843,11 @@ spawn_player:
   JSR update_player_oam
   RTS
 
+; ---- NGC: screen transitions / continuous scrolling ----
+; Hard-cut helpers at the level edges plus the dual-nametable 256px traversal.
+
 goto_play_screen:
-  ; A = play_idx → carrega PlayScreenTable[A]
+  ; A = play_idx -> carrega PlayScreenTable[A]
   TAX
   LDA PlayScreenTable,X
   JSR load_screen
@@ -855,18 +878,20 @@ try_screen_left:
 tsl_done:
   RTS
 
+; Camada 5: cruzamento de tela durante o scroll continuo. Ao cruzar 256px,
+; alterna nt_page, avanca play_idx e pre-carrega a proxima tela na pagina que
+; acabou de ficar totalmente fora da tela.
 advance_screen_right:
-  LDA nt_page          ; pagina que estava a esquerda (play_idx) - agora livre
+  LDA nt_page
   EOR #1
-  STA nt_page          ; nova esquerda = quem era direita
+  STA nt_page
   LDA play_idx
   CLC
   ADC #2
   CMP #5
-  BCS asr_noload       ; play_idx+2 nao existe - nada a pre-carregar
+  BCS asr_noload
   TAX
   LDA PlayScreenTable,X
-  ; a pagina a reescrever e' a que ERA nt_page antes do EOR (a antiga esquerda)
   PHA
   LDA nt_page
   EOR #1
@@ -884,24 +909,21 @@ asr_noload:
   LDA play_idx
   TAX
   LDA PlayScreenTable,X
-  STA cur_screen       ; enemies/colisao 'normal' passam a usar a nova tela esquerda
+  STA cur_screen
   JSR spawn_enemies
+  LDA #1
+  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela" (pulso de 1 frame)
   RTS
 
 advance_screen_left:
   LDA nt_page
   EOR #1
-  STA nt_page          ; nova esquerda = a pagina que ja segurava play_idx-1... nao,
-  ; espera - play_idx-1 ainda NAO esta em lugar nenhum, precisa ser carregada agora.
-  ; A pagina a escrever com play_idx-1 e' exatamente esse nt_page NOVO (a que segurava
-  ; a antiga DIREITA/play_idx+1, agora livre) - SEM EOR de novo (isso e' so' pro lado
-  ; direito, onde a pagina livre e' a antiga ESQUERDA = nt_page novo EOR 1). Usar EOR
-  ; aqui tambem sobrescrevia a pagina errada (a que ainda segura play_idx, destruindo a
-  ; tela que devia continuar visivel como nova direita) - bug real, corrigido.
-  LDA play_idx        ; play_idx ainda e' o valor ANTIGO (esquerda antes da travessia)
+  STA nt_page
+  ; play_idx-1 ainda nao esta carregada: reutiliza a pagina que acabou de ficar livre.
+  LDA play_idx
   SEC
-  SBC #1              ; nova esquerda = play_idx-1 - precisa ser carregada de novo
-  BMI asl_noload      ; play_idx-1 < 0 -> inicio do mundo, nada a pre-carregar
+  SBC #1
+  BMI asl_noload
   TAX
   LDA PlayScreenTable,X
   PHA
@@ -922,6 +944,8 @@ asl_noload:
   LDA PlayScreenTable,X
   STA cur_screen
   JSR spawn_enemies
+  LDA #1
+  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela" (pulso de 1 frame)
   RTS
 
 clear_instances:
@@ -1497,12 +1521,20 @@ check_player_enemy_hit:
 cpe_loop:
   LDA inst_on,X
   BEQ cpe_next
+  ; posicao do inimigo NA TELA (mesma logica de update_instances_oam): inst_x - scroll_x.
+  ; Sem isso, a colisao usava a posicao "de nascimento" do inimigo e desalinhava
+  ; do sprite visivel conforme o scroll avançava (bug: só batia certo no instante do spawn).
+  LDA inst_x,X
+  SEC
+  SBC scroll_x
+  BCC cpe_next        ; saiu da tela pela esquerda - sem colisao possivel
+  STA en_tmp
   LDA player_x
   CLC
   ADC #12
-  CMP inst_x,X
+  CMP en_tmp
   BCC cpe_next
-  LDA inst_x,X
+  LDA en_tmp
   CLC
   ADC #12
   CMP player_x
@@ -1542,6 +1574,8 @@ hide_player:
   JSR update_player_oam
   RTS
 
+; ---- Collision lookup ----
+; col_x (0-31), col_y (0-29) -> col_result (tipo 0-5)
 get_collision:
   LDA col_y
   CMP #30
@@ -1580,6 +1614,8 @@ gc_oob:
   STA col_result
   RTS
 
+; ---- Collision lookup for world/scroll ----
+; Igual a get_collision, mas usa gcw_screen em vez de cur_screen.
 get_collision2:
   LDA col_y
   CMP #30
@@ -1617,6 +1653,7 @@ gc2_oob:
   STA col_result
   RTS
 
+; ---- World collision coordinate resolver ----
 world_col_from:
   CLC
   ADC scroll_x
@@ -1644,10 +1681,10 @@ wcf_have:
   STA col_x
   RTS
 
+; ---- Ground collision probe ----
 check_ground:
   LDA #0
   STA on_ground
-  ; tile Y = (player_y + 16) / 8
   LDA player_y
   CLC
   ADC #16
@@ -1655,7 +1692,6 @@ check_ground:
   LSR A
   LSR A
   STA col_y
-  ; tile X esquerdo (mundo: scroll_x + player_x + 2)
   LDA player_x
   CLC
   ADC #2
@@ -1666,7 +1702,6 @@ check_ground:
   BEQ cg_yes
   CMP #2
   BEQ cg_yes
-  ; tile X direito (mundo: scroll_x + player_x + 13)
   LDA player_x
   CLC
   ADC #13
@@ -1681,7 +1716,6 @@ check_ground:
 cg_yes:
   LDA #1
   STA on_ground
-  ; snap Y ao topo do tile
   LDA col_y
   ASL A
   ASL A
@@ -1691,6 +1725,7 @@ cg_yes:
   STA player_y
   RTS
 
+; ---- Solid collision helper ----
 is_solid:
   CMP #1
   BEQ is_yes
@@ -1702,8 +1737,8 @@ is_yes:
   LDA #1
   RTS
 
+; ---- Wall collision probe ----
 check_wall_at:
-  ; ponto superior (player_y + 4)
   LDA player_y
   CLC
   ADC #4
@@ -1715,7 +1750,6 @@ check_wall_at:
   LDA col_result
   JSR is_solid
   BNE cw_hit
-  ; ponto medio (player_y + 12)
   LDA player_y
   CLC
   ADC #12
@@ -1976,6 +2010,8 @@ up_fall:
   STA player_y
   LDA #0
   STA jump_cnt
+  LDA #1
+  STA pv_ev_oob   ; Camada 6: flag nativa "Fora dos limites" (pulso de 1 frame)
 up_done:
   JSR animate_player
   JSR update_player_oam
@@ -2009,6 +2045,7 @@ clrram:
   STA $0700,X
   INX
   BNE clrram
+  JSR program_init_vars   ; Camada 6: valores iniciais != 0 das variaveis do usuario
 vblankwait2:
   BIT $2002
   BPL vblankwait2
@@ -2050,9 +2087,7 @@ clroam:
   STA $2001
 
 ; ---- Main loop ----
-; Bits do pad (após ROR x8): A=0 B=1 Select=2 Start=3 Up=4 Down=5 Left=6 Right=7
-; START no splash → Fase 1 + spawn Hero
-; SELECT no play → Game Over (atalho de teste)
+; O fluxo de estados (Splash/Play/Game Over) vem do bloco game_flow do NGC.
 MainLoop:
   LDA nmi_flag
   BEQ MainLoop
@@ -2066,32 +2101,60 @@ MainLoop:
   BEQ st_play
   JMP st_gameover
 
+; ---- NGC GAME FLOW ----
+; 0=splash 1=play 2=gameover
 st_splash:
-  ; bit 3 = START
+  ; START no splash -> Fase 1 + spawn Hero
   LDA pad1_edge
   AND #%00001000
-  BEQ MainLoop
+  BNE st_splash_start
+  JMP MainLoop
+st_splash_start:
   LDA #1
   STA game_state
   LDA #1
-  JSR load_screen        ; tela 0 vai pra $2000 (hard cut, igual antes)
+  JSR load_screen
   LDA #0
   STA scroll_x
-  STA nt_page            ; tela esquerda (play_idx=0) fica na pagina $2000
+  STA nt_page
   LDA #2
   LDX #$24
   STX psn_base_hi
-  JSR preload_screen_nt  ; tela 1 pré-carregada em $2400 (pra scroll já funcionar)
+  JSR preload_screen_nt
   JSR spawn_player
   JSR spawn_enemies
   JSR music_init
   JMP MainLoop
 
 st_play:
-  ; fisica + input + inimigos
+  ; Camada 6: contador de idle (frames seguidos sem nenhum botao segurado)
+  LDA pad1
+  BNE prog_idle_reset
+  LDA pv_idle
+  CLC
+  ADC #1
+  STA pv_idle
+  BCC prog_idle_done
+  INC pv_idle+1
+  JMP prog_idle_done
+prog_idle_reset:
+  LDA #0
+  STA pv_idle
+  STA pv_idle+1
+prog_idle_done:
+  ; Camada 6: Acao "Pausar o jogo" congela player+inimigos, mas regras e
+  ; leitura de input continuam - senao nao teria como despausar.
+  LDA pv_game_paused
+  BNE st_play_paused
   JSR update_player
   JSR update_enemies
-  ; SELECT → Game Over (teste)
+st_play_paused:
+  JSR run_rules
+  ; Camada 6: flags nativas sao pulso de 1 frame - zera depois das regras rodarem
+  LDA #0
+  STA pv_ev_oob
+  STA pv_ev_enter
+  ; SELECT -> Game Over
   LDA pad1_edge
   AND #%00000100
   BEQ st_play_done
@@ -2104,16 +2167,540 @@ st_play_done:
   JMP MainLoop
 
 st_gameover:
-  ; START no game over → volta pro splash
+  ; START no Game Over -> Splash
   LDA pad1_edge
   AND #%00001000
-  BEQ MainLoop
+  BNE st_gameover_restart
+  JMP MainLoop
+st_gameover_restart:
   LDA #0
   STA game_state
   JSR hide_player
   LDA #0
   JSR load_screen
   JMP MainLoop
+
+program_init_vars:
+  LDA #3
+  STA pv_z_Vidas_3681
+  RTS
+
+; ---- NGC Camada 6 Fase 2: motor de hitbox ----
+HbTriggerScr:
+  .byte 0
+HbTriggerX:
+  .byte 0
+HbTriggerY:
+  .byte 0
+HbTriggerObj:
+  .byte 0
+
+; A(entrada) = tipo de terreno esperado (1=solido, 2=plataforma).
+; Devolve em A: 1 se o tile sob os pes do heroi bate, senao 0.
+; Sub-rotina isolada (scratch proprio) - nao mexe no estado que
+; check_ground/check_wall_at ja usam pro motor de fisica.
+check_terrain_type:
+  STA pv_terr_target
+  LDA player_y
+  CLC
+  ADC #16
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  LDA player_x
+  CLC
+  ADC #7
+  JSR world_col_from
+  JSR get_collision2
+  LDA col_result
+  CMP pv_terr_target
+  BEQ ctt_yes
+  LDA #0
+  RTS
+ctt_yes:
+  LDA #1
+  RTS
+
+; A(entrada) = id numerico do objeto de hitbox (dano/warp) procurado.
+; Devolve em A: 1 se alguma instancia desse objeto na tela atual
+; esta sobrepondo o corpo do heroi, senao 0.
+check_hbobj_hit:
+  STA pv_hb_target
+  LDX #0
+chh_loop:
+  CPX #0  ; sem triggers -> CPX #0, o loop nunca entra
+  BEQ chh_no
+  LDA HbTriggerObj,X
+  CMP pv_hb_target
+  BNE chh_next
+  LDA HbTriggerScr,X
+  CMP cur_screen
+  BNE chh_next
+  ; posicao na tela do trigger (mesma logica dos inimigos): x - scroll_x
+  LDA HbTriggerX,X
+  SEC
+  SBC scroll_x
+  BCC chh_next
+  STA pv_hb_scr_x
+  ; AABB vs corpo do heroi (mesma convencao de check_player_enemy_hit)
+  LDA player_x
+  CLC
+  ADC #14
+  CMP pv_hb_scr_x
+  BCC chh_next
+  LDA pv_hb_scr_x
+  CLC
+  ADC #14
+  CMP player_x
+  BCC chh_next
+  LDA player_y
+  CLC
+  ADC #16
+  CMP HbTriggerY,X
+  BCC chh_next
+  LDA HbTriggerY,X
+  CLC
+  ADC #16
+  CMP player_y
+  BCC chh_next
+  LDA #1
+  RTS
+chh_next:
+  INX
+  JMP chh_loop
+chh_no:
+  LDA #0
+  RTS
+
+; Fase 3: AABB generico entre dois retangulos (pv_hbA_*/pv_hbB_*, ja
+; com a posicao real somada por quem chama). Devolve A=1 se sobrepoe.
+check_aabb_overlap:
+  LDA pv_hbB_x
+  CLC
+  ADC pv_hbB_w
+  CMP pv_hbA_x
+  BCC caabb_no
+  LDA pv_hbA_x
+  CLC
+  ADC pv_hbA_w
+  CMP pv_hbB_x
+  BCC caabb_no
+  LDA pv_hbB_y
+  CLC
+  ADC pv_hbB_h
+  CMP pv_hbA_y
+  BCC caabb_no
+  LDA pv_hbA_y
+  CLC
+  ADC pv_hbA_h
+  CMP pv_hbB_y
+  BCC caabb_no
+  LDA #1
+  RTS
+caabb_no:
+  LDA #0
+  RTS
+
+; Fase 3: A(entrada) = indice numerico do personagem-alvo (nao-heroi).
+; pv_hbA_* ja deve estar preenchido com a hitbox do heroi (posicao real);
+; pv_char_hb_x/y = offset da hitbox do alvo; pv_hbB_w/h = tamanho dela.
+; Varre o pool de instancias procurando uma do tipo-alvo que sobreponha
+; a hitbox do heroi. Se achar, deixa o slot em pv_hb_matched_inst e
+; devolve A=1; senao A=0. Mesma logica de posicao-na-tela dos inimigos
+; (inst_x - scroll_x, esconde se saiu pela esquerda).
+check_char_hero_hit:
+  STA pv_char_target
+  LDX #0
+cchh_loop:
+  CPX #5
+  BEQ cchh_no
+  LDA inst_on,X
+  BEQ cchh_next
+  LDA inst_char,X
+  CMP pv_char_target
+  BNE cchh_next
+  LDA inst_x,X
+  SEC
+  SBC scroll_x
+  BCC cchh_next
+  CLC
+  ADC pv_char_hb_x
+  STA pv_hbB_x
+  LDA inst_y,X
+  CLC
+  ADC pv_char_hb_y
+  STA pv_hbB_y
+  STX pv_char_save_x
+  JSR check_aabb_overlap
+  CMP #0
+  BEQ cchh_restore
+  LDX pv_char_save_x
+  STX pv_hb_matched_inst
+  LDA #1
+  RTS
+cchh_restore:
+  LDX pv_char_save_x
+cchh_next:
+  INX
+  JMP cchh_loop
+cchh_no:
+  LDA #0
+  RTS
+
+; ---- NGC Camada 6: motor de regras ----
+ScreenPhase:
+  .byte 1, 1, 1, 1, 1
+
+run_rules:
+  LDX play_idx
+  LDA ScreenPhase,X
+  CMP #1
+  BNE prule_0_scope_skip
+  JSR prule_0
+prule_0_scope_skip:
+  LDX play_idx
+  LDA ScreenPhase,X
+  CMP #1
+  BNE prule_1_scope_skip
+  JSR prule_1
+prule_1_scope_skip:
+  LDX play_idx
+  LDA ScreenPhase,X
+  CMP #0
+  BNE prule_2_scope_skip
+  JSR prule_2
+prule_2_scope_skip:
+  LDX play_idx
+  LDA ScreenPhase,X
+  CMP #1
+  BNE prule_3_scope_skip
+  JSR prule_3
+prule_3_scope_skip:
+  JSR prule_4
+  JSR prule_5
+  LDX play_idx
+  LDA ScreenPhase,X
+  CMP #1
+  BNE prule_6_scope_skip
+  JSR prule_6
+prule_6_scope_skip:
+  JSR prule_7
+  JSR prule_8
+  JSR prule_9
+  LDX play_idx
+  LDA ScreenPhase,X
+  CMP #1
+  BNE prule_10_scope_skip
+  JSR prule_10
+prule_10_scope_skip:
+  RTS
+
+; regra: Cair no buraco
+prule_0:
+  ; SE hitbox nativo: out_of_bounds
+  LDA pv_ev_oob
+  BEQ prule_0_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs0
+  AND #$01
+  BNE prule_0_end   ; ja estava ativa - nao repete
+  LDA pv_rs0
+  ORA #$01
+  STA pv_rs0
+  ; SUBTRAIR byte Vidas 1 (sem clamp - estoura como aritmetica 6502 padrao)
+  SEC
+  LDA pv_z_Vidas_3681
+  SBC #1
+  STA pv_z_Vidas_3681
+  ; Acao 'spawn_character': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'play_sound': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  ; SE hitbox de personagem: referencia incompleta ou desconhecida - sempre falso
+  JMP prule_0_cond_end
+  JMP prule_0_end
+prule_0_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs0
+  AND #$FE
+  STA pv_rs0
+prule_0_end:
+  RTS
+
+; regra: rigth
+prule_1:
+  ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
+  JMP prule_1_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs0
+  AND #$02
+  BNE prule_1_end   ; ja estava ativa - nao repete
+  LDA pv_rs0
+  ORA #$02
+  STA pv_rs0
+  ; Acao 'move_character': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  JMP prule_1_end
+prule_1_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs0
+  AND #$FD
+  STA pv_rs0
+prule_1_end:
+  RTS
+
+; regra: press start
+prule_2:
+  ; SE evento: nao-input (custom/menu) - Fase 2, sempre falso
+  JMP prule_2_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs0
+  AND #$04
+  BNE prule_2_end   ; ja estava ativa - nao repete
+  LDA pv_rs0
+  ORA #$04
+  STA pv_rs0
+  ; Acao 'spawn_character': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'play_sound': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  JMP prule_2_end
+prule_2_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs0
+  AND #$FB
+  STA pv_rs0
+prule_2_end:
+  RTS
+
+; regra: jump
+prule_3:
+  ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
+  JMP prule_3_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs0
+  AND #$08
+  BNE prule_3_end   ; ja estava ativa - nao repete
+  LDA pv_rs0
+  ORA #$08
+  STA pv_rs0
+  ; Acao 'move_character': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  JMP prule_3_end
+prule_3_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs0
+  AND #$F7
+  STA pv_rs0
+prule_3_end:
+  RTS
+
+; regra: left
+prule_4:
+  ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
+  JMP prule_4_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs0
+  AND #$10
+  BNE prule_4_end   ; ja estava ativa - nao repete
+  LDA pv_rs0
+  ORA #$10
+  STA pv_rs0
+  ; Acao 'move_character': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  JMP prule_4_end
+prule_4_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs0
+  AND #$EF
+  STA pv_rs0
+prule_4_end:
+  RTS
+
+; regra: Morrer
+prule_5:
+  ; SE variavel byte: Vidas == 0
+  LDA pv_z_Vidas_3681
+  CMP #0
+  BNE prule_5_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs0
+  AND #$20
+  BNE prule_5_end   ; ja estava ativa - nao repete
+  LDA pv_rs0
+  ORA #$20
+  STA pv_rs0
+  ; Acao: Matar (heroi) - mesma logica de respawn da queda
+  LDA #40
+  STA player_x
+  LDA #32
+  STA player_y
+  LDA #0
+  STA jump_cnt
+  ; Acao: Ir para Warp - tela de destino nao encontrada, ignorado
+  JMP prule_5_end
+prule_5_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs0
+  AND #$DF
+  STA pv_rs0
+prule_5_end:
+  RTS
+
+; regra: tocar inimigo
+prule_6:
+  ; SE hitbox: heroi (hb_body) toca personagem-alvo (hb_body)
+  LDA player_x
+  CLC
+  ADC #3
+  STA pv_hbA_x
+  LDA player_y
+  CLC
+  ADC #3
+  STA pv_hbA_y
+  LDA #10
+  STA pv_hbA_w
+  LDA #10
+  STA pv_hbA_h
+  LDA #3
+  STA pv_char_hb_x
+  LDA #2
+  STA pv_char_hb_y
+  LDA #11
+  STA pv_hbB_w
+  LDA #11
+  STA pv_hbB_h
+  LDA #1
+  JSR check_char_hero_hit
+  BEQ prule_6_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs0
+  AND #$40
+  BNE prule_6_end   ; ja estava ativa - nao repete
+  LDA pv_rs0
+  ORA #$40
+  STA pv_rs0
+  ; SUBTRAIR byte Vidas 1 (sem clamp - estoura como aritmetica 6502 padrao)
+  SEC
+  LDA pv_z_Vidas_3681
+  SBC #1
+  STA pv_z_Vidas_3681
+  ; Acao 'spawn_character': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  JMP prule_6_end
+prule_6_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs0
+  AND #$BF
+  STA pv_rs0
+prule_6_end:
+  RTS
+
+; regra: spaw enemy
+prule_7:
+  ; SE hitbox nativo: enter_screen
+  LDA pv_ev_enter
+  BEQ prule_7_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs0
+  AND #$80
+  BNE prule_7_end   ; ja estava ativa - nao repete
+  LDA pv_rs0
+  ORA #$80
+  STA pv_rs0
+  ; Acao 'spawn_character': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  JMP prule_7_end
+prule_7_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs0
+  AND #$7F
+  STA pv_rs0
+prule_7_end:
+  RTS
+
+; regra: matar inimigo
+prule_8:
+  ; SE hitbox: heroi (hb_1787148586149) toca personagem-alvo (hb_1787148461799)
+  LDA player_x
+  CLC
+  ADC #3
+  STA pv_hbA_x
+  LDA player_y
+  CLC
+  ADC #13
+  STA pv_hbA_y
+  LDA #10
+  STA pv_hbA_w
+  LDA #1
+  STA pv_hbA_h
+  LDA #4
+  STA pv_char_hb_x
+  LDA #1
+  STA pv_char_hb_y
+  LDA #9
+  STA pv_hbB_w
+  LDA #1
+  STA pv_hbB_h
+  LDA #1
+  JSR check_char_hero_hit
+  BEQ prule_8_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs1
+  AND #$01
+  BNE prule_8_end   ; ja estava ativa - nao repete
+  LDA pv_rs1
+  ORA #$01
+  STA pv_rs1
+  ; Acao: Matar (so a instancia que bateu na condicao SE hitbox anterior)
+  LDX pv_hb_matched_inst
+  LDA #0
+  STA inst_on,X
+  JMP prule_8_end
+prule_8_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs1
+  AND #$FE
+  STA pv_rs1
+prule_8_end:
+  RTS
+
+; regra: tiro inimigo
+prule_9:
+  ; SE evento: nao-input (custom/menu) - Fase 2, sempre falso
+  JMP prule_9_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs1
+  AND #$02
+  BNE prule_9_end   ; ja estava ativa - nao repete
+  LDA pv_rs1
+  ORA #$02
+  STA pv_rs1
+  ; Acao 'shoot': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  JMP prule_9_end
+prule_9_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs1
+  AND #$FD
+  STA pv_rs1
+prule_9_end:
+  RTS
+
+; regra: Pause
+prule_10:
+  ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
+  JMP prule_10_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs1
+  AND #$04
+  BNE prule_10_end   ; ja estava ativa - nao repete
+  LDA pv_rs1
+  ORA #$04
+  STA pv_rs1
+  ; Acao: Pausar/despausar o jogo
+  LDA pv_game_paused
+  EOR #1
+  STA pv_game_paused
+  JMP prule_10_end
+prule_10_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs1
+  AND #$FB
+  STA pv_rs1
+prule_10_end:
+  RTS
 
 PaletteData:
   .byte $0F, $00, $10, $30, $0F, $06, $16, $26, $0F, $00, $16, $30, $0F, $02, $12, $22
@@ -2162,18 +2749,13 @@ ScreenColHi:
   .byte >Collision_4
   .byte >Collision_5
 PlayScreenTable:  ; indices globais das telas de jogo (em ordem)
-  .byte 1, 2, 3, 4, 5
+  .byte $01, $02, $03, $04, $05
 
-; hitboxInstances total=7
-; play[0] screen=Tela 1 id=scr_1787144379503 spawns=1
-; play[1] screen=Tela 2 id=scr_1787144402490 spawns=0
-; play[2] screen=Tela 3 id=scr_1787144420490 spawns=2
-; play[3] screen=Tela 4 id=scr_1787144430768 spawns=2
-; play[4] screen=tela final fase 1 id=scr_1787144451744 spawns=2
+; --- NGC Sprite / Entity Data ---
 EnemyData_0:
   .byte $01, $D8, $C6, $01
 EnemyData_1:
-  .byte $00, $00, $00, $00
+  .byte $00, $00
 EnemyData_2:
   .byte $02, $64, $64, $01, $75, $22, $01
 EnemyData_3:
@@ -2195,88 +2777,76 @@ EnemySpawnHi:
 
 CharCells_0:  ; Hero
   .byte $00, $00, $01, $02
-CharFlips_0:  ; flip por celula ja convertido pra bits de atributo OAM (bit6=H bit7=V)
+CharFlips_0:
   .byte $00, $40, $00, $00
-CharOvCells_0:  ; sprites sobrepostos (mt.overlay) - $FF em todas = sem overlay nesse frame
+CharOvCells_0:
   .byte $FF, $FF, $FF, $FF
-CharOvFlips_0:  ; flip+paleta do overlay ja combinados (bit0-1=paleta bit6-7=flip)
+CharOvFlips_0:
   .byte $00, $00, $00, $00
 CharOvDx_0:
   .byte $00
 CharOvDy_0:
   .byte $00
-CharOvCellsFlip_0:  ; variante espelhada (usada quando player_flip != 0)
+CharOvCellsFlip_0:
   .byte $FF, $FF, $FF, $FF
 CharOvFlipsFlip_0:
   .byte $40, $40, $40, $40
 CharOvDxFlip_0:
   .byte $00
 CharDur_0:
-  .byte 8
+  .byte $08
 CharCells_1:  ; enemy
   .byte $03, $04, $05, $06, $03, $04, $07, $06, $03, $04, $05, $06, $03, $04, $08, $06
-CharFlips_1:  ; flip por celula ja convertido pra bits de atributo OAM (bit6=H bit7=V)
+CharFlips_1:
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-CharOvCells_1:  ; sprites sobrepostos (mt.overlay) - $FF em todas = sem overlay nesse frame
+CharOvCells_1:
   .byte $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF
-CharOvFlips_1:  ; flip+paleta do overlay ja combinados (bit0-1=paleta bit6-7=flip)
+CharOvFlips_1:
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
 CharOvDx_1:
   .byte $00, $00, $00, $00
 CharOvDy_1:
   .byte $00, $00, $00, $00
-CharOvCellsFlip_1:  ; variante espelhada (usada quando player_flip != 0)
+CharOvCellsFlip_1:
   .byte $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF
 CharOvFlipsFlip_1:
   .byte $40, $40, $40, $40, $40, $40, $40, $40, $40, $40, $40, $40, $40, $40, $40, $40
 CharOvDxFlip_1:
   .byte $00, $00, $00, $00
 CharDur_1:
-  .byte 8, 8, 8, 8
+  .byte $08, $08, $08, $08
 CharCells_2:  ; Simon
   .byte $09, $0A, $0B, $0C
-CharFlips_2:  ; flip por celula ja convertido pra bits de atributo OAM (bit6=H bit7=V)
+CharFlips_2:
   .byte $00, $00, $00, $00
-CharOvCells_2:  ; sprites sobrepostos (mt.overlay) - $FF em todas = sem overlay nesse frame
+CharOvCells_2:
   .byte $FF, $FF, $FF, $FF
-CharOvFlips_2:  ; flip+paleta do overlay ja combinados (bit0-1=paleta bit6-7=flip)
+CharOvFlips_2:
   .byte $00, $00, $00, $00
 CharOvDx_2:
   .byte $00
 CharOvDy_2:
   .byte $00
-CharOvCellsFlip_2:  ; variante espelhada (usada quando player_flip != 0)
+CharOvCellsFlip_2:
   .byte $FF, $FF, $FF, $FF
 CharOvFlipsFlip_2:
   .byte $40, $40, $40, $40
 CharOvDxFlip_2:
   .byte $00
 CharDur_2:
-  .byte 8
+  .byte $08
 CharFrameCellsLo:
-  .byte <CharCells_0
-  .byte <CharCells_1
-  .byte <CharCells_2
+  .byte <CharCells_0, <CharCells_1, <CharCells_2
 CharFrameCellsHi:
-  .byte >CharCells_0
-  .byte >CharCells_1
-  .byte >CharCells_2
+  .byte >CharCells_0, >CharCells_1, >CharCells_2
 CharFrameFlipsLo:
-  .byte <CharFlips_0
-  .byte <CharFlips_1
-  .byte <CharFlips_2
+  .byte <CharFlips_0, <CharFlips_1, <CharFlips_2
 CharFrameFlipsHi:
-  .byte >CharFlips_0
-  .byte >CharFlips_1
-  .byte >CharFlips_2
+  .byte >CharFlips_0, >CharFlips_1, >CharFlips_2
 CharFrameDurLo:
-  .byte <CharDur_0
-  .byte <CharDur_1
-  .byte <CharDur_2
+  .byte <CharDur_0, <CharDur_1, <CharDur_2
 CharFrameDurHi:
-  .byte >CharDur_0
-  .byte >CharDur_1
-  .byte >CharDur_2
+  .byte >CharDur_0, >CharDur_1, >CharDur_2
 CharFrameCount:
   .byte 1, 4, 1
 
@@ -2688,8 +3258,7 @@ Collision_5:
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
 
-; --- Music data ---
-; canal 0: pulse1
+; ---- NGC MUSIC DATA ----
 PitchLo_ch0:
   .byte $00, $26, $F8, $89, $F9, $56, $4D, $9D, $4C
 PitchHi_ch0:
@@ -2749,7 +3318,6 @@ Time_ch0:
   .byte $0B, $15, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $15, $0B, $0B, $0B, $0B, $15
   .byte $0B, $05, $05, $15, $15, $15, $15
 
-; canal 1: pulse2
 PitchLo_ch1:
   .byte $00, $52, $93, $0C, $2D, $67, $C9, $86, $70, $77, $64, $54, $7E, $A9, $6A, $59
   .byte $42, $E1, $FD
@@ -2811,7 +3379,6 @@ Time_ch1:
   .byte $0B, $15, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $15, $0B, $0B, $0B, $0B, $15
   .byte $0B, $05, $05, $15, $15, $15, $15
 
-; canal 2: triangle
 PitchLo_ch2:
   .byte $00, $1A, $5C, $C4, $FB, $A6, $CE, $93, $52, $0C, $2D, $67
 PitchHi_ch2:
@@ -2877,7 +3444,8 @@ Time_ch2:
   .word IRQ
 
 .segment "CHARS"
-  ; pg0 sprites (empacotado a partir dos frames dos personagens) / pg1 background empacotado
+
+; pg0 sprites empacotado pelo NGC
   .byte $00, $00, $00, $1F, $10, $10, $12, $10, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $14, $13, $10, $10, $1F, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $08, $E8, $08, $08, $F8, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
@@ -3134,7 +3702,10 @@ Time_ch2:
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  ; $1000 background
+
+; $1000 background
+
+; $1000 background
   .byte $00, $00, $00, $1F, $10, $10, $12, $10, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $FF, $01, $01, $01, $FF, $10, $10, $FF, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $FF, $21, $21, $21, $FF, $01, $01, $01, $00, $00, $00, $00, $00, $00, $00, $00

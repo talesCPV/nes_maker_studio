@@ -387,9 +387,48 @@ const BUILD = (() => {
         stats.innerHTML = "Modo: " + buildMode + "<br>ASM: " + asm.length + " chars<br>ROM: — (use ca65)" +
           "<br>Música: " + (music?music.name:"—");
       }
+
+      // Thumbnail do dashboard: gera a partir do preview do build
+      // só se o projeto já tem id no servidor e ainda não tem thumb.
+      try {
+        await maybeUploadBuildThumbnail();
+      } catch(thumbErr) {
+        console.warn("Thumbnail:", thumbErr);
+      }
     }catch(e){
       log("❌ Erro: "+e.message);
       console.error(e);
+    }
+  }
+
+  /**
+   * Renderiza o preview, exporta PNG e envia ao backend
+   * (servidor ignora se thumbnail.png já existir).
+   */
+  async function maybeUploadBuildThumbnail(){
+    if(typeof Project === "undefined" || !Project.projectId){
+      log("Thumbnail: projeto sem id no servidor — ignorado.");
+      return;
+    }
+    try { renderPreview(); } catch(e) {}
+    const canvas = document.getElementById("buildPreviewCanvas");
+    if(!canvas){
+      log("Thumbnail: canvas de preview ausente.");
+      return;
+    }
+    const dataUrl = canvas.toDataURL("image/png");
+    if(!dataUrl || dataUrl.length < 100){
+      log("Thumbnail: preview vazio.");
+      return;
+    }
+    if(typeof Project.uploadThumbnailIfMissing !== "function") return;
+    const result = await Project.uploadThumbnailIfMissing(dataUrl);
+    if(result && result.skipped){
+      log("Thumbnail: já existia no servidor — mantido.");
+    } else if(result && result.success){
+      log("Thumbnail: salvo no servidor.");
+    } else if(result && result.message){
+      log("Thumbnail: " + result.message);
     }
   }
 

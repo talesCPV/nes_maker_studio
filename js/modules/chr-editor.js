@@ -1560,18 +1560,27 @@ const CHR = (() => {
     }
     renderAll();
   }
-  async function tryLoadDefaultCHR(){
+  // Quando true, nunca injeta assets/novo.chr (projeto .nms já carregado ou em carga).
+  let suppressDefaultChr = false;
+
+  async function tryLoadDefaultCHR(force){
     try{
-      // Se buffer já tem conteúdo, não carrega
-      const nonZero = chrBuffer.some(b => b !== 0);
-      if(nonZero) return;
+      // Projeto carregado / em carga: não sobrescreve o CHR do .nms
+      if(!force && suppressDefaultChr) return false;
+      // Se buffer já tem conteúdo, não carrega (exceto força explícita)
+      if(!force && chrBuffer.some(b => b !== 0)) return false;
       const resp = await fetch('assets/novo.chr');
-      if(!resp.ok) return;
+      if(!resp.ok) return false;
+      // Revalida após o await: o projeto pode ter sido carregado no meio tempo
+      if(!force && suppressDefaultChr) return false;
+      if(!force && chrBuffer.some(b => b !== 0)) return false;
       const buf = new Uint8Array(await resp.arrayBuffer());
-      if(buf.length < 16) return;
+      if(buf.length < 16) return false;
+      if(!force && suppressDefaultChr) return false;
+      if(!force && chrBuffer.some(b => b !== 0)) return false;
       // Verifica se arquivo tem conteúdo
       const hasData = buf.some(b => b !== 0);
-      if(!hasData) return;
+      if(!hasData) return false;
       let newBuf;
       if(buf.length >= 8192) newBuf = buf.slice(0, 8192);
       else if(buf.length >= 4096){ newBuf = new Uint8Array(8192); newBuf.set(buf); if(buf.length === 4096) newBuf.set(buf, 4096); }
@@ -1586,9 +1595,11 @@ const CHR = (() => {
       initPalUI();
       renderAll();
       updateLabels();
-      console.log('Default novo.chr carregado automaticamente');
+      console.log(force ? 'novo.chr carregado (novo projeto)' : 'Default novo.chr carregado automaticamente');
+      return true;
     }catch(e){
       console.log('Não foi possível carregar assets/novo.chr:', e.message);
+      return false;
     }
   }
 
@@ -3273,12 +3284,32 @@ const CHR = (() => {
 
 
   return {
-    init(){ buildHTML(); setTimeout(()=>tryLoadDefaultCHR(), 100); },
+    init(){
+      buildHTML();
+      // Se a URL já pede um projeto do dashboard, não agenda o default CHR —
+      // o .nms trará o buffer correto. Evita corrida com assets/novo.chr.
+      try {
+        const pid = new URLSearchParams(window.location.search).get('project');
+        if(pid) suppressDefaultChr = true;
+      } catch(e) {}
+      setTimeout(()=>tryLoadDefaultCHR(), 100);
+    },
+    /** Impede (ou reativa) a injeção automática de assets/novo.chr. */
+    setSuppressDefaultChr(v){ suppressDefaultChr = !!v; },
+    /** Carrega assets/novo.chr. force=true ignora suppress (usado em Novo projeto). */
+    async loadDefaultCHR(force){ return tryLoadDefaultCHR(!!force); },
     loadBuffer(buf, pals, bankData){
+      // Qualquer carga via Project (.nms) passa por aqui — não sobrescrever depois.
+      suppressDefaultChr = true;
       let newBuf = buf.length>=8192?buf:(()=>{let n=new Uint8Array(8192); n.set(buf); return n;})();
       const hasData = newBuf.some(b=>b!==0);
-      if(!hasData){ console.log('Buffer vazio recebido, mantendo atual e tentando carregar novo.chr'); tryLoadDefaultCHR(); }
-      else { chrBuffer = newBuf; }
+      if(!hasData){
+        console.log('Buffer vazio recebido do projeto; mantendo buffer atual (sem injetar novo.chr)');
+        // Não chama tryLoadDefaultCHR — o CHR vazio do .nms é intencional ou
+        // ainda será preenchido; injetar assets/novo.chr apagaria o resto do projeto.
+      } else {
+        chrBuffer = newBuf;
+      }
       if(pals) palettes=pals.map(p=>[...p]);
       if(bankData && Array.isArray(bankData.paletteBank) && bankData.paletteBank.length){
         paletteBank = bankData.paletteBank.map(e=>({
