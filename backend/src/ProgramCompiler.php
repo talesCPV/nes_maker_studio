@@ -37,18 +37,28 @@
  * Fase 3 (novo): SE hitbox de personagem... toca... (body/attack/hurt).
  * Cada hitbox de personagem é um retângulo FIXO (x,y,w,h relativo à posição
  * do personagem) - não depende do frame de animação atual, o que simplifica
- * bastante. Só suporta o caso herói-vs-outro-personagem (cobre os usos reais
- * já cadastrados: "matar inimigo", "tocar inimigo"); personagem-vs-personagem
- * sem o herói nos dois lados fica pra Fase 4 (precisaria de um loop duplo de
- * instâncias). Quando a ação Matar vem logo depois de um SE hitbox de
- * personagem que bateu, mata só a instância específica que colidiu (via
- * pv_hb_matched_inst), não todas as do mesmo tipo.
+ * bastante. Cobre herói-vs-outro-personagem (check_char_hero_hit) e, desde a
+ * Fase 4, também personagem-vs-personagem sem o herói em nenhum dos lados
+ * (check_char_char_hit, loop duplo de instâncias - ex: inimigo vs inimigo,
+ * projétil vs inimigo). Quando a ação Matar vem logo depois de um SE hitbox
+ * de personagem que bateu, mata só a(s) instância(s) específica(s) que
+ * colidiram (via pv_hb_matched_inst/pv_hb_matched_inst_a), não todas as do
+ * mesmo tipo.
  *
- * Ainda fora do escopo (sempre-falso/no-op, não quebra a build): personagem-
- * vs-personagem sem o herói nos dois lados, Spawnar Personagem, Aplicar
- * Força de Pulo/Nível de Velocidade (valores fixos no jogo hoje), Tocar Som
- * (sem motor de SFX), Abrir/Fechar Menu, Ligar/Desligar Hitbox, Mover,
- * Atirar, eventos P2/custom/menu.
+ * Fase 4 (bugs de comportamento corrigidos junto): removidas duas reações
+ * automáticas herdadas de antes da Camada 6 que rodavam por fora das regras
+ * - (1) o bump-back fixo jogador-vs-inimigo (check_player_enemy_hit) e (2)
+ * o respawn automático ao cair fora dos limites. As duas viravam "regras
+ * invisíveis" que disparavam mesmo sem nenhuma regra configurada pelo
+ * usuário, e ainda rodavam em paralelo com regras reais pro mesmo evento.
+ * Agora só a flag nativa dispara (pv_ev_oob / SE hitbox nativo) - o que
+ * acontece de fato é 100% definido pelas regras do usuário.
+ *
+ * Ainda fora do escopo (sempre-falso/no-op, não quebra a build): Spawnar
+ * Personagem, Aplicar Força de Pulo/Nível de Velocidade (valores fixos no
+ * jogo hoje - decisão pendente de virar leitura das tabelas do Dashboard),
+ * Tocar Som (sem motor de SFX), Abrir/Fechar Menu, Ligar/Desligar Hitbox,
+ * Mover, Atirar, eventos P2/custom/menu.
  */
 final class ProgramCompiler
 {
@@ -259,7 +269,7 @@ final class ProgramCompiler
         $si = 0;
         $inLeadingConditions = true;
         $hasLeadingCondition = false;
-        $lastInstanceTarget = false;
+        $lastInstanceTargets = [];
         foreach ($rule['steps'] as $step) {
             if (!is_array($step)) continue;
             $tag = "{$label}_s{$si}";
@@ -267,16 +277,16 @@ final class ProgramCompiler
             $isCondition = in_array($type, ['if_event', 'if_hitbox', 'if_var'], true);
             if ($isCondition && $inLeadingConditions) {
                 $hasLeadingCondition = true;
-                if ($type === 'if_event') { $condLines = array_merge($condLines, $this->compileIfEvent($tag, $condFail, $step, $eventById)); $lastInstanceTarget = false; }
-                elseif ($type === 'if_hitbox') { $r = $this->compileIfHitbox($tag, $condFail, $step, $hbCtx); $condLines = array_merge($condLines, $r['lines']); $lastInstanceTarget = $r['instanceTarget']; }
-                else { $condLines = array_merge($condLines, $this->compileIfVar($tag, $condFail, $step, $alloc)); $lastInstanceTarget = false; }
+                if ($type === 'if_event') { $condLines = array_merge($condLines, $this->compileIfEvent($tag, $condFail, $step, $eventById)); $lastInstanceTargets = []; }
+                elseif ($type === 'if_hitbox') { $r = $this->compileIfHitbox($tag, $condFail, $step, $hbCtx); $condLines = array_merge($condLines, $r['lines']); $lastInstanceTargets = $r['instanceTargets']; }
+                else { $condLines = array_merge($condLines, $this->compileIfVar($tag, $condFail, $step, $alloc)); $lastInstanceTargets = []; }
             } else {
                 $inLeadingConditions = false;
-                if ($type === 'if_event') { $restLines = array_merge($restLines, $this->compileIfEvent($tag, $condFail, $step, $eventById)); $lastInstanceTarget = false; }
-                elseif ($type === 'if_hitbox') { $r = $this->compileIfHitbox($tag, $condFail, $step, $hbCtx); $restLines = array_merge($restLines, $r['lines']); $lastInstanceTarget = $r['instanceTarget']; }
-                elseif ($type === 'if_var') { $restLines = array_merge($restLines, $this->compileIfVar($tag, $condFail, $step, $alloc)); $lastInstanceTarget = false; }
+                if ($type === 'if_event') { $restLines = array_merge($restLines, $this->compileIfEvent($tag, $condFail, $step, $eventById)); $lastInstanceTargets = []; }
+                elseif ($type === 'if_hitbox') { $r = $this->compileIfHitbox($tag, $condFail, $step, $hbCtx); $restLines = array_merge($restLines, $r['lines']); $lastInstanceTargets = $r['instanceTargets']; }
+                elseif ($type === 'if_var') { $restLines = array_merge($restLines, $this->compileIfVar($tag, $condFail, $step, $alloc)); $lastInstanceTargets = []; }
                 elseif (in_array($type, ['set_var', 'add_var', 'sub_var'], true)) { $restLines = array_merge($restLines, $this->compileVarEffect($tag, $type, $step, $alloc)); }
-                elseif ($type === 'action') { $restLines = array_merge($restLines, $this->compileAction($tag, $step, $charIndexById, $heroIds, $numInstances, $hbCtx, $lastInstanceTarget)); }
+                elseif ($type === 'action') { $restLines = array_merge($restLines, $this->compileAction($tag, $step, $charIndexById, $heroIds, $numInstances, $hbCtx, $lastInstanceTargets)); }
             }
             $si++;
         }
@@ -326,8 +336,8 @@ final class ProgramCompiler
         if ($ref !== null) {
             $flag = substr($ref, 7);
             $var = $flag === 'on_ground' ? 'on_ground' : ($flag === 'out_of_bounds' ? 'pv_ev_oob' : ($flag === 'enter_screen' ? 'pv_ev_enter' : null));
-            if ($var === null) return ['lines' => ["  ; SE hitbox nativo desconhecido '{$flag}' - sempre falso", "  JMP {$ruleEnd}_end"], 'instanceTarget' => false];
-            return ['lines' => ["  ; SE hitbox nativo: {$flag}", "  LDA {$var}", "  BEQ {$ruleEnd}_end"], 'instanceTarget' => false];
+            if ($var === null) return ['lines' => ["  ; SE hitbox nativo desconhecido '{$flag}' - sempre falso", "  JMP {$ruleEnd}_end"], 'instanceTargets' => []];
+            return ['lines' => ["  ; SE hitbox nativo: {$flag}", "  LDA {$var}", "  BEQ {$ruleEnd}_end"], 'instanceTargets' => []];
         }
         $ref = str_starts_with($a, 'terrain:') ? $a : (str_starts_with($b, 'terrain:') ? $b : null);
         if ($ref !== null) {
@@ -337,13 +347,13 @@ final class ProgramCompiler
                 "  LDA #{$terrType}",
                 "  JSR check_terrain_type",
                 "  BEQ {$ruleEnd}_end",
-            ], 'instanceTarget' => false];
+            ], 'instanceTargets' => []];
         }
         $ref = str_starts_with($a, 'hbobj:') ? $a : (str_starts_with($b, 'hbobj:') ? $b : null);
         if ($ref !== null) {
             $objId = substr($ref, 6);
             if (!isset($hbCtx['objNumericId'][$objId])) {
-                return ['lines' => ["  ; SE hitbox objeto '{$objId}' sem instancia colocada no mapa - sempre falso", "  JMP {$ruleEnd}_end"], 'instanceTarget' => false];
+                return ['lines' => ["  ; SE hitbox objeto '{$objId}' sem instancia colocada no mapa - sempre falso", "  JMP {$ruleEnd}_end"], 'instanceTargets' => []];
             }
             $numId = $hbCtx['objNumericId'][$objId];
             return ['lines' => [
@@ -351,22 +361,21 @@ final class ProgramCompiler
                 "  LDA #{$numId}",
                 "  JSR check_hbobj_hit",
                 "  BEQ {$ruleEnd}_end",
-            ], 'instanceTarget' => false];
+            ], 'instanceTargets' => []];
         }
         if (str_starts_with($a, 'char:') && str_starts_with($b, 'char:')) {
             return $this->compileIfCharHitbox($tag, $ruleEnd, $a, $b, $hbCtx);
         }
-        return ['lines' => ["  ; SE hitbox de personagem: referencia incompleta ou desconhecida - sempre falso", "  JMP {$ruleEnd}_end"], 'instanceTarget' => false];
+        return ['lines' => ["  ; SE hitbox de personagem: referencia incompleta ou desconhecida - sempre falso", "  JMP {$ruleEnd}_end"], 'instanceTargets' => []];
     }
 
     /**
      * Fase 3: "SE hitbox de personagem... toca..." entre dois personagens.
      * Cada hitbox de personagem é um retângulo FIXO (x,y,w,h relativo à
      * posição do personagem) - não depende do frame de animação atual.
-     * Só suporta o caso herói-vs-outro-personagem (cobre "matar inimigo" e
-     * "tocar inimigo", os dois usos reais já cadastrados) - personagem vs
-     * personagem sem nenhum dos dois ser o herói fica pra Fase 4 (precisa de
-     * um loop duplo de instâncias, mais caro).
+     * Suporta herói-vs-outro-personagem (via check_char_hero_hit) e, desde a
+     * Fase 4, também personagem-vs-personagem sem o herói em nenhum dos dois
+     * lados (via check_char_char_hit, loop duplo de instâncias).
      */
     private function compileIfCharHitbox(string $tag, string $ruleEnd, string $a, string $b, array $hbCtx): array
     {
@@ -375,16 +384,18 @@ final class ProgramCompiler
         $heroSide = null; $otherSide = null;
         if (isset($hbCtx['heroIds'][$charA]) && !isset($hbCtx['heroIds'][$charB])) { $heroSide = [$charA, $hbA]; $otherSide = [$charB, $hbB]; }
         elseif (isset($hbCtx['heroIds'][$charB]) && !isset($hbCtx['heroIds'][$charA])) { $heroSide = [$charB, $hbB]; $otherSide = [$charA, $hbA]; }
+
         if ($heroSide === null) {
-            return ['lines' => ["  ; SE hitbox personagem-vs-personagem sem o heroi nos dois lados: Fase 4 - sempre falso", "  JMP {$ruleEnd}_end"], 'instanceTarget' => false];
+            return $this->compileIfCharCharHitbox($tag, $ruleEnd, $charA, $hbA, $charB, $hbB, $hbCtx);
         }
+
         [$heroCharId, $heroHbId] = $heroSide;
         [$otherCharId, $otherHbId] = $otherSide;
         $heroHb = $hbCtx['charHitboxesById'][$heroCharId][$heroHbId] ?? null;
         $otherHb = $hbCtx['charHitboxesById'][$otherCharId][$otherHbId] ?? null;
         $otherIdx = $hbCtx['charIndexById'][$otherCharId] ?? null;
         if (!$heroHb || !$otherHb || $otherIdx === null) {
-            return ['lines' => ["  ; SE hitbox de personagem: hitbox ou personagem nao encontrado - sempre falso", "  JMP {$ruleEnd}_end"], 'instanceTarget' => false];
+            return ['lines' => ["  ; SE hitbox de personagem: hitbox ou personagem nao encontrado - sempre falso", "  JMP {$ruleEnd}_end"], 'instanceTargets' => []];
         }
         return ['lines' => [
             "  ; SE hitbox: heroi ({$heroHbId}) toca personagem-alvo ({$otherHbId})",
@@ -411,7 +422,49 @@ final class ProgramCompiler
             "  LDA #{$otherIdx}",
             "  JSR check_char_hero_hit",
             "  BEQ {$ruleEnd}_end",
-        ], 'instanceTarget' => true];
+        ], 'instanceTargets' => [$otherCharId => 'pv_hb_matched_inst']];
+    }
+
+    /**
+     * Fase 4: "SE hitbox de personagem... toca..." entre dois personagens
+     * SEM o herói em nenhum dos lados (ex: inimigo vs inimigo, projétil vs
+     * inimigo). Precisa de um loop duplo de instâncias (check_char_char_hit)
+     * - mais caro que o caso com herói, então só compila esse loop quando a
+     * regra realmente usa esse tipo de comparação.
+     */
+    private function compileIfCharCharHitbox(string $tag, string $ruleEnd, string $charA, string $hbAId, string $charB, string $hbBId, array $hbCtx): array
+    {
+        $hbA = $hbCtx['charHitboxesById'][$charA][$hbAId] ?? null;
+        $hbB = $hbCtx['charHitboxesById'][$charB][$hbBId] ?? null;
+        $idxA = $hbCtx['charIndexById'][$charA] ?? null;
+        $idxB = $hbCtx['charIndexById'][$charB] ?? null;
+        if (!$hbA || !$hbB || $idxA === null || $idxB === null) {
+            return ['lines' => ["  ; SE hitbox personagem-vs-personagem: hitbox ou personagem nao encontrado - sempre falso", "  JMP {$ruleEnd}_end"], 'instanceTargets' => []];
+        }
+        return ['lines' => [
+            "  ; SE hitbox: personagem A ({$hbAId}) toca personagem B ({$hbBId}) - Fase 4",
+            "  LDA #{$hbA['x']}",
+            "  STA pv_char_hb_x",
+            "  LDA #{$hbA['y']}",
+            "  STA pv_char_hb_y",
+            "  LDA #{$hbA['w']}",
+            "  STA pv_hbA_w",
+            "  LDA #{$hbA['h']}",
+            "  STA pv_hbA_h",
+            "  LDA #{$hbB['x']}",
+            "  STA pv_char_hb2_x",
+            "  LDA #{$hbB['y']}",
+            "  STA pv_char_hb2_y",
+            "  LDA #{$hbB['w']}",
+            "  STA pv_hbB_w",
+            "  LDA #{$hbB['h']}",
+            "  STA pv_hbB_h",
+            "  LDA #{$idxB}",
+            "  STA pv_char_target2",
+            "  LDA #{$idxA}",
+            "  JSR check_char_char_hit",
+            "  BEQ {$ruleEnd}_end",
+        ], 'instanceTargets' => [$charA => 'pv_hb_matched_inst_a', $charB => 'pv_hb_matched_inst']];
     }
 
     private function compileIfEvent(string $tag, string $ruleEnd, array $step, array $eventById): array
@@ -564,7 +617,7 @@ final class ProgramCompiler
         return ["  ; {$opLabel} byte {$v['name']} {$value} (sem clamp - estoura como aritmetica 6502 padrao)", "  {$carry}", "  LDA {$label}", "  {$op1} #{$value}", "  STA {$label}"];
     }
 
-    private function compileAction(string $tag, array $step, array $charIndexById, array $heroIds, int $numInstances, array $hbCtx, bool $instanceTarget = false): array
+    private function compileAction(string $tag, array $step, array $charIndexById, array $heroIds, int $numInstances, array $hbCtx, array $instanceTargets = []): array
     {
         $actionId = (string)($step['actionId'] ?? '');
         $targetId = (string)($step['targetId'] ?? '');
@@ -585,13 +638,14 @@ final class ProgramCompiler
                         "  LDA #0", "  STA jump_cnt",
                     ];
                 }
-                if (isset($charIndexById[$targetId]) && $instanceTarget) {
+                if (isset($charIndexById[$targetId]) && isset($instanceTargets[$targetId])) {
                     // A condicao logo antes (SE hitbox de personagem) ja achou
                     // a instancia especifica que bateu - mata só ela, não
                     // todas as do mesmo tipo (mais correto pra "matar inimigo").
+                    $scratchVar = $instanceTargets[$targetId];
                     return [
                         "  ; Acao: Matar (so a instancia que bateu na condicao SE hitbox anterior)",
-                        "  LDX pv_hb_matched_inst",
+                        "  LDX {$scratchVar}",
                         "  LDA #0",
                         "  STA inst_on,X",
                     ];

@@ -741,15 +741,10 @@ up_fall:
   STA player_y
   CMP #240
   BCC up_done
-  ; caiu → respawn
-  LDA #40
-  STA player_x
-  LDA #32
-  STA player_y
-  LDA #0
-  STA jump_cnt
+  ; saiu dos limites - so a flag nativa dispara (Camada 6). Sem regra pra
+  ; isso, o heroi so continua caindo (sem reposicionamento automatico).
   LDA #1
-  STA pv_ev_oob   ; Camada 6: flag nativa "Fora dos limites" (pulso de 1 frame)
+  STA pv_ev_oob
 up_done:
   JSR animate_player
   JSR update_player_oam
