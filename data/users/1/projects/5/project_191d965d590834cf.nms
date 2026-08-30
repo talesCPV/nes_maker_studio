@@ -21926,7 +21926,7 @@
             "description": "",
             "mapper": 0,
             "bank": 0,
-            "gravity": "down",
+            "gravity": "none",
             "gravityStrength": 4,
             "scroll": "static",
             "mirroring": "vertical",
@@ -22151,78 +22151,56 @@
     ],
     "events": [
         {
-            "id": "ev_up",
-            "name": "Cima",
-            "category": "input",
-            "builtin": true
-        },
-        {
-            "id": "ev_down",
-            "name": "Baixo",
-            "category": "input",
-            "builtin": true
-        },
-        {
-            "id": "ev_left",
-            "name": "Esquerda",
-            "category": "input",
-            "builtin": true
-        },
-        {
-            "id": "ev_right",
-            "name": "Direita",
-            "category": "input",
-            "builtin": true
-        },
-        {
-            "id": "ev_a",
-            "name": "BotÃ£o A",
-            "category": "input",
-            "builtin": true
-        },
-        {
-            "id": "ev_b",
-            "name": "BotÃ£o B",
-            "category": "input",
-            "builtin": true
-        },
-        {
-            "id": "ev_start",
-            "name": "Start",
-            "category": "input",
-            "builtin": true
-        },
-        {
-            "id": "ev_select",
-            "name": "Select",
-            "category": "input",
-            "builtin": true
-        },
-        {
             "id": "ev_1787146398356",
             "name": "start: Press Start",
             "category": "menu",
             "builtin": false
         },
         {
-            "id": "ev_p1_idle",
-            "name": "P1 Idle",
-            "category": "input",
-            "button": "P1-IDLE",
-            "builtin": true
-        },
-        {
-            "id": "ev_p2_idle",
-            "name": "P2 Idle",
-            "category": "input",
-            "button": "P2-IDLE",
-            "builtin": true
-        },
-        {
             "id": "ev_1787457815932",
             "name": "Tiro Inimigo",
             "category": "custom",
             "builtin": false
+        },
+        {
+            "id": "ev_1788110149140",
+            "name": "Direita",
+            "category": "input",
+            "builtin": false,
+            "button": "P1-RIGHT",
+            "trigger": "hold"
+        },
+        {
+            "id": "ev_1788110260011",
+            "name": "Esquerda",
+            "category": "input",
+            "builtin": false,
+            "button": "P1-LEFT",
+            "trigger": "hold"
+        },
+        {
+            "id": "ev_1788110281044",
+            "name": "Botão A",
+            "category": "input",
+            "builtin": false,
+            "button": "P1-A",
+            "trigger": "hold"
+        },
+        {
+            "id": "ev_1788110890987",
+            "name": "Pulo unico",
+            "category": "input",
+            "builtin": false,
+            "button": "P1-A",
+            "trigger": "press"
+        },
+        {
+            "id": "ev_1788111025874",
+            "name": "B Segurado",
+            "category": "input",
+            "builtin": false,
+            "button": "P1-B",
+            "trigger": "hold"
         }
     ],
     "rules": [
@@ -22269,7 +22247,7 @@
             "steps": [
                 {
                     "type": "if_event",
-                    "eventId": "ev_right"
+                    "eventId": "ev_1788110149140"
                 },
                 {
                     "type": "action",
@@ -22283,7 +22261,7 @@
                     "type": "action",
                     "eventId": "",
                     "actionId": "apply_speed_level",
-                    "targetId": "sp_1787249791876",
+                    "targetId": "sp_1788110723514",
                     "charId": "char_1787145214756"
                 }
             ]
@@ -22291,7 +22269,7 @@
         {
             "id": "rule_1787146372491",
             "name": "press start",
-            "scope": "phase_1",
+            "scope": "global",
             "steps": [
                 {
                     "type": "if_event",
@@ -22308,6 +22286,20 @@
                     "eventId": "",
                     "actionId": "play_sound",
                     "targetId": "song_mt04mdzzcaol"
+                },
+                {
+                    "type": "action",
+                    "eventId": "",
+                    "actionId": "apply_jump_force",
+                    "targetId": "jf_1788110740419",
+                    "charId": "char_1787145214756"
+                },
+                {
+                    "type": "action",
+                    "eventId": "",
+                    "actionId": "apply_speed_level",
+                    "targetId": "sp_1788110723514",
+                    "charId": "char_1787145214756"
                 }
             ]
         },
@@ -22318,7 +22310,7 @@
             "steps": [
                 {
                     "type": "if_event",
-                    "eventId": "ev_a"
+                    "eventId": "ev_1788110890987"
                 },
                 {
                     "type": "action",
@@ -22328,6 +22320,13 @@
                     "charId": "char_1787145214756",
                     "animId": "idle",
                     "direction": "jump"
+                },
+                {
+                    "type": "action",
+                    "eventId": "",
+                    "actionId": "apply_jump_force",
+                    "targetId": "jf_1788110740419",
+                    "charId": "char_1787145214756"
                 }
             ]
         },
@@ -22338,7 +22337,7 @@
             "steps": [
                 {
                     "type": "if_event",
-                    "eventId": "ev_left"
+                    "eventId": "ev_1788110260011"
                 },
                 {
                     "type": "action",
@@ -22348,6 +22347,13 @@
                     "animId": "idle",
                     "direction": "left",
                     "flip": "flip_h"
+                },
+                {
+                    "type": "action",
+                    "eventId": "",
+                    "actionId": "apply_speed_level",
+                    "targetId": "sp_1788110723514",
+                    "charId": "char_1787145214756"
                 }
             ]
         },
@@ -22460,7 +22466,7 @@
         {
             "id": "rule_1787458607426",
             "name": "Pause",
-            "scope": "phase_1787142538003",
+            "scope": "global",
             "steps": [
                 {
                     "type": "if_event",
@@ -22470,6 +22476,20 @@
                     "type": "action",
                     "eventId": "",
                     "actionId": "pause_game"
+                },
+                {
+                    "type": "action",
+                    "eventId": "",
+                    "actionId": "apply_speed_level",
+                    "targetId": "sp_1788110452451",
+                    "charId": "char_1787145214756"
+                },
+                {
+                    "type": "action",
+                    "eventId": "",
+                    "actionId": "apply_jump_force",
+                    "targetId": "jf_1787249781892",
+                    "charId": "char_1787145214756"
                 }
             ]
         },
@@ -22505,14 +22525,7 @@
             "steps": [
                 {
                     "type": "if_event",
-                    "eventId": "ev_a"
-                },
-                {
-                    "type": "action",
-                    "eventId": "",
-                    "actionId": "apply_jump_force",
-                    "targetId": "jf_1787249781892",
-                    "charId": "char_1787145214756"
+                    "eventId": "ev_1788111025874"
                 },
                 {
                     "type": "action",
@@ -27499,7 +27512,7 @@
         ],
         "asm": ""
     },
-    "savedAt": 1788041721992,
+    "savedAt": 1788111405235,
     "physicsTables": {
         "jumps": [
             {
@@ -27541,13 +27554,23 @@
             "id": "jf_1787249781892",
             "name": "Pulo",
             "value": 20
+        },
+        {
+            "id": "jf_1788110740419",
+            "name": "pulo fraco",
+            "value": 10
         }
     ],
     "speedLevels": [
         {
-            "id": "sp_1787249791876",
+            "id": "sp_1788110452451",
             "name": "walk",
-            "value": 10
+            "value": 3
+        },
+        {
+            "id": "sp_1788110723514",
+            "name": "Lento",
+            "value": 1
         }
     ],
     "hitboxInstances": [
@@ -27699,5 +27722,6 @@
         "pal_6",
         "pal_7",
         "pal_8"
-    ]
+    ],
+    "controlMode": "auto"
 }

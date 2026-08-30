@@ -61,6 +61,7 @@ final class ProjectParser
         return [
             'project' => $project,
             'buildMode' => 'game',
+            'controlMode' => ($project['controlMode'] ?? 'auto') === 'programmed' ? 'programmed' : 'auto',
             'music' => $music,
             'musicEnabled' => $music !== null,
             'musicChannelCount' => $music ? min(5, count($music['channels'] ?? [])) : 0,

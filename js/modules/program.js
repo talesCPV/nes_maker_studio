@@ -466,7 +466,7 @@ const PROGRAM = (() => {
     const rows = events.map(e => `
       <tr style="border-bottom:1px solid #222">
         <td style="padding:6px;color:#fff">${e.name}</td>
-        <td style="padding:6px;color:#888">${e.category}${e.button ? ' ('+e.button+')' : ''}${e.hitboxObjectId ? ' ('+(hitboxObjs.find(o=>o.id===e.hitboxObjectId)?.name || '?')+')' : ''}</td>
+        <td style="padding:6px;color:#888">${e.category}${e.button ? ' ('+e.button+(e.trigger==='hold'?' segurado':'')+')' : ''}${e.hitboxObjectId ? ' ('+(hitboxObjs.find(o=>o.id===e.hitboxObjectId)?.name || '?')+')' : ''}</td>
         <td style="padding:6px">${e.builtin ? '<span style="color:#4ec9b0;font-size:10px">nativo</span>' : '<span style="color:#ffcc00;font-size:10px">customizado</span>'}</td>
         <td style="padding:6px;text-align:right"><button class="btn-tool" onclick="PROGRAM.deleteEvent('${e.id}')" style="background:#c0392b;color:#fff;font-size:10px">🗑</button></td>
       </tr>`).join('');
@@ -483,6 +483,10 @@ const PROGRAM = (() => {
             <select id="evButton" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
               ${INPUT_BUTTONS.map(b=>`<option value="${b}">${b}</option>`).join('')}
             </select>
+            <select id="evTrigger" title="Toque: dispara só no instante em que aperta. Segurado: dispara todo frame enquanto o botão estiver pressionado (use pra Mover)." style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
+              <option value="press">Toque</option>
+              <option value="hold">Segurado</option>
+            </select>
             <button class="btn-tool" onclick="PROGRAM.addEvent()" style="background:#27ae60;color:#fff">+ Adicionar</button>
           </div>
         </div>
@@ -498,17 +502,19 @@ const PROGRAM = (() => {
 
   function onEvCategoryChange(){
     const catEl = document.getElementById('evCategory'); const btnEl = document.getElementById('evButton');
+    const trgEl = document.getElementById('evTrigger');
     if(!catEl) return;
     btnEl.style.display = catEl.value === 'input' ? 'inline-block' : 'none';
+    if(trgEl) trgEl.style.display = catEl.value === 'input' ? 'inline-block' : 'none';
   }
 
   function addEvent(){
     const nameEl = document.getElementById('evName'); const catEl = document.getElementById('evCategory');
-    const btnEl = document.getElementById('evButton');
+    const btnEl = document.getElementById('evButton'); const trgEl = document.getElementById('evTrigger');
     const name = nameEl.value.trim(); if(!name) return;
     if(!Project.data.events) Project.data.events = [];
     const ev = { id: 'ev_'+Date.now(), name, category: catEl.value, builtin: false };
-    if(catEl.value === 'input') ev.button = btnEl.value;
+    if(catEl.value === 'input') { ev.button = btnEl.value; ev.trigger = trgEl ? trgEl.value : 'press'; }
     Project.data.events.push(ev);
     renderTab();
   }

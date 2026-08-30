@@ -46,6 +46,7 @@ final class NGC
         $mainLoop = $this->renderTemplate('main_loop', $context);
         $collision = $this->renderTemplate('collision', $context);
         $player = $this->renderTemplate('player', $context);
+        $playerManualMove = $this->renderTemplate('player_manual_move', $context);
         $scroll = $this->renderTemplate('scroll', $context);
         $background = $this->renderTemplate('background', $context);
         $backgroundTables = $this->renderTemplate('background_tables', $context);
@@ -96,6 +97,7 @@ final class NGC
         $builder->add($spriteEntities);
         $builder->add($collision);
         $builder->add($player);
+        $builder->add($playerManualMove);
         $builder->add($reset);
         $builder->add($mainLoop);
         $builder->add($gameFlow);
@@ -118,11 +120,11 @@ final class NGC
             'ready' => true,
             'partial' => false,
             'compiler' => 'NGC',
-            'version' => '0.25.0',
+            'version' => '0.26.0',
             'buildMode' => $context['buildMode'],
             'projectName' => $context['project']['name'] ?? 'meu-jogo',
             'asm' => $builder->build(),
-            'migrated' => ['header', 'vectors', 'zeropage', 'nmi', 'reset', 'input', 'main_loop', 'collision', 'player', 'scroll', 'background', 'background_tables', 'background_data', 'sprite_player', 'sprite_entities', 'sprite_data', 'sprite_chr', 'background_chr', 'music', 'game_flow', 'palette_data', 'program_vars', 'program_rules', 'program_hitbox_engine'],
+            'migrated' => ['header', 'vectors', 'zeropage', 'nmi', 'reset', 'input', 'main_loop', 'collision', 'player', 'player_manual_move', 'scroll', 'background', 'background_tables', 'background_data', 'sprite_player', 'sprite_entities', 'sprite_data', 'sprite_chr', 'background_chr', 'music', 'game_flow', 'palette_data', 'program_vars', 'program_rules', 'program_hitbox_engine'],
         ];
 
         if (!empty($request['debug'])) {

@@ -77,6 +77,9 @@ pv_ev_enter:    .res 1  ; Camada 6 Fase 2: flag nativa "Entrou na tela" (pulso)
 pv_hb_target:   .res 1  ; Camada 6 Fase 2: scratch do check_hbobj_hit
 pv_hb_scr_x:    .res 1  ; Camada 6 Fase 2: scratch do check_hbobj_hit
 pv_terr_target: .res 1  ; Camada 6 Fase 2: scratch do check_terrain_type
+pv_jump_force:  .res 1  ; Camada 6 Fase 5: frames de impulso de pulo - 0 = pulo desligado ate uma regra Aplicar Forca de Pulo definir
+pv_move_speed:  .res 1  ; Camada 6 Fase 5: pixels/frame de movimento horizontal - 0 = movimento desligado ate uma regra Aplicar Nivel de Velocidade definir
+mv_calc:        .res 1  ; Camada 6 Fase 5: scratch pra compor deadzone+sonda+velocidade em runtime
 pv_hbA_x:       .res 1  ; Camada 6 Fase 3: retangulo A (heroi) do check_aabb_overlap
 pv_hbA_y:       .res 1
 pv_hbA_w:       .res 1
@@ -1751,9 +1754,16 @@ uls_try_scroll:
   ; o delta) - por isso soma DEADZONE_LEFT(96), nao so o movimento. Selecao de tela
   ; e' sempre por ADC/carry (>=256 -> play_idx+1), independente da direcao do
   ; movimento - e' sobre POSICAO no mundo, nao sobre pra que lado anda.
+  ; Camada 6 Fase 5: DEADZONE_LEFT(96) + 2(sonda) - pv_move_speed, calculado
+  ; num scratch primeiro pra preservar a mesma logica de carry/overflow do
+  ; calculo original (que usava uma constante fixa).
+  LDA #98
+  SEC
+  SBC pv_move_speed
+  STA mv_calc
   LDA scroll_x
   CLC
-  ADC #95             ; DEADZONE_LEFT(96) - 3(mov) + 2(sonda) = 95
+  ADC mv_calc
   STA gcw_col
   LDA #0
   BCC uls_sel_ok      ; sem overflow -> tela atual (play_idx)
@@ -1801,7 +1811,7 @@ uls_have:
   ; livre: rola o mundo pra esquerda
   LDA scroll_x
   SEC
-  SBC #3
+  SBC pv_move_speed
   STA scroll_x
   BCS uls_no_cross     ; sem borrow -> nao cruzou 256
   JSR advance_screen_left
@@ -1811,10 +1821,10 @@ uls_no_cross:
   JMP up_jump          ; NAO cair em up_left_move - senao o player anda De novo por
   ; cima do que o scroll ja moveu (dobra a velocidade percebida - bug reportado)
 up_left_move:
-  ; tile X na borda esquerda proposta (x-3+2) - movimento livre dentro da deadzone
+  ; tile X na borda esquerda proposta (x-velocidade+2) - movimento livre dentro da deadzone
   LDA player_x
   SEC
-  SBC #3
+  SBC pv_move_speed
   CLC
   ADC #2
   JSR world_col_from
@@ -1823,7 +1833,7 @@ up_left_move:
   BNE up_right           ; bloqueado
   LDA player_x
   SEC
-  SBC #3
+  SBC pv_move_speed
   STA player_x
   LDA #1
   STA player_flip
@@ -1847,10 +1857,16 @@ urs_deadzone:
   BCC up_right_move
   JMP up_jump
 urs_try_scroll:
-  ; testa parede NO MUNDO (scroll_x + DEADZONE_RIGHT(152) + sonda direita(+13) + mov(+3))
+  ; testa parede NO MUNDO (scroll_x + DEADZONE_RIGHT(152) + sonda direita(+13) + pv_move_speed)
+  ; Camada 6 Fase 5: 165+velocidade calculado num scratch primeiro (mesma
+  ; razao do lado esquerdo - preserva a logica de carry original).
+  LDA #165
+  CLC
+  ADC pv_move_speed
+  STA mv_calc
   LDA scroll_x
   CLC
-  ADC #168
+  ADC mv_calc
   STA gcw_col
   LDA #0
   BCC urs_sel_ok      ; sem overflow -> ainda na tela atual (play_idx)
@@ -1898,7 +1914,7 @@ urs_have:
   ; livre: rola o mundo pra direita
   LDA scroll_x
   CLC
-  ADC #3
+  ADC pv_move_speed
   STA scroll_x
   BCC urs_no_cross     ; sem overflow -> nao cruzou 256
   JSR advance_screen_right
@@ -1907,10 +1923,10 @@ urs_no_cross:
   STA player_flip
   JMP up_jump
 up_right_move:
-  ; tile X na borda direita proposta (x+3+13) - movimento livre dentro da deadzone
+  ; tile X na borda direita proposta (x+velocidade+13) - movimento livre dentro da deadzone
   LDA player_x
   CLC
-  ADC #3
+  ADC pv_move_speed
   CLC
   ADC #13
   JSR world_col_from
@@ -1919,7 +1935,7 @@ up_right_move:
   BNE up_jump            ; bloqueado
   LDA player_x
   CLC
-  ADC #3
+  ADC pv_move_speed
   STA player_x
   LDA #0
   STA player_flip
@@ -1930,7 +1946,8 @@ up_jump:
   BEQ up_vert
   LDA on_ground
   BEQ up_vert
-  LDA #14
+  LDA pv_jump_force   ; Camada 6 Fase 5: 0 = pulo desligado ate uma regra Aplicar Forca de Pulo definir
+  BEQ up_vert
   STA jump_cnt
   LDA #0
   STA on_ground
@@ -1963,6 +1980,208 @@ up_fall:
 up_done:
   JSR animate_player
   JSR update_player_oam
+  RTS
+
+mv_hero_left:
+  LDA player_x
+  CMP #96
+  BCC mvhl_deadzone
+  JMP mvhl_move
+mvhl_deadzone:
+  LDA play_idx
+  BNE mvhl_try_scroll
+  LDA player_x
+  CMP #8
+  BCS mvhl_move
+  RTS                  ; bloqueado - borda esquerda absoluta do jogo (tela 0)
+mvhl_try_scroll:
+  LDA #98
+  SEC
+  SBC pv_move_speed
+  STA mv_calc
+  LDA scroll_x
+  CLC
+  ADC mv_calc
+  STA gcw_col
+  LDA #0
+  BCC mvhl_sel_ok
+  LDA #1
+mvhl_sel_ok:
+  STA gcw_sel
+  BEQ mvhl_use_cur
+  LDA play_idx
+  CLC
+  ADC #1
+  JMP mvhl_have
+mvhl_use_cur:
+  LDA play_idx
+mvhl_have:
+  TAX
+  LDA PlayScreenTable,X
+  STA gcw_screen
+  LDA gcw_col
+  LSR A
+  LSR A
+  LSR A
+  STA col_x
+  LDA player_y
+  CLC
+  ADC #4
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  JSR get_collision2
+  LDA col_result
+  JSR is_solid
+  BNE mvhl_blocked
+  LDA player_y
+  CLC
+  ADC #12
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  JSR get_collision2
+  LDA col_result
+  JSR is_solid
+  BNE mvhl_blocked
+  LDA scroll_x
+  SEC
+  SBC pv_move_speed
+  STA scroll_x
+  BCS mvhl_no_cross
+  JSR advance_screen_left
+mvhl_no_cross:
+  LDA #1
+  STA player_flip
+  RTS
+mvhl_blocked:
+  RTS
+mvhl_move:
+  LDA player_x
+  SEC
+  SBC pv_move_speed
+  CLC
+  ADC #2
+  JSR world_col_from
+  JSR check_wall_at
+  LDA col_result
+  BNE mvhl_move_blocked
+  LDA player_x
+  SEC
+  SBC pv_move_speed
+  STA player_x
+  LDA #1
+  STA player_flip
+mvhl_move_blocked:
+  RTS
+
+mv_hero_right:
+  LDA player_x
+  CMP #152
+  BCS mvhr_deadzone
+  JMP mvhr_move
+mvhr_deadzone:
+  LDA play_idx
+  CMP #4
+  BCC mvhr_try_scroll
+  LDA player_x
+  CMP #244
+  BCC mvhr_move
+  RTS                  ; bloqueado - borda direita absoluta do jogo (ultima tela)
+mvhr_try_scroll:
+  LDA #165
+  CLC
+  ADC pv_move_speed
+  STA mv_calc
+  LDA scroll_x
+  CLC
+  ADC mv_calc
+  STA gcw_col
+  LDA #0
+  BCC mvhr_sel_ok
+  LDA #1
+mvhr_sel_ok:
+  STA gcw_sel
+  BEQ mvhr_use_cur
+  LDA play_idx
+  CLC
+  ADC #1
+  JMP mvhr_have
+mvhr_use_cur:
+  LDA play_idx
+mvhr_have:
+  TAX
+  LDA PlayScreenTable,X
+  STA gcw_screen
+  LDA gcw_col
+  LSR A
+  LSR A
+  LSR A
+  STA col_x
+  LDA player_y
+  CLC
+  ADC #4
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  JSR get_collision2
+  LDA col_result
+  JSR is_solid
+  BNE mvhr_blocked
+  LDA player_y
+  CLC
+  ADC #12
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  JSR get_collision2
+  LDA col_result
+  JSR is_solid
+  BNE mvhr_blocked
+  LDA scroll_x
+  CLC
+  ADC pv_move_speed
+  STA scroll_x
+  BCC mvhr_no_cross
+  JSR advance_screen_right
+mvhr_no_cross:
+  LDA #0
+  STA player_flip
+  RTS
+mvhr_blocked:
+  RTS
+mvhr_move:
+  LDA player_x
+  CLC
+  ADC pv_move_speed
+  CLC
+  ADC #13
+  JSR world_col_from
+  JSR check_wall_at
+  LDA col_result
+  BNE mvhr_move_blocked
+  LDA player_x
+  CLC
+  ADC pv_move_speed
+  STA player_x
+  LDA #0
+  STA player_flip
+mvhr_move_blocked:
+  RTS
+
+mv_hero_jump:
+  LDA on_ground
+  BEQ mvhj_done
+  LDA pv_jump_force
+  BEQ mvhj_done
+  STA jump_cnt
+  LDA #0
+  STA on_ground
+mvhj_done:
   RTS
 
 Reset:
@@ -2385,12 +2604,7 @@ prule_0_scope_skip:
   BNE prule_1_scope_skip
   JSR prule_1
 prule_1_scope_skip:
-  LDX play_idx
-  LDA ScreenPhase,X
-  CMP #0
-  BNE prule_2_scope_skip
   JSR prule_2
-prule_2_scope_skip:
   LDX play_idx
   LDA ScreenPhase,X
   CMP #1
@@ -2408,12 +2622,7 @@ prule_6_scope_skip:
   JSR prule_7
   JSR prule_8
   JSR prule_9
-  LDX play_idx
-  LDA ScreenPhase,X
-  CMP #1
-  BNE prule_10_scope_skip
   JSR prule_10
-prule_10_scope_skip:
   JSR prule_11
   LDX play_idx
   LDA ScreenPhase,X
@@ -2440,8 +2649,8 @@ prule_0:
   LDA pv_z_Vidas_3681
   SBC #1
   STA pv_z_Vidas_3681
-  ; Acao 'spawn_character': Fase 4 (subsistema ainda nao existe no jogo) - no-op
-  ; Acao 'play_sound': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'spawn_character': Fase 7 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'play_sound': Fase 7 (subsistema ainda nao existe no jogo) - no-op
   ; SE hitbox de personagem: referencia incompleta ou desconhecida - sempre falso
   JMP prule_0_cond_end
   JMP prule_0_end
@@ -2455,23 +2664,18 @@ prule_0_end:
 
 ; regra: rigth
 prule_1:
-  ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
-  JMP prule_1_cond_end
-  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
-  LDA pv_rs0
-  AND #$02
-  BNE prule_1_end   ; ja estava ativa - nao repete
-  LDA pv_rs0
-  ORA #$02
-  STA pv_rs0
-  ; Acao 'move_character': Fase 4 (subsistema ainda nao existe no jogo) - no-op
-  ; Acao 'apply_speed_level': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  ; SE evento: P1-RIGHT segurado
+  LDA pad1
+  AND #$80
+  BEQ prule_1_cond_end
+  ; Acao: Mover heroi direita
+  JSR mv_hero_right
+  ; animId 'idle' - selecao de animacao por regra ainda nao existe (Fase 7)
+  ; Acao: Aplicar Nivel de Velocidade (1 px/frame)
+  LDA #1
+  STA pv_move_speed
   JMP prule_1_end
 prule_1_cond_end:
-  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
-  LDA pv_rs0
-  AND #$FD
-  STA pv_rs0
 prule_1_end:
   RTS
 
@@ -2486,8 +2690,14 @@ prule_2:
   LDA pv_rs0
   ORA #$04
   STA pv_rs0
-  ; Acao 'spawn_character': Fase 4 (subsistema ainda nao existe no jogo) - no-op
-  ; Acao 'play_sound': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'spawn_character': Fase 7 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'play_sound': Fase 7 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao: Aplicar Forca de Pulo (10 frames de impulso)
+  LDA #10
+  STA pv_jump_force
+  ; Acao: Aplicar Nivel de Velocidade (1 px/frame)
+  LDA #1
+  STA pv_move_speed
   JMP prule_2_end
 prule_2_cond_end:
   ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
@@ -2499,8 +2709,10 @@ prule_2_end:
 
 ; regra: jump
 prule_3:
-  ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
-  JMP prule_3_cond_end
+  ; SE evento: P1-A pressionado
+  LDA pad1_edge
+  AND #$01
+  BEQ prule_3_cond_end
   ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
   LDA pv_rs0
   AND #$08
@@ -2508,7 +2720,14 @@ prule_3:
   LDA pv_rs0
   ORA #$08
   STA pv_rs0
-  ; Acao 'move_character': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao: Mover heroi pulo
+  JSR mv_hero_jump
+  LDA #0
+  STA player_flip
+  ; animId 'idle' - selecao de animacao por regra ainda nao existe (Fase 7)
+  ; Acao: Aplicar Forca de Pulo (10 frames de impulso)
+  LDA #10
+  STA pv_jump_force
   JMP prule_3_end
 prule_3_cond_end:
   ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
@@ -2520,22 +2739,18 @@ prule_3_end:
 
 ; regra: left
 prule_4:
-  ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
-  JMP prule_4_cond_end
-  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
-  LDA pv_rs0
-  AND #$10
-  BNE prule_4_end   ; ja estava ativa - nao repete
-  LDA pv_rs0
-  ORA #$10
-  STA pv_rs0
-  ; Acao 'move_character': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  ; SE evento: P1-LEFT segurado
+  LDA pad1
+  AND #$40
+  BEQ prule_4_cond_end
+  ; Acao: Mover heroi esquerda
+  JSR mv_hero_left
+  ; animId 'idle' - selecao de animacao por regra ainda nao existe (Fase 7)
+  ; Acao: Aplicar Nivel de Velocidade (1 px/frame)
+  LDA #1
+  STA pv_move_speed
   JMP prule_4_end
 prule_4_cond_end:
-  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
-  LDA pv_rs0
-  AND #$EF
-  STA pv_rs0
 prule_4_end:
   RTS
 
@@ -2607,7 +2822,7 @@ prule_6:
   LDA pv_z_Vidas_3681
   SBC #1
   STA pv_z_Vidas_3681
-  ; Acao 'spawn_character': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'spawn_character': Fase 7 (subsistema ainda nao existe no jogo) - no-op
   JMP prule_6_end
 prule_6_cond_end:
   ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
@@ -2629,7 +2844,7 @@ prule_7:
   LDA pv_rs0
   ORA #$80
   STA pv_rs0
-  ; Acao 'spawn_character': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'spawn_character': Fase 7 (subsistema ainda nao existe no jogo) - no-op
   JMP prule_7_end
 prule_7_cond_end:
   ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
@@ -2696,7 +2911,7 @@ prule_9:
   LDA pv_rs1
   ORA #$02
   STA pv_rs1
-  ; Acao 'shoot': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'shoot': Fase 7 (subsistema ainda nao existe no jogo) - no-op
   JMP prule_9_end
 prule_9_cond_end:
   ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
@@ -2708,7 +2923,7 @@ prule_9_end:
 
 ; regra: Pause
 prule_10:
-  ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
+  ; SE evento: nao-input (custom/menu) - Fase 2, sempre falso
   JMP prule_10_cond_end
   ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
   LDA pv_rs1
@@ -2721,6 +2936,12 @@ prule_10:
   LDA pv_game_paused
   EOR #1
   STA pv_game_paused
+  ; Acao: Aplicar Nivel de Velocidade (3 px/frame)
+  LDA #3
+  STA pv_move_speed
+  ; Acao: Aplicar Forca de Pulo (20 frames de impulso)
+  LDA #20
+  STA pv_jump_force
   JMP prule_10_end
 prule_10_cond_end:
   ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
@@ -2786,23 +3007,17 @@ prule_11_end:
 
 ; regra: jump 2
 prule_12:
-  ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
-  JMP prule_12_cond_end
-  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
-  LDA pv_rs1
-  AND #$10
-  BNE prule_12_end   ; ja estava ativa - nao repete
-  LDA pv_rs1
-  ORA #$10
-  STA pv_rs1
-  ; Acao 'apply_jump_force': Fase 4 (subsistema ainda nao existe no jogo) - no-op
-  ; Acao 'move_character': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  ; SE evento: P1-B segurado
+  LDA pad1
+  AND #$02
+  BEQ prule_12_cond_end
+  ; Acao: Mover heroi pulo
+  JSR mv_hero_jump
+  LDA #0
+  STA player_flip
+  ; animId 'idle' - selecao de animacao por regra ainda nao existe (Fase 7)
   JMP prule_12_end
 prule_12_cond_end:
-  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
-  LDA pv_rs1
-  AND #$EF
-  STA pv_rs1
 prule_12_end:
   RTS
 

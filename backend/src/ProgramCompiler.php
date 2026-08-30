@@ -279,6 +279,7 @@ final class ProgramCompiler
         $si = 0;
         $inLeadingConditions = true;
         $hasLeadingCondition = false;
+        $hasHoldEvent = false;
         $lastInstanceTargets = [];
         foreach ($rule['steps'] as $step) {
             if (!is_array($step)) continue;
@@ -287,12 +288,12 @@ final class ProgramCompiler
             $isCondition = in_array($type, ['if_event', 'if_hitbox', 'if_var'], true);
             if ($isCondition && $inLeadingConditions) {
                 $hasLeadingCondition = true;
-                if ($type === 'if_event') { $condLines = array_merge($condLines, $this->compileIfEvent($tag, $condFail, $step, $eventById)); $lastInstanceTargets = []; }
+                if ($type === 'if_event') { $r = $this->compileIfEvent($tag, $condFail, $step, $eventById); $condLines = array_merge($condLines, $r['lines']); if ($r['isHold']) $hasHoldEvent = true; $lastInstanceTargets = []; }
                 elseif ($type === 'if_hitbox') { $r = $this->compileIfHitbox($tag, $condFail, $step, $hbCtx); $condLines = array_merge($condLines, $r['lines']); $lastInstanceTargets = $r['instanceTargets']; }
                 else { $condLines = array_merge($condLines, $this->compileIfVar($tag, $condFail, $step, $alloc)); $lastInstanceTargets = []; }
             } else {
                 $inLeadingConditions = false;
-                if ($type === 'if_event') { $restLines = array_merge($restLines, $this->compileIfEvent($tag, $condFail, $step, $eventById)); $lastInstanceTargets = []; }
+                if ($type === 'if_event') { $r = $this->compileIfEvent($tag, $condFail, $step, $eventById); $restLines = array_merge($restLines, $r['lines']); $lastInstanceTargets = []; }
                 elseif ($type === 'if_hitbox') { $r = $this->compileIfHitbox($tag, $condFail, $step, $hbCtx); $restLines = array_merge($restLines, $r['lines']); $lastInstanceTargets = $r['instanceTargets']; }
                 elseif ($type === 'if_var') { $restLines = array_merge($restLines, $this->compileIfVar($tag, $condFail, $step, $alloc)); $lastInstanceTargets = []; }
                 elseif (in_array($type, ['set_var', 'add_var', 'sub_var'], true)) { $restLines = array_merge($restLines, $this->compileVarEffect($tag, $type, $step, $alloc)); }
@@ -306,11 +307,17 @@ final class ProgramCompiler
         $lines[] = "{$label}:";
         $lines = array_merge($lines, $condLines);
 
-        if (!$hasLeadingCondition) {
-            // Regra sem nenhuma condicao de entrada (só efeitos, ou começa
-            // direto com um efeito) - não tem "borda" pra detectar, mantém
-            // disparando todo frame como antes.
+        if (!$hasLeadingCondition || $hasHoldEvent) {
+            // Regra sem nenhuma condicao de entrada (só efeitos), ou que usa
+            // um evento "segurado" (Fase 6: precisa repetir todo frame
+            // enquanto o botao estiver preso - ex: Mover - entao pula o
+            // disparo por borda de proposito, mesmo tendo condicao).
             $lines = array_merge($lines, $restLines);
+            $lines[] = "  JMP {$label}_end";
+            // {label}_cond_end precisa existir sempre que houver condicao de
+            // entrada (o codigo da condicao ja referencia esse rotulo) -
+            // aqui so cai direto pro fim, sem bit de estado pra mexer.
+            if ($hasLeadingCondition) $lines[] = "{$label}_cond_end:";
             $lines[] = "{$label}_end:";
             $lines[] = "  RTS";
             return implode("\n", $lines);
@@ -481,14 +488,15 @@ final class ProgramCompiler
     {
         $ev = $eventById[(string)($step['eventId'] ?? '')] ?? null;
         if (!is_array($ev) || ($ev['category'] ?? '') !== 'input') {
-            return ["  ; SE evento: nao-input (custom/menu) - Fase 2, sempre falso", "  JMP {$ruleEnd}_end"];
+            return ['lines' => ["  ; SE evento: nao-input (custom/menu) - Fase 2, sempre falso", "  JMP {$ruleEnd}_end"], 'isHold' => false];
         }
         $button = (string)($ev['button'] ?? '');
+        $isHold = ($ev['trigger'] ?? 'press') === 'hold';
         if ($button === 'P1-IDLE') {
             $idleTime = max(0, (int)($step['idleTime'] ?? 0));
             $lo = $idleTime & 0xFF;
             $hi = ($idleTime >> 8) & 0xFF;
-            return [
+            return ['lines' => [
                 "  ; SE evento: P1-IDLE >= {$idleTime} frame(s)",
                 "  LDA pv_idle+1",
                 "  CMP #{$hi}",
@@ -498,18 +506,19 @@ final class ProgramCompiler
                 "  CMP #{$lo}",
                 "  BCC {$ruleEnd}_end",
                 "{$tag}_idle_ok:",
-            ];
+            ], 'isHold' => false];
         }
         if (isset(self::P1_BUTTON_MASK[$button])) {
             $mask = self::P1_BUTTON_MASK[$button];
-            return [
-                "  ; SE evento: {$button} pressionado",
-                "  LDA pad1_edge",
+            $reg = $isHold ? 'pad1' : 'pad1_edge';
+            return ['lines' => [
+                "  ; SE evento: {$button} " . ($isHold ? 'segurado' : 'pressionado'),
+                "  LDA {$reg}",
                 sprintf('  AND #$%02X', $mask),
                 "  BEQ {$ruleEnd}_end",
-            ];
+            ], 'isHold' => $isHold];
         }
-        return ["  ; SE evento: {$button} (P2 ainda sem leitura de controle) - sempre falso", "  JMP {$ruleEnd}_end"];
+        return ['lines' => ["  ; SE evento: {$button} (P2 ainda sem leitura de controle) - sempre falso", "  JMP {$ruleEnd}_end"], 'isHold' => false];
     }
 
     private function compileIfVar(string $tag, string $ruleEnd, array $step, array $alloc): array
@@ -700,10 +709,35 @@ final class ProgramCompiler
                 }
                 $val = $hbCtx['speedLevelById'][$targetId];
                 return ["  ; Acao: Aplicar Nivel de Velocidade ({$val} px/frame)", "  LDA #{$val}", "  STA pv_move_speed"];
+            case 'move_character': {
+                $charId = (string)($step['charId'] ?? '');
+                if (!isset($heroIds[$charId])) {
+                    return ["  ; Acao: Mover - so suportado pro heroi por enquanto (alvo nao e o heroi)"];
+                }
+                $direction = (string)($step['direction'] ?? '');
+                $flip = (string)($step['flip'] ?? 'default');
+                if ($direction === 'left') {
+                    $lines = ["  ; Acao: Mover heroi esquerda", "  JSR mv_hero_left"];
+                } elseif ($direction === 'right') {
+                    $lines = ["  ; Acao: Mover heroi direita", "  JSR mv_hero_right"];
+                } elseif ($direction === 'jump') {
+                    $lines = ["  ; Acao: Mover heroi pulo", "  JSR mv_hero_jump"];
+                    if ($flip === 'flip_h') { $lines[] = "  LDA #1"; $lines[] = "  STA player_flip"; }
+                    elseif ($flip === 'default') { $lines[] = "  LDA #0"; $lines[] = "  STA player_flip"; }
+                } else {
+                    // up/down/zigzag: motor atual e' plataforma 2D (sem movimento
+                    // vertical livre nem patrulha zig-zag pro heroi) - Fase 7.
+                    return ["  ; Acao: Mover ({$direction}) - Fase 7 (motor ainda so suporta esquerda/direita/pulo pro heroi) - no-op"];
+                }
+                if (!empty($step['animId'])) {
+                    $lines[] = "  ; animId '{$step['animId']}' - selecao de animacao por regra ainda nao existe (Fase 7)";
+                }
+                return $lines;
+            }
             case 'custom':
                 return ["  ; Acao personalizada: " . (string)($step['params'] ?? '') . " (sem semantica definida - no-op por design)"];
             default:
-                return ["  ; Acao '{$actionId}': Fase 5 (subsistema ainda nao existe no jogo) - no-op"];
+                return ["  ; Acao '{$actionId}': Fase 7 (subsistema ainda nao existe no jogo) - no-op"];
         }
     }
 

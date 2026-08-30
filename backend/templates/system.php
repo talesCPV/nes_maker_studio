@@ -477,6 +477,220 @@ cw_hit:
 ASM;
     },
 
+    'player_manual_move' => static function(array $ctx): string {
+        // Camada 6 Fase 6: sub-rotinas autocontidas pra ação Mover (chamadas
+        // via JSR pelas regras) - espelham a MESMA lógica de colisão/scroll
+        // de cima (deadzone 96-152, sonda de parede, cruzamento de tela),
+        // só que cada uma termina em RTS em vez de encadear com a próxima
+        // direção. Ficam sempre presentes (nao dependem do modo de controle
+        // no Dashboard) - em modo Automático servem pra movimento roteirizado
+        // extra; em modo Via Programação são o ÚNICO jeito do herói andar/pular.
+        $asm = <<<'ASM'
+mv_hero_left:
+  LDA player_x
+  CMP #96
+  BCC mvhl_deadzone
+  JMP mvhl_move
+mvhl_deadzone:
+  LDA play_idx
+  BNE mvhl_try_scroll
+  LDA player_x
+  CMP #8
+  BCS mvhl_move
+  RTS                  ; bloqueado - borda esquerda absoluta do jogo (tela 0)
+mvhl_try_scroll:
+  LDA #98
+  SEC
+  SBC pv_move_speed
+  STA mv_calc
+  LDA scroll_x
+  CLC
+  ADC mv_calc
+  STA gcw_col
+  LDA #0
+  BCC mvhl_sel_ok
+  LDA #1
+mvhl_sel_ok:
+  STA gcw_sel
+  BEQ mvhl_use_cur
+  LDA play_idx
+  CLC
+  ADC #1
+  JMP mvhl_have
+mvhl_use_cur:
+  LDA play_idx
+mvhl_have:
+  TAX
+  LDA PlayScreenTable,X
+  STA gcw_screen
+  LDA gcw_col
+  LSR A
+  LSR A
+  LSR A
+  STA col_x
+  LDA player_y
+  CLC
+  ADC #4
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  JSR get_collision2
+  LDA col_result
+  JSR is_solid
+  BNE mvhl_blocked
+  LDA player_y
+  CLC
+  ADC #12
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  JSR get_collision2
+  LDA col_result
+  JSR is_solid
+  BNE mvhl_blocked
+  LDA scroll_x
+  SEC
+  SBC pv_move_speed
+  STA scroll_x
+  BCS mvhl_no_cross
+  JSR advance_screen_left
+mvhl_no_cross:
+  LDA #1
+  STA player_flip
+  RTS
+mvhl_blocked:
+  RTS
+mvhl_move:
+  LDA player_x
+  SEC
+  SBC pv_move_speed
+  CLC
+  ADC #2
+  JSR world_col_from
+  JSR check_wall_at
+  LDA col_result
+  BNE mvhl_move_blocked
+  LDA player_x
+  SEC
+  SBC pv_move_speed
+  STA player_x
+  LDA #1
+  STA player_flip
+mvhl_move_blocked:
+  RTS
+
+mv_hero_right:
+  LDA player_x
+  CMP #152
+  BCS mvhr_deadzone
+  JMP mvhr_move
+mvhr_deadzone:
+  LDA play_idx
+  CMP #{{LAST_PLAY_IDX}}
+  BCC mvhr_try_scroll
+  LDA player_x
+  CMP #244
+  BCC mvhr_move
+  RTS                  ; bloqueado - borda direita absoluta do jogo (ultima tela)
+mvhr_try_scroll:
+  LDA #165
+  CLC
+  ADC pv_move_speed
+  STA mv_calc
+  LDA scroll_x
+  CLC
+  ADC mv_calc
+  STA gcw_col
+  LDA #0
+  BCC mvhr_sel_ok
+  LDA #1
+mvhr_sel_ok:
+  STA gcw_sel
+  BEQ mvhr_use_cur
+  LDA play_idx
+  CLC
+  ADC #1
+  JMP mvhr_have
+mvhr_use_cur:
+  LDA play_idx
+mvhr_have:
+  TAX
+  LDA PlayScreenTable,X
+  STA gcw_screen
+  LDA gcw_col
+  LSR A
+  LSR A
+  LSR A
+  STA col_x
+  LDA player_y
+  CLC
+  ADC #4
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  JSR get_collision2
+  LDA col_result
+  JSR is_solid
+  BNE mvhr_blocked
+  LDA player_y
+  CLC
+  ADC #12
+  LSR A
+  LSR A
+  LSR A
+  STA col_y
+  JSR get_collision2
+  LDA col_result
+  JSR is_solid
+  BNE mvhr_blocked
+  LDA scroll_x
+  CLC
+  ADC pv_move_speed
+  STA scroll_x
+  BCC mvhr_no_cross
+  JSR advance_screen_right
+mvhr_no_cross:
+  LDA #0
+  STA player_flip
+  RTS
+mvhr_blocked:
+  RTS
+mvhr_move:
+  LDA player_x
+  CLC
+  ADC pv_move_speed
+  CLC
+  ADC #13
+  JSR world_col_from
+  JSR check_wall_at
+  LDA col_result
+  BNE mvhr_move_blocked
+  LDA player_x
+  CLC
+  ADC pv_move_speed
+  STA player_x
+  LDA #0
+  STA player_flip
+mvhr_move_blocked:
+  RTS
+
+mv_hero_jump:
+  LDA on_ground
+  BEQ mvhj_done
+  LDA pv_jump_force
+  BEQ mvhj_done
+  STA jump_cnt
+  LDA #0
+  STA on_ground
+mvhj_done:
+  RTS
+ASM;
+        return str_replace('{{LAST_PLAY_IDX}}', (string)(int)($ctx['lastPlayIdx'] ?? 0), $asm);
+    },
+
     'player' => static function(array $ctx): string {
         $lastPlayIdx = (int)($ctx['lastPlayIdx'] ?? 0);
         $asm = <<<'ASM'
@@ -738,6 +952,30 @@ up_done:
   RTS
 
 ASM;
+        // Camada 6 Fase 6: se o Dashboard estiver em modo "Via Programação",
+        // o movimento automático pelo direcional/pulo fica desligado - as
+        // 3 leituras de botão que disparam esse dispatcher viram uma
+        // constante zero (nunca aciona), sem tocar em mais nada da lógica
+        // já validada. O herói só anda/pula via ação Mover (ver
+        // mv_hero_left/mv_hero_right/mv_hero_jump, sempre presentes).
+        $auto = ($ctx['controlMode'] ?? 'auto') !== 'programmed';
+        if (!$auto) {
+            $asm = str_replace(
+                "  LDA pad1\n  AND #%01000000      ; Left bit6",
+                "  LDA #0                ; Camada 6 Fase 6: modo Via Programacao - direcional automatico desligado\n  AND #%01000000",
+                $asm
+            );
+            $asm = str_replace(
+                "  LDA pad1\n  AND #%10000000      ; Right bit7",
+                "  LDA #0                ; Camada 6 Fase 6: modo Via Programacao - direcional automatico desligado\n  AND #%10000000",
+                $asm
+            );
+            $asm = str_replace(
+                "  LDA pad1_edge\n  AND #%00000011      ; A ou B",
+                "  LDA #0                ; Camada 6 Fase 6: modo Via Programacao - pulo automatico desligado\n  AND #%00000011",
+                $asm
+            );
+        }
         return str_replace('{{LAST_PLAY_IDX}}', (string)$lastPlayIdx, $asm);
     },
 

@@ -19,7 +19,7 @@ const DASHBOARD = (() => {
           </div>
         </div>
 
-        <div style="display:flex;flex:1;gap:0;overflow:hidden;min-height:0;flex-wrap: wrap;overflow-y: scroll;">
+        <div style="display:flex;flex:1;gap:0;overflow:hidden;min-height:0">
           <!-- ESQUERDA: Info do projeto e Game Config / Cheats -->
           <div style="width:380px;min-width:380px;background:#181818;border-right:1px solid #333;padding:16px;display:flex;flex-direction:column;gap:14px;overflow:auto">
             <div style="background:#111;border:1px solid #333;border-radius:8px;padding:12px">
@@ -111,6 +111,19 @@ const DASHBOARD = (() => {
                   Mirroring agora é definido <b style="color:#aaa">por fase</b>, conforme o tipo de scroll.
                 </div>
               </div>
+
+              <div style="margin-top:12px;background:#111;border:1px solid #333;border-radius:6px;padding:10px">
+                <label style="font-size:10px;color:#666">Controle do Herói</label>
+                <select id="dashControlMode" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px;margin-top:4px">
+                  <option value="auto">Automático (joystick move direto, como antes)</option>
+                  <option value="programmed">Via Programação (só obedece regras com ação Mover)</option>
+                </select>
+                <div style="font-size:9px;color:#666;margin-top:4px;line-height:1.4">
+                  "Via Programação" desliga o movimento automático pelo direcional/pulo -
+                  o herói só anda/pula se uma Regra com a ação <b style="color:#aaa">Mover</b>
+                  mandar (use um evento "Segurado" pra movimento contínuo).
+                </div>
+              </div>
             </div>
 
             <!-- SEÇÃO DE TRUQUES / CHEATS -->
@@ -133,7 +146,7 @@ const DASHBOARD = (() => {
           </div>
 
           <!-- CENTRO: Fases -->
-          <div style="flex:1;background:#1e1e1e;padding:16px;overflow:auto;display:flex;flex-direction:column;gap:12px; min-width: 400px;">
+          <div style="flex:1;background:#1e1e1e;padding:16px;overflow:auto;display:flex;flex-direction:column;gap:12px">
             <div style="display:flex;align-items:center;gap:12px">
               <h3 style="font-size:12px;color:#4ec9b0;margin:0">🎮 FASES DO JOGO</h3>
               <span style="font-size:11px;color:#666" id="dashPhaseCount">0 fases</span>
@@ -202,12 +215,14 @@ const DASHBOARD = (() => {
     const continuesEl = document.getElementById('dashContinues');
     const energyEl = document.getElementById('dashEnergy');
     const maxInstEl = document.getElementById('dashMaxInstances');
+    const controlModeEl = document.getElementById('dashControlMode');
 
     if(nameEl) nameEl.addEventListener('input', e=>{ if(Project.data){ Project.data.name=e.target.value; Project.updateUI(); } });
     if(authorEl) authorEl.addEventListener('input', e=>{ if(Project.data) Project.data.author=e.target.value; });
     if(genreEl) genreEl.addEventListener('change', e=>{ if(Project.data) Project.data.genre=e.target.value; });
     if(descEl) descEl.addEventListener('input', e=>{ if(Project.data) Project.data.description=e.target.value; });
     if(mapperEl) mapperEl.addEventListener('change', e=>{ if(Project.data) Project.data.mapper=parseInt(e.target.value); });
+    if(controlModeEl) controlModeEl.addEventListener('change', e=>{ if(Project.data) Project.data.controlMode=e.target.value; });
 
     const updateConfig = () => {
       if(!Project.data) return;
@@ -300,6 +315,8 @@ const DASHBOARD = (() => {
     if(genreEl) genreEl.value=Project.data.genre||'platformer';
     if(descEl) descEl.value=Project.data.description||'';
     if(mapperEl) mapperEl.value=Project.data.mapper||0;
+    const controlModeEl=document.getElementById('dashControlMode');
+    if(controlModeEl) controlModeEl.value = Project.data.controlMode || 'auto';
 
     if(Project.data.gameConfig){
       if(livesEl) livesEl.value = Project.data.gameConfig.lives || 3;
