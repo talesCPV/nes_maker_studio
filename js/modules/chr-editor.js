@@ -74,21 +74,15 @@ const CHR = (() => {
     const root = document.getElementById('chrModuleRoot'); if(!root) return;
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
-        <div style="display:flex;gap:8px;align-items:center;padding:8px 12px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-            <button class="btn-tool" onclick="CHR.openImageImport()" title="Importar PNG/JPG e preparar crop/grid em tiles" style="background:#16a085;color:#fff;border-color:#1abc9c;min-width:118px;height:28px;padding:0 10px;font-size:11px;font-weight:600;border-radius:4px;border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;gap:4px;box-sizing:border-box">🖼 Import imagem</button>
-            <button class="btn-tool" onclick="CHR.openNmsImport()" title="Importar tiles/metatiles de outro .nms ou .chr" style="background:#8e44ad;color:#fff;border-color:#a569bd;min-width:118px;height:28px;padding:0 10px;font-size:11px;font-weight:600;border-radius:4px;border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;gap:4px;box-sizing:border-box">📦 Import metatiles</button>
-            <button class="btn-tool" onclick="CHR.importCHR()" title="Importar arquivo .chr / .bin / .nes no buffer atual" style="background:#2c3e50;color:#fff;border-color:#5d6d7e;min-width:118px;height:28px;padding:0 10px;font-size:11px;font-weight:600;border-radius:4px;border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;gap:4px;box-sizing:border-box">🧱 Import .chr</button>
-            <button class="btn-tool" onclick="Project.exportCHR()" title="Exportar buffer CHR atual" style="background:#34495e;color:#fff;border-color:#5d6d7e;min-width:118px;height:28px;padding:0 10px;font-size:11px;font-weight:600;border-radius:4px;border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;gap:4px;box-sizing:border-box">⬇️ Export .chr</button>
-            <input type="file" id="importNms_internal" accept=".nms,.chr,.bin,application/json,application/octet-stream" style="display:none">
-            <input type="file" id="importCHR_internal" accept=".chr,.bin,.nes" style="display:none">
-            <input type="file" id="importImage_internal" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
-          </div>
-          <span style="margin-left:auto;font-size:10px;color:#888" id="lblMetatileSize">2x2 PT0</span>
-          <span style="font-size:10px;color:#888">Tiles: <b id="lblTileIndices" style="color:#ffcc00">$00</b></span>
-        </div>
-
         <div id="chrMetatileToolbar" style="display:flex;gap:6px;align-items:center;padding:6px 10px;background:#252526;border-bottom:1px solid #333;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;white-space:nowrap">
+          <button type="button" class="icon-btn" onclick="CHR.openImageImport()" title="Importar PNG/JPG e preparar crop/grid em tiles">🖼</button>
+          <button type="button" class="icon-btn" onclick="CHR.openNmsImport()" title="Importar tiles/metatiles de outro .nms ou .chr">📦</button>
+          <button type="button" class="icon-btn" onclick="CHR.importCHR()" title="Importar arquivo .chr / .bin / .nes no buffer atual">🧱</button>
+          <button type="button" class="icon-btn" onclick="Project.exportCHR()" title="Exportar buffer CHR atual">⬇️</button>
+          <input type="file" id="importNms_internal" accept=".nms,.chr,.bin,application/json,application/octet-stream" style="display:none">
+          <input type="file" id="importCHR_internal" accept=".chr,.bin,.nes" style="display:none">
+          <input type="file" id="importImage_internal" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
+          <span style="width:1px;height:24px;background:#444;margin:0 2px"></span>
           <span style="font-size:10px;color:#888;margin-right:2px">TOOLS</span>
           <button type="button" class="icon-btn tool-btn active" data-tool="pen" onclick="CHR.setTool('pen')" title="Pen">🖊️</button>
           <button type="button" class="icon-btn tool-btn" data-tool="erase" onclick="CHR.setTool('erase')" title="Erase">🧹</button>
@@ -111,12 +105,9 @@ const CHR = (() => {
           <button type="button" class="icon-btn" onclick="CHR.toggleSlotFlipH()" title="Flip H da célula (OAM)" style="background:#1a3a1a;border-color:#2a5a2a">↔</button>
           <button type="button" class="icon-btn" onclick="CHR.toggleSlotFlipV()" title="Flip V da célula (OAM)" style="background:#1a3a1a;border-color:#2a5a2a">↕</button>
           <span id="lblSlotFlip" style="font-size:10px;color:#888;min-width:28px">—</span>
-          <button type="button" class="icon-btn" onclick="CHR.shift('left')" title="Shift left">←</button>
-          <button type="button" class="icon-btn" onclick="CHR.shift('up')" title="Shift up">↑</button>
-          <button type="button" class="icon-btn" onclick="CHR.shift('down')" title="Shift down">↓</button>
-          <button type="button" class="icon-btn" onclick="CHR.shift('right')" title="Shift right">→</button>
-          <button type="button" class="icon-btn" onclick="CHR.clearGroup()" title="Clear group" style="background:#5a1a1a;border-color:#7d2525">🧹</button>
           <button type="button" class="icon-btn" onclick="CHR.undo()" title="Undo">↩️</button>
+          <span style="margin-left:auto;font-size:10px;color:#888" id="lblMetatileSize">2x2 PT0</span>
+          <span style="font-size:10px;color:#888">Tiles: <b id="lblTileIndices" style="color:#ffcc00">$00</b></span>
         </div>
 
         <div style="display:flex;flex:1;overflow:hidden;min-height:0">
@@ -124,7 +115,7 @@ const CHR = (() => {
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <select id="bankSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 8px;font-size:12px"></select>
               <button class="btn-tool" style="background:#c0392b;color:#fff" onclick="CHR.addBank()">+ BANK</button>
-              <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ccc;cursor:pointer"><input type="checkbox" id="chkShowGrid"> grid</label>
+              <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ccc;cursor:pointer"><input type="checkbox" id="chkShowGrid" checked> grid</label>
             </div>
             <canvas id="sheetCanvas" width="512" height="512" style="border:2px solid #333;background:#000;image-rendering:pixelated;cursor:crosshair;display:block"></canvas>
           </div>
@@ -170,6 +161,13 @@ const CHR = (() => {
                   <canvas id="previewCanvas" width="128" height="128" style="border:1px solid #333;background:#000;image-rendering:pixelated;display:block"></canvas>
                   <div style="display:flex;gap:6px;margin-top:10px" id="quickColors"></div>
                   <div style="font-size:10px;color:#666;margin-top:8px;line-height:1.4">Esquerdo desenha · direito pega cor · teclas 1–4</div>
+                  <div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap">
+                    <button type="button" class="icon-btn" onclick="CHR.shift('left')" title="Shift left">←</button>
+                    <button type="button" class="icon-btn" onclick="CHR.shift('up')" title="Shift up">↑</button>
+                    <button type="button" class="icon-btn" onclick="CHR.shift('down')" title="Shift down">↓</button>
+                    <button type="button" class="icon-btn" onclick="CHR.shift('right')" title="Shift right">→</button>
+                    <button type="button" class="icon-btn" onclick="CHR.clearGroup()" title="Clear group" style="background:#5a1a1a;border-color:#7d2525">🧹</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -240,7 +238,7 @@ const CHR = (() => {
               <h4 style="font-size:11px;color:#c39bd3;margin:0 0 8px">BANCO DE PALETAS</h4>
               <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
                 <div style="flex:1;min-width:220px">
-                  <div id="paletteBankList" style="max-height:140px;overflow:auto;border:1px solid #333;border-radius:4px;background:#0a0a0a;margin-bottom:6px"></div>
+                  <div id="paletteBankList" data-palette-bank-list style="max-height:140px;overflow:auto;border:1px solid #333;border-radius:4px;background:#0a0a0a;margin-bottom:6px"></div>
                   <div style="display:flex;gap:4px;flex-wrap:wrap">
                     <button type="button" class="btn-tool" onclick="CHR.paletteBankAdd()" style="font-size:9px;flex:1" title="Nova entrada no banco">+ Nova</button>
                     <button type="button" class="btn-tool" onclick="CHR.paletteBankApply()" style="font-size:9px;flex:1;background:#007acc;color:#fff" title="Aplicar no slot PPU ativo">→ Ativo</button>
@@ -647,34 +645,41 @@ const CHR = (() => {
   }
   function renderPaletteBankUI(){
     ensurePaletteBank();
-    const list = document.getElementById('paletteBankList');
-    if(!list) return;
-    list.innerHTML = '';
-    paletteBank.forEach((e, idx)=>{
-      const row = document.createElement('div');
-      const on = idx === _palBankSel;
-      row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:4px;cursor:pointer;border:1px solid '+(on?'#007acc':'#333')+';background:'+(on?'#1a2a3a':'#111');
-      row.onclick = ()=>{ _palBankSel = idx; renderPaletteBankUI(); };
-      const lab = document.createElement('span');
-      lab.style.cssText = 'font-size:10px;color:#ccc;min-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-      lab.textContent = e.name;
-      lab.title = e.name + ' (' + e.id + ')';
-      row.appendChild(lab);
-      for(let c=0;c<4;c++){
-        const sw = document.createElement('div');
-        const hex = (typeof NES_PALETTE!=='undefined' && NES_PALETTE[e.colors[c]&63]) ? NES_PALETTE[e.colors[c]&63] : '#000';
-        sw.style.cssText = 'width:14px;height:14px;border-radius:2px;border:1px solid #444;background:'+hex;
-        row.appendChild(sw);
-      }
-      const used = [];
-      for(let i=0;i<8;i++){ if(paletteActive[i]===e.id) used.push(i<4?('BG'+i):('SPR'+(i-4))); }
-      if(used.length){
-        const u = document.createElement('span');
-        u.style.cssText = 'font-size:8px;color:#4ec9b0;margin-left:4px';
-        u.textContent = used.join(',');
-        row.appendChild(u);
-      }
-      list.appendChild(row);
+    // Suporta múltiplas listas (CHR + Backgrounds) via id clássico ou data-attr
+    const lists = [];
+    const primary = document.getElementById('paletteBankList');
+    if(primary) lists.push(primary);
+    document.querySelectorAll('[data-palette-bank-list]').forEach(el=>{
+      if(!lists.includes(el)) lists.push(el);
+    });
+    lists.forEach(list=>{
+      list.innerHTML = '';
+      paletteBank.forEach((e, idx)=>{
+        const row = document.createElement('div');
+        const on = idx === _palBankSel;
+        row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:4px;cursor:pointer;border:1px solid '+(on?'#007acc':'#333')+';background:'+(on?'#1a2a3a':'#111');
+        row.onclick = ()=>{ _palBankSel = idx; renderPaletteBankUI(); };
+        const lab = document.createElement('span');
+        lab.style.cssText = 'font-size:10px;color:#ccc;min-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+        lab.textContent = e.name;
+        lab.title = e.name + ' (' + e.id + ')';
+        row.appendChild(lab);
+        for(let c=0;c<4;c++){
+          const sw = document.createElement('div');
+          const hex = (typeof NES_PALETTE!=='undefined' && NES_PALETTE[e.colors[c]&63]) ? NES_PALETTE[e.colors[c]&63] : '#000';
+          sw.style.cssText = 'width:14px;height:14px;border-radius:2px;border:1px solid #444;background:'+hex;
+          row.appendChild(sw);
+        }
+        const used = [];
+        for(let i=0;i<8;i++){ if(paletteActive[i]===e.id) used.push(i<4?('BG'+i):('SPR'+(i-4))); }
+        if(used.length){
+          const u = document.createElement('span');
+          u.style.cssText = 'font-size:8px;color:#4ec9b0;margin-left:4px';
+          u.textContent = used.join(',');
+          row.appendChild(u);
+        }
+        list.appendChild(row);
+      });
     });
     // selects for active slots
     const renderSlotSelects = (containerId, start, count, prefix)=>{
@@ -701,6 +706,10 @@ const CHR = (() => {
           const e = bankEntryById(sel.value);
           if(e) palettes[slot] = [e.colors[0]&63,e.colors[1]&63,e.colors[2]&63,e.colors[3]&63];
           initPalUI(); renderAll(); renderPaletteBankUI();
+          // Notifica outros módulos (ex.: Backgrounds) que as paletas mudaram
+          try {
+            if(typeof BG !== 'undefined' && BG.onPalettesChanged) BG.onPalettesChanged();
+          } catch(err){}
         };
         wrap.appendChild(lab);
         wrap.appendChild(sel);
@@ -709,6 +718,7 @@ const CHR = (() => {
     };
     renderSlotSelects('paletteActiveBG', 0, 4, 'BG');
     renderSlotSelects('paletteActiveSPR', 4, 4, 'SPR');
+    renderSlotSelects('bgPaletteActiveBG', 0, 4, 'BG');
   }
 
   function initPalUI(){
@@ -3346,15 +3356,54 @@ const CHR = (() => {
     clearGroup(){ pushUndo(); selectedTiles.forEach(ti=>chrBuffer.fill(0,ti*16,ti*16+16)); renderAll(); },
     undo(){ if(undoStack.length){ chrBuffer=undoStack.pop(); renderAll(); } },
     importCHR(){ document.getElementById('importCHR_internal')?.click(); },
+    setActivePal(i){
+      activePal = Math.max(0, Math.min(7, parseInt(i,10)||0));
+      try{ initPalUI(); renderAll(); }catch(e){}
+    },
+    getActivePal(){ return activePal; },
+    setActiveSlot(s){
+      activeSlot = Math.max(0, Math.min(3, parseInt(s,10)||0));
+      try{ initPalUI(); }catch(e){}
+    },
+    getActiveSlot(){ return activeSlot; },
+    setPaletteColor(palIdx, slotIdx, colorIdx){
+      const p = Math.max(0, Math.min(7, parseInt(palIdx,10)||0));
+      const s = Math.max(0, Math.min(3, parseInt(slotIdx,10)||0));
+      const c = Math.max(0, Math.min(63, parseInt(colorIdx,10)||0));
+      if(!Array.isArray(palettes[p])) palettes[p] = [15,0,16,48];
+      palettes[p][s] = c;
+      activePal = p;
+      activeSlot = s;
+      try{ syncActiveBankEntryFromPpu(); }catch(e){}
+      try{ initPalUI(); renderAll(); renderPaletteBankUI(); }catch(e){}
+      try{
+        if(typeof Project !== 'undefined' && Project.data){
+          Project.data.palettes = palettes.map(x=>[...x]);
+        }
+      }catch(e){}
+    },
+    refreshPaletteUI(){
+      try{ ensurePaletteBank(); }catch(e){}
+      try{ initPalUI(); }catch(e){}
+      try{ renderPaletteBankUI(); }catch(e){}
+      try{ if(typeof renderPaletteCompact==='function') renderPaletteCompact(); }catch(e){}
+    },
     paletteBankAdd(){
       const n = prompt('Nome da nova paleta:', 'Pal ' + (paletteBank.length+1));
       if(n===null) return;
       const src = palettes[activePal] || [15,0,16,48];
       addPaletteToBank(src, n.trim()||'Pal');
+      try{ if(typeof BG !== 'undefined' && BG.onPalettesChanged) BG.onPalettesChanged(); }catch(e){}
     },
-    paletteBankApply(){ applyBankEntryToActiveSlot(_palBankSel); },
+    paletteBankApply(){
+      applyBankEntryToActiveSlot(_palBankSel);
+      try{ if(typeof BG !== 'undefined' && BG.onPalettesChanged) BG.onPalettesChanged(); }catch(e){}
+    },
     paletteBankRename(){ renameBankEntry(_palBankSel); },
-    paletteBankDelete(){ deleteBankEntry(_palBankSel); },
+    paletteBankDelete(){
+      deleteBankEntry(_palBankSel);
+      try{ if(typeof BG !== 'undefined' && BG.onPalettesChanged) BG.onPalettesChanged(); }catch(e){}
+    },
     togglePalettePanel(){
       const panel = document.getElementById('chrPalettePanel');
       const btn = document.getElementById('chrPaletteToggle');

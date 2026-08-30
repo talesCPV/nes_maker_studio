@@ -7,8 +7,9 @@ require_once __DIR__ . '/../config/database.php';
 
 /**
  * GET  ?id=N  → serve thumbnail.png (ou 404)
- * POST JSON { project_id, image: base64 data URL ou raw base64 PNG }
- *      → grava thumbnail.png SOMENTE se ainda não existir
+ * POST JSON:
+ *   { project_id, image, force? } → grava thumbnail.png
+ *   { project_id, action: "clear" } → remove thumbnail.png
  */
 
 function jsonResponse(array $data, int $status = 200): never
@@ -129,15 +130,52 @@ try {
 
     $project = assertProjectOwned($pdo, $userId, $projectId);
 
+    $dir = projectDir($userId, $projectId);
+    $thumbPath = $dir . DIRECTORY_SEPARATOR . 'thumbnail.png';
+
+    /*
+     * Limpar thumbnail (volta ao cartucho padrão no dashboard).
+     * Permitido mesmo com projeto na lixeira.
+     */
+    $action = isset($data['action']) ? (string) $data['action'] : '';
+    if ($action === 'clear') {
+        clearstatcache(true, $thumbPath);
+        $removed = false;
+        if (is_file($thumbPath)) {
+            @chmod($thumbPath, 0666);
+            if (!@unlink($thumbPath)) {
+                jsonResponse([
+                    'success' => false,
+                    'message' => 'Não foi possível remover o thumbnail no servidor.',
+                    'debug' => $thumbPath
+                ], 500);
+            }
+            clearstatcache(true, $thumbPath);
+            if (is_file($thumbPath)) {
+                jsonResponse([
+                    'success' => false,
+                    'message' => 'Thumbnail ainda existe após tentativa de remoção.',
+                    'debug' => $thumbPath
+                ], 500);
+            }
+            $removed = true;
+        }
+        jsonResponse([
+            'success' => true,
+            'cleared' => true,
+            'removed' => $removed,
+            'message' => $removed
+                ? 'Thumbnail removido.'
+                : 'Nenhum thumbnail para remover.'
+        ]);
+    }
+
     if ((int) $project['is_deleted'] === 1) {
         jsonResponse([
             'success' => false,
             'message' => 'Projeto está na lixeira.'
         ], 409);
     }
-
-    $dir = projectDir($userId, $projectId);
-    $thumbPath = $dir . DIRECTORY_SEPARATOR . 'thumbnail.png';
 
     /*
      * force=true: upload manual do usuário (pode sobrescrever).

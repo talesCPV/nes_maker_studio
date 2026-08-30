@@ -31,34 +31,6 @@ ASM;
         $maxOam = 14;
         $numInstances = min($requested, $maxOam);
 
-        $music = null;
-        $sounds = $project['sounds'] ?? null;
-        $musicId = $ctx['selection']['musicId'] ?? 'none';
-        if (is_array($sounds) && ($sounds['version'] ?? null) === 3 && is_array($sounds['items'] ?? null)) {
-            foreach ($sounds['items'] as $item) {
-                if (is_array($item) && ($item['id'] ?? null) === $musicId && is_array($item['channels'] ?? null) && count($item['channels'])) {
-                    $music = $item;
-                    break;
-                }
-            }
-        } elseif (is_array($sounds) && ($sounds['version'] ?? null) === 2 && is_array($sounds['channels'] ?? null)) {
-            if ($musicId !== 'none') {
-                $music = [
-                    'id' => 'song_legacy',
-                    'name' => 'Musica 1',
-                    'loop' => $sounds['loop'] ?? true,
-                    'baseFrames' => $sounds['baseFrames'] ?? 30,
-                    'channels' => $sounds['channels'],
-                ];
-            }
-        }
-
-        $channelCount = 0;
-        if (is_array($music)) {
-            $channelCount = count($music['channels'] ?? []);
-            $channelCount = min(5, $channelCount);
-        }
-
         $lines = [];
         $lines[] = '.segment "ZEROPAGE"';
         $lines[] = 'pad1:       .res 1';
@@ -120,8 +92,9 @@ ASM;
         $lines[] = 'ovl_dy:       .res 1';
         $lines[] = 'inst_grounded: .res 1  ; scratch: resultado de check_ground_inst (Camada 4)';
         $lines[] = 'en_tmp:     .res 1';
-        if ($music !== null) {
+        if (($ctx['music'] ?? null) !== null) {
             $lines[] = 'music_on:   .res 1';
+            $channelCount = (int)($ctx['musicChannelCount'] ?? 0);
             for ($i = 0; $i < $channelCount; $i++) {
                 $lines[] = "ch{$i}_timer: .res 1";
                 $lines[] = "ch{$i}_pos:   .res 1";
@@ -536,9 +509,16 @@ uls_try_scroll:
   ; o delta) - por isso soma DEADZONE_LEFT(96), nao so o movimento. Selecao de tela
   ; e' sempre por ADC/carry (>=256 -> play_idx+1), independente da direcao do
   ; movimento - e' sobre POSICAO no mundo, nao sobre pra que lado anda.
+  ; Camada 6 Fase 5: DEADZONE_LEFT(96) + 2(sonda) - pv_move_speed, calculado
+  ; num scratch primeiro pra preservar a mesma logica de carry/overflow do
+  ; calculo original (que usava uma constante fixa).
+  LDA #98
+  SEC
+  SBC pv_move_speed
+  STA mv_calc
   LDA scroll_x
   CLC
-  ADC #95             ; DEADZONE_LEFT(96) - 3(mov) + 2(sonda) = 95
+  ADC mv_calc
   STA gcw_col
   LDA #0
   BCC uls_sel_ok      ; sem overflow -> tela atual (play_idx)
@@ -586,7 +566,7 @@ uls_have:
   ; livre: rola o mundo pra esquerda
   LDA scroll_x
   SEC
-  SBC #3
+  SBC pv_move_speed
   STA scroll_x
   BCS uls_no_cross     ; sem borrow -> nao cruzou 256
   JSR advance_screen_left
@@ -596,10 +576,10 @@ uls_no_cross:
   JMP up_jump          ; NAO cair em up_left_move - senao o player anda De novo por
   ; cima do que o scroll ja moveu (dobra a velocidade percebida - bug reportado)
 up_left_move:
-  ; tile X na borda esquerda proposta (x-3+2) - movimento livre dentro da deadzone
+  ; tile X na borda esquerda proposta (x-velocidade+2) - movimento livre dentro da deadzone
   LDA player_x
   SEC
-  SBC #3
+  SBC pv_move_speed
   CLC
   ADC #2
   JSR world_col_from
@@ -608,7 +588,7 @@ up_left_move:
   BNE up_right           ; bloqueado
   LDA player_x
   SEC
-  SBC #3
+  SBC pv_move_speed
   STA player_x
   LDA #1
   STA player_flip
@@ -632,10 +612,16 @@ urs_deadzone:
   BCC up_right_move
   JMP up_jump
 urs_try_scroll:
-  ; testa parede NO MUNDO (scroll_x + DEADZONE_RIGHT(152) + sonda direita(+13) + mov(+3))
+  ; testa parede NO MUNDO (scroll_x + DEADZONE_RIGHT(152) + sonda direita(+13) + pv_move_speed)
+  ; Camada 6 Fase 5: 165+velocidade calculado num scratch primeiro (mesma
+  ; razao do lado esquerdo - preserva a logica de carry original).
+  LDA #165
+  CLC
+  ADC pv_move_speed
+  STA mv_calc
   LDA scroll_x
   CLC
-  ADC #168
+  ADC mv_calc
   STA gcw_col
   LDA #0
   BCC urs_sel_ok      ; sem overflow -> ainda na tela atual (play_idx)
@@ -683,7 +669,7 @@ urs_have:
   ; livre: rola o mundo pra direita
   LDA scroll_x
   CLC
-  ADC #3
+  ADC pv_move_speed
   STA scroll_x
   BCC urs_no_cross     ; sem overflow -> nao cruzou 256
   JSR advance_screen_right
@@ -692,10 +678,10 @@ urs_no_cross:
   STA player_flip
   JMP up_jump
 up_right_move:
-  ; tile X na borda direita proposta (x+3+13) - movimento livre dentro da deadzone
+  ; tile X na borda direita proposta (x+velocidade+13) - movimento livre dentro da deadzone
   LDA player_x
   CLC
-  ADC #3
+  ADC pv_move_speed
   CLC
   ADC #13
   JSR world_col_from
@@ -704,7 +690,7 @@ up_right_move:
   BNE up_jump            ; bloqueado
   LDA player_x
   CLC
-  ADC #3
+  ADC pv_move_speed
   STA player_x
   LDA #0
   STA player_flip
@@ -715,7 +701,8 @@ up_jump:
   BEQ up_vert
   LDA on_ground
   BEQ up_vert
-  LDA #14
+  LDA pv_jump_force   ; Camada 6 Fase 5: 0 = pulo desligado ate uma regra Aplicar Forca de Pulo definir
+  BEQ up_vert
   STA jump_cnt
   LDA #0
   STA on_ground

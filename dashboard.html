@@ -957,12 +957,25 @@ async function clearProjectThumbnail(projectId, imgEl) {
                 })
             }
         );
-        const data = await response.json().catch(() => ({}));
+        const rawText = await response.text();
+        let data = {};
+        try {
+            data = rawText ? JSON.parse(rawText) : {};
+        } catch (e) {
+            console.error('Clear thumb non-JSON:', response.status, rawText.slice(0, 200));
+            alert(
+                response.status === 404
+                    ? 'Endpoint thumbnail.php não encontrado no servidor.'
+                    : 'Resposta inválida ao remover thumbnail.'
+            );
+            return;
+        }
 
-        if (!response.ok || !data.success) {
+        // Exige cleared=true: evita falso sucesso do ramo "skipped" de versões antigas
+        if (!response.ok || !data.success || data.skipped || !data.cleared) {
             alert(
                 data.message ||
-                'Não foi possível remover o thumbnail.'
+                'Não foi possível remover o thumbnail no servidor. Atualize backend/projects/thumbnail.php.'
             );
             return;
         }
@@ -1282,11 +1295,25 @@ async function loadTrash() {
                     )
                 );
 
+                const purgeBtn =
+                    document.createElement('button');
 
-                actions.appendChild(
-                    restore
+                purgeBtn.type = 'button';
+                purgeBtn.className = 'icon-btn secondary';
+                purgeBtn.textContent = '☠';
+                purgeBtn.title = 'Excluir permanentemente';
+                purgeBtn.setAttribute('aria-label', 'Excluir permanentemente');
+
+                purgeBtn.addEventListener(
+                    'click',
+                    () => purgeProject(
+                        project.id,
+                        project.name
+                    )
                 );
 
+                actions.appendChild(restore);
+                actions.appendChild(purgeBtn);
 
                 item.appendChild(title);
                 item.appendChild(description);
@@ -1313,6 +1340,57 @@ async function loadTrash() {
 /* =========================================================
    RESTAURAR PROJETOS
    ========================================================= */
+
+async function purgeProject(projectId, projectName) {
+    const confirmed = confirm(
+        `Excluir PERMANENTEMENTE o projeto "${projectName}"?\n\n` +
+        'Esta ação não pode ser desfeita. Arquivos e dados serão apagados.'
+    );
+    if (!confirmed) return;
+
+    try {
+        const response = await fetch(
+            'backend/projects/purge.php',
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    id: projectId
+                })
+            }
+        );
+
+        const rawText = await response.text();
+        let data = {};
+        try {
+            data = rawText ? JSON.parse(rawText) : {};
+        } catch (e) {
+            console.error('Purge non-JSON:', response.status, rawText.slice(0, 200));
+            alert(
+                response.status === 404
+                    ? 'Endpoint purge.php não encontrado. Copie backend/projects/purge.php para o servidor.'
+                    : 'Resposta inválida do servidor.'
+            );
+            return;
+        }
+
+        if (!response.ok || !data.success) {
+            alert(
+                data.message ||
+                'Não foi possível excluir o projeto permanentemente.'
+            );
+            return;
+        }
+
+        await loadTrash();
+    } catch (err) {
+        console.error('Erro ao excluir permanentemente:', err);
+        alert('Erro de comunicação com o servidor.');
+    }
+}
 
    async function restoreProject(
     projectId,
@@ -1618,7 +1696,7 @@ projectForm.addEventListener(
    ========================================================= */
 
    function openProject(projectId) {
-        window.location.href = `index.html?project=${encodeURIComponent(projectId)}`;
+        window.location.href = `editor.html?project=${encodeURIComponent(projectId)}`;
     }
 
 /* =========================================================

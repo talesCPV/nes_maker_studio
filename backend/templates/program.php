@@ -25,6 +25,9 @@ return [
         $lines[] = 'pv_hb_target:   .res 1  ; Camada 6 Fase 2: scratch do check_hbobj_hit';
         $lines[] = 'pv_hb_scr_x:    .res 1  ; Camada 6 Fase 2: scratch do check_hbobj_hit';
         $lines[] = 'pv_terr_target: .res 1  ; Camada 6 Fase 2: scratch do check_terrain_type';
+        $lines[] = 'pv_jump_force:  .res 1  ; Camada 6 Fase 5: frames de impulso de pulo - 0 = pulo desligado ate uma regra Aplicar Forca de Pulo definir';
+        $lines[] = 'pv_move_speed:  .res 1  ; Camada 6 Fase 5: pixels/frame de movimento horizontal - 0 = movimento desligado ate uma regra Aplicar Nivel de Velocidade definir';
+        $lines[] = 'mv_calc:        .res 1  ; Camada 6 Fase 5: scratch pra compor deadzone+sonda+velocidade em runtime';
         $lines[] = 'pv_hbA_x:       .res 1  ; Camada 6 Fase 3: retangulo A (heroi) do check_aabb_overlap';
         $lines[] = 'pv_hbA_y:       .res 1';
         $lines[] = 'pv_hbA_w:       .res 1';

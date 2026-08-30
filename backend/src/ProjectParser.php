@@ -9,19 +9,23 @@ final class ProjectParser
         }
 
         $project = $request['project'];
-        $buildMode = ($request['buildMode'] ?? 'game') === 'single' ? 'single' : 'game';
 
-        $selection = is_array($request['selection'] ?? null) ? $request['selection'] : [];
-        $music = $this->resolveMusic($project, $selection['musicId'] ?? 'none');
+        // Fase 5: build-rom.js não manda mais seletores manuais - o jogo é
+        // compilado só com o que foi programado. Música por enquanto embeda
+        // a primeira música do projeto (dado pronto no ROM), mas só toca de
+        // fato quando a ação "Tocar Música" existir e uma regra disparar -
+        // até lá a ROM fica silenciosa (nada acontece sem regra).
+        $sounds = is_array($project['sounds']['items'] ?? null) ? $project['sounds']['items'] : [];
+        $firstMusicId = 'none';
+        foreach ($sounds as $s) {
+            if (is_array($s) && !empty($s['channels'])) { $firstMusicId = (string)($s['id'] ?? 'none'); break; }
+        }
+        $music = $this->resolveMusic($project, $firstMusicId);
 
         // Stage 21: a resolução de telas (quais backgrounds/splashes entram no
-        // jogo, em que ordem, com que papel) agora acontece inteiramente aqui.
-        // O frontend não precisa mais pré-processar nada - só manda o
-        // project.data (.nms) bruto inteiro + os seletores da UI (fase/tipo/
-        // índice) quando for build de tela única.
-        $screens = $buildMode === 'single'
-            ? $this->resolveSingleScreen($project, $selection)
-            : $this->collectGameScreens($project);
+        // jogo, em que ordem, com que papel) acontece inteiramente aqui a
+        // partir do project.data (.nms) bruto - sem nenhum seletor da UI.
+        $screens = $this->collectGameScreens($project);
 
         $screenData = $screens;
         $playIdxs = [];
@@ -56,8 +60,7 @@ final class ProjectParser
 
         return [
             'project' => $project,
-            'buildMode' => $buildMode,
-            'selection' => $selection,
+            'buildMode' => 'game',
             'music' => $music,
             'musicEnabled' => $music !== null,
             'musicChannelCount' => $music ? min(5, count($music['channels'] ?? [])) : 0,
@@ -489,62 +492,8 @@ final class ProjectParser
         return $screens;
     }
 
-    /**
-     * Réplica de getSelectedBuildData() do build-rom.js pro modo TELA ÚNICA.
-     * O frontend manda só os seletores (fase/tipo/índice) escolhidos na UI;
-     * a resolução em si (qual asset carregar) acontece aqui.
-     */
-    private function resolveSingleScreen(array $project, array $selection): array
-    {
-        $phases = is_array($project['phases'] ?? null) ? $project['phases'] : [];
-        $splashes = is_array($project['splashScreens'] ?? null) ? $project['splashScreens'] : [];
-        $bgs = is_array($project['backgrounds'] ?? null) ? $project['backgrounds'] : [];
-
-        $phaseIdx = (int)($selection['phaseIndex'] ?? 0);
-        $targetPhase = $phases[$phaseIdx] ?? ($phases[0] ?? null);
-        $type = (string)($selection['imageType'] ?? 'splash');
-        $imgIdx = $selection['imageIndex'] ?? 'auto';
-
-        $pick = static function (?array $a): ?array {
-            if (!is_array($a)) return null;
-            return [
-                'nametable' => is_array($a['nametable'] ?? null) ? $a['nametable'] : array_fill(0, 960, 0),
-                'attributes' => is_array($a['attributes'] ?? null) ? $a['attributes'] : array_fill(0, 64, 0),
-                'collisionMap' => is_array($a['collisionMap'] ?? null) ? $a['collisionMap'] : array_fill(0, 960, 0),
-                'name' => $a['name'] ?? '',
-            ];
-        };
-
-        $imageData = null;
-        if ($imgIdx !== 'auto' && $imgIdx !== null && $imgIdx !== '') {
-            $idx = (int)$imgIdx;
-            if ($type === 'background' && isset($bgs[$idx])) $imageData = $pick($bgs[$idx]);
-            elseif ($type === 'splash' && isset($splashes[$idx])) $imageData = $pick($splashes[$idx]);
-        }
-        if (!$imageData && $type === 'splash' && is_array($targetPhase) && !empty($targetPhase['splash'])) {
-            foreach ($splashes as $s) if (is_array($s) && ($s['name'] ?? null) === $targetPhase['splash']) { $imageData = $pick($s); break; }
-        }
-        if (!$imageData && $type === 'background' && is_array($targetPhase) && !empty($targetPhase['background'])) {
-            foreach ($bgs as $b) if (is_array($b) && ($b['name'] ?? null) === $targetPhase['background']) { $imageData = $pick($b); break; }
-        }
-        if (!$imageData && $type === 'splash' && count($splashes)) $imageData = $pick($splashes[0]);
-        if (!$imageData && $type === 'background' && count($bgs)) $imageData = $pick($bgs[0]);
-        if (!$imageData) {
-            if (count($splashes)) $imageData = $pick($splashes[0]);
-            elseif (count($bgs)) $imageData = $pick($bgs[0]);
-        }
-        if (!$imageData) $imageData = ['nametable' => array_fill(0, 960, 0), 'attributes' => array_fill(0, 64, 0), 'collisionMap' => array_fill(0, 960, 0), 'name' => 'vazio'];
-
-        return [[
-            'id' => 'single',
-            'name' => $imageData['name'],
-            'type' => $type,
-            'role' => $type === 'splash' ? 'splash' : 'play',
-            'nametable' => $imageData['nametable'],
-            'attributes' => $imageData['attributes'],
-            'collisionMap' => $imageData['collisionMap'],
-        ]];
-    }
+    // resolveSingleScreen removido (Fase 5) - modo Tela Única não existe
+    // mais, build-rom.js só manda o build completo (Jogo).
 
     private function screenByIndex(array $project, int $index): array
     {

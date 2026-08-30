@@ -2415,6 +2415,12 @@ prule_6_scope_skip:
   JSR prule_10
 prule_10_scope_skip:
   JSR prule_11
+  LDX play_idx
+  LDA ScreenPhase,X
+  CMP #1
+  BNE prule_12_scope_skip
+  JSR prule_12
+prule_12_scope_skip:
   RTS
 
 ; regra: Cair no buraco
@@ -2459,6 +2465,7 @@ prule_1:
   ORA #$02
   STA pv_rs0
   ; Acao 'move_character': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'apply_speed_level': Fase 4 (subsistema ainda nao existe no jogo) - no-op
   JMP prule_1_end
 prule_1_cond_end:
   ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
@@ -2777,6 +2784,28 @@ prule_11_cond_end:
 prule_11_end:
   RTS
 
+; regra: jump 2
+prule_12:
+  ; SE evento:  (P2 ainda sem leitura de controle) - sempre falso
+  JMP prule_12_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs1
+  AND #$10
+  BNE prule_12_end   ; ja estava ativa - nao repete
+  LDA pv_rs1
+  ORA #$10
+  STA pv_rs1
+  ; Acao 'apply_jump_force': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao 'move_character': Fase 4 (subsistema ainda nao existe no jogo) - no-op
+  JMP prule_12_end
+prule_12_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs1
+  AND #$EF
+  STA pv_rs1
+prule_12_end:
+  RTS
+
 PaletteData:
   .byte $0F, $00, $10, $30, $0F, $06, $16, $26, $0F, $00, $16, $30, $0F, $02, $12, $22
   .byte $0F, $16, $30, $07, $0F, $19, $29, $39, $0F, $03, $13, $23, $0F, $09, $19, $29
@@ -2871,9 +2900,9 @@ CharOvDxFlip_0:
 CharDur_0:
   .byte $08
 CharCells_1:  ; enemy
-  .byte $03, $04, $05, $06, $03, $04, $07, $06, $03, $04, $05, $06, $03, $04, $08, $06
+  .byte $03, $04, $05, $06, $03, $04, $05, $07, $03, $04, $05, $06, $03, $04, $05, $08
 CharFlips_1:
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $40, $00, $00, $00, $40, $00, $00, $00, $40, $00, $00, $00, $00
 CharOvCells_1:
   .byte $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF
 CharOvFlips_1:
@@ -3524,12 +3553,12 @@ Time_ch2:
   .byte $00, $00, $00, $1F, $10, $10, $12, $10, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $14, $13, $10, $10, $1F, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $08, $E8, $08, $08, $F8, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $03, $0C, $10, $11, $23, $20, $40, $00, $00, $03, $0F, $0E, $1C, $1F, $3F
-  .byte $80, $60, $18, $04, $84, $82, $02, $41, $00, $80, $E0, $F8, $78, $7C, $FC, $BE
+  .byte $01, $06, $18, $20, $21, $41, $40, $82, $00, $01, $07, $1F, $1E, $3E, $3F, $7D
+  .byte $00, $C0, $30, $08, $88, $C4, $04, $02, $00, $00, $C0, $F0, $70, $38, $F8, $FC
+  .byte $43, $40, $20, $20, $18, $06, $03, $01, $3C, $3F, $1F, $1F, $07, $01, $02, $01
   .byte $27, $39, $02, $06, $04, $03, $00, $00, $18, $00, $01, $01, $03, $00, $00, $00
-  .byte $C2, $02, $04, $04, $18, $60, $C0, $80, $3C, $FC, $F8, $F8, $E0, $80, $40, $80
   .byte $27, $38, $00, $01, $01, $03, $01, $00, $18, $00, $00, $00, $00, $00, $00, $00
-  .byte $21, $23, $1C, $10, $0C, $03, $00, $00, $1E, $1C, $03, $0F, $03, $00, $00, $00
+  .byte $84, $C4, $38, $08, $30, $C0, $00, $00, $78, $38, $C0, $F0, $C0, $00, $00, $00
   .byte $00, $01, $03, $03, $1F, $3F, $3F, $FF, $00, $01, $03, $03, $1F, $21, $30, $FF
   .byte $F0, $F8, $C8, $D8, $C8, $E8, $B8, $C0, $F0, $F8, $F8, $A8, $B8, $D8, $78, $E0
   .byte $7F, $9F, $BF, $FF, $3F, $3F, $1F, $1F, $F0, $F9, $FF, $FF, $3F, $3D, $0F, $15

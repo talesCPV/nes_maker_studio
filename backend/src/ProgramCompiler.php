@@ -156,6 +156,14 @@ final class ProgramCompiler
                 'obj' => $hbObjNumericId[$oid],
             ];
         }
+        $jumpForceById = [];
+        foreach ((is_array($project['jumpForces'] ?? null) ? $project['jumpForces'] : []) as $jf) {
+            if (is_array($jf) && isset($jf['id'])) $jumpForceById[(string)$jf['id']] = max(0, min(255, (int)($jf['value'] ?? 0)));
+        }
+        $speedLevelById = [];
+        foreach ((is_array($project['speedLevels'] ?? null) ? $project['speedLevels'] : []) as $sl) {
+            if (is_array($sl) && isset($sl['id'])) $speedLevelById[(string)$sl['id']] = max(0, min(255, (int)($sl['value'] ?? 0)));
+        }
         $hbCtx = [
             'objNumericId' => $hbObjNumericId,
             'objectById' => $objectById,
@@ -166,6 +174,8 @@ final class ProgramCompiler
             'charHitboxesById' => $charHitboxesById,
             'heroIds' => $heroIds,
             'charIndexById' => $charIndexById,
+            'jumpForceById' => $jumpForceById,
+            'speedLevelById' => $speedLevelById,
         ];
 
         $ruleBodies = [];
@@ -670,10 +680,30 @@ final class ProgramCompiler
                 return ["  ; Acao: Matar - alvo nao encontrado, ignorado"];
             case 'goto_warp':
                 return $this->compileGotoWarp($tag, $targetId, $hbCtx);
+            case 'apply_jump_force':
+                $charId = (string)($step['charId'] ?? '');
+                if ($charId !== '' && !isset($heroIds[$charId])) {
+                    return ["  ; Acao: Aplicar Forca de Pulo - so suportado pro heroi por enquanto (alvo nao e o heroi)"];
+                }
+                if (!isset($hbCtx['jumpForceById'][$targetId])) {
+                    return ["  ; Acao: Aplicar Forca de Pulo - entrada '{$targetId}' nao encontrada na tabela, ignorado"];
+                }
+                $val = $hbCtx['jumpForceById'][$targetId];
+                return ["  ; Acao: Aplicar Forca de Pulo ({$val} frames de impulso)", "  LDA #{$val}", "  STA pv_jump_force"];
+            case 'apply_speed_level':
+                $charId = (string)($step['charId'] ?? '');
+                if ($charId !== '' && !isset($heroIds[$charId])) {
+                    return ["  ; Acao: Aplicar Nivel de Velocidade - so suportado pro heroi por enquanto (alvo nao e o heroi)"];
+                }
+                if (!isset($hbCtx['speedLevelById'][$targetId])) {
+                    return ["  ; Acao: Aplicar Nivel de Velocidade - entrada '{$targetId}' nao encontrada na tabela, ignorado"];
+                }
+                $val = $hbCtx['speedLevelById'][$targetId];
+                return ["  ; Acao: Aplicar Nivel de Velocidade ({$val} px/frame)", "  LDA #{$val}", "  STA pv_move_speed"];
             case 'custom':
                 return ["  ; Acao personalizada: " . (string)($step['params'] ?? '') . " (sem semantica definida - no-op por design)"];
             default:
-                return ["  ; Acao '{$actionId}': Fase 4 (subsistema ainda nao existe no jogo) - no-op"];
+                return ["  ; Acao '{$actionId}': Fase 5 (subsistema ainda nao existe no jogo) - no-op"];
         }
     }
 

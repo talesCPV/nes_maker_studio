@@ -19,7 +19,7 @@ const DASHBOARD = (() => {
           </div>
         </div>
 
-        <div style="display:flex;flex:1;gap:0;overflow:hidden;min-height:0">
+        <div style="display:flex;flex:1;gap:0;overflow:hidden;min-height:0;flex-wrap: wrap;overflow-y: scroll;">
           <!-- ESQUERDA: Info do projeto e Game Config / Cheats -->
           <div style="width:380px;min-width:380px;background:#181818;border-right:1px solid #333;padding:16px;display:flex;flex-direction:column;gap:14px;overflow:auto">
             <div style="background:#111;border:1px solid #333;border-radius:8px;padding:12px">
@@ -133,7 +133,7 @@ const DASHBOARD = (() => {
           </div>
 
           <!-- CENTRO: Fases -->
-          <div style="flex:1;background:#1e1e1e;padding:16px;overflow:auto;display:flex;flex-direction:column;gap:12px">
+          <div style="flex:1;background:#1e1e1e;padding:16px;overflow:auto;display:flex;flex-direction:column;gap:12px; min-width: 400px;">
             <div style="display:flex;align-items:center;gap:12px">
               <h3 style="font-size:12px;color:#4ec9b0;margin:0">🎮 FASES DO JOGO</h3>
               <span style="font-size:11px;color:#666" id="dashPhaseCount">0 fases</span>

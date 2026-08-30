@@ -59,7 +59,7 @@ const BG = (() => {
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <div style="display:flex;gap:8px;align-items:center;padding:8px 12px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
-          <h3 style="font-size:12px;color:#ffcc00;margin:0">🗺 BACKGROUNDS v0.9.7 • Ferramenta Warp Dedicada</h3>
+          <h3 style="font-size:12px;color:#ffcc00;margin:0">🗺 BACKGROUNDS</h3>
           <div style="display:flex;gap:6px;align-items:center;margin-left:12px">
             <span style="font-size:11px;color:#888">BG:</span>
             <select id="bgSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 6px;font-size:11px;min-width:140px"></select>
@@ -74,67 +74,66 @@ const BG = (() => {
           </div>
         </div>
 
+        <div id="bgToolsToolbar" style="display:flex;gap:6px;align-items:center;padding:6px 10px;background:#252526;border-bottom:1px solid #333;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;white-space:nowrap">
+          <span style="font-size:10px;color:#888;margin-right:2px">TOOLS</span>
+          <button type="button" class="icon-btn tool-btn active" data-bg-tool="paint" onclick="BG.setTool('paint')" title="Pintar">🎨</button>
+          <button type="button" class="icon-btn tool-btn" data-bg-tool="flood" onclick="BG.setTool('flood')" title="Flood Fill">🌊</button>
+          <button type="button" class="icon-btn tool-btn" data-bg-tool="attr" onclick="BG.setTool('attr')" title="Pincel de Paleta">🖌</button>
+          <button type="button" class="icon-btn tool-btn" data-bg-tool="hitbox" onclick="BG.setTool('hitbox')" title="Hitbox Manual">🛡</button>
+          <button type="button" class="icon-btn tool-btn" data-bg-tool="assign" onclick="BG.setTool('assign')" title="Atribuir objeto (Dano/Warp/Spawn)">🎯</button>
+          <button type="button" class="icon-btn tool-btn" data-bg-tool="erase" onclick="BG.setTool('erase')" title="Borracha">🧽</button>
+          <button type="button" class="icon-btn tool-btn" data-bg-tool="text" onclick="BG.setTool('text')" title="Texto">🔤</button>
+          <button type="button" class="icon-btn tool-btn" data-bg-tool="fill" onclick="BG.setTool('fill')" title="Auto-Fill">🪣</button>
+          <span style="width:1px;height:24px;background:#444;margin:0 2px"></span>
+          <span id="bgHelpText" style="font-size:10px;color:#888;white-space:normal;max-width:min(480px,40vw);line-height:1.3">Pintura livre. Alt+clique clona. Shift+clique apaga.</span>
+        </div>
+
         <div style="display:flex;flex:1;overflow:hidden;min-height:0">
           <div style="width:340px;min-width:340px;background:#181818;border-right:1px solid #333;padding:12px;overflow:auto;display:flex;flex-direction:column;gap:12px">
-            
-            <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
-              <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">FERRAMENTAS</h4>
-              <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">
-                <button class="btn-tool tool-btn active" data-bg-tool="paint" onclick="BG.setTool('paint')">🎨 Pintar</button>
-                <button class="btn-tool tool-btn" data-bg-tool="flood" onclick="BG.setTool('flood')" style="background:#8e44ad;color:#fff;border:1px solid #9b59b6">🌊 Flood</button>
-                <button class="btn-tool tool-btn" data-bg-tool="attr" onclick="BG.setTool('attr')" style="background:#2980b9;color:#fff;border:1px solid #3498db">🖌 Paleta</button>
-                <button class="btn-tool tool-btn" data-bg-tool="hitbox" onclick="BG.setTool('hitbox')" style="background:#c0392b;color:#fff;border:1px solid #e74c3c">🛡 Hitbox</button>
-                <button class="btn-tool tool-btn" data-bg-tool="assign" onclick="BG.setTool('assign')" style="background:#2980b9;color:#fff;border:1px solid #3498db" title="Clique numa instância de Dano/Warp/Spawn já pintada pra trocar qual objeto ela usa">🎯 Objeto</button>
-                <button class="btn-tool tool-btn" data-bg-tool="erase" onclick="BG.setTool('erase')" style="background:#555;color:#fff;border:1px solid #777">🧽 Borracha</button>
-                <button class="btn-tool tool-btn" data-bg-tool="text" onclick="BG.setTool('text')" style="background:#ffcc00;color:#000">🔤 Texto</button>
-                <button class="btn-tool tool-btn" data-bg-tool="fill" onclick="BG.setTool('fill')">🪣 Auto-Fill</button>
-              </div>
-              <div id="bgHelpText" style="font-size:10px;color:#888;background:#000;border:1px solid #222;border-radius:3px;padding:4px 6px">Pintura livre. Alt+clique clona. Shift+clique apaga. No modo Texto, clique no canvas para posicionar o cursor.</div>
-              
-              <div id="bgHitboxPanel" style="display:none;background:#2a0808;border:1px solid #881111;border-radius:6px;padding:8px;margin-top:8px">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                  <h4 style="font-size:10px;color:#ff6666;margin:0">HITBOX MANUAL</h4>
-                  <label style="font-size:10px;color:#ffcc00;display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" id="chkHitboxFlood"> 🪣 Flood</label>
-                </div>
-                <div style="display:flex;gap:4px;flex-wrap:wrap">
-                  <button class="btn-tool collision-btn" data-col-type="0" onclick="BG.setCollisionType(0)" style="font-size:10px">⬜ 0: Livre</button>
-                  <button class="btn-tool collision-btn active" data-col-type="1" onclick="BG.setCollisionType(1)" style="font-size:10px;background:#c0392b;color:#fff">🟥 1: Sólido</button>
-                  <button class="btn-tool collision-btn" data-col-type="2" onclick="BG.setCollisionType(2)" style="font-size:10px;background:#27ae60;color:#fff">🟩 2: Plataforma</button>
-                  <button class="btn-tool collision-btn" data-col-type="3" onclick="BG.setCollisionType(3)" style="font-size:10px;background:#8e44ad;color:#fff">🟪 3: Dano</button>
-                  <button class="btn-tool collision-btn" data-col-type="4" onclick="BG.setCollisionType(4)" style="font-size:10px;background:#d35400;color:#fff">🚪 4: Warp</button>
-                  <button class="btn-tool collision-btn" data-col-type="5" onclick="BG.setCollisionType(5)" style="font-size:10px;background:#16a085;color:#fff">🐣 5: Spawn</button>
-                </div>
-              </div>
 
-              <div id="bgFillPanel" style="display:none;background:#1a1a00;border:1px solid #665500;border-radius:6px;padding:8px;margin-top:8px">
-                <h4 style="font-size:10px;color:#ffcc00;margin-bottom:6px">AÇÕES DE PREENCHIMENTO</h4>
-                <div style="display:flex;gap:4px;flex-wrap:wrap">
-                  <button class="btn-tool" onclick="BG.fillAllEmpty()" style="font-size:10px">⬜ Só Vazios</button>
-                  <button class="btn-tool" onclick="BG.fillEntireScreen()" style="font-size:10px;background:#ffcc00;color:#000">🌟 Tela toda</button>
-                  <button class="btn-tool" onclick="BG.applyAttrToAll()" style="font-size:10px;background:#2980b9;color:#fff">🎨 Paleta Global</button>
-                  <button class="btn-tool" onclick="BG.clearBackground()" style="font-size:10px;background:#c0392b;color:#fff">🧹 Limpar</button>
-                </div>
+            <div id="bgHitboxPanel" style="display:none;background:#2a0808;border:1px solid #881111;border-radius:6px;padding:8px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                <h4 style="font-size:10px;color:#ff6666;margin:0">HITBOX MANUAL</h4>
+                <label style="font-size:10px;color:#ffcc00;display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" id="chkHitboxFlood"> 🪣 Flood</label>
               </div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap">
+                <button class="btn-tool collision-btn" data-col-type="0" onclick="BG.setCollisionType(0)" style="font-size:10px">⬜ 0: Livre</button>
+                <button class="btn-tool collision-btn active" data-col-type="1" onclick="BG.setCollisionType(1)" style="font-size:10px;background:#c0392b;color:#fff">🟥 1: Sólido</button>
+                <button class="btn-tool collision-btn" data-col-type="2" onclick="BG.setCollisionType(2)" style="font-size:10px;background:#27ae60;color:#fff">🟩 2: Plataforma</button>
+                <button class="btn-tool collision-btn" data-col-type="3" onclick="BG.setCollisionType(3)" style="font-size:10px;background:#8e44ad;color:#fff">🟪 3: Dano</button>
+                <button class="btn-tool collision-btn" data-col-type="4" onclick="BG.setCollisionType(4)" style="font-size:10px;background:#d35400;color:#fff">🚪 4: Warp</button>
+                <button class="btn-tool collision-btn" data-col-type="5" onclick="BG.setCollisionType(5)" style="font-size:10px;background:#16a085;color:#fff">🐣 5: Spawn</button>
+              </div>
+            </div>
 
-              <div id="bgTextPanel" style="display:none;background:#1a1a00;border:1px solid #665500;border-radius:6px;padding:8px;margin-top:8px">
-                <h4 style="font-size:10px;color:#ffcc00;margin-bottom:6px">🔤 TEXTO - CLIQUE NO CANVAS PARA POSICIONAR</h4>
-                <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-                  <label style="font-size:10px;color:#888">Offset:</label>
-                  <select id="bgTextOffsetSelect" style="background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:3px;font-size:10px" onchange="BG.setTextOffsetMode(this.value)">
-                    <option value="smb">SMB (0-9, A-Z sequencial)</option>
-                    <option value="ascii">ASCII (código direto)</option>
-                  </select>
-                </div>
-                <div style="display:flex;gap:4px;margin:4px 0">
-                  <input id="bgTextInput" type="text" placeholder="Digite texto + Enter" style="flex:1;background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:6px;font-size:12px;font-family:monospace">
-                  <button class="btn-tool" onclick="BG.insertText()" style="background:#ffcc00;color:#000">Inserir</button>
-                </div>
-                <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap">
-                  <label style="font-size:10px;color:#888">Paleta:</label>
-                  <div id="bgTextPalettes" style="display:flex;gap:4px"></div>
-                  <span style="font-size:10px;color:#666">Cursor: <b id="bgCursorPos" style="color:#ffcc00">0,0</b></span>
-                  <button class="btn-tool" onclick="BG.clearTextSelection()" style="font-size:9px;margin-left:auto">✖ Deselecionar</button>
-                </div>
+            <div id="bgFillPanel" style="display:none;background:#1a1a00;border:1px solid #665500;border-radius:6px;padding:8px">
+              <h4 style="font-size:10px;color:#ffcc00;margin-bottom:6px">AÇÕES DE PREENCHIMENTO</h4>
+              <div style="display:flex;gap:4px;flex-wrap:wrap">
+                <button class="btn-tool" onclick="BG.fillAllEmpty()" style="font-size:10px">⬜ Só Vazios</button>
+                <button class="btn-tool" onclick="BG.fillEntireScreen()" style="font-size:10px;background:#ffcc00;color:#000">🌟 Tela toda</button>
+                <button class="btn-tool" onclick="BG.applyAttrToAll()" style="font-size:10px;background:#2980b9;color:#fff">🎨 Paleta Global</button>
+                <button class="btn-tool" onclick="BG.clearBackground()" style="font-size:10px;background:#c0392b;color:#fff">🧹 Limpar</button>
+              </div>
+            </div>
+
+            <div id="bgTextPanel" style="display:none;background:#1a1a00;border:1px solid #665500;border-radius:6px;padding:8px">
+              <h4 style="font-size:10px;color:#ffcc00;margin-bottom:6px">🔤 TEXTO - CLIQUE NO CANVAS PARA POSICIONAR</h4>
+              <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+                <label style="font-size:10px;color:#888">Offset:</label>
+                <select id="bgTextOffsetSelect" style="background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:3px;font-size:10px" onchange="BG.setTextOffsetMode(this.value)">
+                  <option value="smb">SMB (0-9, A-Z sequencial)</option>
+                  <option value="ascii">ASCII (código direto)</option>
+                </select>
+              </div>
+              <div style="display:flex;gap:4px;margin:4px 0">
+                <input id="bgTextInput" type="text" placeholder="Digite texto + Enter" style="flex:1;background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:6px;font-size:12px;font-family:monospace">
+                <button class="btn-tool" onclick="BG.insertText()" style="background:#ffcc00;color:#000">Inserir</button>
+              </div>
+              <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap">
+                <label style="font-size:10px;color:#888">Paleta:</label>
+                <div id="bgTextPalettes" style="display:flex;gap:4px"></div>
+                <span style="font-size:10px;color:#666">Cursor: <b id="bgCursorPos" style="color:#ffcc00">0,0</b></span>
+                <button class="btn-tool" onclick="BG.clearTextSelection()" style="font-size:9px;margin-left:auto">✖ Deselecionar</button>
               </div>
             </div>
 
@@ -147,7 +146,10 @@ const BG = (() => {
             </div>
 
             <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:8px">
-              <div style="display:flex;gap:12px;align-items:center"><div><h4 style="font-size:10px;color:#888;margin-bottom:6px">PALETA (0-3)</h4><div id="attrPaletteSelect" style="display:flex;gap:6px;flex-direction:column"></div></div><div style="flex:1;display:flex;flex-direction:column;align-items:center"><div id="selectedInfo" style="font-size:10px;color:#aaa;text-align:center;margin-bottom:4px">Nenhum</div><div style="position:relative"><canvas id="selectedPreview" width="80" height="80" style="border:1px solid #ffcc00;background:#000;image-rendering:pixelated;display:block;cursor:pointer" title="Clique no sub-tile para alternar colisão!"></canvas></div></div></div>
+              <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div id="selectedInfo" style="font-size:10px;color:#aaa;text-align:center">Nenhum</div>
+                <canvas id="selectedPreview" width="80" height="80" style="border:1px solid #ffcc00;background:#000;image-rendering:pixelated;display:block;cursor:pointer" title="Clique no sub-tile para alternar colisão!"></canvas>
+              </div>
               <div style="border-top:1px solid #222;padding-top:6px;display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:10px;color:#ffcc00">🛡 Hitbox por Tile:</label><button class="btn-tool" onclick="BG.setAllSubTilesCollision()" style="font-size:9px;padding:1px 4px">Setar Todos</button></div><div style="display:flex;gap:4px"><select id="mtSubTileColSelect" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:10px"><option value="0">⬜ 0: Ar/Livre</option><option value="1">🟥 1: Sólido</option><option value="2">🟩 2: Plataforma</option><option value="3">🟪 3: Dano/Espinho</option><option value="4">🚪 4: Warp</option><option value="5">🐣 5: Spawn</option></select><button class="btn-tool" onclick="BG.applyMetatileHitboxToCanvas()" style="font-size:10px;background:#27ae60;color:#fff">⚡ Recalcular</button></div></div>
               <div id="mtDefaultObjWrap" style="border-top:1px solid #222;padding-top:6px;display:none;flex-direction:column;gap:4px">
                 <label style="font-size:10px;color:#ffcc00">🎯 Objeto padrão (Dano/Warp):</label>
@@ -187,6 +189,51 @@ const BG = (() => {
             </div>
           </div>
         </div>
+
+        <div id="bgPalettePanel" class="chr-palette-panel collapsed">
+          <div class="chr-palette-bar">
+            <button type="button" id="bgPaletteToggle" class="icon-btn" title="Expandir / recolher paletas" onclick="BG.togglePalettePanel()">▸</button>
+            <span class="chr-palette-bar-title">Paletas BG</span>
+            <div id="bgPaletteCompact" class="chr-palette-compact" title="Slots de atributo BG (0–3)"></div>
+            <span id="bgPaletteBarHint" class="chr-palette-bar-hint">clique ▸ para expandir banco e slots</span>
+          </div>
+          <div class="chr-palette-body">
+            <!-- 1) Atributo / slots PPU BG -->
+            <div>
+              <h4 style="font-size:11px;color:#4ec9b0;margin:0 0 8px">PALETAS PPU (BG 0–3)</h4>
+              <div id="attrPaletteSelect" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"></div>
+              <div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap">
+                <span style="font-size:10px;color:#888">Cor ativa do slot:</span>
+                <div id="bgQuickColors" style="display:flex;gap:4px"></div>
+                <span style="font-size:9px;color:#666">clique num quadrado da sub-paleta e depois na master NES</span>
+              </div>
+            </div>
+            <!-- 2) Master NES -->
+            <div>
+              <h4 style="font-size:11px;color:#4ec9b0;margin:0 0 8px">PALETA MASTER NES (clique pra trocar cor do slot)</h4>
+              <div id="bgMasterPaletteGrid" style="display:flex;flex-direction:column;gap:2px;background:#111;padding:8px;border-radius:6px;border:1px solid #333;width:fit-content"></div>
+            </div>
+            <!-- 3) Banco + ativos BG -->
+            <div style="border:1px solid #333;border-radius:6px;background:#1a1a1a;padding:10px">
+              <h4 style="font-size:11px;color:#c39bd3;margin:0 0 8px">BANCO DE PALETAS</h4>
+              <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+                <div style="flex:1;min-width:220px">
+                  <div id="bgPaletteBankList" data-palette-bank-list style="max-height:140px;overflow:auto;border:1px solid #333;border-radius:4px;background:#0a0a0a;margin-bottom:6px"></div>
+                  <div style="display:flex;gap:4px;flex-wrap:wrap">
+                    <button type="button" class="btn-tool" onclick="BG.paletteBankAdd()" style="font-size:9px;flex:1" title="Nova entrada no banco">+ Nova</button>
+                    <button type="button" class="btn-tool" onclick="BG.paletteBankApply()" style="font-size:9px;flex:1;background:#007acc;color:#fff" title="Aplicar no slot BG ativo">→ Ativo</button>
+                    <button type="button" class="btn-tool" onclick="BG.paletteBankRename()" style="font-size:9px">✎</button>
+                    <button type="button" class="btn-tool" onclick="BG.paletteBankDelete()" style="font-size:9px;background:#c0392b;color:#fff">✕</button>
+                  </div>
+                </div>
+                <div style="min-width:200px;flex:0 0 220px">
+                  <div style="font-size:9px;color:#666;margin-bottom:2px">Ativas BG</div>
+                  <div id="bgPaletteActiveBG"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     `;
     bgCanvas = document.getElementById('bgCanvas');
@@ -195,18 +242,25 @@ const BG = (() => {
     initChrPageSelect();
     updateBGSelect();
     refreshMetatileList();
-    updateAttrPaletteUI();
+    refreshBgPalettePanel();
     updateTextPaletteUI();
     render();
   }
 
   function setTool(t) {
     currentTool = t;
-    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector(`[data-bg-tool="${t}"]`)?.classList.add('active');
-    document.getElementById('bgFillPanel').style.display = (t === 'fill') ? 'block' : 'none';
-    document.getElementById('bgTextPanel').style.display = (t === 'text') ? 'block' : 'none';
-    document.getElementById('bgHitboxPanel').style.display = (t === 'hitbox') ? 'block' : 'none';
+    document.querySelectorAll('#mod-bg .tool-btn[data-bg-tool]').forEach(b => {
+      const on = b.getAttribute('data-bg-tool') === t;
+      b.classList.toggle('active', on);
+      if(on){ b.style.background = '#007acc'; b.style.borderColor = '#007acc'; }
+      else { b.style.background = ''; b.style.borderColor = ''; }
+    });
+    const fillPanel = document.getElementById('bgFillPanel');
+    const textPanel = document.getElementById('bgTextPanel');
+    const hitboxPanel = document.getElementById('bgHitboxPanel');
+    if(fillPanel) fillPanel.style.display = (t === 'fill') ? 'block' : 'none';
+    if(textPanel) textPanel.style.display = (t === 'text') ? 'block' : 'none';
+    if(hitboxPanel) hitboxPanel.style.display = (t === 'hitbox') ? 'block' : 'none';
     const label = document.getElementById('bgModeLabel');
     const help = document.getElementById('bgHelpText');
     textMode = (t === 'text');
@@ -782,17 +836,184 @@ const BG = (() => {
     });
   }
 
+  function getBgPalettes(){
+    return (typeof CHR !== 'undefined' && CHR.getPalettes)
+      ? CHR.getPalettes()
+      : (Project.data?.palettes || [[15,0,16,48],[15,0,16,48],[15,0,16,48],[15,0,16,48]]);
+  }
+
+  function getBgActiveColorSlot(){
+    if(typeof CHR !== 'undefined' && typeof CHR.getActiveSlot === 'function') return CHR.getActiveSlot();
+    return 1;
+  }
+
   function updateAttrPaletteUI(){
-    const container = document.getElementById('attrPaletteSelect'); if(!container) return;
-    const pals = (typeof CHR !== 'undefined' && CHR.getPalettes) ? CHR.getPalettes() : (Project.data?.palettes || [[15,0,16,48]]);
-    container.innerHTML = '';
-    for(let i=0; i<4; i++){
-      const btn = document.createElement('div');
-      btn.style.cssText = `width:70px;height:20px;border:2px solid ${i===activePalette?'#ffcc00':'#333'};cursor:pointer;display:flex;border-radius:3px;overflow:hidden`;
-      btn.onclick = () => { activePalette = i; updateAttrPaletteUI(); if(selectedMetatile) updateSelectedInfo(); };
-      for(let c=0; c<4; c++){ const d = document.createElement('div'); d.style.flex = '1'; d.style.background = NES_PALETTE[pals[i] ? pals[i][c] : 0]; btn.appendChild(d); }
-      container.appendChild(btn);
+    const pals = getBgPalettes();
+    const activeColorSlot = getBgActiveColorSlot();
+    const container = document.getElementById('attrPaletteSelect');
+    if(container){
+      container.innerHTML = '';
+      for(let i=0; i<4; i++){
+        const box = document.createElement('div');
+        box.style.cssText = `display:flex;gap:2px;padding:3px;border:2px solid ${i===activePalette?'#007acc':'transparent'};border-radius:4px;background:#111;cursor:pointer`;
+        box.title = 'BG ' + i;
+        box.onclick = () => {
+          activePalette = i;
+          if(typeof CHR !== 'undefined' && CHR.setActivePal) CHR.setActivePal(i);
+          refreshBgPalettePanel();
+          if(selectedMetatile) updateSelectedInfo();
+        };
+        for(let c=0; c<4; c++){
+          const slot = document.createElement('div');
+          const isActive = i===activePalette && c===activeColorSlot;
+          slot.style.cssText = `width:20px;height:20px;background:${NES_PALETTE[pals[i] ? pals[i][c] : 0]};border:${isActive?'2px solid #ffcc00':'1px solid #444'};border-radius:2px;cursor:pointer`;
+          slot.onclick = (e) => {
+            e.stopPropagation();
+            activePalette = i;
+            if(typeof CHR !== 'undefined' && CHR.setActivePal) CHR.setActivePal(i);
+            if(typeof CHR !== 'undefined' && CHR.setActiveSlot) CHR.setActiveSlot(c);
+            refreshBgPalettePanel();
+            if(selectedMetatile) updateSelectedInfo();
+          };
+          box.appendChild(slot);
+        }
+        container.appendChild(box);
+      }
     }
+    // Cores rápidas do slot ativo (0–3)
+    const qc = document.getElementById('bgQuickColors');
+    if(qc){
+      qc.innerHTML = '';
+      const pal = pals[activePalette] || pals[0] || [15,0,16,48];
+      for(let c=0; c<4; c++){
+        const isActive = c===activeColorSlot;
+        const btn = document.createElement('div');
+        btn.style.cssText = `width:32px;height:24px;background:${NES_PALETTE[pal[c]]};border:${isActive?'2px solid #ffcc00':'1px solid #555'};border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:#000;font-weight:bold`;
+        btn.textContent = String(c);
+        btn.onclick = () => {
+          if(typeof CHR !== 'undefined' && CHR.setActiveSlot) CHR.setActiveSlot(c);
+          refreshBgPalettePanel();
+        };
+        qc.appendChild(btn);
+      }
+    }
+    renderBgPaletteCompact(pals);
+    renderBgMasterPalette();
+  }
+
+  function renderBgMasterPalette(){
+    const grid = document.getElementById('bgMasterPaletteGrid');
+    if(!grid || typeof NES_PALETTE === 'undefined') return;
+    grid.innerHTML = '';
+    let line = null;
+    NES_PALETTE.forEach((col, idx) => {
+      if(idx % 16 === 0){
+        line = document.createElement('div');
+        line.style.display = 'flex';
+        line.style.gap = '2px';
+        grid.appendChild(line);
+      }
+      const b = document.createElement('div');
+      b.style.cssText = `width:18px;height:18px;background:${col};border:1px solid #333;border-radius:2px;cursor:pointer`;
+      b.title = `NES $${idx.toString(16).padStart(2,'0').toUpperCase()}`;
+      b.onclick = () => {
+        if(typeof CHR === 'undefined' || !CHR.setPaletteColor) return;
+        if(CHR.setActivePal) CHR.setActivePal(activePalette);
+        CHR.setPaletteColor(activePalette, getBgActiveColorSlot(), idx);
+        onPalettesChanged();
+      };
+      line.appendChild(b);
+    });
+  }
+
+  function renderBgPaletteCompact(pals){
+    const compact = document.getElementById('bgPaletteCompact');
+    if(!compact) return;
+    if(!pals) pals = getBgPalettes();
+    compact.innerHTML = '';
+    const group = document.createElement('div');
+    group.className = 'chr-pal-compact-group';
+    const lab = document.createElement('span');
+    lab.className = 'chr-pal-compact-lab';
+    lab.textContent = 'BG';
+    group.appendChild(lab);
+    for(let i=0; i<4; i++){
+      const slot = document.createElement('div');
+      slot.className = 'chr-pal-compact-slot' + (i===activePalette ? ' active' : '');
+      slot.title = 'Atributo BG ' + i;
+      slot.onclick = () => {
+        activePalette = i;
+        if(typeof CHR !== 'undefined' && CHR.setActivePal) CHR.setActivePal(i);
+        refreshBgPalettePanel();
+        if(selectedMetatile) updateSelectedInfo();
+      };
+      for(let c=0; c<4; c++){
+        const sw = document.createElement('div');
+        sw.style.background = NES_PALETTE[pals[i] ? pals[i][c] : 0];
+        slot.appendChild(sw);
+      }
+      group.appendChild(slot);
+    }
+    compact.appendChild(group);
+  }
+
+  function refreshBgPalettePanel(){
+    updateAttrPaletteUI();
+    if(typeof CHR !== 'undefined' && CHR.refreshPaletteUI){
+      CHR.refreshPaletteUI();
+    }
+  }
+
+  function togglePalettePanel(){
+    const panel = document.getElementById('bgPalettePanel');
+    const btn = document.getElementById('bgPaletteToggle');
+    if(!panel) return;
+    panel.classList.toggle('collapsed');
+    const open = !panel.classList.contains('collapsed');
+    if(btn){
+      btn.textContent = open ? '▾' : '▸';
+      btn.title = open ? 'Recolher paletas' : 'Expandir paletas';
+    }
+    if(open){
+      if(typeof CHR !== 'undefined' && CHR.setActivePal) CHR.setActivePal(activePalette);
+      refreshBgPalettePanel();
+    } else {
+      renderBgPaletteCompact();
+    }
+  }
+
+  function paletteBankAdd(){
+    if(typeof CHR === 'undefined' || !CHR.paletteBankAdd) return;
+    if(CHR.setActivePal) CHR.setActivePal(activePalette);
+    CHR.paletteBankAdd();
+    onPalettesChanged();
+  }
+
+  function paletteBankApply(){
+    if(typeof CHR === 'undefined' || !CHR.paletteBankApply) return;
+    if(CHR.setActivePal) CHR.setActivePal(activePalette);
+    CHR.paletteBankApply();
+    onPalettesChanged();
+  }
+
+  function paletteBankRename(){
+    if(typeof CHR === 'undefined' || !CHR.paletteBankRename) return;
+    CHR.paletteBankRename();
+    onPalettesChanged();
+  }
+
+  function paletteBankDelete(){
+    if(typeof CHR === 'undefined' || !CHR.paletteBankDelete) return;
+    CHR.paletteBankDelete();
+    onPalettesChanged();
+  }
+
+  function onPalettesChanged(){
+    updateAttrPaletteUI();
+    updateTextPaletteUI();
+    if(typeof CHR !== 'undefined' && CHR.refreshPaletteUI) CHR.refreshPaletteUI();
+    try{ render(); }catch(e){}
+    if(selectedMetatile) try{ updateSelectedInfo(); }catch(e){}
   }
 
   function updateTextPaletteUI(){
@@ -1260,6 +1481,7 @@ const BG = (() => {
     insertText, exportASM, fillAllEmpty, fillEntireScreen, applyAttrToAll, setTextOffsetMode,
     newCanvas, clearBackground, saveEntryAs, deleteCurrentEntry, loadEntry,
     editTextLayer, deleteTextLayer, toggleMoveMode, nudgeTextLayer, startDuplicateTextMode, duplicateTextLayerAt, clearTextSelection,
+    togglePalettePanel, paletteBankAdd, paletteBankApply, paletteBankRename, paletteBankDelete, onPalettesChanged,
     loadBackgrounds: (arr)=>{ if(Project.data) Project.data.backgrounds=arr; updateBGSelect(); },
     loadSplashScreens: (arr)=>{ if(Project.data) Project.data.splashScreens=arr; updateBGSelect(); },
     getBackgrounds: ()=> Project.data?.backgrounds||[],
