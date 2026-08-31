@@ -244,11 +244,13 @@
         }
 
         .trashCard,
+        .libraryCard,
         .newprojCard {
             display: none;
         }
 
-        .trashCard {
+        .trashCard,
+        .libraryCard {
             width: 80vw !important;
             max-width: 900px;
             max-height: 85vh;
@@ -257,22 +259,81 @@
             align-items: stretch;
         }
 
-        .trashCard h2 {
+        .trashCard h2,
+        .libraryCard h2 {
             flex: 0 0 auto;
             margin: 0 0 8px;
             align-self: flex-start;
             padding-right: 36px;
         }
 
-        .trashCard .message {
+        .trashCard .message,
+        .libraryCard .message {
             flex: 0 0 auto;
         }
 
-        .trashCard #trashList {
+        .trashCard #trashList,
+        .libraryCard #libraryList {
             flex: 1 1 auto;
             min-height: 0;
             overflow-y: auto;
             margin-top: 12px;
+        }
+
+        .library-tabs {
+            display: flex;
+            gap: 6px;
+            margin: 4px 0 0;
+            flex: 0 0 auto;
+        }
+
+        .library-tabs button {
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #444;
+            background: #1a1a1a;
+            color: #aaa;
+            cursor: pointer;
+        }
+
+        .library-tabs button.active {
+            background: #007acc;
+            border-color: #007acc;
+            color: #fff;
+        }
+
+        .library-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #141414;
+            margin-bottom: 8px;
+        }
+
+        .library-item .meta {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .library-item .meta strong {
+            display: block;
+            color: #eee;
+            font-size: 13px;
+        }
+
+        .library-item .meta span {
+            font-size: 11px;
+            color: #777;
+        }
+
+        .library-item .actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
         }
 
         .open {
@@ -345,6 +406,16 @@
                 aria-label="Novo projeto"
             >
                 +
+            </button>
+
+            <button
+                id="libraryButton"
+                class="icon-btn secondary"
+                type="button"
+                title="Biblioteca de assets"
+                aria-label="Biblioteca"
+            >
+                📚
             </button>
 
             <button
@@ -487,9 +558,42 @@
     
     </div>
 
+    <div class="card dash-card libraryCard">
+
+        <button
+            id="closeLibraryModal"
+            class="close"
+            type="button"
+        >
+        &times;
+        </button>
+
+        <h2>📚 Biblioteca</h2>
+
+        <div class="library-tabs">
+            <button type="button" id="libTabSound" class="active" data-lib-type="sound">Sons (.nsound)</button>
+            <button type="button" id="libTabTile" data-lib-type="tile">Tiles (.tile)</button>
+            <button type="button" id="libImportBtn" title="Importar arquivo local para a biblioteca" style="margin-left:auto;background:#27ae60;border-color:#27ae60;color:#fff">⬆ Importar</button>
+        </div>
+        <input type="file" id="libImportInput" accept=".nsound,.tile,application/json,.json" style="display:none">
+
+        <div
+            id="libraryMessage"
+            class="message"
+        >
+            Carregando...
+        </div>
+
+        <div
+            id="libraryList"
+            class="project-list"
+        ></div>
+
+    </div>
+
 </div>
 
-
+<script src="js/library.js"></script>
 <script>
 
 /* =========================================================
@@ -1497,6 +1601,7 @@ function openEditProjectModal(project) {
     if (descEl) descEl.value = project.description || '';
 
     trashCard.classList.remove('open');
+    if (libraryCard) libraryCard.classList.remove('open');
     modal.classList.add('open');
     newprojCard.classList.add('open');
 }
@@ -1512,6 +1617,7 @@ document
             projectForm.reset();
             setProjectModalMode('create');
             trashCard.classList.remove('open');
+            if (libraryCard) libraryCard.classList.remove('open');
             modal.classList.add('open');
             newprojCard.classList.add('open');
         }
@@ -1522,9 +1628,13 @@ document
    FECHAR MODAL
    ========================================================= */
 
+const libraryCard = document.querySelector('.libraryCard');
+let libraryActiveType = 'sound';
+
 function closeDashboardModal() {
     modal.classList.remove('open');
     trashCard.classList.remove('open');
+    if (libraryCard) libraryCard.classList.remove('open');
     newprojCard.classList.remove('open');
 }
 
@@ -1535,6 +1645,10 @@ document
 document
     .getElementById('closeTrashModal')
     .addEventListener('click', closeDashboardModal);
+
+document
+    .getElementById('closeLibraryModal')
+    ?.addEventListener('click', closeDashboardModal);
 
 /*
  * Também permite fechar clicando
@@ -1561,11 +1675,199 @@ modal.addEventListener(
         'click',
         async () => {
             newprojCard.classList.remove('open');
+            if (libraryCard) libraryCard.classList.remove('open');
             modal.classList.add('open');
             trashCard.classList.add('open');
             await loadTrash();
         }
     );
+
+/* =========================================================
+   BIBLIOTECA DE ASSETS (.nsound / .tile)
+   ========================================================= */
+
+function formatBytes(n) {
+    n = Number(n) || 0;
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    return (n / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function setLibraryTab(type) {
+    libraryActiveType = type === 'tile' ? 'tile' : 'sound';
+    document.querySelectorAll('.library-tabs button').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-lib-type') === libraryActiveType);
+    });
+}
+
+async function loadLibrary(type) {
+    if (type) setLibraryTab(type);
+    const msg = document.getElementById('libraryMessage');
+    const list = document.getElementById('libraryList');
+    if (!msg || !list) return;
+
+    msg.textContent = 'Carregando biblioteca...';
+    list.innerHTML = '';
+
+    if (typeof AssetLibrary === 'undefined') {
+        msg.textContent = 'Biblioteca indisponível (js/library.js).';
+        return;
+    }
+
+    try {
+        const items = await AssetLibrary.list(libraryActiveType);
+        if (!items.length) {
+            msg.textContent = libraryActiveType === 'tile'
+                ? 'Nenhum .tile salvo. Exporte metatiles em Personagens.'
+                : 'Nenhum .nsound salvo. Exporte no editor de som.';
+            return;
+        }
+        msg.textContent = items.length + ' item(ns)';
+
+        items.forEach(it => {
+            const row = document.createElement('div');
+            row.className = 'library-item';
+
+            const extra = libraryActiveType === 'tile'
+                ? `${it.metatile_count || 0} metatile(s)` +
+                  (it.character_count ? ` · ${it.character_count} char(s)` : '')
+                : `${it.item_count || 0} peça(s)`;
+
+            const updated = it.updated_at
+                ? new Date(it.updated_at).toLocaleString()
+                : '—';
+
+            row.innerHTML = `
+                <div class="meta">
+                    <strong></strong>
+                    <span></span>
+                </div>
+                <div class="actions">
+                    <button type="button" class="icon-btn" title="Baixar arquivo" data-act="dl">⬇</button>
+                    <button type="button" class="icon-btn secondary" title="Excluir da biblioteca" data-act="del" style="background:#5a1a1a;border-color:#7d2525">🗑</button>
+                </div>
+            `;
+            row.querySelector('strong').textContent = it.name || it.id;
+            row.querySelector('span').textContent =
+                `${extra} · ${formatBytes(it.size)} · ${updated}`;
+
+            row.querySelector('[data-act="dl"]').addEventListener('click', async () => {
+                try {
+                    const loaded = await AssetLibrary.load(libraryActiveType, it.id);
+                    const ext = libraryActiveType === 'tile' ? 'tile' : 'nsound';
+                    const safe = String(loaded.name || it.id)
+                        .replace(/[^a-zA-Z0-9_\-]+/g, '_')
+                        .slice(0, 40);
+                    const blob = new Blob(
+                        [JSON.stringify(loaded.data, null, 2)],
+                        { type: 'application/json' }
+                    );
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = safe + '.' + ext;
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => {
+                        URL.revokeObjectURL(a.href);
+                        a.remove();
+                    }, 500);
+                } catch (err) {
+                    alert(err.message || 'Falha no download');
+                }
+            });
+
+            row.querySelector('[data-act="del"]').addEventListener('click', async () => {
+                if (!confirm(`Remover "${it.name || it.id}" da biblioteca?`)) return;
+                try {
+                    await AssetLibrary.remove(libraryActiveType, it.id);
+                    await loadLibrary();
+                } catch (err) {
+                    alert(err.message || 'Falha ao remover');
+                }
+            });
+
+            list.appendChild(row);
+        });
+    } catch (err) {
+        console.error(err);
+        msg.textContent = err.message || 'Não foi possível carregar a biblioteca.';
+    }
+}
+
+document.getElementById('libraryButton')?.addEventListener('click', async () => {
+    newprojCard.classList.remove('open');
+    trashCard.classList.remove('open');
+    modal.classList.add('open');
+    if (libraryCard) libraryCard.classList.add('open');
+    await loadLibrary(libraryActiveType);
+});
+
+document.getElementById('libTabSound')?.addEventListener('click', () => loadLibrary('sound'));
+document.getElementById('libTabTile')?.addEventListener('click', () => loadLibrary('tile'));
+
+/** Importa .nsound / .tile local para a biblioteca do usuário (troca entre usuários). */
+async function importFileToLibrary(file) {
+    if (!file || typeof AssetLibrary === 'undefined') return;
+    const msg = document.getElementById('libraryMessage');
+    const nameLower = (file.name || '').toLowerCase();
+
+    try {
+        const text = await file.text();
+        const doc = JSON.parse(text);
+
+        let type = null;
+        if (doc.format === 'tile' || nameLower.endsWith('.tile')) {
+            type = 'tile';
+            if (!doc.chr || !Array.isArray(doc.metatiles)) {
+                throw new Error('Arquivo .tile inválido (precisa de chr e metatiles).');
+            }
+            if (doc.format !== 'tile') doc.format = 'tile';
+        } else if (doc.format === 'nsound' || nameLower.endsWith('.nsound') || Array.isArray(doc.items)) {
+            type = 'sound';
+            if (doc.format !== 'nsound') {
+                doc.format = 'nsound';
+                doc.version = doc.version || 1;
+                if (!Array.isArray(doc.items) && doc.item) doc.items = [doc.item];
+                if (!Array.isArray(doc.items) && (doc.channels || doc.type === 'song' || doc.type === 'sfx')) {
+                    doc.items = [doc];
+                }
+            }
+            if (!Array.isArray(doc.items) || !doc.items.length) {
+                throw new Error('Arquivo .nsound inválido (sem peças).');
+            }
+        } else {
+            throw new Error('Formato não reconhecido. Use .nsound ou .tile.');
+        }
+
+        if (!doc.name) {
+            doc.name = file.name.replace(/\.(nsound|tile|json)$/i, '') || 'importado';
+        }
+
+        const saved = await AssetLibrary.save(type, doc, { name: doc.name });
+        setLibraryTab(type);
+        if (msg) msg.textContent = `Importado: "${saved.name || doc.name}"`;
+        await loadLibrary(type);
+    } catch (err) {
+        console.error(err);
+        alert(err.message || 'Falha ao importar arquivo.');
+        if (msg) msg.textContent = err.message || 'Falha ao importar.';
+    }
+}
+
+document.getElementById('libImportBtn')?.addEventListener('click', () => {
+    document.getElementById('libImportInput')?.click();
+});
+
+document.getElementById('libImportInput')?.addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) await importFileToLibrary(f);
+    e.target.value = '';
+});
+
+// Ao abrir novo projeto / editar, fecha a biblioteca também
+document.getElementById('newProjectButton')?.addEventListener('click', () => {
+    if (libraryCard) libraryCard.classList.remove('open');
+}, true);
 
 /* =========================================================
    CRIAR PROJETO

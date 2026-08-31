@@ -1,0 +1,3941 @@
+{
+    "format": "nsound",
+    "version": 1,
+    "exportedAt": "2026-08-31T14:44:34.937Z",
+    "app": "NES Maker Studio Sound Editor",
+    "name": "bloody-tears",
+    "items": [
+        {
+            "id": "song_mtgg2y3hzscu",
+            "type": "song",
+            "name": "bloody-tears",
+            "loop": true,
+            "baseFrames": 26,
+            "typeActivation": [],
+            "channels": [
+                {
+                    "id": "ch_mtgg2y3h3dr5",
+                    "type": "pulse1",
+                    "name": "Voice 2",
+                    "muted": false,
+                    "notes": [
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        }
+                    ]
+                },
+                {
+                    "id": "ch_mtgg2y3hz402",
+                    "type": "pulse2",
+                    "name": "Organ",
+                    "muted": false,
+                    "notes": [
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "eighth"
+                        }
+                    ]
+                },
+                {
+                    "id": "ch_mtgg2y3h3dbz",
+                    "type": "triangle",
+                    "name": "Voice 1",
+                    "muted": false,
+                    "notes": [
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "A#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "eighth"
+                        }
+                    ]
+                },
+                {
+                    "id": "ch_mtgg2y3hvtam",
+                    "type": "noise",
+                    "name": "Drums",
+                    "muted": false,
+                    "notes": [
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DHATC",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DKICK",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "DSNARE",
+                            "figure": "eighth"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "library_id": "snd_5030fc3eed7b",
+    "savedAt": "2026-08-31T16:44:34+02:00"
+}

@@ -498,18 +498,24 @@ const CHAR = (() => {
       characters
     };
 
-    const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    const base = String(doc.name||'tiles').replace(/[^a-zA-Z0-9_\-]+/g, '_').slice(0, 40);
-    a.href = URL.createObjectURL(blob);
-    a.download = base + '.tile';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
     closeTileExport();
-    if(typeof Project !== 'undefined' && Project.status){
-      Project.status(`Exportado ${metatiles.length} metatile(s)` + (characters.length ? ` + ${characters.length} personagem(ns)` : '') + ` → ${a.download}`);
+
+    // Só biblioteca no servidor — download fica no dashboard
+    if(typeof AssetLibrary !== 'undefined' && AssetLibrary.save){
+      AssetLibrary.save('tile', doc, { name: doc.name }).then(r=>{
+        if(typeof Project !== 'undefined' && Project.status){
+          Project.status(
+            `Biblioteca: "${r.name || doc.name}" · ${metatiles.length} metatile(s)` +
+            (characters.length ? ` + ${characters.length} personagem(ns)` : '')
+          );
+        }
+      }).catch(err=>{
+        const msg = err && err.message ? err.message : 'erro ao salvar';
+        alert('Não foi possível salvar na biblioteca.\n' + msg + '\n(É preciso estar logado.)');
+      });
+      return;
     }
+    alert('Biblioteca indisponível (AssetLibrary).');
   }
 
   return {

@@ -515,10 +515,9 @@ const SOUND = (() => {
         <button id="btn-new-sfx" class="btn-sfx">+ SFX</button>
         <button id="btn-import-midi" class="secondary" title="Importar arquivo MIDI">Import MIDI</button>
         <input type="file" id="midi-file-input" accept=".mid,.midi,audio/midi,audio/x-midi" style="display:none">
-        <button id="btn-export-nsound" class="secondary" title="Exportar peca ativa como .nsound">Export .nsound</button>
-        <button id="btn-import-nsound" class="secondary" title="Importar .nsound para a biblioteca">Import .nsound</button>
-        <input type="file" id="nsound-file-input" accept=".nsound,application/json,.json" style="display:none">
-        <button id="btn-rename" class="secondary">Renomear</button>
+        <button id="btn-export-nsound" class="btn-save-lib" title="Salvar peça na biblioteca do usuário (.nsound)">Save to lib</button>
+        <button id="btn-import-nsound-lib" class="btn-lib" title="Importar da biblioteca do usuário no servidor">Biblioteca</button>
+        <button id="btn-rename" class="btn-rename">Renomear</button>
         <button id="btn-delete-item" class="btn-del">Apagar</button>
         <span id="sound-status" style="font-size:11px;color:#888;margin-left:auto"></span>
       </div>
@@ -2147,19 +2146,56 @@ const SOUND = (() => {
       version: 1,
       exportedAt: new Date().toISOString(),
       app: "NES Maker Studio Sound Editor",
+      name: all ? "library" : ((payloadItems[0] && payloadItems[0].name) || "sound"),
       items: payloadItems
     };
-    const blob = new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    const base = (payloadItems[0] && payloadItems[0].name) || "sound";
-    const safe = String(base).replace(/[^a-zA-Z0-9_\-]+/g, "_").slice(0, 40);
-    a.href = URL.createObjectURL(blob);
-    a.download = (all ? "library" : safe) + ".nsound";
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
-    const st = document.getElementById("sound-status");
-    if(st) st.textContent = "Exportado " + payloadItems.length + " peca(s) → " + a.download;
+    // Só biblioteca no servidor — download fica no dashboard
+    if(typeof AssetLibrary !== "undefined" && AssetLibrary.save){
+      AssetLibrary.save("sound", doc, { name: doc.name }).then((r)=>{
+        const st = document.getElementById("sound-status");
+        if(st) st.textContent = "Salvo na biblioteca: " + (r.name || doc.name)
+          + " (" + payloadItems.length + " peça(s))";
+        if(typeof Project !== "undefined" && Project.status){
+          Project.status("Biblioteca: " + (r.name || doc.name));
+        }
+      }).catch((err)=>{
+        const msg = err && err.message ? err.message : "erro ao salvar";
+        const st = document.getElementById("sound-status");
+        if(st) st.textContent = "Biblioteca: " + msg;
+        alert("Não foi possível salvar na biblioteca.\n" + msg + "\n(É preciso estar logado.)");
+      });
+      return;
+    }
+    alert("Biblioteca indisponível (AssetLibrary).");
+  }
+
+  /** Importa um .nsound da biblioteca do usuário. */
+  async function importNSoundFromLibrary(){
+    if(typeof AssetLibrary === "undefined"){
+      alert("Biblioteca indisponível.");
+      return;
+    }
+    try{
+      const list = await AssetLibrary.list("sound");
+      if(!list.length){
+        alert("Nenhum .nsound na sua biblioteca ainda.\nExporte uma peça para gravar automaticamente.");
+        return;
+      }
+      const lines = list.map((it, i)=> `${i+1}. ${it.name} (${it.item_count||0} peça(s))`);
+      const pick = prompt("Importar da biblioteca:\n" + lines.join("\n") + "\n\nDigite o número:", "1");
+      if(pick === null) return;
+      const idx = parseInt(pick, 10) - 1;
+      if(isNaN(idx) || idx < 0 || idx >= list.length){
+        alert("Número inválido.");
+        return;
+      }
+      const loaded = await AssetLibrary.load("sound", list[idx].id);
+      const blob = new Blob([JSON.stringify(loaded.data)], { type: "application/json" });
+      const file = new File([blob], (loaded.name || "lib") + ".nsound", { type: "application/json" });
+      importNSoundFile(file);
+    }catch(err){
+      alert("Biblioteca: " + (err.message || err));
+    }
   }
 
   function importNSoundFile(file){
@@ -2328,14 +2364,8 @@ Time_${label}:
       // Shift+click = biblioteca inteira
       exportNSound({ all: !!(e && e.shiftKey) });
     };
-    const impNs = document.getElementById("btn-import-nsound");
-    if(impNs) impNs.onclick = ()=> document.getElementById("nsound-file-input").click();
-    const nsInput = document.getElementById("nsound-file-input");
-    if(nsInput) nsInput.onchange = (e)=>{
-      const f = e.target.files && e.target.files[0];
-      if(f) importNSoundFile(f);
-      e.target.value = "";
-    };
+    const impNsLib = document.getElementById("btn-import-nsound-lib");
+    if(impNsLib) impNsLib.onclick = ()=> importNSoundFromLibrary();
 
     if(els.librarySelect){
       els.librarySelect.onchange = (e)=>{
