@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NES Maker Studio v0.6.5 FINAL</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="assets/icon.png" type="image/png">
+</head>
+<body>
+<div id="topbar">
+  <div class="top-logo"><span>▶</span> NES MAKER STUDIO v0.6.5 FINAL EXATO</div>
+  <div class="divider"></div>
+  <button class="icon-btn primary" title="Novo Projeto (Ctrl+N)" onclick="Project.newProject()">📄</button>
+  <label class="icon-btn" title="Abrir Projeto .NMS (Ctrl+O)" style="cursor:pointer">📂<input type="file" id="openNMS" accept=".nms,.json" style="display:none"></label>
+  <button class="icon-btn" title="Salvar no servidor (Ctrl+S)" onclick="Project.save()">💾</button>
+  <button class="icon-btn" title="Fork — salvar como novo projeto" onclick="Project.fork()">⑂</button>
+  <button class="icon-btn" title="Voltar para o Dashboard" onclick="goToDashboard()">🏠</button>
+
+  <div class="divider"></div>
+  <span style="font-size:11px;color:#00ff00">v0.6.5 FINAL - Scroll Fix Exato + CHR Page - FUNCIONANDO</span>
+  <button class="icon-btn" title="Sobre" onclick="alert('NES Maker Studio v0.6.5 FINAL\nScroll fix exato do usuário\nCHR Page Selector\nOAM DMA removido conforme exemplo\nFUNCIONANDO PERFEITAMENTE')" style="margin-left:auto">❓</button>
+  <div class="proj-info">
+    <span id="projNameLabel">Sem projeto</span>
+    <b id="projFileLabel">—</b>
+    <span id="projStatus" style="color:#27ae60">● pronto</span>
+  </div>
+</div>
+<div id="main">
+  <div id="sidebar">
+    <div class="side-header">
+      <span class="side-title">Módulos</span>
+      <button type="button" class="side-toggle" id="btnSideToggle" title="Recolher menu" onclick="UI.toggleSidebar()">«</button>
+    </div>
+    <div class="side-item active" data-mod="dashboard" onclick="UI.switchModule('dashboard')" title="Dashboard">
+      <span class="side-ico">📊</span><span class="side-label">Dashboard</span>
+    </div>
+    <div class="side-item" data-mod="chr" onclick="UI.switchModule('chr')" title="CHR Editor">
+      <span class="side-ico">🎨</span><span class="side-label">CHR Editor</span>
+    </div>
+    <div class="side-item" data-mod="bg" onclick="UI.switchModule('bg')" title="Backgrounds">
+      <span class="side-ico">🗺</span><span class="side-label">Backgrounds</span>
+    </div>
+    <div class="side-item" data-mod="char" onclick="UI.switchModule('char')" title="Personagens">
+      <span class="side-ico">🦸</span><span class="side-label">Personagens</span>
+    </div>
+    <div class="side-item" data-mod="sound" onclick="UI.switchModule('sound')" title="Sons APU">
+      <span class="side-ico">🎵</span><span class="side-label">Sons APU</span>
+    </div>
+    <div class="side-item" data-mod="world" onclick="UI.switchModule('world')" title="Level-Design">
+      <span class="side-ico">🌍</span><span class="side-label">Level-Design</span>
+    </div>
+    <div class="side-item" data-mod="program" onclick="UI.switchModule('program')" title="Programação">
+      <span class="side-ico">🧠</span><span class="side-label">Programação</span>
+    </div>
+    <div class="side-item" data-mod="build" onclick="UI.switchModule('build')" title="Build ROM">
+      <span class="side-ico">🔨</span><span class="side-label">Build ROM</span>
+    </div>
+    <div class="side-footer">
+      <div>CHR: <span id="infoCHR">8KB</span></div>
+      <div>Banks: <span id="infoBanks">2</span></div>
+      <div>Fases: <span id="infoPhases">0</span></div>
+      <div>Splash: <span id="infoSplash">0</span></div>
+      <div class="side-footer-format">Formato: <b style="color:#00ff00">.nms</b></div>
+    </div>
+  </div>
+  <div id="content">
+    <div class="module active" id="mod-dashboard"></div>
+    <div class="module" id="mod-chr"><div class="chr-wrap" id="chrModuleRoot"></div></div>
+    <div class="module" id="mod-bg"></div>
+    <div class="module" id="mod-char"></div>
+    <div class="module" id="mod-sound"></div>
+    <div class="module" id="mod-world"></div>
+    <div class="module" id="mod-program"></div>
+    <div class="module" id="mod-build"></div>
+  </div>
+</div>
+<script src="js/core.js"></script>
+<script src="js/render-utils.js"></script>
+<script src="js/modules/dashboard.js"></script>
+<script src="js/modules/chr-editor.js"></script>
+<script src="js/modules/characters.js"></script>
+<script src="js/modules/backgrounds.js"></script>
+<script src="js/modules/level-design.js"></script>
+<script src="js/modules/program.js"></script>
+<script src="js/modules/build-rom.js"></script>
+<script src="js/modules/sound-editor.js"></script>
+<script>
+const UI = {
+  switchModule(name){
+    document.querySelectorAll('.side-item').forEach(e=>e.classList.remove('active'));
+    document.querySelector(`[data-mod="${name}"]`)?.classList.add('active');
+    document.querySelectorAll('.module').forEach(m=>m.classList.remove('active'));
+    document.getElementById('mod-'+name)?.classList.add('active');
+    if(name==='dashboard'){ try{ DASHBOARD.init(); }catch(e){} }
+    if(name==='chr'){ try{ CHR.renderAll(); }catch(e){} }
+    if(name==='char'){ try{ CHAR.init(); }catch(e){} }
+    if(name==='bg'){ try{ BG.init(); BG.refreshMetatileList(); }catch(e){} }
+    if(name==='world'){ try{ LEVEL_DESIGN.init(); }catch(e){} }
+    if(name==='program'){ try{ PROGRAM.init(); }catch(e){} }
+    if(name==='build'){ try{ BUILD.init(); }catch(e){} }
+    if(name==='sound'){ try{ SOUND.init(); }catch(e){} }
+  },
+  toggleSidebar(){
+    const sb = document.getElementById('sidebar');
+    if(!sb) return;
+    const collapsed = sb.classList.toggle('collapsed');
+    try { localStorage.setItem('nms_sidebar_collapsed', collapsed ? '1' : '0'); } catch(e){}
+    const btn = document.getElementById('btnSideToggle');
+    if(btn){
+      btn.textContent = collapsed ? '»' : '«';
+      btn.title = collapsed ? 'Expandir menu' : 'Recolher menu';
+    }
+  },
+  restoreSidebar(){
+    try {
+      if(localStorage.getItem('nms_sidebar_collapsed') === '1'){
+        const sb = document.getElementById('sidebar');
+        if(sb){
+          sb.classList.add('collapsed');
+          const btn = document.getElementById('btnSideToggle');
+          if(btn){ btn.textContent = '»'; btn.title = 'Expandir menu'; }
+        }
+      }
+    } catch(e){}
+  }
+}
+window.addEventListener('keydown', e=>{
+  if(e.ctrlKey && e.key.toLowerCase()==='n'){ e.preventDefault(); Project.newProject(); }
+  if(e.ctrlKey && e.key.toLowerCase()==='s'){ e.preventDefault(); Project.save(); }
+  if(e.ctrlKey && e.key.toLowerCase()==='o'){ e.preventDefault(); document.getElementById('openNMS').click(); }
+  if(e.ctrlKey && e.key.toLowerCase()==='z'){ e.preventDefault(); CHR.undo(); }
+});
+
+window.addEventListener('DOMContentLoaded', async () => {
+
+    UI.restoreSidebar();
+
+    /*
+    * Se existe ?project=ID na URL, o core.js
+    * carregará o projeto do backend.
+    *
+    * NÃO criamos um novo projeto aqui.
+    */
+
+    const params =
+      new URLSearchParams(
+        window.location.search
+      );
+
+    const projectId =
+      params.get('project');
+
+    if (projectId) {
+
+      /*
+      * O loader do backend será executado
+      * pelo core.js depois que todos os
+      * módulos estiverem disponíveis.
+      */
+
+      if (typeof Project.loadProjectFromBackend === 'function') {
+
+        await Project.loadProjectFromBackend(
+          projectId
+        );
+
+      }
+
+    } else {
+
+      /*
+      * Acesso normal ao editor sem projeto.
+      *
+      * Mantém o comportamento antigo:
+      * cria um projeto novo somente quando
+      * não existe projeto vindo do Dashboard.
+      */
+
+      Project.newProject(true);
+
+    }
+
+    setTimeout(() => {
+
+      UI.switchModule('dashboard');
+
+    }, 100);
+
+  });
+
+  function goToDashboard() {
+
+    /*
+    * O usuário já está autenticado
+    * na sessão PHP.
+    */
+
+    window.location.href =
+        'dashboard.html';
+  }
+
+
+</script>
+</body>
+</html>

@@ -22,6 +22,7 @@ then
     git add login.html
     git add register.html
     git add index.html
+    git add editor.html
     git add historico.txt
     git add backup.zip
     git add intro.md
