@@ -27,8 +27,6 @@ then
     git add backup.zip
     git add intro.md
     git add upload.sh
-    git add smb.nms
-    git add hello.nms
     
     git commit -m "by_script"
 
