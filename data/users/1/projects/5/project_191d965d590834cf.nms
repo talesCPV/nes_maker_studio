@@ -22215,6 +22215,14 @@
             "category": "input",
             "button": "P2-IDLE",
             "builtin": true
+        },
+        {
+            "id": "ev_1788151355578",
+            "name": "start",
+            "category": "input",
+            "builtin": false,
+            "button": "P1-START",
+            "trigger": "press"
         }
     ],
     "rules": [
@@ -22548,6 +22556,23 @@
                     "charId": "char_1787145214756",
                     "animId": "idle",
                     "direction": "jump"
+                }
+            ]
+        },
+        {
+            "id": "rule_1788150703944",
+            "name": "tocar musica",
+            "scope": "global",
+            "steps": [
+                {
+                    "type": "if_event",
+                    "eventId": "ev_1788151355578"
+                },
+                {
+                    "type": "action",
+                    "eventId": "",
+                    "actionId": "play_sound",
+                    "targetId": "song_mt04mdzzcaol"
                 }
             ]
         }
@@ -27526,7 +27551,7 @@
         ],
         "asm": ""
     },
-    "savedAt": 1788131221124,
+    "savedAt": 1788151368990,
     "physicsTables": {
         "jumps": [
             {

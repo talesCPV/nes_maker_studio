@@ -18,6 +18,10 @@ return [
         $lines[] = '; ---- NGC GAME FLOW ----';
         $lines[] = '; 0=splash 1=play 2=gameover';
         $lines[] = 'st_splash:';
+        $lines[] = '  JSR run_rules';
+        $lines[] = '  LDA #0';
+        $lines[] = '  STA pv_ev_oob';
+        $lines[] = '  STA pv_ev_enter';
         $lines[] = '  ; START no splash -> Fase 1 + spawn Hero';
         $lines[] = '  LDA pad1_edge';
         $lines[] = '  AND #%00001000';
@@ -28,6 +32,8 @@ return [
         $lines[] = '  STA game_state';
         $lines[] = "  LDA #{$playStart}";
         $lines[] = '  JSR load_screen';
+        $lines[] = '  LDA #1';
+        $lines[] = '  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela"';
         $lines[] = '  LDA #0';
         $lines[] = '  STA scroll_x';
         $lines[] = '  STA nt_page';
@@ -39,7 +45,7 @@ return [
         }
         $lines[] = '  JSR spawn_player';
         $lines[] = '  JSR spawn_enemies';
-        if ($music) $lines[] = '  JSR music_init';
+        $lines[] = '  ; Musica so toca via acao Tocar Som (Camada 6) - sem autoplay';
         $lines[] = '  JMP MainLoop';
         $lines[] = '';
 
@@ -80,11 +86,17 @@ return [
         $lines[] = '  JSR hide_player';
         $lines[] = "  LDA #{$gameoverIdx}";
         $lines[] = '  JSR load_screen';
+        $lines[] = '  LDA #1';
+        $lines[] = '  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela"';
         $lines[] = 'st_play_done:';
         $lines[] = '  JMP MainLoop';
         $lines[] = '';
 
         $lines[] = 'st_gameover:';
+        $lines[] = '  JSR run_rules';
+        $lines[] = '  LDA #0';
+        $lines[] = '  STA pv_ev_oob';
+        $lines[] = '  STA pv_ev_enter';
         $lines[] = '  ; START no Game Over -> Splash';
         $lines[] = '  LDA pad1_edge';
         $lines[] = '  AND #%00001000';
@@ -96,6 +108,8 @@ return [
         $lines[] = '  JSR hide_player';
         $lines[] = "  LDA #{$splashIdx}";
         $lines[] = '  JSR load_screen';
+        $lines[] = '  LDA #1';
+        $lines[] = '  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela"';
         $lines[] = '  JMP MainLoop';
         $lines[] = '';
 

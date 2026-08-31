@@ -73,7 +73,7 @@ final class ProgramCompiler
      * @param array $playIdxs índices globais de tela (mesma ordem de PlayScreenTable)
      * @param array $screenData telas resolvidas (mesma ordem/índices de $playIdxs referenciados)
      */
-    public function compile(array $project, array $spriteCtx, array $playIdxs, array $screenData): array
+    public function compile(array $project, array $spriteCtx, array $playIdxs, array $screenData, string $embeddedMusicId = 'none'): array
     {
         $vars = is_array($project['variables'] ?? null) ? $project['variables'] : [];
         $alloc = $this->allocateVariables($vars);
@@ -113,11 +113,14 @@ final class ProgramCompiler
             if (is_array($p) && isset($p['id'])) $phaseIndexById[(string)$p['id']] = (int)$i;
         }
 
-        // ScreenPhase[play_idx] = índice numérico da fase dona da tela (ou 255 = nenhuma).
+        // ScreenPhase[indice GLOBAL da tela] = indice numerico da fase dona
+        // dela (ou 255 = nenhuma). Cobre TODAS as telas (splash/jogo/game
+        // over) - antes so cobria telas de jogo via play_idx, o que deixava
+        // "escopo por fase" impossivel de bater pra splash/gameover (essas
+        // telas nunca aparecem em play_idx).
         $screenPhase = [];
-        foreach ($playIdxs as $gi) {
-            $screen = $screenData[$gi] ?? null;
-            $pid = is_array($screen) ? ($screen['phaseId'] ?? null) : null;
+        foreach ($screenData as $sc) {
+            $pid = is_array($sc) ? ($sc['phaseId'] ?? null) : null;
             $screenPhase[] = ($pid !== null && isset($phaseIndexById[(string)$pid])) ? $phaseIndexById[(string)$pid] : 255;
         }
         if (!$screenPhase) $screenPhase[] = 255;
@@ -164,6 +167,18 @@ final class ProgramCompiler
         foreach ((is_array($project['speedLevels'] ?? null) ? $project['speedLevels'] : []) as $sl) {
             if (is_array($sl) && isset($sl['id'])) $speedLevelById[(string)$sl['id']] = max(0, min(255, (int)($sl['value'] ?? 0)));
         }
+        // Fase 6.1: pra ação Carregar Fase - acha a tela de entrada de cada
+        // fase (a splash dela, senão o primeiro background). Splash sempre
+        // tem prioridade sobre background, independente da ordem em que
+        // aparecem em screenData.
+        $phaseEntryScreen = [];
+        foreach ($screenData as $gi => $sc) {
+            if (!is_array($sc) || empty($sc['phaseId'])) continue;
+            $pid = (string)$sc['phaseId'];
+            if (($sc['type'] ?? '') === 'splash') { $phaseEntryScreen[$pid] = (int)$gi; }
+            elseif (!isset($phaseEntryScreen[$pid])) { $phaseEntryScreen[$pid] = (int)$gi; }
+        }
+
         $hbCtx = [
             'objNumericId' => $hbObjNumericId,
             'objectById' => $objectById,
@@ -176,6 +191,9 @@ final class ProgramCompiler
             'charIndexById' => $charIndexById,
             'jumpForceById' => $jumpForceById,
             'speedLevelById' => $speedLevelById,
+            'phaseEntryScreen' => $phaseEntryScreen,
+            'phaseIndexById' => $phaseIndexById,
+            'embeddedMusicId' => $embeddedMusicId,
         ];
 
         $ruleBodies = [];
@@ -201,7 +219,7 @@ final class ProgramCompiler
                 $dispatch[] = "  JSR {$label}";
             } elseif (isset($phaseIndexById[$scope])) {
                 $pidx = $phaseIndexById[$scope];
-                $dispatch[] = "  LDX play_idx";
+                $dispatch[] = "  LDX cur_screen";
                 $dispatch[] = "  LDA ScreenPhase,X";
                 $dispatch[] = "  CMP #{$pidx}";
                 $dispatch[] = "  BNE {$label}_scope_skip";
@@ -734,6 +752,48 @@ final class ProgramCompiler
                 }
                 return $lines;
             }
+            case 'play_sound':
+                if ($hbCtx['embeddedMusicId'] === 'none' || $hbCtx['embeddedMusicId'] === '') {
+                    return ["  ; Acao: Tocar Som - projeto nao tem nenhuma musica com canais configurados, ignorado"];
+                }
+                if ($targetId !== $hbCtx['embeddedMusicId']) {
+                    return ["  ; Acao: Tocar Som - so a musica embedada na ROM pode ser tocada por enquanto (1 musica por ROM); alvo '{$targetId}' nao e a musica embedada"];
+                }
+                return ["  ; Acao: Tocar Som (reinicia e liga o motor de musica)", "  JSR music_init"];
+            case 'load_phase':
+                if (!isset($hbCtx['phaseEntryScreen'][$targetId])) {
+                    return ["  ; Acao: Carregar Fase - fase '{$targetId}' sem tela de entrada (sem splash/background), ignorado"];
+                }
+                $gi = $hbCtx['phaseEntryScreen'][$targetId];
+                $screen = $hbCtx['screenData'][$gi] ?? [];
+                $isSplashEntry = ($screen['type'] ?? '') === 'splash';
+                $lines = [
+                    "  ; Acao: Carregar Fase",
+                    "  LDA #{$gi}",
+                    "  JSR load_screen",
+                    "  LDA #1",
+                    "  STA pv_ev_enter",
+                    "  LDA #0",
+                    "  STA scroll_x",
+                    "  STA nt_page",
+                ];
+                if ($isSplashEntry) {
+                    // Entrada da fase e' uma splash - volta pro estado de splash
+                    // (o jogador aperta START normalmente pra entrar na fase).
+                    $lines[] = "  LDA #0";
+                    $lines[] = "  STA game_state";
+                } else {
+                    // Entrada direto num background - pula a splash e ja entra jogando.
+                    $lines[] = "  LDA #1";
+                    $lines[] = "  STA game_state";
+                    $pos = array_search($gi, $hbCtx['playIdxs'], true);
+                    if ($pos !== false) {
+                        $lines[] = "  LDA #{$pos}";
+                        $lines[] = "  STA play_idx";
+                        $lines[] = "  JSR spawn_enemies";
+                    }
+                }
+                return $lines;
             case 'custom':
                 return ["  ; Acao personalizada: " . (string)($step['params'] ?? '') . " (sem semantica definida - no-op por design)"];
             default:

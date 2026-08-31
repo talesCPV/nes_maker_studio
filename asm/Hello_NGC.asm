@@ -2242,7 +2242,9 @@ clroam:
   STA player_on
   LDA #0
   JSR load_screen
-  JSR music_init
+  LDA #1
+  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela" (splash inicial no boot)
+  ; Musica so toca via acao Tocar Som (Camada 6) - sem autoplay no boot
   ; scroll 0,0
   LDA #0
   STA $2005
@@ -2271,6 +2273,10 @@ MainLoop:
 ; ---- NGC GAME FLOW ----
 ; 0=splash 1=play 2=gameover
 st_splash:
+  JSR run_rules
+  LDA #0
+  STA pv_ev_oob
+  STA pv_ev_enter
   ; START no splash -> Fase 1 + spawn Hero
   LDA pad1_edge
   AND #%00001000
@@ -2281,6 +2287,8 @@ st_splash_start:
   STA game_state
   LDA #1
   JSR load_screen
+  LDA #1
+  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela"
   LDA #0
   STA scroll_x
   STA nt_page
@@ -2290,7 +2298,7 @@ st_splash_start:
   JSR preload_screen_nt
   JSR spawn_player
   JSR spawn_enemies
-  JSR music_init
+  ; Musica so toca via acao Tocar Som (Camada 6) - sem autoplay
   JMP MainLoop
 
 st_play:
@@ -2330,10 +2338,16 @@ st_play_paused:
   JSR hide_player
   LDA #5
   JSR load_screen
+  LDA #1
+  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela"
 st_play_done:
   JMP MainLoop
 
 st_gameover:
+  JSR run_rules
+  LDA #0
+  STA pv_ev_oob
+  STA pv_ev_enter
   ; START no Game Over -> Splash
   LDA pad1_edge
   AND #%00001000
@@ -2345,6 +2359,8 @@ st_gameover_restart:
   JSR hide_player
   LDA #0
   JSR load_screen
+  LDA #1
+  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela"
   JMP MainLoop
 
 program_init_vars:
@@ -2589,23 +2605,23 @@ cccc_no:
 
 ; ---- NGC Camada 6: motor de regras ----
 ScreenPhase:
-  .byte 1, 1, 1, 1, 1
+  .byte 0, 1, 1, 1, 1, 1
 
 run_rules:
-  LDX play_idx
+  LDX cur_screen
   LDA ScreenPhase,X
   CMP #1
   BNE prule_0_scope_skip
   JSR prule_0
 prule_0_scope_skip:
-  LDX play_idx
+  LDX cur_screen
   LDA ScreenPhase,X
   CMP #1
   BNE prule_1_scope_skip
   JSR prule_1
 prule_1_scope_skip:
   JSR prule_2
-  LDX play_idx
+  LDX cur_screen
   LDA ScreenPhase,X
   CMP #1
   BNE prule_3_scope_skip
@@ -2613,7 +2629,7 @@ prule_1_scope_skip:
 prule_3_scope_skip:
   JSR prule_4
   JSR prule_5
-  LDX play_idx
+  LDX cur_screen
   LDA ScreenPhase,X
   CMP #1
   BNE prule_6_scope_skip
@@ -2624,12 +2640,13 @@ prule_6_scope_skip:
   JSR prule_9
   JSR prule_10
   JSR prule_11
-  LDX play_idx
+  LDX cur_screen
   LDA ScreenPhase,X
   CMP #1
   BNE prule_12_scope_skip
   JSR prule_12
 prule_12_scope_skip:
+  JSR prule_13
   RTS
 
 ; regra: Cair no buraco
@@ -2650,7 +2667,8 @@ prule_0:
   SBC #1
   STA pv_z_Vidas_3681
   ; Acao 'spawn_character': Fase 7 (subsistema ainda nao existe no jogo) - no-op
-  ; Acao 'play_sound': Fase 7 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao: Tocar Som (reinicia e liga o motor de musica)
+  JSR music_init
   ; SE hitbox de personagem: referencia incompleta ou desconhecida - sempre falso
   JMP prule_0_cond_end
   JMP prule_0_end
@@ -2691,7 +2709,8 @@ prule_2:
   ORA #$04
   STA pv_rs0
   ; Acao 'spawn_character': Fase 7 (subsistema ainda nao existe no jogo) - no-op
-  ; Acao 'play_sound': Fase 7 (subsistema ainda nao existe no jogo) - no-op
+  ; Acao: Tocar Som (reinicia e liga o motor de musica)
+  JSR music_init
   ; Acao: Aplicar Forca de Pulo (10 frames de impulso)
   LDA #10
   STA pv_jump_force
@@ -3019,6 +3038,30 @@ prule_12:
   JMP prule_12_end
 prule_12_cond_end:
 prule_12_end:
+  RTS
+
+; regra: tocar musica
+prule_13:
+  ; SE evento: P1-START pressionado
+  LDA pad1_edge
+  AND #$08
+  BEQ prule_13_cond_end
+  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro
+  LDA pv_rs1
+  AND #$20
+  BNE prule_13_end   ; ja estava ativa - nao repete
+  LDA pv_rs1
+  ORA #$20
+  STA pv_rs1
+  ; Acao: Tocar Som (reinicia e liga o motor de musica)
+  JSR music_init
+  JMP prule_13_end
+prule_13_cond_end:
+  ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
+  LDA pv_rs1
+  AND #$DF
+  STA pv_rs1
+prule_13_end:
   RTS
 
 PaletteData:

@@ -22,6 +22,7 @@ const PROGRAM = (() => {
   // Catálogo pequeno de ações primitivas (cresce com o tempo, não é por gênero de jogo).
   const ACTION_CATALOG = {
     goto_warp:   { label: 'Ir para Warp' },
+    load_phase:  { label: 'Carregar Fase' },
     spawn_character: { label: 'Spawnar Personagem' },
     set_on_ground: { label: 'Definir On Ground' },
     apply_jump_force: { label: 'Aplicar Força de Pulo' },
@@ -726,6 +727,10 @@ const PROGRAM = (() => {
         const warpObjs = (Project.data?.hitboxObjects || []).filter(o => o.kind === 'warp');
         fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle}">
           <option value="">— warp —</option>${warpObjs.map(o=>`<option value="${o.id}" ${step.targetId===o.id?'selected':''}>🚪 ${o.name}</option>`).join('')}</select>`;
+      } else if(step.actionId === 'load_phase'){
+        const phases = Project.data?.phases || [];
+        fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle}">
+          <option value="">— fase —</option>${phases.map(p=>`<option value="${p.id}" ${step.targetId===p.id?'selected':''}>🚩 ${p.name}</option>`).join('')}</select>`;
       } else if(step.actionId === 'spawn_character'){
         const spawnObjs = (Project.data?.hitboxObjects || []).filter(o => o.kind === 'spawn');
         fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle}">

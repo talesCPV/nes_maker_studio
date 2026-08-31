@@ -56,7 +56,7 @@ final class ProjectParser
         $paletteBytes = $this->buildPaletteData($project, $chrRaw, $screenData);
 
         // Camada 6 - Fase 1: variáveis + motor de regras (ver ProgramCompiler.php).
-        $program = (new ProgramCompiler())->compile($project, $sprite, $playIdxs, $screenData);
+        $program = (new ProgramCompiler())->compile($project, $sprite, $playIdxs, $screenData, $firstMusicId);
 
         return [
             'project' => $project,

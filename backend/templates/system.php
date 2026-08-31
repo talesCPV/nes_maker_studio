@@ -189,7 +189,6 @@ ASM;
         $playStart = (int)($ctx['playStartIdx'] ?? 0);
         $gameoverIdx = (int)($ctx['gameoverIdx'] ?? 0);
         $secondPlay = $ctx['secondPlayScreenIdx'] ?? null;
-        $music = !empty($ctx['musicEnabled']);
 
         $lines = [];
         $lines[] = 'Reset:';
@@ -245,7 +244,9 @@ ASM;
         $lines[] = '  STA player_on';
         $lines[] = "  LDA #{$splashIdx}";
         $lines[] = '  JSR load_screen';
-        if ($music) $lines[] = '  JSR music_init';
+        $lines[] = '  LDA #1';
+        $lines[] = '  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela" (splash inicial no boot)';
+        $lines[] = '  ; Musica so toca via acao Tocar Som (Camada 6) - sem autoplay no boot';
         $lines[] = '  ; scroll 0,0';
         $lines[] = '  LDA #0';
         $lines[] = '  STA $2005';
