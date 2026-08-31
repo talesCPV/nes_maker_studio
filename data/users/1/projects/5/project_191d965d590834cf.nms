@@ -22201,6 +22201,20 @@
             "builtin": false,
             "button": "P1-B",
             "trigger": "hold"
+        },
+        {
+            "id": "ev_p1_idle",
+            "name": "P1 Idle",
+            "category": "input",
+            "button": "P1-IDLE",
+            "builtin": true
+        },
+        {
+            "id": "ev_p2_idle",
+            "name": "P2 Idle",
+            "category": "input",
+            "button": "P2-IDLE",
+            "builtin": true
         }
     ],
     "rules": [
@@ -22346,7 +22360,7 @@
                     "charId": "char_1787145214756",
                     "animId": "idle",
                     "direction": "left",
-                    "flip": "flip_h"
+                    "flip": "default"
                 },
                 {
                     "type": "action",
@@ -27512,7 +27526,7 @@
         ],
         "asm": ""
     },
-    "savedAt": 1788111405235,
+    "savedAt": 1788131221124,
     "physicsTables": {
         "jumps": [
             {

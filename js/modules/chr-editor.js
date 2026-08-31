@@ -96,15 +96,8 @@ const CHR = (() => {
           <button type="button" class="icon-btn tool-btn" data-tool="sheetcopy" onclick="CHR.setTool('sheetcopy')" title="Copiar Tile (fila)">🗐</button>
           <button type="button" class="icon-btn tool-btn" data-tool="sheetpaste" onclick="CHR.setTool('sheetpaste')" title="Colar Tile">📥</button>
           <button type="button" class="icon-btn tool-btn" data-tool="sheetclear" onclick="CHR.setTool('sheetclear')" title="Clear Tile">🗑</button>
-          <button type="button" class="icon-btn" onclick="CHR.clearTileQueue()" title="Limpar fila de tiles">✖️</button>
           <span style="font-size:10px;color:#888" id="lblSheetClipboard">Fila: 0</span>
           <span style="width:1px;height:24px;background:#444;margin:0 2px"></span>
-          <button type="button" class="icon-btn" onclick="CHR.flipH()" title="Flip H (pixels do grupo)">↔️</button>
-          <button type="button" class="icon-btn" onclick="CHR.flipV()" title="Flip V (pixels do grupo)">↕️</button>
-          <button type="button" class="icon-btn" onclick="CHR.rotate()" title="Rotate 90°">🔄</button>
-          <button type="button" class="icon-btn" onclick="CHR.toggleSlotFlipH()" title="Flip H da célula (OAM)" style="background:#1a3a1a;border-color:#2a5a2a">↔</button>
-          <button type="button" class="icon-btn" onclick="CHR.toggleSlotFlipV()" title="Flip V da célula (OAM)" style="background:#1a3a1a;border-color:#2a5a2a">↕</button>
-          <span id="lblSlotFlip" style="font-size:10px;color:#888;min-width:28px">—</span>
           <button type="button" class="icon-btn" onclick="CHR.undo()" title="Undo">↩️</button>
           <span style="margin-left:auto;font-size:10px;color:#888" id="lblMetatileSize">2x2 PT0</span>
           <span style="font-size:10px;color:#888">Tiles: <b id="lblTileIndices" style="color:#ffcc00">$00</b></span>
@@ -115,7 +108,7 @@ const CHR = (() => {
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <select id="bankSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 8px;font-size:12px"></select>
               <button class="btn-tool" style="background:#c0392b;color:#fff" onclick="CHR.addBank()">+ BANK</button>
-              <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ccc;cursor:pointer"><input type="checkbox" id="chkShowGrid" checked> grid</label>
+              <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ccc;cursor:pointer"><input type="checkbox" id="chkShowGrid"> grid</label>
             </div>
             <canvas id="sheetCanvas" width="512" height="512" style="border:2px solid #333;background:#000;image-rendering:pixelated;cursor:crosshair;display:block"></canvas>
           </div>
@@ -167,6 +160,14 @@ const CHR = (() => {
                     <button type="button" class="icon-btn" onclick="CHR.shift('down')" title="Shift down">↓</button>
                     <button type="button" class="icon-btn" onclick="CHR.shift('right')" title="Shift right">→</button>
                     <button type="button" class="icon-btn" onclick="CHR.clearGroup()" title="Clear group" style="background:#5a1a1a;border-color:#7d2525">🧹</button>
+                  </div>
+                  <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap">
+                    <button type="button" class="icon-btn" onclick="CHR.flipH()" title="Flip H (pixels do grupo)">↔️</button>
+                    <button type="button" class="icon-btn" onclick="CHR.flipV()" title="Flip V (pixels do grupo)">↕️</button>
+                    <button type="button" class="icon-btn" onclick="CHR.rotate()" title="Rotate 90°">🔄</button>
+                    <button type="button" class="icon-btn" onclick="CHR.toggleSlotFlipH()" title="Flip H da célula (OAM)" style="background:#1a3a1a;border-color:#2a5a2a">↔</button>
+                    <button type="button" class="icon-btn" onclick="CHR.toggleSlotFlipV()" title="Flip V da célula (OAM)" style="background:#1a3a1a;border-color:#2a5a2a">↕</button>
+                    <span id="lblSlotFlip" style="font-size:10px;color:#888;min-width:28px">—</span>
                   </div>
                 </div>
               </div>
@@ -1274,6 +1275,8 @@ const CHR = (() => {
       Project.status(`Tile PT${Math.floor(absIdx/256)}:$${(absIdx%256).toString(16).padStart(2,'0').toUpperCase()} limpo`);
   }
   function clearTileQueue(){
+    if(!tileQueue.length) return;
+    if(!confirm('Limpar toda a fila de tiles?\nInclui tiles copiados e importados. Esta ação não pode ser desfeita.')) return;
     tileQueue = [];
     tileQueueActive = 0;
     sheetClipboardTile = null;
@@ -1346,6 +1349,20 @@ const CHR = (() => {
       div.appendChild(rm); div.appendChild(canvas); div.appendChild(label);
       cont.appendChild(div);
     });
+    // Célula final: limpar fila (copiados + importados)
+    const clearCell = document.createElement('div');
+    clearCell.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px;border:1px dashed #884444;border-radius:4px;background:#1a0a0a;cursor:pointer;min-width:56px;min-height:56px';
+    clearCell.title = 'Limpar toda a fila de tiles';
+    clearCell.onclick = () => clearTileQueue();
+    const clearIcon = document.createElement('div');
+    clearIcon.style.cssText = 'font-size:18px;line-height:1';
+    clearIcon.textContent = '✖️';
+    const clearLab = document.createElement('div');
+    clearLab.style.cssText = 'font-size:9px;color:#e74c3c;text-align:center;line-height:1.2';
+    clearLab.innerHTML = 'Limpar<br>fila';
+    clearCell.appendChild(clearIcon);
+    clearCell.appendChild(clearLab);
+    cont.appendChild(clearCell);
   }
 
   function handleCHRImport(e){
@@ -3353,7 +3370,12 @@ const CHR = (() => {
     flipV(){ flipGroupV(); },
     rotate(){ rotateGroupCW(); },
     shift(dir){ const M=getMatrix(), h=M.length, w=M[0].length, n=Array.from({length:h},()=>Array(w).fill(0)); for(let y=0;y<h;y++) for(let x=0;x<w;x++){ let ny=y,nx=x; if(dir==='left') nx=(x+1)%w; if(dir==='right') nx=(x+w-1)%w; if(dir==='up') ny=(y+1)%h; if(dir==='down') ny=(y+h-1)%h; n[y][x]=M[ny][nx]; } pushUndo(); setMatrix(n); },
-    clearGroup(){ pushUndo(); selectedTiles.forEach(ti=>chrBuffer.fill(0,ti*16,ti*16+16)); renderAll(); },
+    clearGroup(){
+      if(!confirm('Limpar o grupo de tiles selecionado?\nEsta ação pode ser desfeita com Undo.')) return;
+      pushUndo();
+      selectedTiles.forEach(ti=>chrBuffer.fill(0,ti*16,ti*16+16));
+      renderAll();
+    },
     undo(){ if(undoStack.length){ chrBuffer=undoStack.pop(); renderAll(); } },
     importCHR(){ document.getElementById('importCHR_internal')?.click(); },
     setActivePal(i){
