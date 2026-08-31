@@ -16,6 +16,11 @@ const BG = (() => {
   let textOffsetMode = 'smb'; // 'smb' (0-9,A-Z sequencial) ou 'ascii' (código ASCII direto)
   let bgCanvas, bgCtx;
   let currentTool = 'paint';
+  // Zoom visual do canvas (resolução interna continua 512×480)
+  let canvasZoom = 1;
+  const CANVAS_ZOOM_MIN = 0.5;
+  const CANVAS_ZOOM_MAX = 2.5;
+  const CANVAS_ZOOM_STEP = 0.25;
   let selectedTextIdx = null;
   let movingTextMode = false;
   let duplicatingTextMode = false;
@@ -58,23 +63,14 @@ const BG = (() => {
     if(!root) return;
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
-        <div style="display:flex;gap:8px;align-items:center;padding:8px 12px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
-          <h3 style="font-size:12px;color:#ffcc00;margin:0">🗺 BACKGROUNDS</h3>
-          <div style="display:flex;gap:6px;align-items:center;margin-left:12px">
-            <span style="font-size:11px;color:#888">BG:</span>
-            <select id="bgSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 6px;font-size:11px;min-width:140px"></select>
-            <button class="btn-tool" onclick="BG.newCanvas()" style="padding:4px 8px">✨ Novo</button>
-            <button class="btn-tool" onclick="BG.saveEntryAs('bg')" style="background:#ffcc00;color:#000">🗺 Salvar como Background</button>
-            <button class="btn-tool" onclick="BG.saveEntryAs('splash')" style="background:#8e44ad;color:#fff">🎬 Salvar como Splash</button>
-            <button class="btn-tool" onclick="BG.deleteCurrentEntry()" style="background:#c0392b;color:#fff">🗑 Deletar</button>
-          </div>
-          <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
-            <span id="bgModeLabel" style="font-size:10px;color:#4ec9b0;background:#111;border:1px solid #333;border-radius:3px;padding:2px 6px">Modo: Pintura</span>
-            <button class="btn-tool" onclick="BG.exportASM()">📄 Exportar .asm</button>
-          </div>
-        </div>
-
         <div id="bgToolsToolbar" style="display:flex;gap:6px;align-items:center;padding:6px 10px;background:#252526;border-bottom:1px solid #333;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;white-space:nowrap">
+          <select id="bgSelect" title="Selecionar background/splash" style="background:#111;color:#fff;border:1px solid #444;border-radius:6px;padding:4px 8px;font-size:11px;min-width:140px;height:36px;box-sizing:border-box"></select>
+          <button type="button" class="icon-btn" onclick="BG.newCanvas()" title="Novo canvas">✨</button>
+          <button type="button" class="icon-btn" onclick="BG.saveCurrentEntry()" title="Salvar">💾</button>
+          <button type="button" class="icon-btn" onclick="BG.saveAsClone()" title="Salvar como… (clonar tela)">📄</button>
+          <button type="button" class="icon-btn" onclick="BG.renameCurrentEntry()" title="Renomear">✏️</button>
+          <button type="button" class="icon-btn" onclick="BG.deleteCurrentEntry()" title="Deletar entrada atual" style="background:#5a1a1a;border-color:#7d2525">🗑</button>
+          <span style="width:1px;height:24px;background:#444;margin:0 2px"></span>
           <span style="font-size:10px;color:#888;margin-right:2px">TOOLS</span>
           <button type="button" class="icon-btn tool-btn active" data-bg-tool="paint" onclick="BG.setTool('paint')" title="Pintar">🎨</button>
           <button type="button" class="icon-btn tool-btn" data-bg-tool="flood" onclick="BG.setTool('flood')" title="Flood Fill">🌊</button>
@@ -85,102 +81,114 @@ const BG = (() => {
           <button type="button" class="icon-btn tool-btn" data-bg-tool="text" onclick="BG.setTool('text')" title="Texto">🔤</button>
           <button type="button" class="icon-btn tool-btn" data-bg-tool="fill" onclick="BG.setTool('fill')" title="Auto-Fill">🪣</button>
           <span style="width:1px;height:24px;background:#444;margin:0 2px"></span>
-          <span id="bgHelpText" style="font-size:10px;color:#888;white-space:normal;max-width:min(480px,40vw);line-height:1.3">Pintura livre. Alt+clique clona. Shift+clique apaga.</span>
+          <button type="button" class="icon-btn" onclick="BG.zoomOut()" title="Diminuir zoom do grid">➖</button>
+          <span id="bgZoomLabel" style="font-size:10px;color:#888;min-width:36px;text-align:center">100%</span>
+          <button type="button" class="icon-btn" onclick="BG.zoomIn()" title="Aumentar zoom do grid">➕</button>
+          <span style="width:1px;height:24px;background:#444;margin:0 2px"></span>
+          <span id="bgModeLabel" style="font-size:10px;color:#4ec9b0;background:#111;border:1px solid #333;border-radius:3px;padding:2px 6px;flex-shrink:0">Modo: Pintura</span>
+          <span id="bgHelpText" style="font-size:10px;color:#888;white-space:normal;max-width:min(420px,35vw);line-height:1.3">Pintura livre. Alt+clique clona. Shift+clique apaga.</span>
         </div>
 
         <div style="display:flex;flex:1;overflow:hidden;min-height:0">
-          <div style="width:340px;min-width:340px;background:#181818;border-right:1px solid #333;padding:12px;overflow:auto;display:flex;flex-direction:column;gap:12px">
-
-            <div id="bgHitboxPanel" style="display:none;background:#2a0808;border:1px solid #881111;border-radius:6px;padding:8px">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                <h4 style="font-size:10px;color:#ff6666;margin:0">HITBOX MANUAL</h4>
-                <label style="font-size:10px;color:#ffcc00;display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" id="chkHitboxFlood"> 🪣 Flood</label>
+          <!-- Área principal: grid à esquerda + painéis de ferramentas/metatiles -->
+          <div id="bgMainRow" style="flex:1;min-width:0;display:flex;flex-wrap:wrap;overflow:auto;background:#111;align-content:flex-start">
+            <div id="bgGridPane" style="flex:1 1 auto;padding:12px;overflow:auto;display:flex;flex-direction:column;align-items:center;gap:8px;box-sizing:border-box">
+              <div style="display:flex;gap:12px;align-items:center;font-size:11px;color:#888;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="chkShowHitbox" checked> Hitbox</label>
+                <label style="display:flex;align-items:center;gap:4px">Tipo:
+                  <select id="bgEntryTypeSelect" title="Tipo da tela (Background ou Splash)" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:2px 4px;font-size:11px">
+                    <option value="bg">Background</option>
+                    <option value="splash">Splash</option>
+                  </select>
+                </label>
+                <label style="display:flex;align-items:center;gap:4px">Grid:
+                  <select id="bgGridSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:2px 4px;font-size:11px">
+                    <option value="none">Sem grid</option>
+                    <option value="1x1">1x1</option>
+                    <option value="2x2" selected>2x2</option>
+                    <option value="4x4">4x4</option>
+                  </select>
+                </label>
+                <span id="hoverPos" style="color:#4ec9b0;background:#000;padding:2px 6px;border-radius:3px;border:1px solid #333">x:0 y:0</span>
               </div>
-              <div style="display:flex;gap:4px;flex-wrap:wrap">
-                <button class="btn-tool collision-btn" data-col-type="0" onclick="BG.setCollisionType(0)" style="font-size:10px">⬜ 0: Livre</button>
-                <button class="btn-tool collision-btn active" data-col-type="1" onclick="BG.setCollisionType(1)" style="font-size:10px;background:#c0392b;color:#fff">🟥 1: Sólido</button>
-                <button class="btn-tool collision-btn" data-col-type="2" onclick="BG.setCollisionType(2)" style="font-size:10px;background:#27ae60;color:#fff">🟩 2: Plataforma</button>
-                <button class="btn-tool collision-btn" data-col-type="3" onclick="BG.setCollisionType(3)" style="font-size:10px;background:#8e44ad;color:#fff">🟪 3: Dano</button>
-                <button class="btn-tool collision-btn" data-col-type="4" onclick="BG.setCollisionType(4)" style="font-size:10px;background:#d35400;color:#fff">🚪 4: Warp</button>
-                <button class="btn-tool collision-btn" data-col-type="5" onclick="BG.setCollisionType(5)" style="font-size:10px;background:#16a085;color:#fff">🐣 5: Spawn</button>
-              </div>
+              <canvas id="bgCanvas" width="512" height="480" style="border:2px solid #665500;background:#000;image-rendering:pixelated;cursor:crosshair;display:block"></canvas>
             </div>
 
-            <div id="bgFillPanel" style="display:none;background:#1a1a00;border:1px solid #665500;border-radius:6px;padding:8px">
-              <h4 style="font-size:10px;color:#ffcc00;margin-bottom:6px">AÇÕES DE PREENCHIMENTO</h4>
-              <div style="display:flex;gap:4px;flex-wrap:wrap">
-                <button class="btn-tool" onclick="BG.fillAllEmpty()" style="font-size:10px">⬜ Só Vazios</button>
-                <button class="btn-tool" onclick="BG.fillEntireScreen()" style="font-size:10px;background:#ffcc00;color:#000">🌟 Tela toda</button>
-                <button class="btn-tool" onclick="BG.applyAttrToAll()" style="font-size:10px;background:#2980b9;color:#fff">🎨 Paleta Global</button>
-                <button class="btn-tool" onclick="BG.clearBackground()" style="font-size:10px;background:#c0392b;color:#fff">🧹 Limpar</button>
+            <div id="bgSidePane" style="flex:1 1 280px;width:320px;min-width:280px;max-width:360px;background:#181818;border-left:1px solid #333;padding:12px;overflow:auto;display:flex;flex-direction:column;gap:12px;box-sizing:border-box">
+              <div id="bgHitboxPanel" style="display:none;background:#2a0808;border:1px solid #881111;border-radius:6px;padding:8px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                  <h4 style="font-size:10px;color:#ff6666;margin:0">HITBOX MANUAL</h4>
+                  <label style="font-size:10px;color:#ffcc00;display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" id="chkHitboxFlood"> 🪣 Flood</label>
+                </div>
+                <div style="display:flex;gap:4px;flex-wrap:wrap">
+                  <button class="btn-tool collision-btn" data-col-type="0" onclick="BG.setCollisionType(0)" style="font-size:10px">⬜ 0: Livre</button>
+                  <button class="btn-tool collision-btn active" data-col-type="1" onclick="BG.setCollisionType(1)" style="font-size:10px;background:#c0392b;color:#fff">🟥 1: Sólido</button>
+                  <button class="btn-tool collision-btn" data-col-type="2" onclick="BG.setCollisionType(2)" style="font-size:10px;background:#27ae60;color:#fff">🟩 2: Plataforma</button>
+                  <button class="btn-tool collision-btn" data-col-type="3" onclick="BG.setCollisionType(3)" style="font-size:10px;background:#8e44ad;color:#fff">🟪 3: Dano</button>
+                  <button class="btn-tool collision-btn" data-col-type="4" onclick="BG.setCollisionType(4)" style="font-size:10px;background:#d35400;color:#fff">🚪 4: Warp</button>
+                  <button class="btn-tool collision-btn" data-col-type="5" onclick="BG.setCollisionType(5)" style="font-size:10px;background:#16a085;color:#fff">🐣 5: Spawn</button>
+                </div>
               </div>
-            </div>
 
-            <div id="bgTextPanel" style="display:none;background:#1a1a00;border:1px solid #665500;border-radius:6px;padding:8px">
-              <h4 style="font-size:10px;color:#ffcc00;margin-bottom:6px">🔤 TEXTO - CLIQUE NO CANVAS PARA POSICIONAR</h4>
-              <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-                <label style="font-size:10px;color:#888">Offset:</label>
-                <select id="bgTextOffsetSelect" style="background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:3px;font-size:10px" onchange="BG.setTextOffsetMode(this.value)">
-                  <option value="smb">SMB (0-9, A-Z sequencial)</option>
-                  <option value="ascii">ASCII (código direto)</option>
-                </select>
+              <div id="bgFillPanel" style="display:none;background:#1a1a00;border:1px solid #665500;border-radius:6px;padding:8px">
+                <h4 style="font-size:10px;color:#ffcc00;margin-bottom:6px">AÇÕES DE PREENCHIMENTO</h4>
+                <div style="display:flex;gap:4px;flex-wrap:wrap">
+                  <button class="btn-tool" onclick="BG.fillAllEmpty()" style="font-size:10px">⬜ Só Vazios</button>
+                  <button class="btn-tool" onclick="BG.fillEntireScreen()" style="font-size:10px;background:#ffcc00;color:#000">🌟 Tela toda</button>
+                  <button class="btn-tool" onclick="BG.applyAttrToAll()" style="font-size:10px;background:#2980b9;color:#fff">🎨 Paleta Global</button>
+                  <button class="btn-tool" style="font-size:10px;background:#8e44ad;color:#fff" title="Clique no canvas: troca a região conectada pelo metatile selecionado">🌊 Flood (clique)</button>
+                  <button class="btn-tool" onclick="BG.clearBackground()" style="font-size:10px;background:#c0392b;color:#fff">🧹 Limpar</button>
+                </div>
+                <div style="font-size:9px;color:#888;margin-top:6px;line-height:1.3">Flood: selecione o metatile de destino e clique numa região no canvas — todos os blocos conectados iguais ao ponto clicado são trocados.</div>
               </div>
-              <div style="display:flex;gap:4px;margin:4px 0">
-                <input id="bgTextInput" type="text" placeholder="Digite texto + Enter" style="flex:1;background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:6px;font-size:12px;font-family:monospace">
-                <button class="btn-tool" onclick="BG.insertText()" style="background:#ffcc00;color:#000">Inserir</button>
-              </div>
-              <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap">
-                <label style="font-size:10px;color:#888">Paleta:</label>
-                <div id="bgTextPalettes" style="display:flex;gap:4px"></div>
-                <span style="font-size:10px;color:#666">Cursor: <b id="bgCursorPos" style="color:#ffcc00">0,0</b></span>
-                <button class="btn-tool" onclick="BG.clearTextSelection()" style="font-size:9px;margin-left:auto">✖ Deselecionar</button>
-              </div>
-            </div>
 
-            <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                <h4 style="font-size:11px;color:#4ec9b0;margin:0">METATILES (2x2+)</h4>
-                <div style="display:flex;align-items:center;gap:4px"><span style="font-size:10px;color:#888">Pág CHR:</span><select id="bgChrPageSelect" style="background:#000;color:#ffcc00;border:1px solid #444;border-radius:3px;font-size:10px;padding:2px"></select></div>
+              <div id="bgTextPanel" style="display:none;background:#1a1a00;border:1px solid #665500;border-radius:6px;padding:8px">
+                <h4 style="font-size:10px;color:#ffcc00;margin-bottom:6px">🔤 TEXTO - CLIQUE NO CANVAS PARA POSICIONAR</h4>
+                <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+                  <label style="font-size:10px;color:#888">Offset:</label>
+                  <select id="bgTextOffsetSelect" style="background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:3px;font-size:10px" onchange="BG.setTextOffsetMode(this.value)">
+                    <option value="smb">SMB (0-9, A-Z sequencial)</option>
+                    <option value="ascii">ASCII (código direto)</option>
+                  </select>
+                </div>
+                <div style="display:flex;gap:4px;margin:4px 0">
+                  <input id="bgTextInput" type="text" placeholder="Digite texto + Enter" style="flex:1;background:#000;color:#ffcc00;border:1px solid #665500;border-radius:4px;padding:6px;font-size:12px;font-family:monospace">
+                  <button class="btn-tool" onclick="BG.insertText()" style="background:#ffcc00;color:#000">Inserir</button>
+                </div>
+                <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap">
+                  <label style="font-size:10px;color:#888">Paleta:</label>
+                  <div id="bgTextPalettes" style="display:flex;gap:4px"></div>
+                  <span style="font-size:10px;color:#666">Cursor: <b id="bgCursorPos" style="color:#ffcc00">0,0</b></span>
+                  <button class="btn-tool" onclick="BG.clearTextSelection()" style="font-size:9px;margin-left:auto">✖ Deselecionar</button>
+                </div>
               </div>
-              <div id="metatilePalette" style="display:flex;flex-wrap:wrap;gap:6px;max-height:180px;overflow:auto;padding-right:4px"></div>
-            </div>
 
-            <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:8px">
-              <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
-                <div id="selectedInfo" style="font-size:10px;color:#aaa;text-align:center">Nenhum</div>
-                <canvas id="selectedPreview" width="80" height="80" style="border:1px solid #ffcc00;background:#000;image-rendering:pixelated;display:block;cursor:pointer" title="Clique no sub-tile para alternar colisão!"></canvas>
+              <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                  <h4 style="font-size:11px;color:#4ec9b0;margin:0">METATILES (2x2+)</h4>
+                  <div style="display:flex;align-items:center;gap:4px"><span style="font-size:10px;color:#888">Pág CHR:</span><select id="bgChrPageSelect" style="background:#000;color:#ffcc00;border:1px solid #444;border-radius:3px;font-size:10px;padding:2px"></select></div>
+                </div>
+                <div id="metatilePalette" style="display:flex;flex-wrap:wrap;gap:6px;max-height:180px;overflow:auto;padding-right:4px"></div>
               </div>
-              <div style="border-top:1px solid #222;padding-top:6px;display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:10px;color:#ffcc00">🛡 Hitbox por Tile:</label><button class="btn-tool" onclick="BG.setAllSubTilesCollision()" style="font-size:9px;padding:1px 4px">Setar Todos</button></div><div style="display:flex;gap:4px"><select id="mtSubTileColSelect" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:10px"><option value="0">⬜ 0: Ar/Livre</option><option value="1">🟥 1: Sólido</option><option value="2">🟩 2: Plataforma</option><option value="3">🟪 3: Dano/Espinho</option><option value="4">🚪 4: Warp</option><option value="5">🐣 5: Spawn</option></select><button class="btn-tool" onclick="BG.applyMetatileHitboxToCanvas()" style="font-size:10px;background:#27ae60;color:#fff">⚡ Recalcular</button></div></div>
-              <div id="mtDefaultObjWrap" style="border-top:1px solid #222;padding-top:6px;display:none;flex-direction:column;gap:4px">
-                <label style="font-size:10px;color:#ffcc00">🎯 Objeto padrão (Dano/Warp):</label>
-                <select id="mtDefaultObjSelect" onchange="BG.setMetatileDefaultObject(this.value)" style="background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:10px"></select>
-                <div style="font-size:9px;color:#666;line-height:1.3">Usado quando este metatile é carimbado na tela. Cada carimbo pode depois trocar pra outro objeto individualmente.</div>
+
+              <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                  <div id="selectedInfo" style="font-size:10px;color:#aaa;text-align:center">Nenhum</div>
+                  <canvas id="selectedPreview" width="80" height="80" style="border:1px solid #ffcc00;background:#000;image-rendering:pixelated;display:block;cursor:pointer" title="Clique no sub-tile para alternar colisão!"></canvas>
+                </div>
+                <div style="border-top:1px solid #222;padding-top:6px;display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:10px;color:#ffcc00">🛡 Hitbox por Tile:</label><button class="btn-tool" onclick="BG.setAllSubTilesCollision()" style="font-size:9px;padding:1px 4px">Setar Todos</button></div><div style="display:flex;gap:4px"><select id="mtSubTileColSelect" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:10px"><option value="0">⬜ 0: Ar/Livre</option><option value="1">🟥 1: Sólido</option><option value="2">🟩 2: Plataforma</option><option value="3">🟪 3: Dano/Espinho</option><option value="4">🚪 4: Warp</option><option value="5">🐣 5: Spawn</option></select><button class="btn-tool" onclick="BG.applyMetatileHitboxToCanvas()" style="font-size:10px;background:#27ae60;color:#fff">⚡ Recalcular</button></div></div>
+                <div id="mtDefaultObjWrap" style="border-top:1px solid #222;padding-top:6px;display:none;flex-direction:column;gap:4px">
+                  <label style="font-size:10px;color:#ffcc00">🎯 Objeto padrão (Dano/Warp):</label>
+                  <select id="mtDefaultObjSelect" onchange="BG.setMetatileDefaultObject(this.value)" style="background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:10px"></select>
+                  <div style="font-size:9px;color:#666;line-height:1.3">Usado quando este metatile é carimbado na tela. Cada carimbo pode depois trocar pra outro objeto individualmente.</div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <div style="flex:1;background:#111;padding:12px;overflow:auto;display:flex;flex-direction:column;align-items:center;gap:8px">
-            <div style="display:flex;gap:12px;align-items:center;font-size:11px;color:#888;flex-wrap:wrap">
-              <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="chkShowHitbox" checked> Hitbox</label>
-              <label style="display:flex;align-items:center;gap:4px">Grid:
-                <select id="bgGridSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:2px 4px;font-size:11px">
-                  <option value="none">Sem grid</option>
-                  <option value="1x1">1x1</option>
-                  <option value="2x2" selected>2x2</option>
-                  <option value="4x4">4x4</option>
-                </select>
-              </label>
-              <span id="hoverPos" style="color:#4ec9b0;background:#000;padding:2px 6px;border-radius:3px;border:1px solid #333">x:0 y:0</span>
-            </div>
-            <canvas id="bgCanvas" width="512" height="480" style="border:2px solid #665500;background:#000;image-rendering:pixelated;cursor:crosshair;display:block"></canvas>
-          </div>
+              <div id="bgTextLayersPanel" style="display:none;background:#111;border:1px solid #665500;border-radius:6px;padding:10px;flex:1;min-height:120px;flex-direction:column">
+                <h4 style="font-size:11px;color:#ffcc00;margin-bottom:8px">📝 CAMADAS DE TEXTO</h4>
+                <div id="bgTextLayers" style="display:flex;flex-direction:column;gap:6px;flex:1;overflow:auto;max-height:220px"></div>
+              </div>
 
-          <div style="width:300px;min-width:300px;background:#1e1e1e;padding:12px;border-left:1px solid #333;overflow:auto;display:flex;flex-direction:column;gap:12px">
-            <div style="background:#111;border:1px solid #665500;border-radius:6px;padding:10px;flex:1;display:flex;flex-direction:column">
-              <h4 style="font-size:11px;color:#ffcc00;margin-bottom:8px">📝 CAMADAS DE TEXTO - EDITAR/MOVER/DELETAR</h4>
-              <div id="bgTextLayers" style="display:flex;flex-direction:column;gap:6px;flex:1;overflow:auto"></div>
-            </div>
-            <div>
               <div style="font-size:11px;color:#888;background:#111;border:1px solid #333;padding:8px;border-radius:4px">
                 Tiles: <b id="bgStats" style="color:#fff">0/960</b><br>
                 Hitbox: <b id="solidStats" style="color:#ff6666">0</b><br>
@@ -238,6 +246,7 @@ const BG = (() => {
     `;
     bgCanvas = document.getElementById('bgCanvas');
     bgCtx = bgCanvas ? bgCanvas.getContext('2d') : null;
+    applyCanvasZoom();
     attachEvents();
     initChrPageSelect();
     updateBGSelect();
@@ -245,6 +254,32 @@ const BG = (() => {
     refreshBgPalettePanel();
     updateTextPaletteUI();
     render();
+  }
+
+  function applyCanvasZoom(){
+    if(!bgCanvas) bgCanvas = document.getElementById('bgCanvas');
+    if(!bgCanvas) return;
+    const w = Math.round(512 * canvasZoom);
+    const h = Math.round(480 * canvasZoom);
+    bgCanvas.style.width = w + 'px';
+    bgCanvas.style.height = h + 'px';
+    // min-width da área do grid = tamanho visual do canvas + padding lateral (12+12)
+    const gridPane = document.getElementById('bgGridPane');
+    if(gridPane){
+      gridPane.style.minWidth = (w + 24) + 'px';
+    }
+    const lbl = document.getElementById('bgZoomLabel');
+    if(lbl) lbl.textContent = Math.round(canvasZoom * 100) + '%';
+  }
+
+  function zoomIn(){
+    canvasZoom = Math.min(CANVAS_ZOOM_MAX, Math.round((canvasZoom + CANVAS_ZOOM_STEP) * 100) / 100);
+    applyCanvasZoom();
+  }
+
+  function zoomOut(){
+    canvasZoom = Math.max(CANVAS_ZOOM_MIN, Math.round((canvasZoom - CANVAS_ZOOM_STEP) * 100) / 100);
+    applyCanvasZoom();
   }
 
   function setTool(t) {
@@ -258,9 +293,13 @@ const BG = (() => {
     const fillPanel = document.getElementById('bgFillPanel');
     const textPanel = document.getElementById('bgTextPanel');
     const hitboxPanel = document.getElementById('bgHitboxPanel');
+    const textLayersPanel = document.getElementById('bgTextLayersPanel');
     if(fillPanel) fillPanel.style.display = (t === 'fill') ? 'block' : 'none';
     if(textPanel) textPanel.style.display = (t === 'text') ? 'block' : 'none';
     if(hitboxPanel) hitboxPanel.style.display = (t === 'hitbox') ? 'block' : 'none';
+    if(textLayersPanel){
+      textLayersPanel.style.display = (t === 'text') ? 'flex' : 'none';
+    }
     const label = document.getElementById('bgModeLabel');
     const help = document.getElementById('bgHelpText');
     textMode = (t === 'text');
@@ -268,11 +307,11 @@ const BG = (() => {
     else if(t === 'attr') { label.textContent = 'Modo: Pincel de Atributo'; help.textContent = 'Pinta a paleta mantendo as estampas.'; }
     else if(t === 'hitbox') { label.textContent = 'Modo: Hitbox Manual'; help.textContent = 'Pinta colisão individualmente (inclui Warp). Shift+clique apaga.'; }
     else if(t === 'assign') { label.textContent = 'Modo: Atribuir Objeto'; help.textContent = 'Clique num tile de Dano/Warp/Spawn - todos os vizinhos conectados do mesmo tipo são atribuídos juntos.'; }
-    else if(t === 'fill') { label.textContent = 'Modo: Auto-Fill'; help.textContent = 'Preenchimento em massa.'; }
+    else if(t === 'fill') { label.textContent = 'Modo: Auto-Fill'; help.textContent = 'Botões = massa. Clique no canvas = flood: troca região conectada pelo metatile selecionado.'; }
     else if(t === 'erase') { label.textContent = 'Modo: Borracha'; help.textContent = 'Clique (ou arraste) num tile para apagá-lo, tile por tile.'; }
     else if(t === 'text') { 
       label.textContent = 'Modo: Texto ASCII - CLIQUE NO CANVAS'; 
-      help.textContent = 'CLIQUE no canvas para posicionar o cursor amarelo. Depois digite no campo e clique Inserir. Use as camadas à direita para editar/mover/deletar.';
+      help.textContent = 'CLIQUE no canvas para posicionar o cursor. Digite e Insira. Camadas de texto aparecem no painel lateral.';
       updateCursorPos();
     }
     else { label.textContent = 'Modo: Pintura Metatile'; help.textContent = 'Pinta Metatile + Atributo + Hitbox sub-tile. Alt+clique clona. Shift+clique apaga.'; }
@@ -433,15 +472,47 @@ const BG = (() => {
     selectedMetatile.defaultHitboxObjectId = id || null;
   }
 
+  /** Lê o bloco w×h em (ox,oy) do nametable (null se fora da tela). */
+  function readNametableBlock(ox, oy, w, h){
+    const tiles = [];
+    for(let dy=0; dy<h; dy++){
+      for(let dx=0; dx<w; dx++){
+        const nx = ox + dx, ny = oy + dy;
+        if(nx < 0 || nx >= 32 || ny < 0 || ny >= 30) return null;
+        tiles.push(nametable[ny * 32 + nx] || 0);
+      }
+    }
+    return tiles;
+  }
+
+  function blocksEqual(a, b){
+    if(!a || !b || a.length !== b.length) return false;
+    for(let i=0; i<a.length; i++) if((a[i]||0) !== (b[i]||0)) return false;
+    return true;
+  }
+
+  /**
+   * Flood no grid do metatile selecionado: troca todos os blocos conectados
+   * iguais ao bloco clicado pelo metatile selecionado (mesmo princípio do fill do CHR).
+   */
   function floodFillAt(tx, ty) {
-    if(!selectedMetatile) return;
+    if(!selectedMetatile){
+      alert('Selecione um metatile de destino na lista.');
+      return;
+    }
     ensureMetatileCollisions(selectedMetatile);
     const mt = selectedMetatile;
-    const snapX = Math.floor(tx / mt.w) * mt.w;
-    const snapY = Math.floor(ty / mt.h) * mt.h;
-    const targetTile = nametable[snapY * 32 + snapX];
-    const replacementTile = mt.tiles[0];
-    if (targetTile === replacementTile) return;
+    const w = mt.w || 1, h = mt.h || 1;
+    const snapX = Math.floor(tx / w) * w;
+    const snapY = Math.floor(ty / h) * h;
+    const targetBlock = readNametableBlock(snapX, snapY, w, h);
+    if(!targetBlock) return;
+
+    // Se o bloco clicado já é idêntico ao metatile selecionado, nada a fazer
+    const replacement = [];
+    for(let i=0; i<w*h; i++) replacement.push(mt.tiles[i] || 0);
+    if(blocksEqual(targetBlock, replacement)) return;
+
     const queue = [{x: snapX, y: snapY}];
     const visited = new Set();
     while(queue.length > 0) {
@@ -449,29 +520,30 @@ const BG = (() => {
       const cx = curr.x, cy = curr.y;
       const key = `${cx},${cy}`;
       if(visited.has(key)) continue;
-      if(cx < 0 || cx >= 32 || cy < 0 || cy >= 30) continue;
-      if(nametable[cy * 32 + cx] !== targetTile) continue;
+      if(cx < 0 || cx + w > 32 || cy < 0 || cy + h > 30) continue;
+      const block = readNametableBlock(cx, cy, w, h);
+      if(!blocksEqual(block, targetBlock)) continue;
       visited.add(key);
-      for(let dy=0; dy<mt.h; dy++){
-        for(let dx=0; dx<mt.w; dx++){
+
+      for(let dy=0; dy<h; dy++){
+        for(let dx=0; dx<w; dx++){
           const nx = cx + dx, ny = cy + dy;
-          if(nx >= 0 && nx < 32 && ny >= 0 && ny < 30) {
-            const subIdx = dy * mt.w + dx;
-            nametable[ny * 32 + nx] = mt.tiles[subIdx];
-            const attrX = Math.floor(nx/2), attrY = Math.floor(ny/2);
-            const blockX = Math.floor(attrX/2), blockY = Math.floor(attrY/2);
-            const attrIdx = blockY*8 + blockX;
-            const shift = ((attrY%2)*2 + (attrX%2))*2;
-            attributes[attrIdx] = (attributes[attrIdx] & ~(0x03 << shift)) | ((activePalette & 0x03) << shift);
-            collisionMap[ny * 32 + nx] = mt.collisions[subIdx] || 0;
-            setHitboxInstanceAt(nx, ny, mt.collisions[subIdx] || 0, mt.defaultHitboxObjectId || null);
-          }
+          const subIdx = dy * w + dx;
+          nametable[ny * 32 + nx] = mt.tiles[subIdx] || 0;
+          const attrX = Math.floor(nx/2), attrY = Math.floor(ny/2);
+          const blockX = Math.floor(attrX/2), blockY = Math.floor(attrY/2);
+          const attrIdx = blockY*8 + blockX;
+          const shift = ((attrY%2)*2 + (attrX%2))*2;
+          attributes[attrIdx] = (attributes[attrIdx] & ~(0x03 << shift)) | ((activePalette & 0x03) << shift);
+          const col = mt.collisions[subIdx] || 0;
+          collisionMap[ny * 32 + nx] = col;
+          setHitboxInstanceAt(nx, ny, col, mt.defaultHitboxObjectId || null);
         }
       }
-      queue.push({x: cx + mt.w, y: cy});
-      queue.push({x: cx - mt.w, y: cy});
-      queue.push({x: cx, y: cy + mt.h});
-      queue.push({x: cx, y: cy - mt.h});
+      queue.push({x: cx + w, y: cy});
+      queue.push({x: cx - w, y: cy});
+      queue.push({x: cx, y: cy + h});
+      queue.push({x: cx, y: cy - h});
     }
     render();
   }
@@ -583,7 +655,10 @@ const BG = (() => {
       else { const ct = erasing ? 0 : selectedCollisionType; collisionMap[ty * 32 + tx] = ct; setHitboxInstanceAt(tx, ty, ct, null); render(); }
       return;
     }
-    if(currentTool === 'flood') { if(isInitialClick) floodFillAt(tx, ty); return; }
+    if(currentTool === 'flood' || currentTool === 'fill') {
+      if(isInitialClick) floodFillAt(tx, ty);
+      return;
+    }
     if(currentTool === 'erase') { nametable[ty*32+tx] = 0; collisionMap[ty*32+tx] = 0; clearHitboxInstanceAt(tx, ty); render(); return; }
     if(currentTool === 'attr') {
       const attrX = Math.floor(tx/2), attrY = Math.floor(ty/2);
@@ -1408,12 +1483,25 @@ const BG = (() => {
       const pageSel = document.getElementById('bgChrPageSelect'); if(pageSel) pageSel.value = currentChrPage;
     }
     refreshMetatileList();
-    updateBGSelect(); updateTextLayersUI(); render();
+    updateBGSelect(); syncEntryTypeSelect(); updateTextLayersUI(); render();
   }
 
-  // Salva a tela atual como Background ou Splash. Se ela já existia com o OUTRO tipo (ex:
-  // era splash e agora clicou "Salvar como Background"), remove do array antigo e adiciona
-  // no novo - a tela muda de status em vez de duplicar.
+  function getSelectedEntryType(){
+    const sel = document.getElementById('bgEntryTypeSelect');
+    const v = sel?.value;
+    return v === 'splash' ? 'splash' : 'bg';
+  }
+
+  function syncEntryTypeSelect(){
+    const sel = document.getElementById('bgEntryTypeSelect');
+    if(!sel) return;
+    if(currentEntryType === 'splash' || currentEntryType === 'bg'){
+      sel.value = currentEntryType;
+    }
+  }
+
+  // Salva a tela atual como Background ou Splash (tipo do select acima do grid).
+  // Se já existia com outro tipo, remove do array antigo e grava no novo.
   function saveEntryAs(type){
     if(!Project.data) return;
     if(!Project.data.backgrounds) Project.data.backgrounds = [];
@@ -1434,10 +1522,40 @@ const BG = (() => {
 
     const wasConverted = currentEntryType && currentEntryType !== type;
     currentEntryType = type;
-    pruneEmptyEntries(); updateBGSelect();
+    pruneEmptyEntries(); updateBGSelect(); syncEntryTypeSelect();
     Project.status(wasConverted
       ? `"${currentEntryName}" convertido pra ${type === 'splash' ? 'Splash' : 'Background'}`
       : `${type === 'splash' ? 'Splash' : 'Background'} "${currentEntryName}" salvo`);
+  }
+
+  function saveCurrentEntry(){
+    const type = getSelectedEntryType();
+    if(!currentEntryName || !String(currentEntryName).trim()){
+      const name = prompt('Nome da tela:', currentEntryName || '');
+      if(name === null) return;
+      const trimmed = name.trim();
+      if(!trimmed){ alert('Informe um nome.'); return; }
+      currentEntryName = trimmed;
+    }
+    saveEntryAs(type);
+  }
+
+  /** Clona a tela atual com novo nome (e novo id), mantendo o tipo do select. */
+  function saveAsClone(){
+    const type = getSelectedEntryType();
+    const suggested = currentEntryName
+      ? (String(currentEntryName).startsWith('Cópia de ')
+          ? currentEntryName
+          : `Cópia de ${currentEntryName}`)
+      : '';
+    const name = prompt('Salvar como (novo nome):', suggested);
+    if(name === null) return;
+    const trimmed = name.trim();
+    if(!trimmed){ alert('Informe um nome.'); return; }
+    currentEntryId = 'scr_' + Date.now();
+    currentEntryName = trimmed;
+    currentEntryType = null; // força insert novo
+    saveEntryAs(type);
   }
 
   function loadAdjacentAfterDelete(type, removedId){
@@ -1467,19 +1585,31 @@ const BG = (() => {
     Project.status(`Removido com sucesso`);
   }
 
-  function exportASM(){
-    const bgName = currentEntryName || 'bg';
-    let out = `; BACKGROUND ${bgName}\n${bgName}_nametable:\n`;
-    for(let y=0; y<30; y++) out += `  .byte ` + nametable.slice(y*32, y*32+32).map(t => "$" + (t%256).toString(16).padStart(2,"0")).join(",") + "\n";
-    out += `${bgName}_attributes:\n  .byte ` + attributes.map(a => "$" + a.toString(16).padStart(2,"0")).join(",") + "\n";
-    out += `${bgName}_hitbox:\n`; for(let y=0; y<30; y++) out += `  .byte ` + collisionMap.slice(y*32, y*32+32).map(c => "$" + (c||0).toString(16).padStart(2,"0")).join(",") + "\n";
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([out], {type:'text/plain'})); a.download = `${bgName}.asm`; a.click();
+  function renameCurrentEntry(){
+    const current = (currentEntryName || '').trim();
+    const name = prompt('Novo nome da tela:', current || '');
+    if(name === null) return;
+    const trimmed = name.trim();
+    if(!trimmed){ alert('Nome inválido.'); return; }
+    currentEntryName = trimmed;
+    if(Project.data && currentEntryId && currentEntryType){
+      const arr = currentEntryType === 'bg'
+        ? Project.data.backgrounds
+        : Project.data.splashScreens;
+      const entry = arr?.find(e => e.id === currentEntryId);
+      if(entry) entry.name = trimmed;
+    }
+    updateBGSelect();
+    if(typeof Project !== 'undefined' && Project.status){
+      Project.status(`Tela renomeada para "${trimmed}"`);
+    }
   }
 
   return {
     init: buildHTML, setTool, setCollisionType, setAllSubTilesCollision, applyMetatileHitboxToCanvas, setMetatileDefaultObject,
-    insertText, exportASM, fillAllEmpty, fillEntireScreen, applyAttrToAll, setTextOffsetMode,
-    newCanvas, clearBackground, saveEntryAs, deleteCurrentEntry, loadEntry,
+    insertText, fillAllEmpty, fillEntireScreen, applyAttrToAll, setTextOffsetMode,
+    newCanvas, clearBackground, saveEntryAs, saveCurrentEntry, saveAsClone, deleteCurrentEntry, renameCurrentEntry, loadEntry,
+    zoomIn, zoomOut,
     editTextLayer, deleteTextLayer, toggleMoveMode, nudgeTextLayer, startDuplicateTextMode, duplicateTextLayerAt, clearTextSelection,
     togglePalettePanel, paletteBankAdd, paletteBankApply, paletteBankRename, paletteBankDelete, onPalettesChanged,
     loadBackgrounds: (arr)=>{ if(Project.data) Project.data.backgrounds=arr; updateBGSelect(); },

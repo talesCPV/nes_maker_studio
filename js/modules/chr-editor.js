@@ -67,7 +67,8 @@ const CHR = (() => {
     // seleção atual: lista de { absIdx, data[16] }
     picked: [],
     // se veio de um metatile escolhido no menu
-    pendingMeta: null    // { w,h, name, layout: [absIdx,...] } no arquivo fonte
+    pendingMeta: null,   // { w,h, name, layout: [absIdx,...] } no arquivo fonte
+    characters: null     // do .tile (animações) — reservado para merge futuro no CHAR
   };
 
   function buildHTML(){
@@ -76,10 +77,10 @@ const CHR = (() => {
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <div id="chrMetatileToolbar" style="display:flex;gap:6px;align-items:center;padding:6px 10px;background:#252526;border-bottom:1px solid #333;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;white-space:nowrap">
           <button type="button" class="icon-btn" onclick="CHR.openImageImport()" title="Importar PNG/JPG e preparar crop/grid em tiles">🖼</button>
-          <button type="button" class="icon-btn" onclick="CHR.openNmsImport()" title="Importar tiles/metatiles de outro .nms ou .chr">📦</button>
+          <button type="button" class="icon-btn" onclick="CHR.openNmsImport()" title="Importar tiles/metatiles de .nms, .tile ou .chr">📦</button>
           <button type="button" class="icon-btn" onclick="CHR.importCHR()" title="Importar arquivo .chr / .bin / .nes no buffer atual">🧱</button>
           <button type="button" class="icon-btn" onclick="Project.exportCHR()" title="Exportar buffer CHR atual">⬇️</button>
-          <input type="file" id="importNms_internal" accept=".nms,.chr,.bin,application/json,application/octet-stream" style="display:none">
+          <input type="file" id="importNms_internal" accept=".nms,.tile,.chr,.bin,application/json,application/octet-stream" style="display:none">
           <input type="file" id="importCHR_internal" accept=".chr,.bin,.nes" style="display:none">
           <input type="file" id="importImage_internal" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
           <span style="width:1px;height:24px;background:#444;margin:0 2px"></span>
@@ -412,14 +413,14 @@ const CHR = (() => {
         <div id="nmsImportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:10000;align-items:center;justify-content:center">
           <div style="background:#1e1e1e;border:1px solid #444;border-radius:10px;width:min(980px,96vw);max-height:92vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.6)">
             <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #333;flex-wrap:wrap">
-              <h3 style="margin:0;font-size:14px;color:#c39bd3">📦 Import metatiles (.nms)</h3>
-              <span style="font-size:11px;color:#888">.nms (tiles+metatiles) ou .chr bruto → fila de colar</span>
+              <h3 style="margin:0;font-size:14px;color:#c39bd3">📦 Import metatiles</h3>
+              <span style="font-size:11px;color:#888">.nms / .tile (tiles+metatiles) ou .chr bruto → fila de colar</span>
               <button class="btn-tool" onclick="CHR.closeNmsImport()" style="margin-left:auto;background:#c0392b;color:#fff">✕ Fechar</button>
             </div>
             <div style="display:flex;flex:1;min-height:0;overflow:hidden">
               <div style="flex:1;padding:12px;overflow:auto;display:flex;flex-direction:column;gap:8px;background:#111">
                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                  <button class="btn-tool" onclick="document.getElementById('importNms_internal').click()" style="background:#2980b9;color:#fff">📂 Abrir .nms / .chr</button>
+                  <button class="btn-tool" onclick="document.getElementById('importNms_internal').click()" style="background:#2980b9;color:#fff">📂 Abrir .nms / .tile / .chr</button>
                   <span id="nmsImportFileInfo" style="font-size:11px;color:#888">Nenhum arquivo</span>
                   <select id="nmsImportBank" onchange="CHR.nmsImportSetBank()" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px;margin-left:auto">
                     <option value="0">PT0 $0000</option>
@@ -3055,7 +3056,9 @@ const CHR = (() => {
       reader.onload = (ev)=>{
         try{
           const json = JSON.parse(ev.target.result);
-          if(!json.chr){ alert('Arquivo .nms inválido (sem CHR)'); return; }
+          // Aceita .nms e .tile (format:"tile") — ambos trazem chr + metatiles
+          const isTile = json && (json.format === 'tile' || nameLower.endsWith('.tile'));
+          if(!json.chr){ alert('Arquivo inválido (sem CHR). Use .nms ou .tile.'); return; }
           const arr = Array.isArray(json.chr) ? json.chr : [];
           const u8 = new Uint8Array(Math.max(8192, arr.length));
           u8.set(arr.slice(0, u8.length));
@@ -3065,15 +3068,20 @@ const CHR = (() => {
           nmsImport.bank = 0;
           nmsImport.picked = [];
           nmsImport.pendingMeta = null;
+          // Personagens/animações do .tile ficam disponíveis para merge opcional
+          nmsImport.characters = (isTile && Array.isArray(json.characters)) ? json.characters : null;
           const info = document.getElementById('nmsImportFileInfo');
-          if(info) info.innerHTML = `<b style="color:#fff">${nmsImport.name}</b> · ${nmsImport.metatiles.length} metatile(s)`;
+          if(info){
+            const charInfo = nmsImport.characters ? ` · ${nmsImport.characters.length} personagem(ns)` : '';
+            info.innerHTML = `<b style="color:#fff">${nmsImport.name}</b> · ${nmsImport.metatiles.length} metatile(s)${charInfo}${isTile?' · .tile':''}`;
+          }
           const bankSel = document.getElementById('nmsImportBank');
           if(bankSel) bankSel.value = '0';
           nmsImportRenderMtList();
           nmsImportRedraw();
           nmsImportRenderPicked();
         }catch(err){
-          alert('Erro ao ler .nms: ' + err.message);
+          alert('Erro ao ler arquivo: ' + err.message);
         }
       };
       reader.readAsText(file);

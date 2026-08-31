@@ -37,7 +37,36 @@ const CHAR = (() => {
           <button class="btn-tool" onclick="CHAR.addCharacter()" style="background:#27ae60;color:#fff">＋ Novo</button>
           <button class="btn-tool" onclick="CHAR.duplicate()" >⧉ Duplicar</button>
           <button class="btn-tool" onclick="CHAR.deleteCharacter()" style="background:#7d2525;color:#fff">🗑 Excluir</button>
+          <button class="btn-tool" onclick="CHAR.openTileExport()" style="background:#8e44ad;color:#fff" title="Exportar metatiles + CHR + animações (.tile)">📦 Export .tile</button>
           <button class="btn-tool" onclick="Project.save()" style="background:#27ae60;color:#fff">💾 Salvar .NMS</button>
+        </div>
+      </div>
+      <!-- Modal export .tile -->
+      <div id="tileExportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:10000;align-items:center;justify-content:center">
+        <div style="background:#1e1e1e;border:1px solid #444;border-radius:10px;width:min(560px,94vw);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.6)">
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #333">
+            <h3 style="margin:0;font-size:14px;color:#c39bd3">📦 Exportar .tile</h3>
+            <span style="font-size:11px;color:#888">CHR + metatiles + animações</span>
+            <button class="btn-tool" onclick="CHAR.closeTileExport()" style="margin-left:auto;background:#c0392b;color:#fff">✕</button>
+          </div>
+          <div style="padding:12px 14px;overflow:auto;flex:1;display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:11px;color:#aaa;line-height:1.4">Escolha os metatiles a incluir. O arquivo pode ser importado em <b style="color:#4ec9b0">CHR → Import metatiles</b>.</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn-tool" onclick="CHAR.tileExportSelectAll()" style="font-size:10px">Selecionar todos</button>
+              <button class="btn-tool" onclick="CHAR.tileExportSelectNone()" style="font-size:10px">Limpar</button>
+              <button class="btn-tool" onclick="CHAR.tileExportSelectUsed()" style="font-size:10px;background:#2980b9;color:#fff">Usados no personagem atual</button>
+              <button class="btn-tool" onclick="CHAR.tileExportSelectAllChars()" style="font-size:10px;background:#16a085;color:#fff">Usados em todos os chars</button>
+            </div>
+            <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:6px;cursor:pointer">
+              <input type="checkbox" id="tileExportIncludeChars" checked> Incluir dados de animação (personagens)
+            </label>
+            <div id="tileExportMtList" style="max-height:320px;overflow:auto;border:1px solid #333;border-radius:6px;background:#0a0a0a;padding:8px;display:flex;flex-direction:column;gap:4px"></div>
+            <div id="tileExportSummary" style="font-size:10px;color:#888"></div>
+          </div>
+          <div style="padding:12px 14px;border-top:1px solid #333;display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn-tool" onclick="CHAR.closeTileExport()">Cancelar</button>
+            <button class="btn-tool" onclick="CHAR.confirmTileExport()" style="background:#27ae60;color:#fff;font-weight:600">⬇ Exportar .tile</button>
+          </div>
         </div>
       </div>
       <div style="display:flex;flex:1;min-height:0">
@@ -318,5 +347,176 @@ const CHAR = (() => {
   function nextFrame(){stop();const n=anim()?.frames?.length||0;if(n){selectedFrame=(selectedFrame+1)%n;render();}}
   function init(){buildHTML();if(!selectedId&&data()[0])selectedId=data()[0].id;render();}
   function loadData(){selectedId=data()[0]?.id||null;selectedAnim=selectedFrame=0;stop();if(document.getElementById('mod-char'))render();}
-  return {init,loadData,render,addCharacter,duplicate,deleteCharacter,selectCharacter,selectAnim,selectFrame,addAnim,removeAnim,addFrame,removeFrame,moveFrame,useMetatile,setFrameDuration,setField,togglePlay,prevFrame,nextFrame,addHitbox,updateHitboxField,deleteHitbox};
+
+  // ---------- Export .tile (CHR + metatiles + animações) ----------
+  let _tileExportSelected = new Set();
+
+  function getAllMetatiles(){
+    if(typeof CHR !== 'undefined' && CHR.getMetatiles) return CHR.getMetatiles() || [];
+    return Project.data?.metatiles || [];
+  }
+
+  function collectMetatileIdsFromChar(c){
+    const ids = new Set();
+    (c?.animations || []).forEach(a=>{
+      (a.frames || []).forEach(f=>{ if(f.metatileId) ids.add(f.metatileId); });
+    });
+    return ids;
+  }
+
+  function openTileExport(){
+    const modal = document.getElementById('tileExportModal');
+    if(!modal) return;
+    const mts = getAllMetatiles();
+    if(!mts.length){
+      alert('Nenhum metatile no projeto. Crie metatiles no CHR Editor primeiro.');
+      return;
+    }
+    // Pré-seleciona usados no personagem atual (ou todos se não houver)
+    const used = collectMetatileIdsFromChar(current());
+    _tileExportSelected = used.size ? used : new Set(mts.map(m=>m.id));
+    modal.style.display = 'flex';
+    renderTileExportList();
+  }
+
+  function closeTileExport(){
+    const modal = document.getElementById('tileExportModal');
+    if(modal) modal.style.display = 'none';
+  }
+
+  function renderTileExportList(){
+    const cont = document.getElementById('tileExportMtList');
+    const sum = document.getElementById('tileExportSummary');
+    if(!cont) return;
+    const mts = getAllMetatiles();
+    cont.innerHTML = mts.map(m=>{
+      const on = _tileExportSelected.has(m.id);
+      return `<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;cursor:pointer;background:${on?'#1a2a3a':'#111'};border:1px solid ${on?'#007acc':'#333'}">
+        <input type="checkbox" ${on?'checked':''} onchange="CHAR.tileExportToggle('${m.id}',this.checked)">
+        <span style="flex:1;font-size:11px;color:#ddd">${esc(m.name||m.id)}</span>
+        <span style="font-size:9px;color:#666">${m.w||1}×${m.h||1} · PT${m.bank||0}</span>
+      </label>`;
+    }).join('') || '<div style="color:#666;font-size:11px;padding:8px">Nenhum metatile</div>';
+    if(sum) sum.textContent = `${_tileExportSelected.size} de ${mts.length} metatile(s) selecionado(s)`;
+  }
+
+  function tileExportToggle(id, on){
+    if(on) _tileExportSelected.add(id);
+    else _tileExportSelected.delete(id);
+    renderTileExportList();
+  }
+  function tileExportSelectAll(){
+    getAllMetatiles().forEach(m=>_tileExportSelected.add(m.id));
+    renderTileExportList();
+  }
+  function tileExportSelectNone(){
+    _tileExportSelected.clear();
+    renderTileExportList();
+  }
+  function tileExportSelectUsed(){
+    _tileExportSelected = collectMetatileIdsFromChar(current());
+    renderTileExportList();
+  }
+  function tileExportSelectAllChars(){
+    const ids = new Set();
+    data().forEach(c=> collectMetatileIdsFromChar(c).forEach(id=>ids.add(id)));
+    _tileExportSelected = ids;
+    renderTileExportList();
+  }
+
+  function confirmTileExport(){
+    const mts = getAllMetatiles().filter(m=>_tileExportSelected.has(m.id));
+    if(!mts.length){ alert('Selecione ao menos um metatile.'); return; }
+
+    // CHR buffer (array de bytes) — mesmo formato que o .nms usa no import
+    let chrArr = [];
+    if(typeof CHR !== 'undefined' && CHR.getBuffer){
+      const buf = CHR.getBuffer();
+      chrArr = Array.from(buf);
+    } else if(Project.data?.chr){
+      chrArr = Array.isArray(Project.data.chr) ? [...Project.data.chr] : Array.from(Project.data.chr);
+    }
+    if(!chrArr.length){ alert('Buffer CHR vazio — nada para exportar.'); return; }
+
+    // Metatiles serializados (cópia limpa)
+    const metatiles = mts.map(m=>({
+      id: m.id,
+      name: m.name || m.id,
+      w: m.w || 1,
+      h: m.h || 1,
+      bank: m.bank || 0,
+      tiles: Array.isArray(m.tiles) ? [...m.tiles] : [],
+      flips: Array.isArray(m.flips) ? [...m.flips] : [],
+      palette: m.palette != null ? m.palette : 0,
+      collisions: Array.isArray(m.collisions) ? [...m.collisions] : undefined,
+      overlay: m.overlay ? JSON.parse(JSON.stringify(m.overlay)) : undefined,
+      defaultHitboxObjectId: m.defaultHitboxObjectId || null
+    }));
+
+    const includeChars = document.getElementById('tileExportIncludeChars')?.checked !== false;
+    let characters = [];
+    if(includeChars){
+      const mtIds = new Set(mts.map(m=>m.id));
+      characters = data().map(c=>{
+        // filtra frames cujo metatile não está no export
+        const anims = (c.animations||[]).map(a=>({
+          id: a.id,
+          name: a.name,
+          fps: a.fps,
+          loop: a.loop !== false,
+          frames: (a.frames||[])
+            .filter(f=>mtIds.has(f.metatileId))
+            .map(f=>({
+              metatileId: f.metatileId,
+              duration: f.duration||1,
+              offsetX: f.offsetX||0,
+              offsetY: f.offsetY||0
+            }))
+        })).filter(a=>a.frames.length);
+        if(!anims.length) return null;
+        return {
+          id: c.id,
+          name: c.name,
+          type: c.type,
+          origin: c.origin ? {...c.origin} : {x:0,y:0},
+          hitboxes: ensureHitboxes(c).map(h=>({...h})),
+          jumpForceId: c.jumpForceId||null,
+          speedId: c.speedId||null,
+          animations: anims
+        };
+      }).filter(Boolean);
+    }
+
+    const doc = {
+      format: 'tile',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      app: 'NES Maker Studio',
+      name: current()?.name || Project.data?.name || 'tiles',
+      chr: chrArr,
+      metatiles,
+      characters
+    };
+
+    const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    const base = String(doc.name||'tiles').replace(/[^a-zA-Z0-9_\-]+/g, '_').slice(0, 40);
+    a.href = URL.createObjectURL(blob);
+    a.download = base + '.tile';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    closeTileExport();
+    if(typeof Project !== 'undefined' && Project.status){
+      Project.status(`Exportado ${metatiles.length} metatile(s)` + (characters.length ? ` + ${characters.length} personagem(ns)` : '') + ` → ${a.download}`);
+    }
+  }
+
+  return {
+    init, loadData, render, addCharacter, duplicate, deleteCharacter, selectCharacter, selectAnim, selectFrame,
+    addAnim, removeAnim, addFrame, removeFrame, moveFrame, useMetatile, setFrameDuration, setField,
+    togglePlay, prevFrame, nextFrame, addHitbox, updateHitboxField, deleteHitbox,
+    openTileExport, closeTileExport, tileExportToggle, tileExportSelectAll, tileExportSelectNone,
+    tileExportSelectUsed, tileExportSelectAllChars, confirmTileExport
+  };
 })();
