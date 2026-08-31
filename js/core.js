@@ -400,6 +400,14 @@ const Project = {
           nms.description || ''
         );
         this.projectId = parseInt(project.id, 10) || null;
+        try {
+          if (this.projectId) {
+            sessionStorage.setItem('nms_active_project', String(this.projectId));
+            const url = new URL(window.location.href);
+            url.searchParams.set('project', String(this.projectId));
+            window.history.replaceState({}, document.title, url.pathname + url.search);
+          }
+        } catch(e) {}
         if(project.filename){
           this.fileName = project.filename.endsWith('.nms')
             ? project.filename
@@ -428,6 +436,10 @@ const Project = {
       this.serverSaved = true;
       try {
         localStorage.setItem('nms_autosave', JSON.stringify(nms));
+        sessionStorage.setItem('nms_active_project', String(this.projectId));
+        const url = new URL(window.location.href);
+        url.searchParams.set('project', String(this.projectId));
+        window.history.replaceState({}, document.title, url.pathname + url.search);
       } catch(e) {}
       const itemCount = nms.sounds?.items?.length || 0;
       this.status(
@@ -505,6 +517,10 @@ const Project = {
 
       try {
         localStorage.setItem('nms_autosave', JSON.stringify(nms));
+        sessionStorage.setItem('nms_active_project', String(newId));
+        const url = new URL(window.location.href);
+        url.searchParams.set('project', String(newId));
+        window.history.replaceState({}, document.title, url.pathname + url.search);
       } catch(e) {}
 
       // Atualiza campo do dashboard do editor, se existir
@@ -901,28 +917,17 @@ const Project = {
       }
   
       this.updateUI();
-  
-      /*
-       * Remove o parâmetro da URL depois
-       * que o projeto foi carregado.
-       *
-       * Assim um refresh não precisa
-       * necessariamente repetir o carregamento.
-       */
-  
+
+      // Mantém ?project=ID na URL e no sessionStorage
+      // para o refresh reabrir o mesmo projeto.
       try {
-  
-        const cleanUrl =
-          window.location.pathname;
-  
-        window.history.replaceState(
-          {},
-          document.title,
-          cleanUrl
-        );
-  
+        if (this.projectId) {
+          sessionStorage.setItem('nms_active_project', String(this.projectId));
+          const url = new URL(window.location.href);
+          url.searchParams.set('project', String(this.projectId));
+          window.history.replaceState({}, document.title, url.pathname + url.search);
+        }
       } catch(e) {}
-  
   
       return true;
   

@@ -138,67 +138,74 @@ window.addEventListener('DOMContentLoaded', async () => {
     UI.restoreSidebar();
 
     /*
-    * Se existe ?project=ID na URL, o core.js
-    * carregará o projeto do backend.
-    *
-    * NÃO criamos um novo projeto aqui.
-    */
+     * Editor só com usuário logado + projeto do backend.
+     * Entrada prevista: dashboard → editor.html?project=ID
+     * Refresh: ?project= na URL ou sessionStorage nms_active_project
+     */
 
-    const params =
-      new URLSearchParams(
-        window.location.search
-      );
-
-    const projectId =
-      params.get('project');
-
-    if (projectId) {
-
-      /*
-      * O loader do backend será executado
-      * pelo core.js depois que todos os
-      * módulos estiverem disponíveis.
-      */
-
-      if (typeof Project.loadProjectFromBackend === 'function') {
-
-        await Project.loadProjectFromBackend(
-          projectId
-        );
-
+    // 1) Sessão obrigatória
+    try {
+      const sessRes = await fetch('backend/auth/session.php', {
+        method: 'GET',
+        credentials: 'same-origin',
+        cache: 'no-store'
+      });
+      const sess = await sessRes.json().catch(() => ({}));
+      if (!sessRes.ok || !sess.authenticated) {
+        const ret = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.replace('login.html?next=' + ret);
+        return;
       }
+    } catch (e) {
+      console.error('Falha ao verificar sessão:', e);
+      window.location.replace('login.html');
+      return;
+    }
 
-    } else {
+    // 2) Resolver project id (URL → sessionStorage)
+    const params = new URLSearchParams(window.location.search);
+    let projectId = params.get('project');
+    if (!projectId) {
+      try {
+        projectId = sessionStorage.getItem('nms_active_project') || '';
+      } catch (e) {
+        projectId = '';
+      }
+    }
 
-      /*
-      * Acesso normal ao editor sem projeto.
-      *
-      * Mantém o comportamento antigo:
-      * cria um projeto novo somente quando
-      * não existe projeto vindo do Dashboard.
-      */
+    if (!projectId) {
+      // Sem projeto: volta ao dashboard (não abre editor “vazio”)
+      window.location.replace('dashboard.html');
+      return;
+    }
 
-      Project.newProject(true);
+    // Garante ?project= na barra de endereço
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('project') !== String(projectId)) {
+        url.searchParams.set('project', String(projectId));
+        window.history.replaceState({}, document.title, url.pathname + url.search);
+      }
+      sessionStorage.setItem('nms_active_project', String(projectId));
+    } catch (e) {}
 
+    if (typeof Project.loadProjectFromBackend === 'function') {
+      const ok = await Project.loadProjectFromBackend(projectId);
+      if (!ok) {
+        try { sessionStorage.removeItem('nms_active_project'); } catch (e) {}
+        window.location.replace('dashboard.html');
+        return;
+      }
     }
 
     setTimeout(() => {
-
       UI.switchModule('dashboard');
-
     }, 100);
 
   });
 
   function goToDashboard() {
-
-    /*
-    * O usuário já está autenticado
-    * na sessão PHP.
-    */
-
-    window.location.href =
-        'dashboard.html';
+    window.location.href = 'dashboard.html';
   }
 
 
