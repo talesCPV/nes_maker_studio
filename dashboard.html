@@ -409,6 +409,22 @@
             </button>
 
             <button
+                id="importNmsButton"
+                class="icon-btn secondary"
+                type="button"
+                title="Importar projeto .nms"
+                aria-label="Importar projeto .nms"
+            >
+                📂
+            </button>
+            <input
+                type="file"
+                id="importNmsInput"
+                accept=".nms,.json,application/json"
+                style="display:none"
+            >
+
+            <button
                 id="libraryButton"
                 class="icon-btn secondary"
                 type="button"
@@ -2040,6 +2056,110 @@ document
         }
     );
 
+
+/* =========================================================
+   IMPORTAR PROJETO .NMS (arquivo local → backend)
+   ========================================================= */
+
+async function importNmsFile(file) {
+    if (!file) return;
+
+    const projectMessage = document.getElementById('projectMessage');
+    if (projectMessage) {
+        projectMessage.textContent = 'Importando ' + file.name + '...';
+    }
+
+    try {
+        const text = await file.text();
+        let nms;
+        try {
+            nms = JSON.parse(text);
+        } catch (e) {
+            throw new Error('Arquivo .nms inválido (JSON).');
+        }
+
+        if (!nms.chr || !nms.palettes) {
+            throw new Error('Arquivo .nms inválido (faltam chr ou palettes).');
+        }
+
+        const fromFile = (file.name || '')
+            .replace(/\.(nms|json)$/i, '')
+            .trim();
+        const suggested = (nms.name || fromFile || 'Projeto importado').trim();
+        const name = prompt('Nome do projeto importado:', suggested);
+        if (name === null) {
+            if (projectMessage) projectMessage.textContent = '';
+            return;
+        }
+        const trimmed = name.trim();
+        if (!trimmed) {
+            alert('Informe um nome.');
+            if (projectMessage) projectMessage.textContent = '';
+            return;
+        }
+
+        nms.name = trimmed;
+        if (nms.description == null) nms.description = '';
+
+        // 1) Cria projeto no backend (template)
+        const createRes = await fetch('backend/projects/create.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: trimmed,
+                description: String(nms.description || '').slice(0, 1000)
+            })
+        });
+        const createData = await createRes.json().catch(() => ({}));
+        if (!createRes.ok || !createData.success || !createData.project?.id) {
+            throw new Error(createData.message || 'Falha ao criar projeto no servidor.');
+        }
+
+        const projectId = parseInt(createData.project.id, 10);
+
+        // 2) Grava o NMS importado por cima do template
+        const saveRes = await fetch('backend/projects/save.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                project_id: projectId,
+                nms: nms
+            })
+        });
+        const saveData = await saveRes.json().catch(() => ({}));
+        if (!saveRes.ok || !saveData.success) {
+            throw new Error(saveData.message || 'Projeto criado, mas falhou ao gravar o .nms.');
+        }
+
+        if (projectMessage) {
+            projectMessage.textContent = `Importado: "${trimmed}" (#${projectId})`;
+        }
+
+        await loadProjects();
+
+        if (confirm(`Projeto importado com sucesso.\nAbrir no editor agora?`)) {
+            openProject(projectId);
+        }
+    } catch (err) {
+        console.error('Import .nms:', err);
+        alert(err.message || 'Falha ao importar .nms');
+        if (projectMessage) {
+            projectMessage.textContent = err.message || 'Falha ao importar.';
+        }
+    }
+}
+
+document.getElementById('importNmsButton')?.addEventListener('click', () => {
+    document.getElementById('importNmsInput')?.click();
+});
+
+document.getElementById('importNmsInput')?.addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) await importNmsFile(f);
+    e.target.value = '';
+});
 
 /* =========================================================
    INICIALIZAÇÃO

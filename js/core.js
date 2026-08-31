@@ -460,90 +460,6 @@ const Project = {
     }
   },
 
-  /**
-   * Fork = "Salvar como…": cria um NOVO projeto no backend
-   * com o NMS atual e passa o editor a apontar para ele.
-   * O projeto original (se houver) permanece intacto.
-   */
-  async fork(){
-    if(!this.data){ alert("Nenhum projeto"); return false; }
-
-    const nms = this.collectProjectData();
-    if(!nms){ alert("Nenhum projeto"); return false; }
-
-    const baseName = (nms.name || 'Meu Jogo').trim() || 'Meu Jogo';
-    const suggested = baseName.startsWith('Cópia de ')
-      ? baseName
-      : `Cópia de ${baseName}`;
-    const name = prompt('Nome do fork (novo projeto):', suggested);
-    if(name === null) return false;
-    const trimmed = name.trim();
-    if(!trimmed){
-      alert('Informe um nome para o fork.');
-      return false;
-    }
-
-    nms.name = trimmed;
-
-    this.status('criando fork no servidor...');
-    try {
-      // Origem do fork = projeto atual no servidor (se houver)
-      const parentId = this.projectId || null;
-      const project = await this.createProjectOnBackend(
-        trimmed,
-        nms.description || '',
-        parentId
-      );
-      const newId = parseInt(project.id, 10) || null;
-      if(!newId){
-        alert('Servidor não retornou ID do novo projeto.');
-        this.status('erro no fork');
-        return false;
-      }
-
-      await this.saveProjectToBackend(newId, nms);
-
-      // Passa a editar o fork
-      this.projectId = newId;
-      this.serverSaved = true;
-      this.data.name = trimmed;
-      if(project.filename){
-        this.fileName = project.filename.endsWith('.nms')
-          ? project.filename
-          : `${project.filename}.nms`;
-      } else {
-        this.fileName = `project_${newId}.nms`;
-      }
-
-      try {
-        localStorage.setItem('nms_autosave', JSON.stringify(nms));
-        sessionStorage.setItem('nms_active_project', String(newId));
-        const url = new URL(window.location.href);
-        url.searchParams.set('project', String(newId));
-        window.history.replaceState({}, document.title, url.pathname + url.search);
-      } catch(e) {}
-
-      // Atualiza campo do dashboard do editor, se existir
-      try {
-        const nameEl = document.getElementById('dashProjName');
-        if(nameEl) nameEl.value = trimmed;
-      } catch(e) {}
-
-      this.updateUI();
-      this.status(`fork criado (#${newId}) — editando a cópia`);
-      return true;
-    } catch(e) {
-      console.error('Erro ao fazer fork:', e);
-      if(e.status === 401 || e.status === 403){
-        alert('Sessão expirada ou não autenticado. Faça login no dashboard e tente novamente.');
-      } else {
-        alert(e.message || 'Erro ao criar o fork no servidor.');
-      }
-      this.status('erro no fork');
-      return false;
-    }
-  },
-
   async loadFromFile(file){
     const text = await file.text();
   
@@ -953,8 +869,5 @@ const Project = {
 
 
 };
-document.getElementById('openNMS')?.addEventListener('change', e=>{
-  const f = e.target.files[0];
-  if(f) Project.loadFromFile(f);
-});
+/* Importar .nms local: use o botão no dashboard do usuário */
 

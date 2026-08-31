@@ -11,10 +11,7 @@
 <div id="topbar">
   <div class="top-logo"><span>▶</span> NES MAKER STUDIO v0.6.5 FINAL EXATO</div>
   <div class="divider"></div>
-  <button class="icon-btn primary" title="Novo Projeto (Ctrl+N)" onclick="Project.newProject()">📄</button>
-  <label class="icon-btn" title="Abrir Projeto .NMS (Ctrl+O)" style="cursor:pointer">📂<input type="file" id="openNMS" accept=".nms,.json" style="display:none"></label>
   <button class="icon-btn" title="Salvar no servidor (Ctrl+S)" onclick="Project.save()">💾</button>
-  <button class="icon-btn" title="Fork — salvar como novo projeto" onclick="Project.fork()">⑂</button>
   <button class="icon-btn" title="Voltar para o Dashboard" onclick="goToDashboard()">🏠</button>
 
   <div class="divider"></div>
@@ -127,9 +124,7 @@ const UI = {
   }
 }
 window.addEventListener('keydown', e=>{
-  if(e.ctrlKey && e.key.toLowerCase()==='n'){ e.preventDefault(); Project.newProject(); }
   if(e.ctrlKey && e.key.toLowerCase()==='s'){ e.preventDefault(); Project.save(); }
-  if(e.ctrlKey && e.key.toLowerCase()==='o'){ e.preventDefault(); document.getElementById('openNMS').click(); }
   if(e.ctrlKey && e.key.toLowerCase()==='z'){ e.preventDefault(); CHR.undo(); }
 });
 
