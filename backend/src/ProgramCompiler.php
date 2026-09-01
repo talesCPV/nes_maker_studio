@@ -54,11 +54,22 @@
  * Agora só a flag nativa dispara (pv_ev_oob / SE hitbox nativo) - o que
  * acontece de fato é 100% definido pelas regras do usuário.
  *
+ * Fase 8 (Som v2): "Tocar Som" agora cobre música E efeitos sonoros de
+ * verdade. Todas as músicas/SFX do projeto (não só a 1ª) são embedados na
+ * ROM; trocar de música é só trocar o ponteiro de despacho pra rotina da
+ * nova (music_dispatch), sem indirect-indexed addressing nem código
+ * auto-modificável (CODE roda direto da ROM). Cada SFX toca no(s) canal(is)
+ * que ele mesmo usa no editor de som (igual uma música) - ao ativar, ele
+ * "rouba" temporariamente esse(s) canal(is) físico(s) da música (guarda
+ * sfx_active_ch<N> checada em cada bloco de canal da rotina da música) e
+ * devolve sozinho quando termina. Ver ProgramCompiler::compilePlaySound e
+ * backend/templates/music.php.
+ *
  * Ainda fora do escopo (sempre-falso/no-op, não quebra a build): Spawnar
  * Personagem, Aplicar Força de Pulo/Nível de Velocidade (valores fixos no
  * jogo hoje - decisão pendente de virar leitura das tabelas do Dashboard),
- * Tocar Som (sem motor de SFX), Abrir/Fechar Menu, Ligar/Desligar Hitbox,
- * Mover, Atirar, eventos P2/custom/menu.
+ * Abrir/Fechar Menu, Ligar/Desligar Hitbox, Mover, Atirar, eventos
+ * P2/custom/menu.
  */
 final class ProgramCompiler
 {
@@ -73,7 +84,7 @@ final class ProgramCompiler
      * @param array $playIdxs índices globais de tela (mesma ordem de PlayScreenTable)
      * @param array $screenData telas resolvidas (mesma ordem/índices de $playIdxs referenciados)
      */
-    public function compile(array $project, array $spriteCtx, array $playIdxs, array $screenData, string $embeddedMusicId = 'none'): array
+    public function compile(array $project, array $spriteCtx, array $playIdxs, array $screenData): array
     {
         $vars = is_array($project['variables'] ?? null) ? $project['variables'] : [];
         $alloc = $this->allocateVariables($vars);
@@ -193,7 +204,7 @@ final class ProgramCompiler
             'speedLevelById' => $speedLevelById,
             'phaseEntryScreen' => $phaseEntryScreen,
             'phaseIndexById' => $phaseIndexById,
-            'embeddedMusicId' => $embeddedMusicId,
+            'soundsById' => $this->buildSoundsById($project),
         ];
 
         $ruleBodies = [];
@@ -753,13 +764,7 @@ final class ProgramCompiler
                 return $lines;
             }
             case 'play_sound':
-                if ($hbCtx['embeddedMusicId'] === 'none' || $hbCtx['embeddedMusicId'] === '') {
-                    return ["  ; Acao: Tocar Som - projeto nao tem nenhuma musica com canais configurados, ignorado"];
-                }
-                if ($targetId !== $hbCtx['embeddedMusicId']) {
-                    return ["  ; Acao: Tocar Som - so a musica embedada na ROM pode ser tocada por enquanto (1 musica por ROM); alvo '{$targetId}' nao e a musica embedada"];
-                }
-                return ["  ; Acao: Tocar Som (reinicia e liga o motor de musica)", "  JSR music_init"];
+                return $this->compilePlaySound($targetId, $hbCtx);
             case 'load_phase':
                 if (!isset($hbCtx['phaseEntryScreen'][$targetId])) {
                     return ["  ; Acao: Carregar Fase - fase '{$targetId}' sem tela de entrada (sem splash/background), ignorado"];
@@ -807,6 +812,118 @@ final class ProgramCompiler
      * então não precisa de tabela em runtime - só emite a mesma sequência
      * que st_splash já usa pra entrar numa tela pela primeira vez.
      */
+    /**
+     * Camada Som v2: monta project.sounds.items -> [id => item], só os que
+     * têm pelo menos 1 canal com notas (mesmo filtro do ProjectParser e do
+     * template music.php - um item sem isso nunca ganha rotina/dados na ROM).
+     */
+    private function buildSoundsById(array $project): array
+    {
+        $items = is_array($project['sounds']['items'] ?? null) ? $project['sounds']['items'] : [];
+        $byId = [];
+        foreach ($items as $item) {
+            if (!is_array($item) || empty($item['id']) || empty($item['channels'])) continue;
+            $hasNotes = false;
+            foreach ($item['channels'] as $c) {
+                if (is_array($c) && !empty($c['notes'])) { $hasNotes = true; break; }
+            }
+            if ($hasNotes) $byId[(string)$item['id']] = $item;
+        }
+        return $byId;
+    }
+
+    /** Canais (tipo APU) que um item (música ou SFX) realmente usa, na ordem
+     * fixa pulse1/pulse2/triangle/noise - 1 por tipo, igual ao music.php. */
+    private function resolveUsedChannelTypes(array $item): array
+    {
+        $order = ['pulse1', 'pulse2', 'triangle', 'noise'];
+        $channels = is_array($item['channels'] ?? null) ? $item['channels'] : [];
+        $used = [];
+        foreach ($order as $type) {
+            foreach ($channels as $ch) {
+                if (is_array($ch) && ($ch['type'] ?? '') === $type && !empty($ch['notes'])) {
+                    $used[] = $type;
+                    break;
+                }
+            }
+        }
+        return $used;
+    }
+
+    /** Tem que gerar EXATAMENTE o mesmo label que backend/templates/music.php. */
+    private function soundLabel(string $prefix, string $id): string
+    {
+        $s = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $id) ?? '');
+        if ($s === '') $s = substr(md5($id), 0, 8);
+        return $prefix . substr($s, 0, 16);
+    }
+
+    /**
+     * Ação "Tocar Som": alvo é sempre um literal (id escolhido na UI), nunca
+     * resolvido em runtime. Se for música: troca o ponteiro de despacho
+     * (music_dispatch) pra rotina dessa música, zera a posição dos canais
+     * que ela usa e silencia explicitamente os que ela NÃO usa (senão o som
+     * da música anterior ficaria preso nesse canal). Se for SFX: ativa cada
+     * canal que ele usa (sfx_active_ch<N>) apontando pra rotina dele - a
+     * partir do próximo frame aquele(s) canal(is) ficam sob controle do SFX
+     * até ele terminar, e a música volta sozinha (ver music.php).
+     */
+    private function compilePlaySound(string $targetId, array $hbCtx): array
+    {
+        $sound = $hbCtx['soundsById'][$targetId] ?? null;
+        if (!$sound) {
+            return ["  ; Acao: Tocar Som - som '{$targetId}' nao encontrado ou sem nenhum canal com notas, ignorado"];
+        }
+        $used = $this->resolveUsedChannelTypes($sound);
+        if (!$used) {
+            return ["  ; Acao: Tocar Som - som '{$targetId}' nao tem nenhum canal com notas, ignorado"];
+        }
+        $isSfx = (string)($sound['type'] ?? 'song') === 'sfx';
+        $name = (string)($sound['name'] ?? $targetId);
+        $chIdx = ['pulse1' => 0, 'pulse2' => 1, 'triangle' => 2, 'noise' => 3];
+        $chSil = ['pulse1' => '#%00110000', 'pulse2' => '#%00110000', 'triangle' => '#%00000000', 'noise' => '#%00110000'];
+        $chVol = ['pulse1' => '$4000', 'pulse2' => '$4004', 'triangle' => '$4008', 'noise' => '$400C'];
+
+        if (!$isSfx) {
+            $lbl = $this->soundLabel('ms_', $targetId);
+            $lines = ["  ; Acao: Tocar Musica '{$name}'", "  JSR snd_enable_apu"];
+            $lines[] = "  LDA #<music_update_{$lbl}";
+            $lines[] = '  STA music_dispatch';
+            $lines[] = "  LDA #>music_update_{$lbl}";
+            $lines[] = '  STA music_dispatch+1';
+            foreach ($chIdx as $type => $i) {
+                if (in_array($type, $used, true)) {
+                    $lines[] = '  LDA #0';
+                    $lines[] = "  STA ch{$i}_timer";
+                    $lines[] = "  STA ch{$i}_pos";
+                } else {
+                    $lines[] = "  LDA {$chSil[$type]}";
+                    $lines[] = "  STA {$chVol[$type]}";
+                }
+            }
+            $lines[] = '  LDA #1';
+            $lines[] = '  STA music_on';
+            return $lines;
+        }
+
+        $lbl = $this->soundLabel('sx_', $targetId);
+        $lines = ["  ; Acao: Tocar SFX '{$name}'", "  JSR snd_enable_apu"];
+        foreach ($used as $type) {
+            $i = $chIdx[$type];
+            $r = "sfx_r_{$lbl}_ch{$i}";
+            $lines[] = "  LDA #<{$r}";
+            $lines[] = "  STA sfx_dispatch_ch{$i}";
+            $lines[] = "  LDA #>{$r}";
+            $lines[] = "  STA sfx_dispatch_ch{$i}+1";
+            $lines[] = '  LDA #0';
+            $lines[] = "  STA sfx_pos_ch{$i}";
+            $lines[] = "  STA sfx_timer_ch{$i}";
+            $lines[] = '  LDA #1';
+            $lines[] = "  STA sfx_active_ch{$i}";
+        }
+        return $lines;
+    }
+
     private function compileGotoWarp(string $tag, string $targetId, array $hbCtx): array
     {
         $obj = $hbCtx['objectById'][$targetId] ?? null;

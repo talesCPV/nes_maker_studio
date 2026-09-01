@@ -2,6 +2,11 @@
   .byte $4E,$45,$53,$1A,2,1,$01,0,0,0,0,0,0,0,0,0  ; NROM-256 (32KB PRG), vertical mirroring
 
 .segment "ZEROPAGE"
+music_dispatch:   .res 2  ; JMP (music_dispatch) -> music_update_<musica atual>
+sfx_dispatch_ch0: .res 2  ; JMP (sfx_dispatch_ch0) -> rotina do SFX ativo no canal Pulse1
+sfx_dispatch_ch1: .res 2  ; canal Pulse2
+sfx_dispatch_ch2: .res 2  ; canal Triangle
+sfx_dispatch_ch3: .res 2  ; canal Noise
 pad1:       .res 1
 pad1_old:   .res 1
 pad1_edge:  .res 1
@@ -62,12 +67,26 @@ ovl_dy:       .res 1
 inst_grounded: .res 1  ; scratch: resultado de check_ground_inst (Camada 4)
 en_tmp:     .res 1
 music_on:   .res 1
-ch0_timer: .res 1
-ch0_pos:   .res 1
-ch1_timer: .res 1
-ch1_pos:   .res 1
-ch2_timer: .res 1
-ch2_pos:   .res 1
+ch0_timer:      .res 1
+ch0_pos:        .res 1
+sfx_active_ch0: .res 1  ; !=0 = canal tomado por um SFX (musica pausa nele)
+sfx_timer_ch0:  .res 1
+sfx_pos_ch0:    .res 1
+ch1_timer:      .res 1
+ch1_pos:        .res 1
+sfx_active_ch1: .res 1  ; !=0 = canal tomado por um SFX (musica pausa nele)
+sfx_timer_ch1:  .res 1
+sfx_pos_ch1:    .res 1
+ch2_timer:      .res 1
+ch2_pos:        .res 1
+sfx_active_ch2: .res 1  ; !=0 = canal tomado por um SFX (musica pausa nele)
+sfx_timer_ch2:  .res 1
+sfx_pos_ch2:    .res 1
+ch3_timer:      .res 1
+ch3_pos:        .res 1
+sfx_active_ch3: .res 1  ; !=0 = canal tomado por um SFX (musica pausa nele)
+sfx_timer_ch3:  .res 1
+sfx_pos_ch3:    .res 1
 
 .segment "ZEROPAGE"
 pv_idle:        .res 2  ; Camada 6: frames desde o ultimo input (P1-IDLE)
@@ -151,152 +170,501 @@ nmi_scroll_done:
 IRQ:
   RTI
 
-; ---- NGC MUSIC / APU ----
-music_update:
-  LDA music_on
-  BNE mu_run
+; ---- NGC SOM (musica + SFX) ----
+music_call_dispatch:
+  JMP (music_dispatch)
+sfx_call_dispatch_ch0:
+  JMP (sfx_dispatch_ch0)
+sfx_call_dispatch_ch1:
+  JMP (sfx_dispatch_ch1)
+sfx_call_dispatch_ch2:
+  JMP (sfx_dispatch_ch2)
+sfx_call_dispatch_ch3:
+  JMP (sfx_dispatch_ch3)
+snd_enable_apu:
+  LDA #$0F
+  STA $4015
   RTS
-mu_run:
-mu_ch0:
+music_update:
+  JSR sfx_update_ch0
+  JSR sfx_update_ch1
+  JSR sfx_update_ch2
+  JSR sfx_update_ch3
+  LDA music_on
+  BEQ mu_end
+  JSR music_call_dispatch
+mu_end:
+  RTS
+sfx_update_ch0:
+  LDA sfx_active_ch0
+  BEQ sfx0_upd_end
+  JSR sfx_call_dispatch_ch0
+sfx0_upd_end:
+  RTS
+sfx_update_ch1:
+  LDA sfx_active_ch1
+  BEQ sfx1_upd_end
+  JSR sfx_call_dispatch_ch1
+sfx1_upd_end:
+  RTS
+sfx_update_ch2:
+  LDA sfx_active_ch2
+  BEQ sfx2_upd_end
+  JSR sfx_call_dispatch_ch2
+sfx2_upd_end:
+  RTS
+sfx_update_ch3:
+  LDA sfx_active_ch3
+  BEQ sfx3_upd_end
+  JSR sfx_call_dispatch_ch3
+sfx3_upd_end:
+  RTS
+music_update_ms_songmt04mdzzcaol:
+  LDA sfx_active_ch0
+  BNE ms_songmt04mdzzcaol_ch0_end
   LDA ch0_timer
-  BEQ mu_ch0_next
+  BEQ ms_songmt04mdzzcaol_ch0_next
   DEC ch0_timer
-  JMP mu_ch0_end
-mu_ch0_next:
+  JMP ms_songmt04mdzzcaol_ch0_end
+ms_songmt04mdzzcaol_ch0_next:
   LDY ch0_pos
-  LDA Scale_ch0,Y
+  LDA Scale_ms_songmt04mdzzcaol_ch0,Y
   CMP #$FF
-  BNE mu_ch0_nof
+  BNE ms_songmt04mdzzcaol_ch0_nof
   LDA #0
   STA ch0_pos
   LDY #0
-  LDA Scale_ch0,Y
-mu_ch0_nof:
+  LDA Scale_ms_songmt04mdzzcaol_ch0,Y
+ms_songmt04mdzzcaol_ch0_nof:
   CMP #$FE
-  BNE mu_ch0_play
+  BNE ms_songmt04mdzzcaol_ch0_play
   LDA #%00110000
   STA $4000
-  JMP mu_ch0_end
-mu_ch0_play:
+  JMP ms_songmt04mdzzcaol_ch0_end
+ms_songmt04mdzzcaol_ch0_play:
   TAX
-  LDA Time_ch0,Y
+  LDA Time_ms_songmt04mdzzcaol_ch0,Y
   STA ch0_timer
   INY
   STY ch0_pos
   CPX #0
-  BNE mu_ch0_tone
+  BNE ms_songmt04mdzzcaol_ch0_tone
   LDA #%00110000
   STA $4000
-  JMP mu_ch0_end
-mu_ch0_tone:
+  JMP ms_songmt04mdzzcaol_ch0_end
+ms_songmt04mdzzcaol_ch0_tone:
   LDA #%10111111
   STA $4000
-  LDA PitchLo_ch0,X
+  LDA PitchLo_ms_songmt04mdzzcaol_ch0,X
   STA $4002
-  LDA PitchHi_ch0,X
+  LDA PitchHi_ms_songmt04mdzzcaol_ch0,X
   STA $4003
-mu_ch0_end:
-mu_ch1:
+ms_songmt04mdzzcaol_ch0_end:
+  LDA sfx_active_ch1
+  BNE ms_songmt04mdzzcaol_ch1_end
   LDA ch1_timer
-  BEQ mu_ch1_next
+  BEQ ms_songmt04mdzzcaol_ch1_next
   DEC ch1_timer
-  JMP mu_ch1_end
-mu_ch1_next:
+  JMP ms_songmt04mdzzcaol_ch1_end
+ms_songmt04mdzzcaol_ch1_next:
   LDY ch1_pos
-  LDA Scale_ch1,Y
+  LDA Scale_ms_songmt04mdzzcaol_ch1,Y
   CMP #$FF
-  BNE mu_ch1_nof
+  BNE ms_songmt04mdzzcaol_ch1_nof
   LDA #0
   STA ch1_pos
   LDY #0
-  LDA Scale_ch1,Y
-mu_ch1_nof:
+  LDA Scale_ms_songmt04mdzzcaol_ch1,Y
+ms_songmt04mdzzcaol_ch1_nof:
   CMP #$FE
-  BNE mu_ch1_play
+  BNE ms_songmt04mdzzcaol_ch1_play
   LDA #%00110000
   STA $4004
-  JMP mu_ch1_end
-mu_ch1_play:
+  JMP ms_songmt04mdzzcaol_ch1_end
+ms_songmt04mdzzcaol_ch1_play:
   TAX
-  LDA Time_ch1,Y
+  LDA Time_ms_songmt04mdzzcaol_ch1,Y
   STA ch1_timer
   INY
   STY ch1_pos
   CPX #0
-  BNE mu_ch1_tone
+  BNE ms_songmt04mdzzcaol_ch1_tone
   LDA #%00110000
   STA $4004
-  JMP mu_ch1_end
-mu_ch1_tone:
+  JMP ms_songmt04mdzzcaol_ch1_end
+ms_songmt04mdzzcaol_ch1_tone:
   LDA #%01111111
   STA $4004
-  LDA PitchLo_ch1,X
+  LDA PitchLo_ms_songmt04mdzzcaol_ch1,X
   STA $4006
-  LDA PitchHi_ch1,X
+  LDA PitchHi_ms_songmt04mdzzcaol_ch1,X
   STA $4007
-mu_ch1_end:
-mu_ch2:
+ms_songmt04mdzzcaol_ch1_end:
+  LDA sfx_active_ch2
+  BNE ms_songmt04mdzzcaol_ch2_end
   LDA ch2_timer
-  BEQ mu_ch2_next
+  BEQ ms_songmt04mdzzcaol_ch2_next
   DEC ch2_timer
-  JMP mu_ch2_end
-mu_ch2_next:
+  JMP ms_songmt04mdzzcaol_ch2_end
+ms_songmt04mdzzcaol_ch2_next:
   LDY ch2_pos
-  LDA Scale_ch2,Y
+  LDA Scale_ms_songmt04mdzzcaol_ch2,Y
   CMP #$FF
-  BNE mu_ch2_nof
+  BNE ms_songmt04mdzzcaol_ch2_nof
   LDA #0
   STA ch2_pos
   LDY #0
-  LDA Scale_ch2,Y
-mu_ch2_nof:
+  LDA Scale_ms_songmt04mdzzcaol_ch2,Y
+ms_songmt04mdzzcaol_ch2_nof:
   CMP #$FE
-  BNE mu_ch2_play
+  BNE ms_songmt04mdzzcaol_ch2_play
   LDA #%00000000
   STA $4008
-  JMP mu_ch2_end
-mu_ch2_play:
+  JMP ms_songmt04mdzzcaol_ch2_end
+ms_songmt04mdzzcaol_ch2_play:
   TAX
-  LDA Time_ch2,Y
+  LDA Time_ms_songmt04mdzzcaol_ch2,Y
   STA ch2_timer
   INY
   STY ch2_pos
   CPX #0
-  BNE mu_ch2_tone
+  BNE ms_songmt04mdzzcaol_ch2_tone
   LDA #%00000000
   STA $4008
-  JMP mu_ch2_end
-mu_ch2_tone:
+  JMP ms_songmt04mdzzcaol_ch2_end
+ms_songmt04mdzzcaol_ch2_tone:
   LDA #%11111111
   STA $4008
-  LDA PitchLo_ch2,X
+  LDA PitchLo_ms_songmt04mdzzcaol_ch2,X
   STA $400A
-  LDA PitchHi_ch2,X
+  LDA PitchHi_ms_songmt04mdzzcaol_ch2,X
   STA $400B
-mu_ch2_end:
+ms_songmt04mdzzcaol_ch2_end:
   RTS
-
-music_init:
+music_update_ms_songmtiooyxutc7r:
+  LDA sfx_active_ch0
+  BNE ms_songmtiooyxutc7r_ch0_end
+  LDA ch0_timer
+  BEQ ms_songmtiooyxutc7r_ch0_next
+  DEC ch0_timer
+  JMP ms_songmtiooyxutc7r_ch0_end
+ms_songmtiooyxutc7r_ch0_next:
+  LDY ch0_pos
+  LDA Scale_ms_songmtiooyxutc7r_ch0,Y
+  CMP #$FF
+  BNE ms_songmtiooyxutc7r_ch0_nof
   LDA #0
-  LDA #0
-  STA ch0_timer
   STA ch0_pos
+  LDY #0
+  LDA Scale_ms_songmtiooyxutc7r_ch0,Y
+ms_songmtiooyxutc7r_ch0_nof:
+  CMP #$FE
+  BNE ms_songmtiooyxutc7r_ch0_play
+  LDA #%00110000
+  STA $4000
+  JMP ms_songmtiooyxutc7r_ch0_end
+ms_songmtiooyxutc7r_ch0_play:
+  TAX
+  LDA Time_ms_songmtiooyxutc7r_ch0,Y
   STA ch0_timer
+  INY
+  STY ch0_pos
+  CPX #0
+  BNE ms_songmtiooyxutc7r_ch0_tone
+  LDA #%00110000
+  STA $4000
+  JMP ms_songmtiooyxutc7r_ch0_end
+ms_songmtiooyxutc7r_ch0_tone:
+  LDA #%10111111
+  STA $4000
+  LDA PitchLo_ms_songmtiooyxutc7r_ch0,X
+  STA $4002
+  LDA PitchHi_ms_songmtiooyxutc7r_ch0,X
+  STA $4003
+ms_songmtiooyxutc7r_ch0_end:
+  LDA sfx_active_ch1
+  BNE ms_songmtiooyxutc7r_ch1_end
+  LDA ch1_timer
+  BEQ ms_songmtiooyxutc7r_ch1_next
+  DEC ch1_timer
+  JMP ms_songmtiooyxutc7r_ch1_end
+ms_songmtiooyxutc7r_ch1_next:
+  LDY ch1_pos
+  LDA Scale_ms_songmtiooyxutc7r_ch1,Y
+  CMP #$FF
+  BNE ms_songmtiooyxutc7r_ch1_nof
+  LDA #0
+  STA ch1_pos
+  LDY #0
+  LDA Scale_ms_songmtiooyxutc7r_ch1,Y
+ms_songmtiooyxutc7r_ch1_nof:
+  CMP #$FE
+  BNE ms_songmtiooyxutc7r_ch1_play
+  LDA #%00110000
+  STA $4004
+  JMP ms_songmtiooyxutc7r_ch1_end
+ms_songmtiooyxutc7r_ch1_play:
+  TAX
+  LDA Time_ms_songmtiooyxutc7r_ch1,Y
+  STA ch1_timer
+  INY
+  STY ch1_pos
+  CPX #0
+  BNE ms_songmtiooyxutc7r_ch1_tone
+  LDA #%00110000
+  STA $4004
+  JMP ms_songmtiooyxutc7r_ch1_end
+ms_songmtiooyxutc7r_ch1_tone:
+  LDA #%01111111
+  STA $4004
+  LDA PitchLo_ms_songmtiooyxutc7r_ch1,X
+  STA $4006
+  LDA PitchHi_ms_songmtiooyxutc7r_ch1,X
+  STA $4007
+ms_songmtiooyxutc7r_ch1_end:
+  LDA sfx_active_ch2
+  BNE ms_songmtiooyxutc7r_ch2_end
+  LDA ch2_timer
+  BEQ ms_songmtiooyxutc7r_ch2_next
+  DEC ch2_timer
+  JMP ms_songmtiooyxutc7r_ch2_end
+ms_songmtiooyxutc7r_ch2_next:
+  LDY ch2_pos
+  LDA Scale_ms_songmtiooyxutc7r_ch2,Y
+  CMP #$FF
+  BNE ms_songmtiooyxutc7r_ch2_nof
+  LDA #0
+  STA ch2_pos
+  LDY #0
+  LDA Scale_ms_songmtiooyxutc7r_ch2,Y
+ms_songmtiooyxutc7r_ch2_nof:
+  CMP #$FE
+  BNE ms_songmtiooyxutc7r_ch2_play
+  LDA #%00000000
+  STA $4008
+  JMP ms_songmtiooyxutc7r_ch2_end
+ms_songmtiooyxutc7r_ch2_play:
+  TAX
+  LDA Time_ms_songmtiooyxutc7r_ch2,Y
+  STA ch2_timer
+  INY
+  STY ch2_pos
+  CPX #0
+  BNE ms_songmtiooyxutc7r_ch2_tone
+  LDA #%00000000
+  STA $4008
+  JMP ms_songmtiooyxutc7r_ch2_end
+ms_songmtiooyxutc7r_ch2_tone:
+  LDA #%11111111
+  STA $4008
+  LDA PitchLo_ms_songmtiooyxutc7r_ch2,X
+  STA $400A
+  LDA PitchHi_ms_songmtiooyxutc7r_ch2,X
+  STA $400B
+ms_songmtiooyxutc7r_ch2_end:
+  LDA sfx_active_ch3
+  BNE ms_songmtiooyxutc7r_ch3_end
+  LDA ch3_timer
+  BEQ ms_songmtiooyxutc7r_ch3_next
+  DEC ch3_timer
+  JMP ms_songmtiooyxutc7r_ch3_end
+ms_songmtiooyxutc7r_ch3_next:
+  LDY ch3_pos
+  LDA Scale_ms_songmtiooyxutc7r_ch3,Y
+  CMP #$FF
+  BNE ms_songmtiooyxutc7r_ch3_nof
+  LDA #0
+  STA ch3_pos
+  LDY #0
+  LDA Scale_ms_songmtiooyxutc7r_ch3,Y
+ms_songmtiooyxutc7r_ch3_nof:
+  CMP #$FE
+  BNE ms_songmtiooyxutc7r_ch3_play
+  LDA #%00110000
+  STA $400C
+  JMP ms_songmtiooyxutc7r_ch3_end
+ms_songmtiooyxutc7r_ch3_play:
+  TAX
+  LDA Time_ms_songmtiooyxutc7r_ch3,Y
+  STA ch3_timer
+  INY
+  STY ch3_pos
+  CPX #0
+  BNE ms_songmtiooyxutc7r_ch3_tone
+  LDA #%00110000
+  STA $400C
+  JMP ms_songmtiooyxutc7r_ch3_end
+ms_songmtiooyxutc7r_ch3_tone:
+  LDA #%00111111
+  STA $400C
+  LDA PitchLo_ms_songmtiooyxutc7r_ch3,X
+  STA $400E
+  LDA PitchHi_ms_songmtiooyxutc7r_ch3,X
+  STA $400F
+ms_songmtiooyxutc7r_ch3_end:
+  RTS
+music_update_ms_songmtipgz0u59dk:
+  LDA sfx_active_ch0
+  BNE ms_songmtipgz0u59dk_ch0_end
+  LDA ch0_timer
+  BEQ ms_songmtipgz0u59dk_ch0_next
+  DEC ch0_timer
+  JMP ms_songmtipgz0u59dk_ch0_end
+ms_songmtipgz0u59dk_ch0_next:
+  LDY ch0_pos
+  LDA Scale_ms_songmtipgz0u59dk_ch0,Y
+  CMP #$FF
+  BNE ms_songmtipgz0u59dk_ch0_nof
+  LDA #0
   STA ch0_pos
+  LDY #0
+  LDA Scale_ms_songmtipgz0u59dk_ch0,Y
+ms_songmtipgz0u59dk_ch0_nof:
+  CMP #$FE
+  BNE ms_songmtipgz0u59dk_ch0_play
+  LDA #%00110000
+  STA $4000
+  JMP ms_songmtipgz0u59dk_ch0_end
+ms_songmtipgz0u59dk_ch0_play:
+  TAX
+  LDA Time_ms_songmtipgz0u59dk_ch0,Y
+  STA ch0_timer
+  INY
+  STY ch0_pos
+  CPX #0
+  BNE ms_songmtipgz0u59dk_ch0_tone
+  LDA #%00110000
+  STA $4000
+  JMP ms_songmtipgz0u59dk_ch0_end
+ms_songmtipgz0u59dk_ch0_tone:
+  LDA #%10111111
+  STA $4000
+  LDA PitchLo_ms_songmtipgz0u59dk_ch0,X
+  STA $4002
+  LDA PitchHi_ms_songmtipgz0u59dk_ch0,X
+  STA $4003
+ms_songmtipgz0u59dk_ch0_end:
+  LDA sfx_active_ch1
+  BNE ms_songmtipgz0u59dk_ch1_end
+  LDA ch1_timer
+  BEQ ms_songmtipgz0u59dk_ch1_next
+  DEC ch1_timer
+  JMP ms_songmtipgz0u59dk_ch1_end
+ms_songmtipgz0u59dk_ch1_next:
+  LDY ch1_pos
+  LDA Scale_ms_songmtipgz0u59dk_ch1,Y
+  CMP #$FF
+  BNE ms_songmtipgz0u59dk_ch1_nof
   LDA #0
-  STA ch1_timer
   STA ch1_pos
+  LDY #0
+  LDA Scale_ms_songmtipgz0u59dk_ch1,Y
+ms_songmtipgz0u59dk_ch1_nof:
+  CMP #$FE
+  BNE ms_songmtipgz0u59dk_ch1_play
+  LDA #%00110000
+  STA $4004
+  JMP ms_songmtipgz0u59dk_ch1_end
+ms_songmtipgz0u59dk_ch1_play:
+  TAX
+  LDA Time_ms_songmtipgz0u59dk_ch1,Y
   STA ch1_timer
-  STA ch1_pos
+  INY
+  STY ch1_pos
+  CPX #0
+  BNE ms_songmtipgz0u59dk_ch1_tone
+  LDA #%00110000
+  STA $4004
+  JMP ms_songmtipgz0u59dk_ch1_end
+ms_songmtipgz0u59dk_ch1_tone:
+  LDA #%01111111
+  STA $4004
+  LDA PitchLo_ms_songmtipgz0u59dk_ch1,X
+  STA $4006
+  LDA PitchHi_ms_songmtipgz0u59dk_ch1,X
+  STA $4007
+ms_songmtipgz0u59dk_ch1_end:
+  LDA sfx_active_ch3
+  BNE ms_songmtipgz0u59dk_ch3_end
+  LDA ch3_timer
+  BEQ ms_songmtipgz0u59dk_ch3_next
+  DEC ch3_timer
+  JMP ms_songmtipgz0u59dk_ch3_end
+ms_songmtipgz0u59dk_ch3_next:
+  LDY ch3_pos
+  LDA Scale_ms_songmtipgz0u59dk_ch3,Y
+  CMP #$FF
+  BNE ms_songmtipgz0u59dk_ch3_nof
   LDA #0
-  STA ch2_timer
-  STA ch2_pos
-  STA ch2_timer
-  STA ch2_pos
-  LDA #$0F
-  STA $4015
-  LDA #1
-  STA music_on
+  STA ch3_pos
+  LDY #0
+  LDA Scale_ms_songmtipgz0u59dk_ch3,Y
+ms_songmtipgz0u59dk_ch3_nof:
+  CMP #$FE
+  BNE ms_songmtipgz0u59dk_ch3_play
+  LDA #%00110000
+  STA $400C
+  JMP ms_songmtipgz0u59dk_ch3_end
+ms_songmtipgz0u59dk_ch3_play:
+  TAX
+  LDA Time_ms_songmtipgz0u59dk_ch3,Y
+  STA ch3_timer
+  INY
+  STY ch3_pos
+  CPX #0
+  BNE ms_songmtipgz0u59dk_ch3_tone
+  LDA #%00110000
+  STA $400C
+  JMP ms_songmtipgz0u59dk_ch3_end
+ms_songmtipgz0u59dk_ch3_tone:
+  LDA #%00111111
+  STA $400C
+  LDA PitchLo_ms_songmtipgz0u59dk_ch3,X
+  STA $400E
+  LDA PitchHi_ms_songmtipgz0u59dk_ch3,X
+  STA $400F
+ms_songmtipgz0u59dk_ch3_end:
+  RTS
+sfx_r_sx_sfxmtior0xai20g_ch1:
+  LDA sfx_timer_ch1
+  BEQ sfx_r_sx_sfxmtior0xai20g_ch1_next
+  DEC sfx_timer_ch1
+  RTS
+sfx_r_sx_sfxmtior0xai20g_ch1_next:
+  LDY sfx_pos_ch1
+  LDA Scale_sfx_r_sx_sfxmtior0xai20g_ch1,Y
+  CMP #$FF
+  BNE sfx_r_sx_sfxmtior0xai20g_ch1_nof
+  LDA #0
+  STA sfx_pos_ch1
+  LDY #0
+  LDA Scale_sfx_r_sx_sfxmtior0xai20g_ch1,Y
+sfx_r_sx_sfxmtior0xai20g_ch1_nof:
+  CMP #$FE
+  BNE sfx_r_sx_sfxmtior0xai20g_ch1_play
+  LDA #0
+  STA sfx_active_ch1   ; SFX terminou - devolve o canal pra musica
+  LDA #%00110000
+  STA $4004
+  RTS
+sfx_r_sx_sfxmtior0xai20g_ch1_play:
+  TAX
+  LDA Time_sfx_r_sx_sfxmtior0xai20g_ch1,Y
+  STA sfx_timer_ch1
+  INY
+  STY sfx_pos_ch1
+  CPX #0
+  BNE sfx_r_sx_sfxmtior0xai20g_ch1_tone
+  LDA #%00110000
+  STA $4004
+  RTS
+sfx_r_sx_sfxmtior0xai20g_ch1_tone:
+  LDA #%01111111
+  STA $4004
+  LDA PitchLo_sfx_r_sx_sfxmtior0xai20g_ch1,X
+  STA $4006
+  LDA PitchHi_sfx_r_sx_sfxmtior0xai20g_ch1,X
+  STA $4007
   RTS
 
 ; Leitura do controle P1 (strobe padrão NES)
@@ -2336,7 +2704,7 @@ st_play_paused:
   LDA #2
   STA game_state
   JSR hide_player
-  LDA #5
+  LDA #6
   JSR load_screen
   LDA #1
   STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela"
@@ -2605,7 +2973,7 @@ cccc_no:
 
 ; ---- NGC Camada 6: motor de regras ----
 ScreenPhase:
-  .byte 0, 1, 1, 1, 1, 1
+  .byte 0, 1, 1, 1, 1, 1, 2
 
 run_rules:
   LDX cur_screen
@@ -2667,8 +3035,25 @@ prule_0:
   SBC #1
   STA pv_z_Vidas_3681
   ; Acao 'spawn_character': Fase 7 (subsistema ainda nao existe no jogo) - no-op
-  ; Acao: Tocar Som (reinicia e liga o motor de musica)
-  JSR music_init
+  ; Acao: Tocar Musica 'dr-wily-stage-1'
+  JSR snd_enable_apu
+  LDA #<music_update_ms_songmt04mdzzcaol
+  STA music_dispatch
+  LDA #>music_update_ms_songmt04mdzzcaol
+  STA music_dispatch+1
+  LDA #0
+  STA ch0_timer
+  STA ch0_pos
+  LDA #0
+  STA ch1_timer
+  STA ch1_pos
+  LDA #0
+  STA ch2_timer
+  STA ch2_pos
+  LDA #%00110000
+  STA $400C
+  LDA #1
+  STA music_on
   ; SE hitbox de personagem: referencia incompleta ou desconhecida - sempre falso
   JMP prule_0_cond_end
   JMP prule_0_end
@@ -2709,8 +3094,25 @@ prule_2:
   ORA #$04
   STA pv_rs0
   ; Acao 'spawn_character': Fase 7 (subsistema ainda nao existe no jogo) - no-op
-  ; Acao: Tocar Som (reinicia e liga o motor de musica)
-  JSR music_init
+  ; Acao: Tocar Musica 'dr-wily-stage-1'
+  JSR snd_enable_apu
+  LDA #<music_update_ms_songmt04mdzzcaol
+  STA music_dispatch
+  LDA #>music_update_ms_songmt04mdzzcaol
+  STA music_dispatch+1
+  LDA #0
+  STA ch0_timer
+  STA ch0_pos
+  LDA #0
+  STA ch1_timer
+  STA ch1_pos
+  LDA #0
+  STA ch2_timer
+  STA ch2_pos
+  LDA #%00110000
+  STA $400C
+  LDA #1
+  STA music_on
   ; Acao: Aplicar Forca de Pulo (10 frames de impulso)
   LDA #10
   STA pv_jump_force
@@ -2793,7 +3195,37 @@ prule_5:
   STA player_y
   LDA #0
   STA jump_cnt
-  ; Acao: Ir para Warp - tela de destino nao encontrada, ignorado
+  ; Acao: Ir para Warp
+  LDA #6
+  JSR load_screen
+  LDA #0
+  STA scroll_x
+  STA nt_page
+  LDA #112
+  STA player_x
+  LDA #144
+  STA player_y
+  ; destino fora da sequencia principal de fases - play_idx nao realinhado,
+  ; inimigos nao re-spawnados nesta tela (evita usar play_idx incoerente)
+  ; Acao: Tocar Musica 'Castlevania_Game_Over'
+  JSR snd_enable_apu
+  LDA #<music_update_ms_songmtipgz0u59dk
+  STA music_dispatch
+  LDA #>music_update_ms_songmtipgz0u59dk
+  STA music_dispatch+1
+  LDA #0
+  STA ch0_timer
+  STA ch0_pos
+  LDA #0
+  STA ch1_timer
+  STA ch1_pos
+  LDA #%00000000
+  STA $4008
+  LDA #0
+  STA ch3_timer
+  STA ch3_pos
+  LDA #1
+  STA music_on
   JMP prule_5_end
 prule_5_cond_end:
   ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
@@ -2910,6 +3342,17 @@ prule_8:
   LDX pv_hb_matched_inst
   LDA #0
   STA inst_on,X
+  ; Acao: Tocar SFX 'SFX 1'
+  JSR snd_enable_apu
+  LDA #<sfx_r_sx_sfxmtior0xai20g_ch1
+  STA sfx_dispatch_ch1
+  LDA #>sfx_r_sx_sfxmtior0xai20g_ch1
+  STA sfx_dispatch_ch1+1
+  LDA #0
+  STA sfx_pos_ch1
+  STA sfx_timer_ch1
+  LDA #1
+  STA sfx_active_ch1
   JMP prule_8_end
 prule_8_cond_end:
   ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
@@ -3053,8 +3496,26 @@ prule_13:
   LDA pv_rs1
   ORA #$20
   STA pv_rs1
-  ; Acao: Tocar Som (reinicia e liga o motor de musica)
-  JSR music_init
+  ; Acao: Tocar Musica 'bloody-tears'
+  JSR snd_enable_apu
+  LDA #<music_update_ms_songmtiooyxutc7r
+  STA music_dispatch
+  LDA #>music_update_ms_songmtiooyxutc7r
+  STA music_dispatch+1
+  LDA #0
+  STA ch0_timer
+  STA ch0_pos
+  LDA #0
+  STA ch1_timer
+  STA ch1_pos
+  LDA #0
+  STA ch2_timer
+  STA ch2_pos
+  LDA #0
+  STA ch3_timer
+  STA ch3_pos
+  LDA #1
+  STA music_on
   JMP prule_13_end
 prule_13_cond_end:
   ; alguma condicao falhou - desliga o bit (proxima vez que baterem, dispara de novo)
@@ -3075,6 +3536,7 @@ ScreenNtLo:
   .byte <Nametable_3
   .byte <Nametable_4
   .byte <Nametable_5
+  .byte <Nametable_6
 ScreenNtHi:
   .byte >Nametable_0
   .byte >Nametable_1
@@ -3082,6 +3544,7 @@ ScreenNtHi:
   .byte >Nametable_3
   .byte >Nametable_4
   .byte >Nametable_5
+  .byte >Nametable_6
 ScreenAtLo:
   .byte <Attr_0
   .byte <Attr_1
@@ -3089,6 +3552,7 @@ ScreenAtLo:
   .byte <Attr_3
   .byte <Attr_4
   .byte <Attr_5
+  .byte <Attr_6
 ScreenAtHi:
   .byte >Attr_0
   .byte >Attr_1
@@ -3096,6 +3560,7 @@ ScreenAtHi:
   .byte >Attr_3
   .byte >Attr_4
   .byte >Attr_5
+  .byte >Attr_6
 ScreenColLo:
   .byte <Collision_0
   .byte <Collision_1
@@ -3103,6 +3568,7 @@ ScreenColLo:
   .byte <Collision_3
   .byte <Collision_4
   .byte <Collision_5
+  .byte <Collision_6
 ScreenColHi:
   .byte >Collision_0
   .byte >Collision_1
@@ -3110,6 +3576,7 @@ ScreenColHi:
   .byte >Collision_3
   .byte >Collision_4
   .byte >Collision_5
+  .byte >Collision_6
 PlayScreenTable:  ; indices globais das telas de jogo (em ordem)
   .byte $01, $02, $03, $04, $05
 
@@ -3620,12 +4087,80 @@ Collision_5:
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
 
+Nametable_6:  ; Game Over (splash)
+  .byte $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17
+  .byte $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17
+  .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01
+  .byte $02, $03, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $1B, $0E, $1C, $07, $0A, $1D, $1E, $07, $10, $1F, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $02, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $05
+  .byte $17, $01, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $05, $17, $17
+  .byte $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17
+  .byte $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17, $17
+Attr_6:
+  .byte $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $33, $00, $00, $00, $00, $00, $00, $CC
+  .byte $33, $00, $00, $00, $00, $00, $00, $CC, $33, $40, $40, $50, $50, $50, $00, $CC
+  .byte $33, $00, $00, $00, $00, $00, $00, $CC, $33, $00, $00, $00, $00, $00, $00, $CC
+  .byte $F3, $F0, $F0, $F0, $F0, $F0, $F0, $FC, $0F, $0F, $0F, $0F, $0F, $0F, $0F, $0F
+Collision_6:
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+
 ; ---- NGC MUSIC DATA ----
-PitchLo_ch0:
+PitchLo_ms_songmt04mdzzcaol_ch0:
   .byte $00, $26, $F8, $89, $F9, $56, $4D, $9D, $4C
-PitchHi_ch0:
+PitchHi_ms_songmt04mdzzcaol_ch0:
   .byte $00, $03, $03, $03, $02, $03, $06, $05, $05
-Scale_ch0:
+Scale_ms_songmt04mdzzcaol_ch0:
   .byte $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $02, $02
   .byte $02, $02, $02, $02, $02, $02, $02, $02, $02, $02, $02, $02, $03, $03, $03, $03
   .byte $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $03, $01, $01, $01, $01, $01
@@ -3652,7 +4187,7 @@ Scale_ch0:
   .byte $07, $08, $08, $07, $06, $06, $06, $07, $07, $08, $08, $07, $07, $02, $02, $02
   .byte $02, $02, $02, $02, $03, $03, $03, $03, $03, $03, $05, $01, $01, $01, $01, $01
   .byte $01, $01, $01, $01, $01, $01, $01, $FF
-Time_ch0:
+Time_ms_songmt04mdzzcaol_ch0:
   .byte $0B, $0B, $15, $0B, $0B, $0B, $0B, $15, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B
   .byte $15, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $15, $0B, $0B, $15, $0B
   .byte $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $15
@@ -3680,13 +4215,13 @@ Time_ch0:
   .byte $0B, $15, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $15, $0B, $0B, $0B, $0B, $15
   .byte $0B, $05, $05, $15, $15, $15, $15
 
-PitchLo_ch1:
+PitchLo_ms_songmt04mdzzcaol_ch1:
   .byte $00, $52, $93, $0C, $2D, $67, $C9, $86, $70, $77, $64, $54, $7E, $A9, $6A, $59
   .byte $42, $E1, $FD
-PitchHi_ch1:
+PitchHi_ms_songmt04mdzzcaol_ch1:
   .byte $00, $01, $01, $01, $01, $01, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00
-Scale_ch1:
+Scale_ms_songmt04mdzzcaol_ch1:
   .byte $00, $01, $01, $01, $02, $00, $02, $01, $01, $02, $00, $03, $04, $03, $00, $01
   .byte $01, $01, $02, $00, $03, $00, $04, $00, $01, $00, $04, $00, $00, $04, $04, $04
   .byte $05, $00, $03, $00, $04, $00, $01, $00, $05, $00, $02, $00, $06, $07, $08, $09
@@ -3713,7 +4248,7 @@ Scale_ch1:
   .byte $00, $03, $00, $00, $04, $00, $03, $03, $00, $03, $00, $04, $01, $00, $01, $01
   .byte $05, $01, $06, $11, $11, $12, $12, $03, $03, $04, $04, $05, $01, $05, $02, $02
   .byte $02, $02, $00, $00, $00, $00, $00, $FF
-Time_ch1:
+Time_ms_songmt04mdzzcaol_ch1:
   .byte $0B, $0B, $15, $0B, $0B, $0B, $0B, $15, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B
   .byte $15, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $15, $0B, $0B, $15, $0B
   .byte $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $15
@@ -3741,11 +4276,11 @@ Time_ch1:
   .byte $0B, $15, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $15, $0B, $0B, $0B, $0B, $15
   .byte $0B, $05, $05, $15, $15, $15, $15
 
-PitchLo_ch2:
+PitchLo_ms_songmt04mdzzcaol_ch2:
   .byte $00, $1A, $5C, $C4, $FB, $A6, $CE, $93, $52, $0C, $2D, $67
-PitchHi_ch2:
+PitchHi_ms_songmt04mdzzcaol_ch2:
   .byte $00, $02, $02, $01, $01, $02, $02, $01, $01, $01, $01, $01
-Scale_ch2:
+Scale_ms_songmt04mdzzcaol_ch2:
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
@@ -3772,7 +4307,7 @@ Scale_ch2:
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $FF
-Time_ch2:
+Time_ms_songmt04mdzzcaol_ch2:
   .byte $0B, $0B, $15, $0B, $0B, $0B, $0B, $15, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B
   .byte $15, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $15, $0B, $0B, $15, $0B
   .byte $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $15
@@ -3799,6 +4334,207 @@ Time_ch2:
   .byte $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B
   .byte $0B, $15, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $0B, $15, $0B, $0B, $0B, $0B, $15
   .byte $0B, $05, $05, $15, $15, $15, $15
+
+PitchLo_ms_songmtiooyxutc7r_ch0:
+  .byte $00, $77, $9F, $4F, $59, $64, $6A, $86, $B3, $C9, $96, $8E, $7E, $D5, $EF, $0C
+PitchHi_ms_songmtiooyxutc7r_ch0:
+  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $01
+Scale_ms_songmtiooyxutc7r_ch0:
+  .byte $01, $02, $03, $02, $04, $02, $05, $02, $06, $02, $05, $02, $06, $02, $01, $02
+  .byte $06, $02, $05, $02, $04, $02, $05, $02, $06, $02, $07, $02, $06, $02, $01, $02
+  .byte $01, $02, $03, $02, $04, $02, $05, $02, $06, $02, $05, $02, $06, $02, $01, $02
+  .byte $06, $02, $05, $02, $04, $02, $05, $02, $06, $02, $07, $02, $06, $02, $01, $02
+  .byte $08, $08, $07, $02, $02, $02, $02, $02, $02, $02, $02, $02, $08, $09, $09, $08
+  .byte $08, $08, $07, $07, $07, $02, $02, $02, $02, $02, $02, $08, $09, $08, $08, $07
+  .byte $02, $02, $02, $02, $02, $02, $02, $02, $02, $08, $02, $02, $0A, $0A, $0A, $07
+  .byte $07, $07, $07, $07, $02, $02, $02, $0A, $0A, $0A, $08, $08, $07, $02, $02, $02
+  .byte $02, $02, $02, $02, $02, $02, $08, $09, $09, $08, $08, $08, $07, $07, $07, $02
+  .byte $02, $02, $02, $02, $02, $08, $09, $08, $08, $07, $02, $02, $02, $02, $02, $02
+  .byte $02, $02, $02, $08, $02, $02, $0A, $0A, $0A, $07, $07, $07, $07, $02, $02, $0B
+  .byte $0B, $0C, $0C, $06, $06, $0D, $0D, $0D, $0E, $0E, $0E, $01, $01, $0D, $0D, $0D
+  .byte $0E, $0E, $0E, $01, $01, $0D, $0D, $0D, $0E, $0E, $0E, $01, $01, $09, $05, $0D
+  .byte $06, $0E, $01, $0F, $07, $0D, $0D, $0E, $01, $01, $01, $01, $01, $0D, $00, $0E
+  .byte $01, $01, $01, $01, $01, $0D, $0D, $0E, $01, $01, $01, $01, $01, $05, $05, $04
+  .byte $06, $05, $05, $FF
+Time_ms_songmtiooyxutc7r_ch0:
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $0D, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $0D, $0D, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $0D, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $0D, $0D, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $0D, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $0D, $0D, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $0D, $07, $07, $07, $07, $07, $07, $07, $07, $0D, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $0D
+  .byte $07, $07, $0D
+
+PitchLo_ms_songmtiooyxutc7r_ch1:
+  .byte $00, $EF, $3F, $9F, $B3, $C9, $D5, $0C, $AB, $DF, $93, $67, $2D, $FD, $1A
+PitchHi_ms_songmtiooyxutc7r_ch1:
+  .byte $00, $00, $01, $00, $00, $00, $00, $01, $01, $01, $01, $01, $01, $00, $02
+Scale_ms_songmtiooyxutc7r_ch1:
+  .byte $00, $01, $02, $03, $02, $04, $02, $05, $02, $06, $02, $05, $02, $06, $02, $01
+  .byte $02, $06, $02, $05, $02, $04, $02, $05, $02, $06, $02, $07, $02, $06, $02, $01
+  .byte $02, $01, $02, $03, $02, $04, $02, $05, $02, $06, $02, $05, $02, $06, $02, $01
+  .byte $02, $06, $02, $05, $02, $04, $02, $05, $02, $06, $02, $07, $02, $06, $02, $01
+  .byte $06, $06, $04, $05, $05, $08, $09, $08, $0A, $0A, $0B, $0B, $02, $02, $02, $06
+  .byte $06, $06, $03, $03, $03, $05, $05, $05, $05, $05, $05, $06, $01, $06, $06, $04
+  .byte $05, $05, $0B, $0A, $0B, $02, $02, $0C, $0C, $07, $01, $01, $06, $06, $06, $06
+  .byte $06, $06, $06, $06, $01, $01, $01, $01, $01, $01, $06, $06, $04, $05, $05, $08
+  .byte $09, $08, $0A, $0A, $0B, $0B, $02, $02, $02, $06, $06, $06, $03, $03, $03, $05
+  .byte $05, $05, $05, $05, $05, $06, $01, $06, $06, $04, $05, $05, $0B, $0A, $0B, $02
+  .byte $02, $0C, $0C, $07, $01, $01, $06, $06, $06, $06, $06, $06, $06, $0D, $0D, $01
+  .byte $01, $06, $06, $04, $04, $0B, $0B, $0B, $0A, $0A, $0A, $05, $05, $0B, $0B, $0B
+  .byte $0A, $0A, $0A, $05, $05, $0B, $0B, $0B, $0A, $0A, $0A, $05, $05, $0A, $05, $08
+  .byte $06, $09, $01, $0E, $07, $0B, $0B, $0A, $05, $05, $05, $05, $05, $0B, $0B, $0A
+  .byte $05, $05, $05, $05, $05, $0B, $0B, $0A, $05, $05, $05, $05, $05, $05, $05, $04
+  .byte $06, $05, $05, $FF
+Time_ms_songmtiooyxutc7r_ch1:
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $0D, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $0D, $0D, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $0D, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $0D, $0D, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $0D, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $0D, $0D, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $0D, $07, $07, $07, $07, $07, $07, $07, $07, $0D, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $0D
+  .byte $07, $07, $0D
+
+PitchLo_ms_songmtiooyxutc7r_ch2:
+  .byte $00, $EF, $3F, $9F, $B3, $C9, $D5, $0C, $AB, $DF, $93, $67, $2D, $FD, $1A
+PitchHi_ms_songmtiooyxutc7r_ch2:
+  .byte $00, $00, $01, $00, $00, $00, $00, $01, $01, $01, $01, $01, $01, $00, $02
+Scale_ms_songmtiooyxutc7r_ch2:
+  .byte $01, $02, $03, $02, $04, $02, $05, $02, $06, $02, $05, $02, $06, $02, $01, $02
+  .byte $06, $02, $05, $02, $04, $02, $05, $02, $06, $02, $07, $02, $06, $02, $01, $02
+  .byte $01, $02, $03, $02, $04, $02, $05, $02, $06, $02, $05, $02, $06, $02, $01, $02
+  .byte $06, $02, $05, $02, $04, $02, $05, $02, $06, $02, $07, $02, $06, $02, $01, $02
+  .byte $06, $06, $04, $05, $05, $08, $09, $08, $0A, $0A, $0B, $0B, $02, $02, $02, $06
+  .byte $06, $06, $03, $03, $03, $05, $05, $05, $05, $05, $05, $06, $01, $06, $06, $04
+  .byte $05, $05, $0B, $0A, $0B, $02, $02, $0C, $0C, $07, $01, $01, $06, $06, $06, $06
+  .byte $06, $06, $06, $06, $01, $01, $01, $01, $01, $01, $06, $06, $04, $05, $05, $08
+  .byte $09, $08, $0A, $0A, $0B, $0B, $02, $02, $02, $06, $06, $06, $03, $03, $03, $05
+  .byte $05, $05, $05, $05, $05, $06, $01, $06, $06, $04, $05, $05, $0B, $0A, $0B, $02
+  .byte $02, $0C, $0C, $07, $01, $01, $06, $06, $06, $06, $06, $06, $06, $0D, $0D, $01
+  .byte $01, $06, $06, $04, $04, $0B, $0B, $0B, $0A, $0A, $0A, $05, $05, $0B, $0B, $0B
+  .byte $0A, $0A, $0A, $05, $05, $0B, $0B, $0B, $0A, $0A, $0A, $05, $05, $0A, $05, $08
+  .byte $06, $09, $01, $0E, $07, $0B, $0B, $0A, $05, $05, $05, $05, $05, $0B, $0B, $0A
+  .byte $05, $05, $05, $05, $05, $0B, $0B, $0A, $05, $05, $05, $05, $05, $05, $05, $04
+  .byte $06, $05, $05, $FF
+Time_ms_songmtiooyxutc7r_ch2:
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $0D, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $0D, $0D, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $0D, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $0D, $0D, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $0D, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $0D, $0D, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $0D, $07, $07, $07, $07, $07, $07, $07, $07, $0D, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $0D
+  .byte $07, $07, $0D
+
+PitchLo_ms_songmtiooyxutc7r_ch3:
+  .byte $00, $00, $00, $00
+PitchHi_ms_songmtiooyxutc7r_ch3:
+  .byte $00, $00, $00, $00
+Scale_ms_songmtiooyxutc7r_ch3:
+  .byte $01, $00, $02, $02, $01, $00, $02, $02, $02, $00, $02, $02, $01, $00, $02, $02
+  .byte $02, $00, $02, $02, $01, $00, $02, $02, $02, $00, $02, $02, $01, $00, $03, $02
+  .byte $01, $00, $02, $02, $01, $00, $02, $02, $02, $00, $02, $02, $01, $00, $02, $02
+  .byte $02, $00, $02, $02, $01, $00, $02, $02, $02, $00, $01, $01, $03, $02, $03, $03
+  .byte $01, $00, $03, $01, $00, $01, $03, $00, $01, $00, $03, $00, $01, $03, $00, $01
+  .byte $00, $03, $01, $00, $01, $03, $00, $01, $00, $03, $00, $01, $03, $01, $00, $03
+  .byte $01, $00, $01, $03, $00, $01, $00, $03, $00, $01, $03, $00, $01, $00, $03, $01
+  .byte $00, $01, $03, $00, $01, $00, $03, $00, $01, $03, $01, $00, $03, $01, $00, $01
+  .byte $03, $00, $01, $00, $03, $00, $01, $03, $00, $01, $00, $03, $01, $00, $01, $03
+  .byte $00, $01, $00, $03, $00, $01, $03, $01, $00, $03, $01, $00, $01, $03, $00, $01
+  .byte $00, $03, $00, $01, $03, $00, $01, $00, $03, $01, $00, $01, $03, $01, $00, $01
+  .byte $03, $00, $03, $03, $03, $01, $00, $03, $01, $00, $01, $03, $00, $01, $00, $03
+  .byte $01, $00, $01, $03, $03, $01, $00, $03, $01, $00, $01, $03, $00, $01, $00, $03
+  .byte $01, $00, $01, $03, $03, $01, $00, $03, $01, $00, $01, $03, $00, $01, $00, $03
+  .byte $01, $00, $01, $03, $03, $01, $00, $03, $01, $00, $01, $03, $01, $00, $01, $03
+  .byte $00, $03, $03, $FF
+Time_ms_songmtiooyxutc7r_ch3:
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $0D, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $0D, $0D, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $0D, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $0D, $0D, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $0D, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $0D, $0D, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $0D, $07, $07, $07, $07, $07, $07, $07, $07, $0D, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+  .byte $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $0D
+  .byte $07, $07, $0D
+
+PitchLo_ms_songmtipgz0u59dk_ch0:
+  .byte $00, $E1, $BD, $96, $8E, $9F
+PitchHi_ms_songmtipgz0u59dk_ch0:
+  .byte $00, $00, $00, $00, $00, $00
+Scale_ms_songmtipgz0u59dk_ch0:
+  .byte $00, $01, $00, $01, $00, $02, $03, $03, $00, $00, $00, $01, $00, $02, $04, $04
+  .byte $00, $04, $03, $05, $03, $00, $04, $00, $04, $03, $03, $00, $03, $03, $00, $00
+  .byte $FE
+Time_ms_songmtipgz0u59dk_ch0:
+  .byte $11, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08
+  .byte $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $11, $08, $08, $11, $08
+
+PitchLo_ms_songmtipgz0u59dk_ch1:
+  .byte $00, $89, $5C, $BF
+PitchHi_ms_songmtipgz0u59dk_ch1:
+  .byte $00, $03, $02, $03
+Scale_ms_songmtipgz0u59dk_ch1:
+  .byte $01, $00, $01, $00, $00, $01, $01, $00, $01, $00, $01, $00, $00, $01, $01, $02
+  .byte $00, $02, $02, $00, $00, $02, $00, $02, $02, $03, $00, $00, $01, $00, $00, $00
+  .byte $FE
+Time_ms_songmtipgz0u59dk_ch1:
+  .byte $11, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08
+  .byte $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $11, $08, $08, $11, $08
+
+PitchLo_ms_songmtipgz0u59dk_ch3:
+  .byte $00, $00, $00, $00
+PitchHi_ms_songmtipgz0u59dk_ch3:
+  .byte $00, $00, $00, $00
+Scale_ms_songmtipgz0u59dk_ch3:
+  .byte $00, $01, $00, $02, $01, $01, $02, $02, $01, $00, $02, $01, $01, $01, $02, $02
+  .byte $00, $01, $01, $02, $01, $00, $02, $01, $01, $02, $02, $00, $02, $02, $03, $03
+  .byte $FE
+Time_ms_songmtipgz0u59dk_ch3:
+  .byte $11, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08
+  .byte $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $11, $08, $08, $11, $08
+
+PitchLo_sfx_r_sx_sfxmtior0xai20g_ch1:
+  .byte $00, $AB
+PitchHi_sfx_r_sx_sfxmtior0xai20g_ch1:
+  .byte $00, $01
+Scale_sfx_r_sx_sfxmtior0xai20g_ch1:
+  .byte $01, $FE
+Time_sfx_r_sx_sfxmtior0xai20g_ch1:
+  .byte $0A
 
 .segment "VECTORS"
   .word NMI
@@ -4095,11 +4831,11 @@ Time_ch2:
   .byte $7E, $60, $60, $7C, $60, $60, $60, $00, $7E, $60, $60, $7C, $60, $60, $60, $00
   .byte $00, $00, $7C, $66, $66, $66, $66, $00, $00, $00, $7C, $66, $66, $66, $66, $00
   .byte $00, $00, $3C, $62, $60, $62, $3C, $00, $00, $00, $3C, $62, $60, $62, $3C, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-  .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+  .byte $3C, $62, $60, $6E, $66, $66, $3C, $00, $3C, $62, $60, $6E, $66, $66, $3C, $00
+  .byte $00, $00, $FE, $DB, $DB, $DB, $DB, $00, $00, $00, $FE, $DB, $DB, $DB, $DB, $00
+  .byte $3C, $66, $66, $66, $66, $66, $3C, $00, $3C, $66, $66, $66, $66, $66, $3C, $00
+  .byte $00, $00, $66, $66, $66, $64, $78, $00, $00, $00, $66, $66, $66, $64, $78, $00
+  .byte $18, $18, $18, $18, $00, $18, $18, $00, $18, $18, $18, $18, $00, $18, $18, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
   .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00

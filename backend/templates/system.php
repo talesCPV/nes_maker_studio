@@ -33,6 +33,18 @@ ASM;
 
         $lines = [];
         $lines[] = '.segment "ZEROPAGE"';
+        // Ponteiros de despacho de som (Camada Som v2 - multi-musica + SFX).
+        // Ficam DELIBERADAMENTE nas primeiras posicoes da ZEROPAGE (endereco
+        // $0000 em diante) para nunca cair num byte terminado em $xFF - a
+        // instrucao JMP (ptr) do 6502 tem um bug de hardware conhecido nesse
+        // caso (byte alto lido da pagina errada).
+        if (!empty($ctx['musicEnabled'])) {
+            $lines[] = 'music_dispatch:   .res 2  ; JMP (music_dispatch) -> music_update_<musica atual>';
+            $lines[] = 'sfx_dispatch_ch0: .res 2  ; JMP (sfx_dispatch_ch0) -> rotina do SFX ativo no canal Pulse1';
+            $lines[] = 'sfx_dispatch_ch1: .res 2  ; canal Pulse2';
+            $lines[] = 'sfx_dispatch_ch2: .res 2  ; canal Triangle';
+            $lines[] = 'sfx_dispatch_ch3: .res 2  ; canal Noise';
+        }
         $lines[] = 'pad1:       .res 1';
         $lines[] = 'pad1_old:   .res 1';
         $lines[] = 'pad1_edge:  .res 1';
@@ -92,12 +104,17 @@ ASM;
         $lines[] = 'ovl_dy:       .res 1';
         $lines[] = 'inst_grounded: .res 1  ; scratch: resultado de check_ground_inst (Camada 4)';
         $lines[] = 'en_tmp:     .res 1';
-        if (($ctx['music'] ?? null) !== null) {
+        if (!empty($ctx['musicEnabled'])) {
             $lines[] = 'music_on:   .res 1';
-            $channelCount = (int)($ctx['musicChannelCount'] ?? 0);
-            for ($i = 0; $i < $channelCount; $i++) {
-                $lines[] = "ch{$i}_timer: .res 1";
-                $lines[] = "ch{$i}_pos:   .res 1";
+            // 4 canais FISICOS fixos (0=Pulse1 1=Pulse2 2=Triangle 3=Noise) -
+            // sempre os 4, independente de quantos a musica atual usa, porque
+            // qualquer musica ou SFX embedado pode usar qualquer canal.
+            for ($i = 0; $i < 4; $i++) {
+                $lines[] = "ch{$i}_timer:      .res 1";
+                $lines[] = "ch{$i}_pos:        .res 1";
+                $lines[] = "sfx_active_ch{$i}: .res 1  ; !=0 = canal tomado por um SFX (musica pausa nele)";
+                $lines[] = "sfx_timer_ch{$i}:  .res 1";
+                $lines[] = "sfx_pos_ch{$i}:    .res 1";
             }
         }
         return implode("\n", $lines);

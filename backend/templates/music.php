@@ -1,125 +1,288 @@
 <?php
 /**
- * NGC Stage 16 - Music / APU.
- * Converte o mesmo formato usado pelo editor de som nas tabelas do runtime NES.
+ * NGC Stage 23 - Som (motor final): multi-musica + SFX.
+ *
+ * Substitui o Stage 16 (1 musica so, sem SFX). Agora TODAS as musicas e
+ * TODOS os SFX com pelo menos 1 canal com notas viram dados+rotinas na ROM.
+ * A acao "Tocar Som" (ProgramCompiler::compilePlaySound) e quem decide, em
+ * tempo de compilacao, qual musica tocar ou qual SFX disparar - o alvo e
+ * sempre um literal escolhido na UI, nunca resolvido em runtime.
+ *
+ * Arquitetura (evita indirect-indexed addressing e self-modifying code -
+ * o CODE roda direto da ROM, nao pode se auto-modificar):
+ *  - Cada musica gera sua PROPRIA rotina music_update_<id> com enderecos
+ *    absolutos fixos pras suas tabelas (sem indirecao). Trocar de musica e
+ *    so trocar o PONTEIRO de despacho (music_dispatch) pra rotina da nova
+ *    musica - JMP (ptr) via trampolim, ver music_call_dispatch.
+ *  - Cada SFX gera 1 rotina por canal que ele usa (sfx_r_<id>_ch<N>).
+ *    Ativar o SFX seta sfx_dispatch_ch<N> pra essa rotina e liga
+ *    sfx_active_ch<N> - a partir dai aquele canal FISICO fica sob controle
+ *    do SFX (a rotina da musica pula ele, ver guarda "sfx_active_ch<N>" em
+ *    cada bloco de canal) ate o SFX terminar (scale hit $FE), que desliga
+ *    sfx_active_ch<N> e devolve o canal pra musica no frame seguinte.
+ *  - 4 canais fisicos fixos: 0=Pulse1 1=Pulse2 2=Triangle 3=Noise. Cada SFX
+ *    escolhe no editor em qual(is) canal(is) ele toca (igual uma musica) -
+ *    por convencao o editor sugere Pulse2 como canal padrao pra SFX novos.
  */
 return [
-    'music' => static function(array $ctx): string {
-        $music = $ctx['music'] ?? null;
-        if (!is_array($music) || empty($music['channels'])) return '';
-
-        $baseFrames = max(1, min(255, (int)($music['baseFrames'] ?? 30)));
-        $loop = ($music['loop'] ?? true) !== false;
-        $channels = is_array($music['channels']) ? $music['channels'] : [];
-        $order = ['pulse1','pulse2','triangle','noise'];
-        $used = [];
-
-        foreach ($order as $type) {
-            foreach ($channels as $ch) {
-                if (is_array($ch) && ($ch['type'] ?? '') === $type) {
-                    $used[] = ['type'=>$type, 'ch'=>$ch];
-                    break;
-                }
-            }
+    'music' => static function (array $ctx): string {
+        $soundItems = is_array($ctx['soundItems'] ?? null) ? $ctx['soundItems'] : [];
+        $songs = [];
+        $sfxs = [];
+        foreach ($soundItems as $item) {
+            if (!is_array($item) || empty($item['id']) || empty($item['channels'])) continue;
+            if ((string)($item['type'] ?? 'song') === 'sfx') $sfxs[] = $item; else $songs[] = $item;
         }
-        foreach ($channels as $ch) {
-            if (!is_array($ch)) continue;
-            $type = (string)($ch['type'] ?? '');
-            $already = false;
-            foreach ($used as $u) if ($u['ch'] === $ch) { $already=true; break; }
-            if ($already) continue;
-            $free = null;
-            foreach ($order as $candidate) {
-                $taken = false;
-                foreach ($used as $u) if ($u['type'] === $candidate) { $taken=true; break; }
-                if (!$taken) { $free=$candidate; break; }
-            }
-            if ($free !== null) $used[] = ['type'=>$free, 'ch'=>$ch];
-        }
-        $used = array_slice($used, 0, 4);
-        if (!$used) return '';
+        if (!$songs && !$sfxs) return '';
 
-        $meta = [
-            'pulse1'=>['vol'=>'$4000','lo'=>'$4002','hi'=>'$4003','duty'=>'#%10111111','sil'=>'#%00110000'],
-            'pulse2'=>['vol'=>'$4004','lo'=>'$4006','hi'=>'$4007','duty'=>'#%01111111','sil'=>'#%00110000'],
-            'triangle'=>['vol'=>'$4008','lo'=>'$400A','hi'=>'$400B','duty'=>'#%11111111','sil'=>'#%00000000'],
-            'noise'=>['vol'=>'$400C','lo'=>'$400E','hi'=>'$400F','duty'=>'#%00111111','sil'=>'#%00110000'],
+        $chMeta = [
+            'pulse1'   => ['idx' => 0, 'vol' => '$4000', 'lo' => '$4002', 'hi' => '$4003', 'duty' => '#%10111111', 'sil' => '#%00110000'],
+            'pulse2'   => ['idx' => 1, 'vol' => '$4004', 'lo' => '$4006', 'hi' => '$4007', 'duty' => '#%01111111', 'sil' => '#%00110000'],
+            'triangle' => ['idx' => 2, 'vol' => '$4008', 'lo' => '$400A', 'hi' => '$400B', 'duty' => '#%11111111', 'sil' => '#%00000000'],
+            'noise'    => ['idx' => 3, 'vol' => '$400C', 'lo' => '$400E', 'hi' => '$400F', 'duty' => '#%00111111', 'sil' => '#%00110000'],
         ];
-        $rhythm = ['breve'=>4,'whole'=>2,'quarter'=>1,'eighth'=>0.5,'sixteenth'=>0.25,'thirtysecond'=>0.125,'sixtyfourth'=>0.0625];
-        $noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+        $order = ['pulse1', 'pulse2', 'triangle', 'noise'];
+        $rhythm = ['breve' => 4, 'whole' => 2, 'quarter' => 1, 'eighth' => 0.5, 'sixteenth' => 0.25, 'thirtysecond' => 0.125, 'sixtyfourth' => 0.0625];
+        $noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
         $freq = 1789773;
-        $enc=[];
-        foreach ($used as $i=>$u) {
-            $notes = is_array($u['ch']['notes'] ?? null) ? $u['ch']['notes'] : [];
-            $pitchList=['REST']; $pitchIndex=['REST'=>0]; $scale=[]; $time=[];
-            $n=min(count($notes),2048);
-            for($j=0;$j<$n;$j++) {
-                $note=(string)($notes[$j]['note'] ?? 'REST');
-                $fig=(string)($notes[$j]['figure'] ?? 'quarter');
-                if(!array_key_exists($note,$pitchIndex)) { $pitchIndex[$note]=count($pitchList); $pitchList[]=$note; }
-                $scale[]=$pitchIndex[$note];
-                $mul=$rhythm[$fig] ?? 1;
-                $time[]=max(1,min(255,(int)round($baseFrames*$mul)));
+
+        $fmt = static function (array $a): string {
+            $lines = [];
+            for ($i = 0; $i < count($a); $i += 16) {
+                $part = array_slice($a, $i, 16);
+                $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => sprintf('$%02X', $v & 255), $part));
             }
-            if(!$scale){$scale=[0];$time=[30];}
-            $scale[]=$loop?0xFF:0xFE;
-            $lo=[];$hi=[];
-            foreach($pitchList as $name){
-                $l=0;$h=0;
-                if(preg_match('/^([A-G]#?)(\\d+)$/',$name,$m)){
-                    $ni=array_search($m[1],$noteNames,true);
-                    if($ni!==false){
-                        $oct=(int)$m[2]; $midi=($oct+1)*12+$ni;
-                        $f=440*pow(2,($midi-69)/12);
-                        $period=(int)round(($freq/(16*$f))-1);
-                        $period=max(0,min(2047,$period));
-                        $l=$period&255;$h=($period>>8)&7;
+            return implode("\n", $lines);
+        };
+
+        // Mesma sanitizacao usada em ProgramCompiler::soundLabel() - tem que
+        // bater exatamente, e' assim que a acao "Tocar Som" acha o label certo.
+        $label = static function (string $prefix, string $id): string {
+            $s = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $id) ?? '');
+            if ($s === '') $s = substr(md5($id), 0, 8);
+            return $prefix . substr($s, 0, 16);
+        };
+
+        $resolveUsed = static function (array $item) use ($order): array {
+            $channels = is_array($item['channels'] ?? null) ? $item['channels'] : [];
+            $used = [];
+            foreach ($order as $type) {
+                foreach ($channels as $ch) {
+                    if (is_array($ch) && ($ch['type'] ?? '') === $type && !empty($ch['notes'])) {
+                        $used[] = ['type' => $type, 'ch' => $ch];
+                        break;
                     }
                 }
-                $lo[]=$l;$hi[]=$h;
             }
-            $enc[]=['type'=>$u['type'],'lo'=>$lo,'hi'=>$hi,'scale'=>$scale,'time'=>$time,'meta'=>$meta[$u['type']]];
+            return $used;
+        };
+
+        $encodeChannel = static function (array $ch, int $baseFrames, bool $loop) use ($rhythm, $noteNames, $freq): array {
+            $notes = is_array($ch['notes'] ?? null) ? $ch['notes'] : [];
+            $pitchList = ['REST']; $pitchIndex = ['REST' => 0]; $scale = []; $time = [];
+            $n = min(count($notes), 2048);
+            for ($j = 0; $j < $n; $j++) {
+                $note = (string)($notes[$j]['note'] ?? 'REST');
+                $fig = (string)($notes[$j]['figure'] ?? 'quarter');
+                if (!array_key_exists($note, $pitchIndex)) { $pitchIndex[$note] = count($pitchList); $pitchList[] = $note; }
+                $scale[] = $pitchIndex[$note];
+                $mul = $rhythm[$fig] ?? 1;
+                $time[] = max(1, min(255, (int)round($baseFrames * $mul)));
+            }
+            if (!$scale) { $scale = [0]; $time = [30]; }
+            $scale[] = $loop ? 0xFF : 0xFE;
+            $lo = []; $hi = [];
+            foreach ($pitchList as $name) {
+                $l = 0; $h = 0;
+                if (preg_match('/^([A-G]#?)(\d+)$/', $name, $m)) {
+                    $ni = array_search($m[1], $noteNames, true);
+                    if ($ni !== false) {
+                        $oct = (int)$m[2]; $midi = ($oct + 1) * 12 + $ni;
+                        $f = 440 * pow(2, ($midi - 69) / 12);
+                        $period = (int)round(($freq / (16 * $f)) - 1);
+                        $period = max(0, min(2047, $period));
+                        $l = $period & 255; $h = ($period >> 8) & 7;
+                    }
+                }
+                $lo[] = $l; $hi[] = $h;
+            }
+            return ['lo' => $lo, 'hi' => $hi, 'scale' => $scale, 'time' => $time];
+        };
+
+        $L = []; // engine (CODE)
+        $D = []; // data (vem numa posicao distante do arquivo)
+        $L[] = '; ---- NGC SOM (musica + SFX) ----';
+
+        // ---- trampolins de despacho indireto (permitem "chamar" um endereco
+        // guardado numa variavel e ainda assim voltar via RTS - JMP nao
+        // empilha retorno, entao o RTS da rotina-alvo devolve pra quem deu
+        // JSR no trampolim, nao pro JMP em si) ----
+        $L[] = 'music_call_dispatch:';
+        $L[] = '  JMP (music_dispatch)';
+        foreach (range(0, 3) as $i) {
+            $L[] = "sfx_call_dispatch_ch{$i}:";
+            $L[] = "  JMP (sfx_dispatch_ch{$i})";
         }
 
-        $fmt=static function(array $a): string {
-            $lines=[]; for($i=0;$i<count($a);$i+=16){
-                $part=array_slice($a,$i,16); $lines[]='  .byte '.implode(', ',array_map(static fn($v)=>sprintf('$%02X',$v&255),$part));
-            } return implode("\n",$lines);
-        };
-        $L=[];
-        $L[]='; ---- NGC MUSIC / APU ----';
-        $L[]='music_update:';
-        $L[]='  LDA music_on';
-        $L[]='  BNE mu_run';
-        $L[]='  RTS';
-        $L[]='mu_run:';
-        foreach($enc as $i=>$c){
-            $m=$c['meta'];$p="mu_ch{$i}";
-            $L[]="{$p}:";
-            $L[]="  LDA ch{$i}_timer"; $L[]="  BEQ {$p}_next"; $L[]="  DEC ch{$i}_timer"; $L[]="  JMP {$p}_end";
-            $L[]="{$p}_next:"; $L[]="  LDY ch{$i}_pos"; $L[]="  LDA Scale_ch{$i},Y"; $L[]='  CMP #$FF'; $L[]="  BNE {$p}_nof";
-            $L[]='  LDA #0';$L[]="  STA ch{$i}_pos";$L[]='  LDY #0';$L[]="  LDA Scale_ch{$i},Y";
-            $L[]="{$p}_nof:";$L[]='  CMP #$FE';$L[]="  BNE {$p}_play";$L[]="  LDA {$m['sil']}";$L[]="  STA {$m['vol']}";$L[]="  JMP {$p}_end";
-            $L[]="{$p}_play:";$L[]='  TAX';$L[]="  LDA Time_ch{$i},Y";$L[]="  STA ch{$i}_timer";$L[]='  INY';$L[]="  STY ch{$i}_pos";$L[]='  CPX #0';$L[]="  BNE {$p}_tone";
-            $L[]="  LDA {$m['sil']}";$L[]="  STA {$m['vol']}";$L[]="  JMP {$p}_end";
-            $L[]="{$p}_tone:";$L[]="  LDA {$m['duty']}";$L[]="  STA {$m['vol']}";$L[]="  LDA PitchLo_ch{$i},X";$L[]="  STA {$m['lo']}";$L[]="  LDA PitchHi_ch{$i},X";$L[]="  STA {$m['hi']}";$L[]="{$p}_end:";
+        // ---- liga o APU (idempotente) - chamada pela propria acao "Tocar
+        // Som" na 1a vez que uma regra dispara som; sem isso nada soa mesmo
+        // com os dados certos, e sem nenhum callsite isso nunca roda sozinho ----
+        $L[] = 'snd_enable_apu:';
+        $L[] = '  LDA #$0F';
+        $L[] = '  STA $4015';
+        $L[] = '  RTS';
+
+        // ---- chamada 1x por frame a partir da NMI ----
+        $L[] = 'music_update:';
+        foreach (range(0, 3) as $i) $L[] = "  JSR sfx_update_ch{$i}";
+        $L[] = '  LDA music_on';
+        $L[] = '  BEQ mu_end';
+        $L[] = '  JSR music_call_dispatch';
+        $L[] = 'mu_end:';
+        $L[] = '  RTS';
+
+        foreach (range(0, 3) as $i) {
+            $L[] = "sfx_update_ch{$i}:";
+            $L[] = "  LDA sfx_active_ch{$i}";
+            $L[] = "  BEQ sfx{$i}_upd_end";
+            $L[] = "  JSR sfx_call_dispatch_ch{$i}";
+            $L[] = "sfx{$i}_upd_end:";
+            $L[] = '  RTS';
         }
-        $L[]='  RTS';$L[]='';$L[]='music_init:';$L[]='  LDA #0';
-        foreach($enc as $i=>$c){
-            $L[]='  LDA #0';
-            $L[]="  STA ch{$i}_timer";
-            $L[]="  STA ch{$i}_pos";
-            $L[]="  STA ch{$i}_timer";
-            $L[]="  STA ch{$i}_pos";
+
+        // ---- 1 rotina por musica (so mexe nos canais que ela usa; um canal
+        // "roubado" por SFX no momento e simplesmente pulado, o SFX quem
+        // escreve nos registradores dele naquele frame) ----
+        foreach ($songs as $song) {
+            $sid = (string)$song['id'];
+            $used = $resolveUsed($song);
+            if (!$used) continue;
+            $baseFrames = max(1, min(255, (int)($song['baseFrames'] ?? 30)));
+            $loop = ($song['loop'] ?? true) !== false;
+            $lbl = $label('ms_', $sid);
+
+            $L[] = "music_update_{$lbl}:";
+            foreach ($used as $u) {
+                $m = $chMeta[$u['type']]; $i = $m['idx']; $p = "{$lbl}_ch{$i}";
+                $L[] = "  LDA sfx_active_ch{$i}";
+                $L[] = "  BNE {$p}_end";
+                $L[] = "  LDA ch{$i}_timer";
+                $L[] = "  BEQ {$p}_next";
+                $L[] = "  DEC ch{$i}_timer";
+                $L[] = "  JMP {$p}_end";
+                $L[] = "{$p}_next:";
+                $L[] = "  LDY ch{$i}_pos";
+                $L[] = "  LDA Scale_{$lbl}_ch{$i},Y";
+                $L[] = '  CMP #$FF';
+                $L[] = "  BNE {$p}_nof";
+                $L[] = '  LDA #0';
+                $L[] = "  STA ch{$i}_pos";
+                $L[] = '  LDY #0';
+                $L[] = "  LDA Scale_{$lbl}_ch{$i},Y";
+                $L[] = "{$p}_nof:";
+                $L[] = '  CMP #$FE';
+                $L[] = "  BNE {$p}_play";
+                $L[] = "  LDA {$m['sil']}";
+                $L[] = "  STA {$m['vol']}";
+                $L[] = "  JMP {$p}_end";
+                $L[] = "{$p}_play:";
+                $L[] = '  TAX';
+                $L[] = "  LDA Time_{$lbl}_ch{$i},Y";
+                $L[] = "  STA ch{$i}_timer";
+                $L[] = '  INY';
+                $L[] = "  STY ch{$i}_pos";
+                $L[] = '  CPX #0';
+                $L[] = "  BNE {$p}_tone";
+                $L[] = "  LDA {$m['sil']}";
+                $L[] = "  STA {$m['vol']}";
+                $L[] = "  JMP {$p}_end";
+                $L[] = "{$p}_tone:";
+                $L[] = "  LDA {$m['duty']}";
+                $L[] = "  STA {$m['vol']}";
+                $L[] = "  LDA PitchLo_{$lbl}_ch{$i},X";
+                $L[] = "  STA {$m['lo']}";
+                $L[] = "  LDA PitchHi_{$lbl}_ch{$i},X";
+                $L[] = "  STA {$m['hi']}";
+                $L[] = "{$p}_end:";
+            }
+            $L[] = '  RTS';
+
+            foreach ($used as $u) {
+                $m = $chMeta[$u['type']]; $i = $m['idx'];
+                $enc = $encodeChannel($u['ch'], $baseFrames, $loop);
+                $D[] = "PitchLo_{$lbl}_ch{$i}:"; $D[] = $fmt($enc['lo']);
+                $D[] = "PitchHi_{$lbl}_ch{$i}:"; $D[] = $fmt($enc['hi']);
+                $D[] = "Scale_{$lbl}_ch{$i}:";    $D[] = $fmt($enc['scale']);
+                $D[] = "Time_{$lbl}_ch{$i}:";     $D[] = $fmt($enc['time']);
+                $D[] = '';
+            }
         }
-        $L[]='  LDA #$0F';$L[]='  STA $4015';$L[]='  LDA #1';$L[]='  STA music_on';$L[]='  RTS';$L[]='';
-        $L[]='; ---- NGC MUSIC DATA ----';
-        foreach($enc as $i=>$c){
-            $L[]="PitchLo_ch{$i}:";$L[]=$fmt($c['lo']);
-            $L[]="PitchHi_ch{$i}:";$L[]=$fmt($c['hi']);
-            $L[]="Scale_ch{$i}:";$L[]=$fmt($c['scale']);
-            $L[]="Time_ch{$i}:";$L[]=$fmt($c['time']);$L[]='';
+
+        // ---- 1 rotina por (SFX, canal que ele usa) ----
+        foreach ($sfxs as $sfx) {
+            $sid = (string)$sfx['id'];
+            $used = $resolveUsed($sfx);
+            if (!$used) continue;
+            $baseFrames = max(1, min(255, (int)($sfx['baseFrames'] ?? 20)));
+            $loop = ($sfx['loop'] ?? false) !== false;
+            $lbl = $label('sx_', $sid);
+
+            foreach ($used as $u) {
+                $m = $chMeta[$u['type']]; $i = $m['idx'];
+                $r = "sfx_r_{$lbl}_ch{$i}";
+                $L[] = "{$r}:";
+                $L[] = "  LDA sfx_timer_ch{$i}";
+                $L[] = "  BEQ {$r}_next";
+                $L[] = "  DEC sfx_timer_ch{$i}";
+                $L[] = '  RTS';
+                $L[] = "{$r}_next:";
+                $L[] = "  LDY sfx_pos_ch{$i}";
+                $L[] = "  LDA Scale_{$r},Y";
+                $L[] = '  CMP #$FF';
+                $L[] = "  BNE {$r}_nof";
+                $L[] = '  LDA #0';
+                $L[] = "  STA sfx_pos_ch{$i}";
+                $L[] = '  LDY #0';
+                $L[] = "  LDA Scale_{$r},Y";
+                $L[] = "{$r}_nof:";
+                $L[] = '  CMP #$FE';
+                $L[] = "  BNE {$r}_play";
+                $L[] = '  LDA #0';
+                $L[] = "  STA sfx_active_ch{$i}   ; SFX terminou - devolve o canal pra musica";
+                $L[] = "  LDA {$m['sil']}";
+                $L[] = "  STA {$m['vol']}";
+                $L[] = '  RTS';
+                $L[] = "{$r}_play:";
+                $L[] = '  TAX';
+                $L[] = "  LDA Time_{$r},Y";
+                $L[] = "  STA sfx_timer_ch{$i}";
+                $L[] = '  INY';
+                $L[] = "  STY sfx_pos_ch{$i}";
+                $L[] = '  CPX #0';
+                $L[] = "  BNE {$r}_tone";
+                $L[] = "  LDA {$m['sil']}";
+                $L[] = "  STA {$m['vol']}";
+                $L[] = '  RTS';
+                $L[] = "{$r}_tone:";
+                $L[] = "  LDA {$m['duty']}";
+                $L[] = "  STA {$m['vol']}";
+                $L[] = "  LDA PitchLo_{$r},X";
+                $L[] = "  STA {$m['lo']}";
+                $L[] = "  LDA PitchHi_{$r},X";
+                $L[] = "  STA {$m['hi']}";
+                $L[] = '  RTS';
+
+                $enc = $encodeChannel($u['ch'], $baseFrames, $loop);
+                $D[] = "PitchLo_{$r}:"; $D[] = $fmt($enc['lo']);
+                $D[] = "PitchHi_{$r}:"; $D[] = $fmt($enc['hi']);
+                $D[] = "Scale_{$r}:";    $D[] = $fmt($enc['scale']);
+                $D[] = "Time_{$r}:";     $D[] = $fmt($enc['time']);
+                $D[] = '';
+            }
         }
-        return implode("\n",$L);
-    }
+
+        $out = implode("\n", $L);
+        $out .= "\n; ---- NGC MUSIC DATA ----\n" . implode("\n", $D);
+        return $out;
+    },
 ];

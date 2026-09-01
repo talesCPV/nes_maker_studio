@@ -10,17 +10,19 @@ final class ProjectParser
 
         $project = $request['project'];
 
-        // Fase 5: build-rom.js não manda mais seletores manuais - o jogo é
-        // compilado só com o que foi programado. Música por enquanto embeda
-        // a primeira música do projeto (dado pronto no ROM), mas só toca de
-        // fato quando a ação "Tocar Música" existir e uma regra disparar -
-        // até lá a ROM fica silenciosa (nada acontece sem regra).
-        $sounds = is_array($project['sounds']['items'] ?? null) ? $project['sounds']['items'] : [];
-        $firstMusicId = 'none';
-        foreach ($sounds as $s) {
-            if (is_array($s) && !empty($s['channels'])) { $firstMusicId = (string)($s['id'] ?? 'none'); break; }
+        // Stage 23: som final - TODAS as musicas e SFX do projeto (com pelo
+        // menos 1 canal com notas) sao embedados na ROM, nao so a primeira.
+        // Nada toca sozinho: a ROM so fica silenciosa ate a acao "Tocar Som"
+        // de alguma regra escolher uma musica ou disparar um SFX (ver
+        // ProgramCompiler::compilePlaySound e backend/templates/music.php).
+        $soundItems = is_array($project['sounds']['items'] ?? null) ? $project['sounds']['items'] : [];
+        $hasSound = false;
+        foreach ($soundItems as $s) {
+            if (!is_array($s) || empty($s['channels'])) continue;
+            foreach ($s['channels'] as $c) {
+                if (is_array($c) && !empty($c['notes'])) { $hasSound = true; break 2; }
+            }
         }
-        $music = $this->resolveMusic($project, $firstMusicId);
 
         // Stage 21: a resolução de telas (quais backgrounds/splashes entram no
         // jogo, em que ordem, com que papel) acontece inteiramente aqui a
@@ -56,15 +58,14 @@ final class ProjectParser
         $paletteBytes = $this->buildPaletteData($project, $chrRaw, $screenData);
 
         // Camada 6 - Fase 1: variáveis + motor de regras (ver ProgramCompiler.php).
-        $program = (new ProgramCompiler())->compile($project, $sprite, $playIdxs, $screenData, $firstMusicId);
+        $program = (new ProgramCompiler())->compile($project, $sprite, $playIdxs, $screenData);
 
         return [
             'project' => $project,
             'buildMode' => 'game',
             'controlMode' => ($project['controlMode'] ?? 'auto') === 'programmed' ? 'programmed' : 'auto',
-            'music' => $music,
-            'musicEnabled' => $music !== null,
-            'musicChannelCount' => $music ? min(5, count($music['channels'] ?? [])) : 0,
+            'soundItems' => $soundItems,
+            'musicEnabled' => $hasSound,
             'screens' => $screens,
             'screenData' => $screenData,
             'palette' => $paletteBytes,
@@ -517,30 +518,4 @@ final class ProjectParser
      * somente dos índices das telas para gerar o RESET corretamente.
      */
 
-    private function resolveMusic(array $project, string $musicId): ?array
-    {
-        if ($musicId === '' || $musicId === 'none') return null;
-        $sounds = $project['sounds'] ?? null;
-        if (!is_array($sounds)) return null;
-
-        if (($sounds['version'] ?? null) === 3 && is_array($sounds['items'] ?? null)) {
-            foreach ($sounds['items'] as $item) {
-                if (is_array($item) && ($item['id'] ?? null) === $musicId && is_array($item['channels'] ?? null) && count($item['channels'])) {
-                    return $item;
-                }
-            }
-        }
-
-        if (($sounds['version'] ?? null) === 2 && is_array($sounds['channels'] ?? null)) {
-            return [
-                'id' => 'song_legacy',
-                'name' => 'Musica 1',
-                'loop' => $sounds['loop'] ?? true,
-                'baseFrames' => $sounds['baseFrames'] ?? 30,
-                'channels' => $sounds['channels'],
-            ];
-        }
-
-        return null;
-    }
 }

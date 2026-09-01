@@ -5,7 +5,7 @@
 
 # Configurações de Acesso FTP da HostGator
 FTP_USER="plan3411"
-FTP_PASS="########"
+FTP_PASS="@Xspider0"
 FTP_HOST="108.167.168.30"
 
 # Diretórios
@@ -24,6 +24,7 @@ mirror -R --verbose --only-newer --delete --parallel=3 \
   --exclude="backup.zip" \
   --exclude="nes.zip" \
   --exclude="smb.nms" \
+  --exclude="data/" \
   "$LOCAL_DIR" "$REMOTE_DIR"
 
 bye

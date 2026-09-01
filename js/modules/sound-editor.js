@@ -172,7 +172,11 @@ const SOUND = (() => {
 
   function defaultChannels(forSfx){
     if(forSfx){
-      return [{ id: uid("ch"), type: "noise", muted: false, notes: [{ note:"C4", figure:"sixteenth" }] }];
+      // Canal padrao de SFX novo: Pulse2 (som embeda todos os SFX do jogo e
+      // cada um pode "roubar" o canal que usa da musica enquanto toca - Pulse2
+      // e' o fallback combinado pra nao brigar com a bateria, que fica no
+      // canal Noise). O usuario pode trocar o tipo do canal aqui no editor.
+      return [{ id: uid("ch"), type: "pulse2", muted: false, notes: [{ note:"C4", figure:"sixteenth" }] }];
     }
     return [{ id: uid("ch"), type: "pulse1", muted: false, notes: [{ note:"C4", figure:"quarter" }] }];
   }
