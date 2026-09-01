@@ -263,6 +263,7 @@ ASM;
         $lines[] = '  JSR load_screen';
         $lines[] = '  LDA #1';
         $lines[] = '  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela" (splash inicial no boot)';
+        $lines[] = '  STA pv_ev_enter_splash   ; Camada 6: flag nativa "Entrou na Splash" (boot)';
         $lines[] = '  ; Musica so toca via acao Tocar Som (Camada 6) - sem autoplay no boot';
         $lines[] = '  ; scroll 0,0';
         $lines[] = '  LDA #0';

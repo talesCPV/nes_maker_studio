@@ -17,9 +17,15 @@
  *  - Cada SFX gera 1 rotina por canal que ele usa (sfx_r_<id>_ch<N>).
  *    Ativar o SFX seta sfx_dispatch_ch<N> pra essa rotina e liga
  *    sfx_active_ch<N> - a partir dai aquele canal FISICO fica sob controle
- *    do SFX (a rotina da musica pula ele, ver guarda "sfx_active_ch<N>" em
- *    cada bloco de canal) ate o SFX terminar (scale hit $FE), que desliga
- *    sfx_active_ch<N> e devolve o canal pra musica no frame seguinte.
+ *    do SFX pro OUVIDO (registrador de audio), mas o TEMPO da musica nesse
+ *    canal NUNCA para: ch<N>_timer/ch<N>_pos continuam avancando nota a
+ *    nota, frame a frame, exatamente como se o SFX nao existisse - so a
+ *    ESCRITA no registrador fica muda (guarda "sfx_active_ch<N>" bem em
+ *    cima de cada STA no hardware, nunca no topo do bloco do canal). Isso
+ *    garante sincronismo: quando o SFX termina (scale hit $FE) e desliga
+ *    sfx_active_ch<N>, a musica retoma exatamente na nota que esta
+ *    programada pro tempo REAL daquele instante - nunca uma nota atrasada
+ *    pelo tempo que o canal ficou "mudo".
  *  - 4 canais fisicos fixos: 0=Pulse1 1=Pulse2 2=Triangle 3=Noise. Cada SFX
  *    escolhe no editor em qual(is) canal(is) ele toca (igual uma musica) -
  *    por convencao o editor sugere Pulse2 como canal padrao pra SFX novos.
@@ -164,8 +170,13 @@ return [
             $L[] = "music_update_{$lbl}:";
             foreach ($used as $u) {
                 $m = $chMeta[$u['type']]; $i = $m['idx']; $p = "{$lbl}_ch{$i}";
-                $L[] = "  LDA sfx_active_ch{$i}";
-                $L[] = "  BNE {$p}_end";
+                // Fase 9 (sincronismo): o contador de tempo/posicao deste canal
+                // NUNCA para, mesmo com o canal "roubado" por um SFX - so a
+                // ESCRITA no registrador de audio e' que fica muda enquanto
+                // sfx_active_ch{i} estiver ligado (guarda logo antes de cada
+                // STA no hardware, nao no topo do bloco). Assim, quando o SFX
+                // devolve o canal, a nota que volta a soar e' sempre a que
+                // esta programada pro tempo REAL - nunca uma nota atrasada.
                 $L[] = "  LDA ch{$i}_timer";
                 $L[] = "  BEQ {$p}_next";
                 $L[] = "  DEC ch{$i}_timer";
@@ -182,6 +193,8 @@ return [
                 $L[] = "{$p}_nof:";
                 $L[] = '  CMP #$FE';
                 $L[] = "  BNE {$p}_play";
+                $L[] = "  LDA sfx_active_ch{$i}";
+                $L[] = "  BNE {$p}_end   ; canal ocupado pelo SFX - so nao escreve, tempo/posicao ja avancaram normal";
                 $L[] = "  LDA {$m['sil']}";
                 $L[] = "  STA {$m['vol']}";
                 $L[] = "  JMP {$p}_end";
@@ -193,10 +206,14 @@ return [
                 $L[] = "  STY ch{$i}_pos";
                 $L[] = '  CPX #0';
                 $L[] = "  BNE {$p}_tone";
+                $L[] = "  LDA sfx_active_ch{$i}";
+                $L[] = "  BNE {$p}_end   ; canal ocupado pelo SFX - so nao escreve, tempo/posicao ja avancaram normal";
                 $L[] = "  LDA {$m['sil']}";
                 $L[] = "  STA {$m['vol']}";
                 $L[] = "  JMP {$p}_end";
                 $L[] = "{$p}_tone:";
+                $L[] = "  LDA sfx_active_ch{$i}";
+                $L[] = "  BNE {$p}_end   ; canal ocupado pelo SFX - so nao escreve, tempo/posicao ja avancaram normal";
                 $L[] = "  LDA {$m['duty']}";
                 $L[] = "  STA {$m['vol']}";
                 $L[] = "  LDA PitchLo_{$lbl}_ch{$i},X";

@@ -22,6 +22,7 @@ return [
         $lines[] = '  LDA #0';
         $lines[] = '  STA pv_ev_oob';
         $lines[] = '  STA pv_ev_enter';
+        $lines[] = '  STA pv_ev_enter_splash';
         $lines[] = '  ; START no splash -> Fase 1 + spawn Hero';
         $lines[] = '  LDA pad1_edge';
         $lines[] = '  AND #%00001000';
@@ -110,6 +111,7 @@ return [
         $lines[] = '  JSR load_screen';
         $lines[] = '  LDA #1';
         $lines[] = '  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela"';
+        $lines[] = '  STA pv_ev_enter_splash   ; Camada 6: flag nativa "Entrou na Splash" (voltou do Game Over)';
         $lines[] = '  JMP MainLoop';
         $lines[] = '';
 

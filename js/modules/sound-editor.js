@@ -536,7 +536,7 @@ const SOUND = (() => {
             <input type="number" id="quarter-frames" value="${active?.baseFrames || 30}" min="4" max="255">
           </div>
           <label style="font-size:12px"><input type="checkbox" id="loop-checkbox" ${active?.loop !== false ? "checked" : ""}> Loop ($FF)</label>
-          <button id="add-channel-btn" class="btn-add-ch">+ Canal</button>
+          <button id="add-channel-btn" class="btn-add-ch" ${active?.type==='sfx' ? 'disabled title="SFX so pode ter 1 canal - crie outro SFX se precisar de mais sons simultaneos"' : ''}>+ Canal</button>
           <button id="btn-merge-layers" class="btn-merge" title="Mescla faixas com o mesmo tipo APU usando a voz ativa em cada coluna">Mesclar</button>
         </div>
 
@@ -1014,6 +1014,8 @@ const SOUND = (() => {
 
   // ===== CANAIS =====
   function addChannel(){
+    const it = items.find(x => x.id === activeId);
+    if(it && it.type === "sfx"){ alert("SFX so pode ter 1 canal. Crie um novo SFX se precisar de mais sons simultaneos."); return; }
     pushUndo();
     const len = timelineLength();
     const used = usedTypes();

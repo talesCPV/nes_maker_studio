@@ -60,10 +60,13 @@
  * nova (music_dispatch), sem indirect-indexed addressing nem código
  * auto-modificável (CODE roda direto da ROM). Cada SFX toca no(s) canal(is)
  * que ele mesmo usa no editor de som (igual uma música) - ao ativar, ele
- * "rouba" temporariamente esse(s) canal(is) físico(s) da música (guarda
- * sfx_active_ch<N> checada em cada bloco de canal da rotina da música) e
- * devolve sozinho quando termina. Ver ProgramCompiler::compilePlaySound e
- * backend/templates/music.php.
+ * "rouba" temporariamente só o REGISTRADOR DE ÁUDIO desse(s) canal(is) da
+ * música (guarda sfx_active_ch<N> checada bem em cima de cada escrita no
+ * hardware, dentro da rotina da música); o tempo/posição da música nesse
+ * canal continua avançando normalmente por baixo, então quando o SFX
+ * termina a música retoma exatamente na nota programada pro tempo real
+ * daquele instante - sem desincronizar dos outros canais. Ver
+ * ProgramCompiler::compilePlaySound e backend/templates/music.php.
  *
  * Ainda fora do escopo (sempre-falso/no-op, não quebra a build): Spawnar
  * Personagem, Aplicar Força de Pulo/Nível de Velocidade (valores fixos no
@@ -84,7 +87,7 @@ final class ProgramCompiler
      * @param array $playIdxs índices globais de tela (mesma ordem de PlayScreenTable)
      * @param array $screenData telas resolvidas (mesma ordem/índices de $playIdxs referenciados)
      */
-    public function compile(array $project, array $spriteCtx, array $playIdxs, array $screenData): array
+    public function compile(array $project, array $spriteCtx, array $playIdxs, array $screenData, array $screenIndexById = []): array
     {
         $vars = is_array($project['variables'] ?? null) ? $project['variables'] : [];
         $alloc = $this->allocateVariables($vars);
@@ -204,6 +207,7 @@ final class ProgramCompiler
             'speedLevelById' => $speedLevelById,
             'phaseEntryScreen' => $phaseEntryScreen,
             'phaseIndexById' => $phaseIndexById,
+            'screenIndexById' => $screenIndexById,
             'soundsById' => $this->buildSoundsById($project),
         ];
 
@@ -314,16 +318,18 @@ final class ProgramCompiler
             if (!is_array($step)) continue;
             $tag = "{$label}_s{$si}";
             $type = (string)($step['type'] ?? '');
-            $isCondition = in_array($type, ['if_event', 'if_hitbox', 'if_var'], true);
+            $isCondition = in_array($type, ['if_event', 'if_hitbox', 'if_var', 'if_screen'], true);
             if ($isCondition && $inLeadingConditions) {
                 $hasLeadingCondition = true;
                 if ($type === 'if_event') { $r = $this->compileIfEvent($tag, $condFail, $step, $eventById); $condLines = array_merge($condLines, $r['lines']); if ($r['isHold']) $hasHoldEvent = true; $lastInstanceTargets = []; }
                 elseif ($type === 'if_hitbox') { $r = $this->compileIfHitbox($tag, $condFail, $step, $hbCtx); $condLines = array_merge($condLines, $r['lines']); $lastInstanceTargets = $r['instanceTargets']; }
+                elseif ($type === 'if_screen') { $condLines = array_merge($condLines, $this->compileIfScreen($tag, $condFail, $step, $hbCtx)); $lastInstanceTargets = []; }
                 else { $condLines = array_merge($condLines, $this->compileIfVar($tag, $condFail, $step, $alloc)); $lastInstanceTargets = []; }
             } else {
                 $inLeadingConditions = false;
                 if ($type === 'if_event') { $r = $this->compileIfEvent($tag, $condFail, $step, $eventById); $restLines = array_merge($restLines, $r['lines']); $lastInstanceTargets = []; }
                 elseif ($type === 'if_hitbox') { $r = $this->compileIfHitbox($tag, $condFail, $step, $hbCtx); $restLines = array_merge($restLines, $r['lines']); $lastInstanceTargets = $r['instanceTargets']; }
+                elseif ($type === 'if_screen') { $restLines = array_merge($restLines, $this->compileIfScreen($tag, $condFail, $step, $hbCtx)); $lastInstanceTargets = []; }
                 elseif ($type === 'if_var') { $restLines = array_merge($restLines, $this->compileIfVar($tag, $condFail, $step, $alloc)); $lastInstanceTargets = []; }
                 elseif (in_array($type, ['set_var', 'add_var', 'sub_var'], true)) { $restLines = array_merge($restLines, $this->compileVarEffect($tag, $type, $step, $alloc)); }
                 elseif ($type === 'action') { $restLines = array_merge($restLines, $this->compileAction($tag, $step, $charIndexById, $heroIds, $numInstances, $hbCtx, $lastInstanceTargets)); }
@@ -372,6 +378,31 @@ final class ProgramCompiler
         return implode("\n", $lines);
     }
 
+    /**
+     * SE Carregar a Tela: <tela especifica>. Igual a pv_ev_enter (pulso de 1
+     * frame, so verdadeiro no frame exato em que a tela entrou), mas em vez
+     * de disparar pra QUALQUER tela (ou depender do escopo da regra), o
+     * alvo e' uma tela literal escolhida na UI - dispara sempre que aquela
+     * tela especifica (e só ela) acabar de ser colocada na PPU, seja
+     * splash, uma tela de fase ou a de game over.
+     */
+    private function compileIfScreen(string $tag, string $ruleEnd, array $step, array $hbCtx): array
+    {
+        $screenId = (string)($step['screenId'] ?? '');
+        $idx = $hbCtx['screenIndexById'][$screenId] ?? null;
+        if ($screenId === '' || $idx === null) {
+            return ["  ; SE Carregar a Tela - tela '{$screenId}' nao encontrada no jogo compilado, sempre falso", "  JMP {$ruleEnd}_end"];
+        }
+        return [
+            "  ; SE Carregar a Tela (indice {$idx})",
+            '  LDA pv_ev_enter',
+            "  BEQ {$ruleEnd}_end",
+            '  LDA cur_screen',
+            "  CMP #{$idx}",
+            "  BNE {$ruleEnd}_end",
+        ];
+    }
+
     private function compileIfHitbox(string $tag, string $ruleEnd, array $step, array $hbCtx): array
     {
         $a = (string)($step['hitboxA'] ?? '');
@@ -381,7 +412,7 @@ final class ProgramCompiler
         $ref = str_starts_with($a, 'native:') ? $a : (str_starts_with($b, 'native:') ? $b : null);
         if ($ref !== null) {
             $flag = substr($ref, 7);
-            $var = $flag === 'on_ground' ? 'on_ground' : ($flag === 'out_of_bounds' ? 'pv_ev_oob' : ($flag === 'enter_screen' ? 'pv_ev_enter' : null));
+            $var = $flag === 'on_ground' ? 'on_ground' : ($flag === 'out_of_bounds' ? 'pv_ev_oob' : ($flag === 'enter_screen' ? 'pv_ev_enter' : ($flag === 'enter_splash' ? 'pv_ev_enter_splash' : null)));
             if ($var === null) return ['lines' => ["  ; SE hitbox nativo desconhecido '{$flag}' - sempre falso", "  JMP {$ruleEnd}_end"], 'instanceTargets' => []];
             return ['lines' => ["  ; SE hitbox nativo: {$flag}", "  LDA {$var}", "  BEQ {$ruleEnd}_end"], 'instanceTargets' => []];
         }

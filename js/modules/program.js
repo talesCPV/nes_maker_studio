@@ -13,6 +13,7 @@ const PROGRAM = (() => {
   const STEP_TYPES = {
     if_event:  { label: 'SE evento...' },
     if_hitbox: { label: 'SE hitbox... toca...' },
+    if_screen: { label: 'SE carregar a tela...' },
     if_var:    { label: 'SE variável...' },
     set_var:   { label: 'DEFINIR variável' },
     add_var:   { label: 'SOMAR variável' },
@@ -48,6 +49,7 @@ const PROGRAM = (() => {
       { value:'native:out_of_bounds', label:'🚫 Out Of Bounds' },
       { value:'native:on_ground',     label:'⬇️ On Ground' },
       { value:'native:enter_screen',  label:'➡️ Enter Screen' },
+      { value:'native:enter_splash',  label:'🏁 Entrar na Splash' },
       { value:'terrain:1', label:'🟥 Terreno: Sólido' },
       { value:'terrain:2', label:'🟩 Terreno: Plataforma' }
     ];
@@ -707,6 +709,11 @@ const PROGRAM = (() => {
       fields = `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'hitboxA',this.value)" style="${selStyleH}">${opts(step.hitboxA)}</select>
         <span style="color:#666;font-size:10px">toca</span>
         <select onchange="PROGRAM.updateStep('${rule.id}',${idx},'hitboxB',this.value)" style="${selStyleH}">${opts(step.hitboxB)}</select>`;
+    } else if(step.type === 'if_screen'){
+      const screens = allScreensList();
+      fields = `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'screenId',this.value)" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:10px">
+        <option value="">— tela —</option>${screens.map(s=>`<option value="${s.id}" ${step.screenId===s.id?'selected':''}>${s._type==='splash'?'🎬':'🗺'} ${s.name}</option>`).join('')}</select>
+        <span style="color:#666;font-size:9px">dispara 1x, no exato frame em que essa tela e' colocada na PPU</span>`;
     } else if(step.type === 'if_var'){
       fields = `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'varId',this.value)" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:10px">
         <option value="">— variável —</option>${vars.map(v=>`<option value="${v.id}" ${step.varId===v.id?'selected':''}>${v.name}</option>`).join('')}</select>

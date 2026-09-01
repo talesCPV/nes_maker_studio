@@ -22,6 +22,7 @@ return [
         $lines[] = 'pv_game_paused: .res 1  ; Camada 6: acao Pausar o jogo';
         $lines[] = 'pv_ev_oob:      .res 1  ; Camada 6 Fase 2: flag nativa "Fora dos limites" (pulso)';
         $lines[] = 'pv_ev_enter:    .res 1  ; Camada 6 Fase 2: flag nativa "Entrou na tela" (pulso)';
+        $lines[] = 'pv_ev_enter_splash: .res 1  ; Camada 6 Fase 8: flag nativa "Entrou na Splash" (pulso, so no boot e ao voltar do Game Over)';
         $lines[] = 'pv_hb_target:   .res 1  ; Camada 6 Fase 2: scratch do check_hbobj_hit';
         $lines[] = 'pv_hb_scr_x:    .res 1  ; Camada 6 Fase 2: scratch do check_hbobj_hit';
         $lines[] = 'pv_terr_target: .res 1  ; Camada 6 Fase 2: scratch do check_terrain_type';
