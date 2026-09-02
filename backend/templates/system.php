@@ -81,17 +81,40 @@ ASM;
         $lines[] = "inst_char:    .res {$numInstances}   ; indice do personagem (CharFrame*,X)";
         $lines[] = "inst_frame:   .res {$numInstances}   ; frame atual da animacao padrao";
         $lines[] = "inst_timer:   .res {$numInstances}   ; frames restantes ate proximo frame";
+        $lines[] = "inst_screen:  .res {$numInstances}   ; Fase 9: indice de tela (play_idx) a que inst_x se refere";
+        $lines[] = 'spn_target:   .res 1   ; Fase 9: indice de tela alvo do spawn_append_screen em andamento';
         $lines[] = 'inst_tmp:     .res 1   ; indice de loop / scratch';
-        $lines[] = 'cell_tl:      .res 1   ; scratch: 4 tiles do frame atual sendo desenhado';
-        $lines[] = 'cell_tr:      .res 1';
-        $lines[] = 'cell_bl:      .res 1';
-        $lines[] = 'cell_br:      .res 1';
-        $lines[] = 'oam_off:      .res 1   ; scratch: offset ($10 + slot*16) dentro da pagina $02xx';
+        $lines[] = 'oam_off:      .res 1   ; scratch: offset (via OamOffTable) dentro da pagina $02xx';
         $lines[] = 'inst_scr_x:   .res 1   ; Camada 5: posicao X na tela (inst_x - scroll_x) do slot sendo desenhado';
-        $lines[] = 'cell_tl_fl:   .res 1   ; flip por celula (bits de atributo OAM ja convertidos) do frame atual';
-        $lines[] = 'cell_tr_fl:   .res 1';
-        $lines[] = 'cell_bl_fl:   .res 1';
-        $lines[] = 'cell_br_fl:   .res 1';
+        // Fase 9 (graficos): scratch do desenho de sprite de tamanho variavel
+        // (compartilhado por update_instances_oam e update_player_oam, cada um
+        // usa por sua vez - X preservado do lado de fora). Os 4 ponteiros
+        // (uio_ptr_*/upo_ptr_*) SAO indireto-indexado (LDA (ptr),Y), por isso
+        // tem que estar na ZEROPAGE mesmo.
+        $lines[] = 'uio_ptr_dx:   .res 2';
+        $lines[] = 'uio_ptr_dy:   .res 2';
+        $lines[] = 'uio_ptr_tile: .res 2';
+        $lines[] = 'uio_ptr_flip: .res 2';
+        $lines[] = 'uio_n:        .res 1   ; contagem de celulas do frame sendo desenhado';
+        $lines[] = 'uio_i:        .res 1   ; indice da celula atual no loop de desenho';
+        $lines[] = 'uio_oamy:     .res 1   ; offset OAM corrente (Y) dentro do desenho de 1 instancia';
+        $lines[] = 'uio_a:        .res 1   ; scratch: dx da celula atual';
+        $lines[] = 'uio_b:        .res 1   ; scratch: dy da celula atual';
+        $lines[] = 'uio_c:        .res 1   ; scratch: tile da celula atual';
+        $lines[] = 'uio_d:        .res 1   ; scratch: flip da celula atual';
+        $lines[] = 'uio_hidecnt:  .res 1   ; contador do loop que esconde sprites sobrando';
+        $lines[] = 'upo_ptr_dx:   .res 2   ; mesma ideia, so pro player (update_player_oam)';
+        $lines[] = 'upo_ptr_dy:   .res 2';
+        $lines[] = 'upo_ptr_tile: .res 2';
+        $lines[] = 'upo_ptr_flip: .res 2';
+        $lines[] = 'upo_n:        .res 1';
+        $lines[] = 'upo_i:        .res 1';
+        $lines[] = 'upo_oamy:     .res 1';
+        $lines[] = 'upo_a:        .res 1';
+        $lines[] = 'upo_b:        .res 1';
+        $lines[] = 'upo_c:        .res 1';
+        $lines[] = 'upo_d:        .res 1';
+        $lines[] = 'upo_hidecnt:  .res 1';
         $lines[] = 'ovl_tl:       .res 1   ; sprites sobrepostos do player (Camada 3 fix): tiles + flip+paleta';
         $lines[] = 'ovl_tr:       .res 1';
         $lines[] = 'ovl_bl:       .res 1';
@@ -1069,7 +1092,18 @@ asr_noload:
   TAX
   LDA PlayScreenTable,X
   STA cur_screen
-  JSR spawn_enemies
+  ; Fase 9 (graficos): NAO limpa mais o pool aqui - os inimigos desta tela ja
+  ; foram adiantados (spawn_append_screen) la' atras, quando esta tela ainda
+  ; era "a proxima". So' adianta a tela SEGUINTE agora, pra ela tambem ter
+  ; toda a janela do scroll pra ser revelada aos poucos (ver
+  ; update_instances_oam: quem ja "passou" da tela atual se auto-desliga).
+  LDA play_idx
+  CLC
+  ADC #1
+  CMP #{{PLAY_COUNT}}
+  BCS asr_no_append
+  JSR spawn_append_screen
+asr_no_append:
   LDA #1
   STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela" (pulso de 1 frame)
   RTS

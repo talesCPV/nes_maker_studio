@@ -102,6 +102,7 @@ final class ProjectParser
         $chars = is_array($project['characters'] ?? null) ? $project['characters'] : [];
         $packed = $this->packSpriteCHR($project, $chars);
         $charData = $packed['charData'];
+        $maxCells = max(1, (int)$packed['maxCells']);
         $heroIdx = 0;
         $heroFound = false;
         foreach ($chars as $i => $c) {
@@ -116,10 +117,18 @@ final class ProjectParser
             $heroFrames = max(1, count(is_array($charData[$heroIdx]['frames'] ?? null) ? $charData[$heroIdx]['frames'] : []));
         }
 
+        // Fase 9 (graficos): sem mais o limite fixo de 4 sprites OAM (2x2) por
+        // instancia - agora cada personagem pode usar ate maxCells sprites (o
+        // maior frame do projeto, incluindo o heroi). O orcamento real do NES
+        // (64 sprites na OAM) e' quem manda: o heroi reserva maxCells (corpo)
+        // + 4 (overlay, ainda fixo 2x2) sprites fixos no inicio da OAM, e o
+        // resto e' dividido entre as instancias - sempre <= 14 (mesmo teto de
+        // antes) e nunca ultrapassando os 64 sprites de verdade.
         $requested = (int)($project['maxInstances'] ?? 10);
         if ($requested < 1) $requested = 1;
         if ($requested > 20) $requested = 20;
-        $numInstances = min($requested, 14);
+        $oamBudgetInstances = max(1, (int)floor((64 - ($maxCells + 4)) / max(1, $maxCells)));
+        $numInstances = min($requested, 14, $oamBudgetInstances);
 
         $charIndexById = [];
         $heroIds = [];
@@ -170,6 +179,7 @@ final class ProjectParser
             'heroFound' => $heroFound,
             'numInstances' => $numInstances,
             'requestedInstances' => $requested,
+            'maxCells' => $maxCells,
             'enemySpawns' => $enemySpawns,
         ];
     }
@@ -184,6 +194,10 @@ final class ProjectParser
      * - overlay opcional com a mesma grade;
      * - limite de 256 tiles;
      * - CHR de sprites ocupa exatamente 4096 bytes.
+     * - Fase 9: cada frame pode ter QUALQUER w/h (ate 8x8, teto do editor de
+     *   CHR) - sem mais o limite de 2x2. O overlay (mt.overlay, recolor
+     *   opcional) continua limitado a 2x2 por enquanto (fora do escopo desta
+     *   fase, que foi especificamente sobre o corpo do personagem).
      */
     private function packSpriteCHR(array $project, array $chars): array
     {
@@ -216,6 +230,7 @@ final class ProjectParser
         };
 
         $charData = [];
+        $maxCells = 1;
         foreach ($chars as $ci => $c) {
             if (!is_array($c)) $c = [];
             $anim = is_array($c['animations'][0] ?? null) ? $c['animations'][0] : ['name'=>'Idle','loop'=>true,'frames'=>[]];
@@ -227,32 +242,41 @@ final class ProjectParser
                 $mt = $mtById[$mtId] ?? null;
                 $duration = max(1, min(255, (int)($f['duration'] ?? 8)));
                 if (!is_array($mt) || !is_array($mt['tiles'] ?? null) || !isset($mt['w'], $mt['h'])) {
-                    $frames[] = ['cells'=>[], 'duration'=>$duration, 'overlay'=>null];
+                    $frames[] = ['w'=>0, 'h'=>0, 'cellsN'=>[], 'flipsN'=>[], 'cellsF'=>[], 'flipsF'=>[], 'duration'=>$duration, 'overlay'=>null];
                     continue;
                 }
-                $w = max(0, (int)$mt['w']);
-                $h = max(0, (int)$mt['h']);
-                if ($w > 2 || $h > 2) {
-                    $truncated[] = (string)($c['name'] ?? "Character {$ci}") . ' / ' . (string)($anim['name'] ?? 'Idle') . ' / frame ' . ($fi + 1) . " ({$w}x{$h} → 2x2)";
-                }
+                // Fase 9 (graficos): sem mais limite 2x2 - qualquer tamanho que o
+                // editor de CHR permitir (ate 8x8, ver chr-editor.js). $w/$h ficam
+                // gravados no proprio frame; runtime le eles pra saber quantas
+                // celulas percorrer (nao ha mais um "corner" fixo de 4 posicoes).
+                $w = max(1, min(8, (int)$mt['w']));
+                $h = max(1, min(8, (int)$mt['h']));
                 $tiles = $mt['tiles'];
                 $flips = is_array($mt['flips'] ?? null) ? $mt['flips'] : [];
-                $cells = [];
-                for ($ty=0; $ty<min(2,$h); $ty++) {
-                    for ($tx=0; $tx<min(2,$w); $tx++) {
-                        $idx = $ty*$w + $tx;
-                        $raw = (int)($tiles[$idx] ?? 0);
-                        $flip = (int)($flips[$idx] ?? 0);
-                        $corner = $ty*2+$tx;
-                        $cells[] = [
-                            'tile' => $mapTile($raw),
-                            'flip' => $flip,
-                            'dx' => $corners[$corner]['dx'],
-                            'dy' => $corners[$corner]['dy'],
-                            'corner' => $corner
-                        ];
+
+                // Orientacao normal (tx crescente = esquerda->direita), row-major.
+                $cellsN = []; $flipsN = [];
+                for ($ty=0; $ty<$h; $ty++) {
+                    for ($tx=0; $tx<$w; $tx++) {
+                        $idx = $ty*$w+$tx;
+                        $cellsN[] = $mapTile((int)($tiles[$idx] ?? 0));
+                        $fl = (int)($flips[$idx] ?? 0);
+                        $flipsN[] = (($fl & 1) ? 0x40 : 0) | (($fl & 2) ? 0x80 : 0);
                     }
                 }
+                // Orientacao espelhada (flip H de direcao) pre-calculada em tempo de
+                // build - mesma ideia que o overlay ja fazia, generalizada pra
+                // qualquer w/h: coluna tx vira (w-1-tx) na MESMA linha, e o bit de
+                // flip horizontal de cada celula e' invertido.
+                $cellsF = []; $flipsF = [];
+                for ($ty=0; $ty<$h; $ty++) {
+                    for ($tx=0; $tx<$w; $tx++) {
+                        $srcIdx = $ty*$w + ($w-1-$tx);
+                        $cellsF[] = $cellsN[$srcIdx];
+                        $flipsF[] = $flipsN[$srcIdx] ^ 0x40;
+                    }
+                }
+                $maxCells = max($maxCells, $w*$h);
 
                 $overlay = null;
                 if (is_array($mt['overlay'] ?? null) && is_array($mt['overlay']['tiles'] ?? null) && count($mt['overlay']['tiles'])) {
@@ -280,9 +304,9 @@ final class ProjectParser
                         'palAttr' => max(0, min(3, $palIdx - 4))
                     ];
                 }
-                $frames[] = ['cells'=>$cells, 'duration'=>$duration, 'overlay'=>$overlay];
+                $frames[] = ['w'=>$w, 'h'=>$h, 'cellsN'=>$cellsN, 'flipsN'=>$flipsN, 'cellsF'=>$cellsF, 'flipsF'=>$flipsF, 'duration'=>$duration, 'overlay'=>$overlay];
             }
-            if (!$frames) $frames[] = ['cells'=>[], 'duration'=>8, 'overlay'=>null];
+            if (!$frames) $frames[] = ['w'=>0, 'h'=>0, 'cellsN'=>[], 'flipsN'=>[], 'cellsF'=>[], 'flipsF'=>[], 'duration'=>8, 'overlay'=>null];
             $charData[] = [
                 'id' => $c['id'] ?? null,
                 'name' => $c['name'] ?? "Character {$ci}",
@@ -306,6 +330,7 @@ final class ProjectParser
             'usedCount' => count($usedTiles),
             'overflowCount' => count($overflow),
             'truncated' => $truncated,
+            'maxCells' => $maxCells,
         ];
     }
 

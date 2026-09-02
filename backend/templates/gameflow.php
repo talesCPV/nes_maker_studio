@@ -46,6 +46,10 @@ return [
         }
         $lines[] = '  JSR spawn_player';
         $lines[] = '  JSR spawn_enemies';
+        if ($secondPlay !== null) {
+            $lines[] = '  LDA #1';
+            $lines[] = '  JSR spawn_append_screen   ; Fase 9: adianta os inimigos da proxima tela pra nao surgirem no meio do scroll';
+        }
         $lines[] = '  ; Musica so toca via acao Tocar Som (Camada 6) - sem autoplay';
         $lines[] = '  JMP MainLoop';
         $lines[] = '';

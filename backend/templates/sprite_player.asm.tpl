@@ -1,184 +1,232 @@
+; ---- Fase 9 (graficos): corpo do heroi com tamanho variavel (sem mais o
+; limite 2x2) - mesmas tabelas Dx/Dy/TileN/FlipN/TileF/FlipF dos inimigos,
+; so' que indexadas direto pelo indice fixo do heroi (@@HERO@@) em vez de
+; inst_char,X. O overlay (recolor, mt.overlay) continua fixo em 2x2, logo
+; abaixo, agora comecando em @@PLAYER_OV_BASE@@ (deslocado pra depois dos
+; ate @@MAX_CELLS@@ sprites do corpo).
+load_player_dx_ptr:
+  LDA CharDxPtrLoTbl+@@HERO@@
+  STA tmp0
+  LDA CharDxPtrHiTbl+@@HERO@@
+  STA tmp1
+  LDA player_frame
+  ASL A
+  TAY
+  LDA (tmp0),Y
+  PHA
+  INY
+  LDA (tmp0),Y
+  STA tmp1
+  PLA
+  STA tmp0
+  RTS
+
+load_player_dy_ptr:
+  LDA CharDyPtrLoTbl+@@HERO@@
+  STA tmp0
+  LDA CharDyPtrHiTbl+@@HERO@@
+  STA tmp1
+  LDA player_frame
+  ASL A
+  TAY
+  LDA (tmp0),Y
+  PHA
+  INY
+  LDA (tmp0),Y
+  STA tmp1
+  PLA
+  STA tmp0
+  RTS
+
+load_player_tilen_ptr:
+  LDA CharTileNPtrLoTbl+@@HERO@@
+  STA tmp0
+  LDA CharTileNPtrHiTbl+@@HERO@@
+  STA tmp1
+  LDA player_frame
+  ASL A
+  TAY
+  LDA (tmp0),Y
+  PHA
+  INY
+  LDA (tmp0),Y
+  STA tmp1
+  PLA
+  STA tmp0
+  RTS
+
+load_player_flipn_ptr:
+  LDA CharFlipNPtrLoTbl+@@HERO@@
+  STA tmp0
+  LDA CharFlipNPtrHiTbl+@@HERO@@
+  STA tmp1
+  LDA player_frame
+  ASL A
+  TAY
+  LDA (tmp0),Y
+  PHA
+  INY
+  LDA (tmp0),Y
+  STA tmp1
+  PLA
+  STA tmp0
+  RTS
+
+load_player_tilef_ptr:
+  LDA CharTileFPtrLoTbl+@@HERO@@
+  STA tmp0
+  LDA CharTileFPtrHiTbl+@@HERO@@
+  STA tmp1
+  LDA player_frame
+  ASL A
+  TAY
+  LDA (tmp0),Y
+  PHA
+  INY
+  LDA (tmp0),Y
+  STA tmp1
+  PLA
+  STA tmp0
+  RTS
+
+load_player_flipf_ptr:
+  LDA CharFlipFPtrLoTbl+@@HERO@@
+  STA tmp0
+  LDA CharFlipFPtrHiTbl+@@HERO@@
+  STA tmp1
+  LDA player_frame
+  ASL A
+  TAY
+  LDA (tmp0),Y
+  PHA
+  INY
+  LDA (tmp0),Y
+  STA tmp1
+  PLA
+  STA tmp0
+  RTS
+
+load_player_n:
+  LDA CharFrameNLo+@@HERO@@
+  STA tmp0
+  LDA CharFrameNHi+@@HERO@@
+  STA tmp1
+  LDY player_frame
+  LDA (tmp0),Y
+  RTS
+
 update_player_oam:
   LDA player_on
   BNE upo_draw
-  ; esconde: Y=$FF nos 8 slots (4 base + 4 overlay)
+  ; esconde corpo (ate @@MAX_CELLS@@) + overlay (4) - @@PLAYER_TOTAL_SLOTS@@ sprites
+  LDY #0
+  LDA #@@PLAYER_TOTAL_SLOTS@@
+  STA upo_hidecnt
+upo_hide_boot:
   LDA #$FF
-  STA $0200
-  STA $0204
-  STA $0208
-  STA $020C
-  STA $0210
-  STA $0214
-  STA $0218
-  STA $021C
+  STA $0200,Y
+  INY
+  INY
+  INY
+  INY
+  DEC upo_hidecnt
+  BNE upo_hide_boot
   RTS
 upo_draw:
-  ; tmp0/tmp1 -> ponteiro pros 4 bytes do frame atual (TL,TR,BL,BR)
-  LDA player_frame
-  ASL A
-  ASL A                 ; frame*4
-  CLC
-  ADC #<CharCells_@@HERO@@
-  STA tmp0
-  LDA #>CharCells_@@HERO@@
-  ADC #0
-  STA tmp1
-  LDY #0
-  LDA (tmp0),Y
-  STA cell_tl
-  INY
-  LDA (tmp0),Y
-  STA cell_tr
-  INY
-  LDA (tmp0),Y
-  STA cell_bl
-  INY
-  LDA (tmp0),Y
-  STA cell_br
-  ; mesmo offset (frame*4), agora na tabela de flip por celula (ja em bits de atributo
-  ; OAM: bit6=H bit7=V) - se combina por XOR com o flip de direcao (player_flip) abaixo.
-  LDA player_frame
-  ASL A
-  ASL A
-  CLC
-  ADC #<CharFlips_@@HERO@@
-  STA tmp0
-  LDA #>CharFlips_@@HERO@@
-  ADC #0
-  STA tmp1
-  LDY #0
-  LDA (tmp0),Y
-  STA cell_tl_fl
-  INY
-  LDA (tmp0),Y
-  STA cell_tr_fl
-  INY
-  LDA (tmp0),Y
-  STA cell_bl_fl
-  INY
-  LDA (tmp0),Y
-  STA cell_br_fl
   LDA player_flip
-  BEQ upo_noflip
-  ; flip H de direcao: espelha o metasprite trocando TL<->TR e BL<->BR (tile e flip
-  ; autoral viajam juntos)
-  LDA cell_tl
-  PHA
-  LDA cell_tr
-  STA cell_tl
-  PLA
-  STA cell_tr
-  LDA cell_bl
-  PHA
-  LDA cell_br
-  STA cell_bl
-  PLA
-  STA cell_br
-  LDA cell_tl_fl
-  PHA
-  LDA cell_tr_fl
-  STA cell_tl_fl
-  PLA
-  STA cell_tr_fl
-  LDA cell_bl_fl
-  PHA
-  LDA cell_br_fl
-  STA cell_bl_fl
-  PLA
-  STA cell_br_fl
-upo_noflip:
-  LDA player_flip
-  BEQ upo_attr0
-  LDA #%01000000     ; flip H de direcao
-  STA tmp0
-  JMP upo_write
-upo_attr0:
+  BEQ upo_pick_normal
+  JSR load_player_tilef_ptr
+  LDA tmp0
+  STA upo_ptr_tile
+  LDA tmp1
+  STA upo_ptr_tile+1
+  JSR load_player_flipf_ptr
+  LDA tmp0
+  STA upo_ptr_flip
+  LDA tmp1
+  STA upo_ptr_flip+1
+  JMP upo_have_ptrs
+upo_pick_normal:
+  JSR load_player_tilen_ptr
+  LDA tmp0
+  STA upo_ptr_tile
+  LDA tmp1
+  STA upo_ptr_tile+1
+  JSR load_player_flipn_ptr
+  LDA tmp0
+  STA upo_ptr_flip
+  LDA tmp1
+  STA upo_ptr_flip+1
+upo_have_ptrs:
+  JSR load_player_dx_ptr
+  LDA tmp0
+  STA upo_ptr_dx
+  LDA tmp1
+  STA upo_ptr_dx+1
+  JSR load_player_dy_ptr
+  LDA tmp0
+  STA upo_ptr_dy
+  LDA tmp1
+  STA upo_ptr_dy+1
+  JSR load_player_n
+  STA upo_n
   LDA #0
-  STA tmp0
-upo_write:
-  ; --- TL ---
-  LDA cell_tl
-  CMP #$FF
-  BEQ upo_tl_hide
-  LDA player_y
-  STA $0200
-  LDA cell_tl
-  STA $0201
-  LDA cell_tl_fl
-  EOR tmp0
-  STA $0202
-  LDA player_x
-  STA $0203
-  JMP upo_tr
-upo_tl_hide:
-  LDA #$FF
-  STA $0200
-upo_tr:
-  ; --- TR ---
-  LDA cell_tr
-  CMP #$FF
-  BEQ upo_tr_hide
-  LDA player_y
-  STA $0204
-  LDA cell_tr
-  STA $0205
-  LDA cell_tr_fl
-  EOR tmp0
-  STA $0206
-  LDA player_x
-  CLC
-  ADC #8
-  STA $0207
-  JMP upo_bl
-upo_tr_hide:
-  LDA #$FF
-  STA $0204
-upo_bl:
-  ; --- BL ---
-  LDA cell_bl
-  CMP #$FF
-  BEQ upo_bl_hide
+  STA upo_i
+  STA upo_oamy
+upo_cellloop:
+  LDA upo_i
+  CMP upo_n
+  BCS upo_cellloop_done
+  TAY
+  LDA (upo_ptr_dx),Y
+  STA upo_a
+  LDA (upo_ptr_dy),Y
+  STA upo_b
+  LDA (upo_ptr_tile),Y
+  STA upo_c
+  LDA (upo_ptr_flip),Y
+  STA upo_d
+  LDY upo_oamy
   LDA player_y
   CLC
-  ADC #8
-  STA $0208
-  LDA cell_bl
-  STA $0209
-  LDA cell_bl_fl
-  EOR tmp0
-  STA $020A
-  LDA player_x
-  STA $020B
-  JMP upo_br
-upo_bl_hide:
-  LDA #$FF
-  STA $0208
-upo_br:
-  ; --- BR ---
-  LDA cell_br
-  CMP #$FF
-  BEQ upo_br_hide
-  LDA player_y
-  CLC
-  ADC #8
-  STA $020C
-  LDA cell_br
-  STA $020D
-  LDA cell_br_fl
-  EOR tmp0
-  STA $020E
+  ADC upo_b
+  STA $0200,Y
+  LDA upo_c
+  STA $0201,Y
+  LDA upo_d
+  STA $0202,Y
   LDA player_x
   CLC
-  ADC #8
-  STA $020F
-  JMP upo_overlay
-upo_br_hide:
+  ADC upo_a
+  STA $0203,Y
+  LDA upo_oamy
+  CLC
+  ADC #4
+  STA upo_oamy
+  INC upo_i
+  JMP upo_cellloop
+upo_cellloop_done:
+  LDA #@@MAX_CELLS@@
+  SEC
+  SBC upo_n
+  BEQ upo_overlay
+  STA upo_hidecnt
+  LDY upo_oamy
+upo_hide_rest:
   LDA #$FF
-  STA $020C
+  STA $0200,Y
+  INY
+  INY
+  INY
+  INY
+  DEC upo_hidecnt
+  BNE upo_hide_rest
 
-; --- sprites sobrepostos do player (mt.overlay) - $0210-$021F. Le do MESMO indice de
-; frame que a camada base (CharOv*_@@HERO@@), independente do flip de direcao (v1:
-; overlay nao espelha automaticamente com a direcao - desenha sempre como autorado).
+; --- sprites sobrepostos do player (mt.overlay) - continua fixo 2x2, agora
+; comecando em @@PLAYER_OV_BASE@@ (logo apos os ate @@MAX_CELLS@@ sprites do
+; corpo). Le do MESMO indice de frame que a camada base (CharOv*_@@HERO@@),
+; independente do flip de direcao (v1: overlay nao espelha automaticamente
+; com a direcao - desenha sempre como autorado).
 upo_overlay:
   ; Camada 3 fix: escolhe a tabela normal ou espelhada (*Flip) dependendo da direcao -
   ; o espelhamento (posicao+conteudo+dx) ja foi calculado em JS na geracao do build,
@@ -274,19 +322,19 @@ upo_ov_dy:
   LDA player_y
   CLC
   ADC ovl_dy
-  STA $0210
+  STA @@PLAYER_OV_BASE@@
   LDA ovl_tl
-  STA $0211
+  STA @@PLAYER_OV_BASE@@+1
   LDA ovl_tl_fl
-  STA $0212
+  STA @@PLAYER_OV_BASE@@+2
   LDA player_x
   CLC
   ADC ovl_dx
-  STA $0213
+  STA @@PLAYER_OV_BASE@@+3
   JMP upo_ov_tr
 upo_ov_tl_hide:
   LDA #$FF
-  STA $0210
+  STA @@PLAYER_OV_BASE@@
 upo_ov_tr:
   ; --- overlay TR ---
   LDA ovl_tr
@@ -295,21 +343,21 @@ upo_ov_tr:
   LDA player_y
   CLC
   ADC ovl_dy
-  STA $0214
+  STA @@PLAYER_OV_BASE@@+4
   LDA ovl_tr
-  STA $0215
+  STA @@PLAYER_OV_BASE@@+5
   LDA ovl_tr_fl
-  STA $0216
+  STA @@PLAYER_OV_BASE@@+6
   LDA player_x
   CLC
   ADC ovl_dx
   CLC
   ADC #8
-  STA $0217
+  STA @@PLAYER_OV_BASE@@+7
   JMP upo_ov_bl
 upo_ov_tr_hide:
   LDA #$FF
-  STA $0214
+  STA @@PLAYER_OV_BASE@@+4
 upo_ov_bl:
   ; --- overlay BL ---
   LDA ovl_bl
@@ -320,19 +368,19 @@ upo_ov_bl:
   ADC ovl_dy
   CLC
   ADC #8
-  STA $0218
+  STA @@PLAYER_OV_BASE@@+8
   LDA ovl_bl
-  STA $0219
+  STA @@PLAYER_OV_BASE@@+9
   LDA ovl_bl_fl
-  STA $021A
+  STA @@PLAYER_OV_BASE@@+10
   LDA player_x
   CLC
   ADC ovl_dx
-  STA $021B
+  STA @@PLAYER_OV_BASE@@+11
   JMP upo_ov_br
 upo_ov_bl_hide:
   LDA #$FF
-  STA $0218
+  STA @@PLAYER_OV_BASE@@+8
 upo_ov_br:
   ; --- overlay BR ---
   LDA ovl_br
@@ -343,21 +391,21 @@ upo_ov_br:
   ADC ovl_dy
   CLC
   ADC #8
-  STA $021C
+  STA @@PLAYER_OV_BASE@@+12
   LDA ovl_br
-  STA $021D
+  STA @@PLAYER_OV_BASE@@+13
   LDA ovl_br_fl
-  STA $021E
+  STA @@PLAYER_OV_BASE@@+14
   LDA player_x
   CLC
   ADC ovl_dx
   CLC
   ADC #8
-  STA $021F
+  STA @@PLAYER_OV_BASE@@+15
   RTS
 upo_ov_br_hide:
   LDA #$FF
-  STA $021C
+  STA @@PLAYER_OV_BASE@@+12
   RTS
 
 ; avanca a animacao do heroi (mesmo esquema idle das instancias, mas so 1 personagem).

@@ -41,6 +41,8 @@ se_loop:
   LDA #0
   STA inst_dir,X
   STA inst_frame,X
+  LDA play_idx
+  STA inst_screen,X   ; Fase 9: esta instancia pertence a tela play_idx
   ; load_frame_duration usa Y/tmp0/tmp1 como scratch - e' exatamente o que o loop
   ; acima usa como cursor de leitura em EnemyData_N. Sem salvar/restaurar aqui, a
   ; 2a instancia em diante lia lixo (Y resetava, tmp0/tmp1 apontavam pra outra tabela).
@@ -65,6 +67,71 @@ se_done:
   JSR update_instances_oam
   RTS
 
+; Fase 9 (graficos): A = indice de tela alvo -> AGREGA os spawns dessa tela
+; nas primeiras vagas LIVRES do pool (NAO limpa - quem ja estava ativo
+; continua). Cada instancia criada aqui carrega inst_screen,X = A, usado por
+; update_instances_oam pra saber se ela ja deveria estar visivel ou nao (ver
+; comentario la'). E' assim que os inimigos da PROXIMA tela ficam prontos
+; antes dela virar a tela atual - nascem fora da area visivel e vao aparecer
+; suavemente conforme o scroll continuo revela a tela, igual o cenario.
+spawn_append_screen:
+  STA spn_target
+  TAX
+  LDA EnemySpawnLo,X
+  STA tmp0
+  LDA EnemySpawnHi,X
+  STA tmp1
+  LDY #0
+  LDA (tmp0),Y
+  STA en_tmp
+  INY
+  LDX #0                 ; X = cursor de vaga livre no pool
+sae_findslot:
+  LDA en_tmp
+  BEQ sae_done
+  CPX #@@NUM_INSTANCES@@
+  BEQ sae_done            ; pool cheio, ignora o resto (mesma degradacao graciosa de sempre)
+  LDA inst_on,X
+  BEQ sae_use_slot
+  INX
+  JMP sae_findslot
+sae_use_slot:
+  LDA (tmp0),Y
+  STA inst_x,X
+  INY
+  LDA (tmp0),Y
+  STA inst_y,X
+  INY
+  LDA (tmp0),Y
+  STA inst_char,X
+  INY
+  LDA #1
+  STA inst_on,X
+  LDA #0
+  STA inst_dir,X
+  STA inst_frame,X
+  LDA spn_target
+  STA inst_screen,X
+  TYA
+  PHA
+  LDA tmp0
+  PHA
+  LDA tmp1
+  PHA
+  JSR load_frame_duration
+  STA inst_timer,X
+  PLA
+  STA tmp1
+  PLA
+  STA tmp0
+  PLA
+  TAY
+  INX
+  DEC en_tmp
+  JMP sae_findslot
+sae_done:
+  RTS
+
 ; X = slot -> le inst_char,X e inst_frame,X, retorna duracao (frames) em A
 load_frame_duration:
   LDA inst_char,X
@@ -77,60 +144,146 @@ load_frame_duration:
   LDA (tmp0),Y
   RTS
 
-; X = slot -> aponta tmp0/tmp1 pros 4 bytes de tile do frame atual (TL,TR,BL,BR;
-; $FF = celula oculta). Y fica sujo, X preservado.
-load_frame_cellptr:
+; ---- Fase 9 (graficos): tamanho variavel de sprite, sem mais o limite 2x2 ----
+; X = slot -> tmp0/tmp1 = ponteiro pra tabela (Dx/Dy/TileN/FlipN/TileF/FlipF) do
+; frame atual. Y fica sujo, X preservado.
+load_dx_ptr:
   LDA inst_char,X
   TAY
-  LDA CharFrameCellsLo,Y
+  LDA CharDxPtrLoTbl,Y
   STA tmp0
-  LDA CharFrameCellsHi,Y
+  LDA CharDxPtrHiTbl,Y
   STA tmp1
   LDA inst_frame,X
   ASL A
-  ASL A                 ; frame*4
-  CLC
-  ADC tmp0
+  TAY
+  LDA (tmp0),Y
+  PHA
+  INY
+  LDA (tmp0),Y
+  STA tmp1
+  PLA
   STA tmp0
-  BCC lfc_done
-  INC tmp1
-lfc_done:
   RTS
 
-; igual load_frame_cellptr, mas aponta pros 4 bytes de FLIP (ja em bits de atributo
-; OAM: bit6=H bit7=V) do mesmo frame. Usa tmp0/tmp1 tambem - so' chamar depois de ja
-; ter lido os 4 bytes de tile pro scratch (cell_tl..br), senao um sobrescreve o outro.
-load_frame_flipptr:
+load_dy_ptr:
   LDA inst_char,X
   TAY
-  LDA CharFrameFlipsLo,Y
+  LDA CharDyPtrLoTbl,Y
   STA tmp0
-  LDA CharFrameFlipsHi,Y
+  LDA CharDyPtrHiTbl,Y
   STA tmp1
   LDA inst_frame,X
   ASL A
-  ASL A                 ; frame*4
-  CLC
-  ADC tmp0
+  TAY
+  LDA (tmp0),Y
+  PHA
+  INY
+  LDA (tmp0),Y
+  STA tmp1
+  PLA
   STA tmp0
-  BCC lff_done
-  INC tmp1
-lff_done:
   RTS
 
-; calcula oam_off = $10 + X*16 (X = slot). Preserva X.
+load_tilen_ptr:
+  LDA inst_char,X
+  TAY
+  LDA CharTileNPtrLoTbl,Y
+  STA tmp0
+  LDA CharTileNPtrHiTbl,Y
+  STA tmp1
+  LDA inst_frame,X
+  ASL A
+  TAY
+  LDA (tmp0),Y
+  PHA
+  INY
+  LDA (tmp0),Y
+  STA tmp1
+  PLA
+  STA tmp0
+  RTS
+
+load_flipn_ptr:
+  LDA inst_char,X
+  TAY
+  LDA CharFlipNPtrLoTbl,Y
+  STA tmp0
+  LDA CharFlipNPtrHiTbl,Y
+  STA tmp1
+  LDA inst_frame,X
+  ASL A
+  TAY
+  LDA (tmp0),Y
+  PHA
+  INY
+  LDA (tmp0),Y
+  STA tmp1
+  PLA
+  STA tmp0
+  RTS
+
+load_tilef_ptr:
+  LDA inst_char,X
+  TAY
+  LDA CharTileFPtrLoTbl,Y
+  STA tmp0
+  LDA CharTileFPtrHiTbl,Y
+  STA tmp1
+  LDA inst_frame,X
+  ASL A
+  TAY
+  LDA (tmp0),Y
+  PHA
+  INY
+  LDA (tmp0),Y
+  STA tmp1
+  PLA
+  STA tmp0
+  RTS
+
+load_flipf_ptr:
+  LDA inst_char,X
+  TAY
+  LDA CharFlipFPtrLoTbl,Y
+  STA tmp0
+  LDA CharFlipFPtrHiTbl,Y
+  STA tmp1
+  LDA inst_frame,X
+  ASL A
+  TAY
+  LDA (tmp0),Y
+  PHA
+  INY
+  LDA (tmp0),Y
+  STA tmp1
+  PLA
+  STA tmp0
+  RTS
+
+; X = slot -> A = n (contagem de celulas) do frame atual.
+load_frame_n:
+  LDA inst_char,X
+  TAY
+  LDA CharFrameNLo,Y
+  STA tmp0
+  LDA CharFrameNHi,Y
+  STA tmp1
+  LDY inst_frame,X
+  LDA (tmp0),Y
+  RTS
+
+; oam_off por instancia via tabela pronta (evita multiplicar por maxCells em
+; runtime - maxCells nao e' necessariamente potencia de 2). Preserva X.
 uio_calc_off:
-  TXA
-  ASL A
-  ASL A
-  ASL A
-  ASL A                 ; X*16
-  CLC
-  ADC #$20               ; pula os 8 sprites do player ($0200-$021F: base+overlay)
+  LDA OamOffTable,X
   STA oam_off
   RTS
 
-; desenha ate NUM_INSTANCES metasprites 2x2 (16x16) em $0210+, 4 OAM por slot.
+; desenha ate NUM_INSTANCES personagens de tamanho variavel (ate @@MAX_CELLS@@
+; sprites cada). Le Dx/Dy (mesmos pras 2 orientacoes) + Tile/Flip da
+; orientacao normal ou espelhada (inst_dir escolhe qual - ja pre-calculada em
+; tempo de build, sem swap em runtime).
 update_instances_oam:
   LDX #0
 uio_loop:
@@ -138,169 +291,149 @@ uio_loop:
   BNE uio_draw
   JSR uio_calc_off
   LDY oam_off
+  LDA #@@MAX_CELLS@@
+  STA uio_hidecnt
+uio_hide_off:
   LDA #$FF
   STA $0200,Y
-  STA $0204,Y
-  STA $0208,Y
-  STA $020C,Y
+  INY
+  INY
+  INY
+  INY
+  DEC uio_hidecnt
+  BNE uio_hide_off
   JMP uio_next
 uio_draw:
-  ; Camada 5: posicao na tela = inst_x - scroll_x (inimigos sempre pertencem a tela
-  ; esquerda atual/cur_screen). Se der borrow, saiu da tela pela esquerda - esconde.
-  LDA inst_x,X
+  ; Fase 9 (graficos): visibilidade agora e' calculada contra a "posicao
+  ; continua" (tela*256+x) em vez de assumir que a instancia sempre pertence
+  ; a cur_screen. Isso e' o que permite os inimigos da PROXIMA tela ja
+  ; existirem no pool (via spawn_append_screen) sem aparecer/desaparecer do
+  ; nada: eles ficam escondidos ate a diferenca de tela bater exatamente com
+  ; play_idx, exatamente quando o scroll contInuO ja teria revelado aquele
+  ; pedaco da tela (mesmo calculo que o cenario usa por baixo, so' que pra
+  ; sprites em vez de nametable).
   SEC
+  LDA inst_x,X
   SBC scroll_x
-  BCS uio_x_ok
-  JMP uio_offscreen
+  STA inst_scr_x            ; valido SE a tela bater (ver abaixo)
+  LDA inst_screen,X
+  SBC play_idx
+  BEQ uio_x_ok              ; mesma tela do scroll atual - inst_scr_x ja' esta certo
+  BMI uio_far_free
+  JMP uio_offscreen         ; tela ainda esta a frente (proxima) - ainda nao chegou a vez dela
+uio_far_free:
+  JMP uio_offscreen_free    ; tela ja ficou pra tras (passou de vez) - desliga a instancia
 uio_x_ok:
-  STA inst_scr_x
-  JSR load_frame_cellptr
-  LDY #0
-  LDA (tmp0),Y
-  STA cell_tl
-  INY
-  LDA (tmp0),Y
-  STA cell_tr
-  INY
-  LDA (tmp0),Y
-  STA cell_bl
-  INY
-  LDA (tmp0),Y
-  STA cell_br
-  ; flip autoral por celula (editor: mirror dentro do metatile) - independente do flip
-  ; de direcao (inst_dir) que vem a seguir. Os dois se combinam por XOR na escrita.
-  JSR load_frame_flipptr
-  LDY #0
-  LDA (tmp0),Y
-  STA cell_tl_fl
-  INY
-  LDA (tmp0),Y
-  STA cell_tr_fl
-  INY
-  LDA (tmp0),Y
-  STA cell_bl_fl
-  INY
-  LDA (tmp0),Y
-  STA cell_br_fl
+  JSR load_dx_ptr
+  LDA tmp0
+  STA uio_ptr_dx
+  LDA tmp1
+  STA uio_ptr_dx+1
+  JSR load_dy_ptr
+  LDA tmp0
+  STA uio_ptr_dy
+  LDA tmp1
+  STA uio_ptr_dy+1
   LDA inst_dir,X
-  BEQ uio_noflip
-  ; flip H de direcao: espelha o metasprite trocando TL<->TR e BL<->BR (tile E flip
-  ; autoral viajam juntos - cada celula continua com seu proprio flip depois da troca)
-  LDA cell_tl
-  PHA
-  LDA cell_tr
-  STA cell_tl
-  PLA
-  STA cell_tr
-  LDA cell_bl
-  PHA
-  LDA cell_br
-  STA cell_bl
-  PLA
-  STA cell_br
-  LDA cell_tl_fl
-  PHA
-  LDA cell_tr_fl
-  STA cell_tl_fl
-  PLA
-  STA cell_tr_fl
-  LDA cell_bl_fl
-  PHA
-  LDA cell_br_fl
-  STA cell_bl_fl
-  PLA
-  STA cell_br_fl
-uio_noflip:
+  BEQ uio_pick_normal
+  JSR load_tilef_ptr
+  LDA tmp0
+  STA uio_ptr_tile
+  LDA tmp1
+  STA uio_ptr_tile+1
+  JSR load_flipf_ptr
+  LDA tmp0
+  STA uio_ptr_flip
+  LDA tmp1
+  STA uio_ptr_flip+1
+  JMP uio_have_ptrs
+uio_pick_normal:
+  JSR load_tilen_ptr
+  LDA tmp0
+  STA uio_ptr_tile
+  LDA tmp1
+  STA uio_ptr_tile+1
+  JSR load_flipn_ptr
+  LDA tmp0
+  STA uio_ptr_flip
+  LDA tmp1
+  STA uio_ptr_flip+1
+uio_have_ptrs:
+  JSR load_frame_n
+  STA uio_n
   JSR uio_calc_off
-  LDY oam_off
-  ; --- TL ---
-  LDA cell_tl
-  CMP #$FF
-  BEQ uio_tl_hide
+  LDA #0
+  STA uio_i
+  LDA oam_off
+  STA uio_oamy
+uio_cellloop:
+  LDA uio_i
+  CMP uio_n
+  BCS uio_cellloop_done
+  TAY
+  LDA (uio_ptr_dx),Y
+  STA uio_a
+  LDA (uio_ptr_dy),Y
+  STA uio_b
+  LDA (uio_ptr_tile),Y
+  STA uio_c
+  LDA (uio_ptr_flip),Y
+  STA uio_d
+  LDY uio_oamy
   LDA inst_y,X
+  CLC
+  ADC uio_b
   STA $0200,Y
-  LDA cell_tl
+  LDA uio_c
   STA $0201,Y
-  LDA cell_tl_fl
-  EOR inst_dir,X
+  LDA uio_d
   STA $0202,Y
   LDA inst_scr_x
+  CLC
+  ADC uio_a
   STA $0203,Y
-  JMP uio_tr
-uio_tl_hide:
+  LDA uio_oamy
+  CLC
+  ADC #4
+  STA uio_oamy
+  INC uio_i
+  JMP uio_cellloop
+uio_cellloop_done:
+  ; esconde os slots sobrando ate completar @@MAX_CELLS@@ (frame menor que o
+  ; maior do projeto)
+  LDA #@@MAX_CELLS@@
+  SEC
+  SBC uio_n
+  BEQ uio_next
+  STA uio_hidecnt
+  LDY uio_oamy
+uio_hide_rest:
   LDA #$FF
   STA $0200,Y
-uio_tr:
-  ; --- TR ---
-  LDA cell_tr
-  CMP #$FF
-  BEQ uio_tr_hide
-  LDA inst_y,X
-  STA $0204,Y
-  LDA cell_tr
-  STA $0205,Y
-  LDA cell_tr_fl
-  EOR inst_dir,X
-  STA $0206,Y
-  LDA inst_scr_x
-  CLC
-  ADC #8
-  STA $0207,Y
-  JMP uio_bl
-uio_tr_hide:
-  LDA #$FF
-  STA $0204,Y
-uio_bl:
-  ; --- BL ---
-  LDA cell_bl
-  CMP #$FF
-  BEQ uio_bl_hide
-  LDA inst_y,X
-  CLC
-  ADC #8
-  STA $0208,Y
-  LDA cell_bl
-  STA $0209,Y
-  LDA cell_bl_fl
-  EOR inst_dir,X
-  STA $020A,Y
-  LDA inst_scr_x
-  STA $020B,Y
-  JMP uio_br
-uio_bl_hide:
-  LDA #$FF
-  STA $0208,Y
-uio_br:
-  ; --- BR ---
-  LDA cell_br
-  CMP #$FF
-  BEQ uio_br_hide
-  LDA inst_y,X
-  CLC
-  ADC #8
-  STA $020C,Y
-  LDA cell_br
-  STA $020D,Y
-  LDA cell_br_fl
-  EOR inst_dir,X
-  STA $020E,Y
-  LDA inst_scr_x
-  CLC
-  ADC #8
-  STA $020F,Y
+  INY
+  INY
+  INY
+  INY
+  DEC uio_hidecnt
+  BNE uio_hide_rest
   JMP uio_next
-uio_br_hide:
-  LDA #$FF
-  STA $020C,Y
+uio_offscreen_free:
+  LDA #0
+  STA inst_on,X   ; a tela dessa instancia ja ficou pra tras de vez - libera a vaga
 uio_offscreen:
   JSR uio_calc_off
   LDY oam_off
+  LDA #@@MAX_CELLS@@
+  STA uio_hidecnt
+uio_offscreen_hide:
   LDA #$FF
   STA $0200,Y
-  STA $0204,Y
-  STA $0208,Y
-  STA $020C,Y
-  JMP uio_next
+  INY
+  INY
+  INY
+  INY
+  DEC uio_hidecnt
+  BNE uio_offscreen_hide
 uio_next:
   INX
   CPX #@@NUM_INSTANCES@@
@@ -572,3 +705,6 @@ hide_player:
   STA player_on
   JSR update_player_oam
   RTS
+
+
+@@OAM_OFF_TABLE@@

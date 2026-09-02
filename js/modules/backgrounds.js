@@ -76,7 +76,7 @@ const BG = (() => {
           <button type="button" class="icon-btn tool-btn" data-bg-tool="flood" onclick="BG.setTool('flood')" title="Flood Fill">🌊</button>
           <button type="button" class="icon-btn tool-btn" data-bg-tool="attr" onclick="BG.setTool('attr')" title="Pincel de Paleta">🖌</button>
           <button type="button" class="icon-btn tool-btn" data-bg-tool="hitbox" onclick="BG.setTool('hitbox')" title="Hitbox Manual">🛡</button>
-          <button type="button" class="icon-btn tool-btn" data-bg-tool="assign" onclick="BG.setTool('assign')" title="Atribuir objeto (Dano/Warp/Spawn)">🎯</button>
+          <button type="button" class="icon-btn tool-btn" data-bg-tool="assign" onclick="BG.setTool('assign')" title="Atribuir objeto (Dano/Warp)">🎯</button>
           <button type="button" class="icon-btn tool-btn" data-bg-tool="erase" onclick="BG.setTool('erase')" title="Borracha">🧽</button>
           <button type="button" class="icon-btn tool-btn" data-bg-tool="text" onclick="BG.setTool('text')" title="Texto">🔤</button>
           <button type="button" class="icon-btn tool-btn" data-bg-tool="fill" onclick="BG.setTool('fill')" title="Auto-Fill">🪣</button>
@@ -126,7 +126,6 @@ const BG = (() => {
                   <button class="btn-tool collision-btn" data-col-type="2" onclick="BG.setCollisionType(2)" style="font-size:10px;background:#27ae60;color:#fff">🟩 2: Plataforma</button>
                   <button class="btn-tool collision-btn" data-col-type="3" onclick="BG.setCollisionType(3)" style="font-size:10px;background:#8e44ad;color:#fff">🟪 3: Dano</button>
                   <button class="btn-tool collision-btn" data-col-type="4" onclick="BG.setCollisionType(4)" style="font-size:10px;background:#d35400;color:#fff">🚪 4: Warp</button>
-                  <button class="btn-tool collision-btn" data-col-type="5" onclick="BG.setCollisionType(5)" style="font-size:10px;background:#16a085;color:#fff">🐣 5: Spawn</button>
                 </div>
               </div>
 
@@ -176,7 +175,7 @@ const BG = (() => {
                   <div id="selectedInfo" style="font-size:10px;color:#aaa;text-align:center">Nenhum</div>
                   <canvas id="selectedPreview" width="80" height="80" style="border:1px solid #ffcc00;background:#000;image-rendering:pixelated;display:block;cursor:pointer" title="Clique no sub-tile para alternar colisão!"></canvas>
                 </div>
-                <div style="border-top:1px solid #222;padding-top:6px;display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:10px;color:#ffcc00">🛡 Hitbox por Tile:</label><button class="btn-tool" onclick="BG.setAllSubTilesCollision()" style="font-size:9px;padding:1px 4px">Setar Todos</button></div><div style="display:flex;gap:4px"><select id="mtSubTileColSelect" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:10px"><option value="0">⬜ 0: Ar/Livre</option><option value="1">🟥 1: Sólido</option><option value="2">🟩 2: Plataforma</option><option value="3">🟪 3: Dano/Espinho</option><option value="4">🚪 4: Warp</option><option value="5">🐣 5: Spawn</option></select><button class="btn-tool" onclick="BG.applyMetatileHitboxToCanvas()" style="font-size:10px;background:#27ae60;color:#fff">⚡ Recalcular</button></div></div>
+                <div style="border-top:1px solid #222;padding-top:6px;display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:10px;color:#ffcc00">🛡 Hitbox por Tile:</label><button class="btn-tool" onclick="BG.setAllSubTilesCollision()" style="font-size:9px;padding:1px 4px">Setar Todos</button></div><div style="display:flex;gap:4px"><select id="mtSubTileColSelect" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:10px"><option value="0">⬜ 0: Ar/Livre</option><option value="1">🟥 1: Sólido</option><option value="2">🟩 2: Plataforma</option><option value="3">🟪 3: Dano/Espinho</option><option value="4">🚪 4: Warp</option></select><button class="btn-tool" onclick="BG.applyMetatileHitboxToCanvas()" style="font-size:10px;background:#27ae60;color:#fff">⚡ Recalcular</button></div></div>
                 <div id="mtDefaultObjWrap" style="border-top:1px solid #222;padding-top:6px;display:none;flex-direction:column;gap:4px">
                   <label style="font-size:10px;color:#ffcc00">🎯 Objeto padrão (Dano/Warp):</label>
                   <select id="mtDefaultObjSelect" onchange="BG.setMetatileDefaultObject(this.value)" style="background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:10px"></select>
@@ -306,7 +305,7 @@ const BG = (() => {
     if(t === 'flood') { label.textContent = 'Modo: Flood Fill'; help.textContent = 'Preenche área contígua com o metatile selecionado.'; }
     else if(t === 'attr') { label.textContent = 'Modo: Pincel de Atributo'; help.textContent = 'Pinta a paleta mantendo as estampas.'; }
     else if(t === 'hitbox') { label.textContent = 'Modo: Hitbox Manual'; help.textContent = 'Pinta colisão individualmente (inclui Warp). Shift+clique apaga.'; }
-    else if(t === 'assign') { label.textContent = 'Modo: Atribuir Objeto'; help.textContent = 'Clique num tile de Dano/Warp/Spawn - todos os vizinhos conectados do mesmo tipo são atribuídos juntos.'; }
+    else if(t === 'assign') { label.textContent = 'Modo: Atribuir Objeto'; help.textContent = 'Clique num tile de Dano/Warp - todos os vizinhos conectados do mesmo tipo são atribuídos juntos.'; }
     else if(t === 'fill') { label.textContent = 'Modo: Auto-Fill'; help.textContent = 'Botões = massa. Clique no canvas = flood: troca região conectada pelo metatile selecionado.'; }
     else if(t === 'erase') { label.textContent = 'Modo: Borracha'; help.textContent = 'Clique (ou arraste) num tile para apagá-lo, tile por tile.'; }
     else if(t === 'text') { 
@@ -440,7 +439,6 @@ const BG = (() => {
           else if(colType === 2) { cctx.fillStyle = 'rgba(39, 174, 96, 0.5)'; cctx.strokeStyle = '#27ae60'; }
           else if(colType === 3) { cctx.fillStyle = 'rgba(142, 68, 173, 0.55)'; cctx.strokeStyle = '#9b59b6'; }
           else if(colType === 4) { cctx.fillStyle = 'rgba(211, 84, 0, 0.55)'; cctx.strokeStyle = '#e67e22'; }
-          else if(colType === 5) { cctx.fillStyle = 'rgba(22, 160, 133, 0.55)'; cctx.strokeStyle = '#1abc9c'; }
           cctx.fillRect(gx*tilePxW, gy*tilePxH, tilePxW, tilePxH);
           cctx.strokeRect(gx*tilePxW + 0.5, gy*tilePxH + 0.5, tilePxW - 1, tilePxH - 1);
         }
@@ -452,19 +450,18 @@ const BG = (() => {
   }
 
   // Mostra/popula o seletor de "objeto padrão" só quando o metatile selecionado tem algum
-  // sub-tile marcado como Dano(3), Warp(4) ou Spawn(5) - senão não faz sentido perguntar.
+  // sub-tile marcado como Dano(3) ou Warp(4) - senão não faz sentido perguntar.
   function updateMetatileDefaultObjectUI(){
     const wrap = document.getElementById('mtDefaultObjWrap');
     const sel = document.getElementById('mtDefaultObjSelect');
     if(!wrap || !sel || !selectedMetatile) { if(wrap) wrap.style.display = 'none'; return; }
     const hasDano = selectedMetatile.collisions.some(c => c === 3);
     const hasWarp = selectedMetatile.collisions.some(c => c === 4);
-    const hasSpawn = selectedMetatile.collisions.some(c => c === 5);
-    if(!hasDano && !hasWarp && !hasSpawn){ wrap.style.display = 'none'; return; }
+    if(!hasDano && !hasWarp){ wrap.style.display = 'none'; return; }
     wrap.style.display = 'flex';
-    const objs = (Project.data?.hitboxObjects || []).filter(o => (hasDano && o.kind === 'dano') || (hasWarp && o.kind === 'warp') || (hasSpawn && o.kind === 'spawn'));
+    const objs = (Project.data?.hitboxObjects || []).filter(o => (hasDano && o.kind === 'dano') || (hasWarp && o.kind === 'warp'));
     const cur = selectedMetatile.defaultHitboxObjectId || '';
-    const iconFor = k => k==='dano' ? '🔻' : (k==='warp' ? '🚪' : '🐣');
+    const iconFor = k => k==='dano' ? '🔻' : '🚪';
     sel.innerHTML = '<option value="">— nenhum (sem objeto padrão) —</option>' + objs.map(o => `<option value="${o.id}" ${o.id===cur?'selected':''}>${iconFor(o.kind)} ${o.name}</option>`).join('');
   }
   function setMetatileDefaultObject(id){
@@ -553,7 +550,7 @@ const BG = (() => {
   // é feito depois, clicando na instância já colocada (ver reassignHitboxInstance).
   function setHitboxInstanceAt(x, y, colType, defaultObjId){
     const idx = hitboxInstances.findIndex(h => h.x === x && h.y === y);
-    if(colType === 3 || colType === 4 || colType === 5){
+    if(colType === 3 || colType === 4){
       if(idx >= 0) hitboxInstances[idx].hitboxObjectId = defaultObjId || null;
       else hitboxInstances.push({ x, y, hitboxObjectId: defaultObjId || null });
     } else if(idx >= 0){
@@ -592,9 +589,9 @@ const BG = (() => {
   // vez (flood por padrão) - não precisa mais clicar tile por tile.
   function assignHitboxObjectAt(tx, ty){
     const colType = collisionMap[ty*32+tx];
-    if(colType !== 3 && colType !== 4 && colType !== 5){ alert('Não há hitbox de Dano/Warp/Spawn nesse tile. Pinte um primeiro (ferramenta Hitbox ou um metatile compatível).'); return; }
-    const kind = colType === 4 ? 'warp' : (colType === 5 ? 'spawn' : 'dano');
-    const kindLabel = kind === 'warp' ? 'Warp' : (kind === 'spawn' ? 'Spawn' : 'Dano');
+    if(colType !== 3 && colType !== 4){ alert('Não há hitbox de Dano/Warp nesse tile. Pinte um primeiro (ferramenta Hitbox ou um metatile compatível).'); return; }
+    const kind = colType === 4 ? 'warp' : 'dano';
+    const kindLabel = kind === 'warp' ? 'Warp' : 'Dano';
     const objs = (Project.data?.hitboxObjects || []).filter(o => o.kind === kind);
     if(objs.length === 0){ alert(`Nenhum objeto de ${kindLabel} cadastrado ainda. Crie um em Programação > Objetos.`); return; }
     const region = floodCollectSameCollisionType(tx, ty, colType);
@@ -1138,7 +1135,6 @@ const BG = (() => {
             else if(type === 2) { bgCtx.fillStyle = 'rgba(39, 174, 96, 0.4)'; bgCtx.strokeStyle = '#27ae60'; } // Cor da Plataforma no canvas
             else if(type === 3) { bgCtx.fillStyle = 'rgba(142, 68, 173, 0.45)'; bgCtx.strokeStyle = '#9b59b6'; }
             else if(type === 4) { bgCtx.fillStyle = 'rgba(211, 84, 0, 0.45)'; bgCtx.strokeStyle = '#e67e22'; } // Cor da Warp no canvas
-            else if(type === 5) { bgCtx.fillStyle = 'rgba(22, 160, 133, 0.45)'; bgCtx.strokeStyle = '#1abc9c'; } // Cor do Spawn no canvas
             bgCtx.fillRect(tx*16, ty*16, 16, 16);
             bgCtx.strokeRect(tx*16+0.5, ty*16+0.5, 15, 15);
           }
