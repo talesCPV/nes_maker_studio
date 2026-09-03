@@ -11712,19 +11712,21 @@
             "levelMap": {
                 "cols": 2,
                 "rows": 1,
-                "transitionType": "scroll_h",
+                "transitionType": "hard_cut",
                 "cells": {
                     "0,0": {
                         "bgId": "scr_1788113096427",
                         "type": "background",
                         "x": 0,
-                        "y": 0
+                        "y": 0,
+                        "hardCut": true
                     },
                     "1,0": {
                         "bgId": "scr_1788113096427",
                         "type": "background",
                         "x": 1,
-                        "y": 0
+                        "y": 0,
+                        "hardCut": true
                     }
                 }
             },
@@ -11822,6 +11824,51 @@
                 }
             ],
             "created": 1788049242917
+        },
+        {
+            "id": "char_1788448478168",
+            "name": "Enemy",
+            "type": "enemy",
+            "origin": {
+                "x": 0,
+                "y": 0
+            },
+            "hitbox": {
+                "x": 0,
+                "y": 0,
+                "w": 8,
+                "h": 16
+            },
+            "hitboxes": [
+                {
+                    "id": "hb_body",
+                    "name": "Corpo",
+                    "type": "body",
+                    "x": 0,
+                    "y": 13,
+                    "w": 16,
+                    "h": 19
+                }
+            ],
+            "jumpForceId": "jf_1788357343390",
+            "speedId": "sp_1788357426575",
+            "animations": [
+                {
+                    "id": "idle",
+                    "name": "Idle",
+                    "fps": 8,
+                    "loop": true,
+                    "frames": [
+                        {
+                            "metatileId": "mt_1788049090518",
+                            "duration": 8,
+                            "offsetX": 0,
+                            "offsetY": 0
+                        }
+                    ]
+                }
+            ],
+            "created": 1788448478168
         }
     ],
     "cheats": [],
@@ -11942,7 +11989,7 @@
                     "eventId": "",
                     "actionId": "move_character",
                     "charId": "char_1788049242917",
-                    "animId": "idle",
+                    "animId": "anim_1788049311073",
                     "direction": "right",
                     "flip": "default"
                 },
@@ -11969,7 +12016,7 @@
                     "eventId": "",
                     "actionId": "move_character",
                     "charId": "char_1788049242917",
-                    "animId": "idle",
+                    "animId": "anim_1788049311073",
                     "direction": "left"
                 },
                 {
@@ -12051,6 +12098,24 @@
                     "charId": "char_1788049242917"
                 }
             ]
+        },
+        {
+            "id": "rule_1788448392733",
+            "name": "Spaw Enemy",
+            "scope": "global",
+            "steps": [
+                {
+                    "type": "if_screen",
+                    "eventId": "",
+                    "screenId": "scr_1788113096427"
+                },
+                {
+                    "type": "action",
+                    "eventId": "",
+                    "actionId": "spawn_character",
+                    "targetId": "hb_1788113788623"
+                }
+            ]
         }
     ],
     "hitboxObjects": [
@@ -12065,9 +12130,24 @@
             "name": "Dano Simon",
             "kind": "dano",
             "damage": 10
+        },
+        {
+            "id": "hb_1788448548074805",
+            "name": "Spawn Enemy",
+            "kind": "spawn",
+            "characterId": "char_1788448478168"
         }
     ],
-    "hitboxInstances": [],
+    "hitboxInstances": [
+        {
+            "id": "inst_1788448548074999",
+            "screenId": "scr_1788113096427",
+            "hitboxObjectId": "hb_1788448548074805",
+            "characterId": "char_1788448478168",
+            "x": 202,
+            "y": 79
+        }
+    ],
     "menus": [],
     "jumpForces": [
         {
@@ -16031,7 +16111,7 @@
         ],
         "asm": ""
     },
-    "savedAt": 1788442280225,
+    "savedAt": 1788467053384,
     "paletteBank": [
         {
             "id": "pal_1",

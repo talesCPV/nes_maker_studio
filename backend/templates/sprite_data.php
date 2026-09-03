@@ -173,6 +173,14 @@ return [
             $frames = is_array($cd['frames'] ?? null) ? $cd['frames'] : [];
             return max(1, count($frames)) & 0xFF;
         }, $charData));
+        // Fase 9 fix (rodada 4): quantos frames a 1a animacao (a "padrao",
+        // tocada ao nascer) desse personagem tem - usado pra inicializar
+        // inst_anim_start/inst_anim_end no spawn (ver spawn_enemies /
+        // spawn_append_screen).
+        $lines[] = 'CharFirstAnimCount:';
+        $lines[] = '  .byte ' . implode(', ', array_map(static function($cd) {
+            return max(1, min(255, (int)($cd['firstAnimCount'] ?? 1)));
+        }, $charData));
         return trim(implode("\n", $lines));
     },
 ];

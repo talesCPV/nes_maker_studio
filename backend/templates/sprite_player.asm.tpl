@@ -416,10 +416,10 @@ animate_player:
   LDA player_timer
   BNE ap_done
   INC player_frame
-  LDA #@@HERO_FRAMES@@
+  LDA player_anim_end
   CMP player_frame
   BNE ap_reload
-  LDA #0
+  LDA player_anim_start
   STA player_frame
 ap_reload:
   LDY player_frame
@@ -439,6 +439,9 @@ spawn_player:
   STA on_ground
   STA play_idx       ; primeira tela da fase
   STA player_frame
+  STA player_anim_start
+  LDA #@@HERO_FIRST_ANIM_COUNT@@
+  STA player_anim_end
   LDA CharDur_@@HERO@@
   STA player_timer
   LDA #1

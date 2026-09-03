@@ -216,6 +216,15 @@ final class ProgramCompiler
             'phaseIndexById' => $phaseIndexById,
             'screenIndexById' => $screenIndexById,
             'soundsById' => $this->buildSoundsById($project),
+            'heroAnimRanges' => is_array($spriteCtx['charData'][$heroIdx]['animRanges'] ?? null) ? $spriteCtx['charData'][$heroIdx]['animRanges'] : [],
+            'heroCharIdx' => $heroIdx,
+            'charAnimRangesById' => (static function () use ($charIndexById, $spriteCtx): array {
+                $out = [];
+                foreach ($charIndexById as $cid => $idx) {
+                    $out[$cid] = is_array($spriteCtx['charData'][$idx]['animRanges'] ?? null) ? $spriteCtx['charData'][$idx]['animRanges'] : [];
+                }
+                return $out;
+            })(),
         ];
 
         $ruleBodies = [];
@@ -778,28 +787,83 @@ final class ProgramCompiler
                 return ["  ; Acao: Aplicar Nivel de Velocidade ({$val} px/frame)", "  LDA #{$val}", "  STA pv_move_speed"];
             case 'move_character': {
                 $charId = (string)($step['charId'] ?? '');
-                if (!isset($heroIds[$charId])) {
-                    return ["  ; Acao: Mover - so suportado pro heroi por enquanto (alvo nao e o heroi)"];
+                if (isset($heroIds[$charId])) {
+                    $direction = (string)($step['direction'] ?? '');
+                    $flip = (string)($step['flip'] ?? 'default');
+                    if ($direction === 'left') {
+                        $lines = ["  ; Acao: Mover heroi esquerda", "  JSR mv_hero_left"];
+                    } elseif ($direction === 'right') {
+                        $lines = ["  ; Acao: Mover heroi direita", "  JSR mv_hero_right"];
+                    } elseif ($direction === 'jump') {
+                        $lines = ["  ; Acao: Mover heroi pulo", "  JSR mv_hero_jump"];
+                        if ($flip === 'flip_h') { $lines[] = "  LDA #1"; $lines[] = "  STA player_flip"; }
+                        elseif ($flip === 'default') { $lines[] = "  LDA #0"; $lines[] = "  STA player_flip"; }
+                    } else {
+                        // up/down/zigzag: motor atual e' plataforma 2D (sem movimento
+                        // vertical livre nem patrulha zig-zag pro heroi) - Fase 7.
+                        return ["  ; Acao: Mover ({$direction}) - Fase 7 (motor ainda so suporta esquerda/direita/pulo pro heroi) - no-op"];
+                    }
+                    if (!empty($step['animId'])) {
+                        $range = $hbCtx['heroAnimRanges'][$step['animId']] ?? null;
+                        if ($range === null) {
+                            $lines[] = "  ; animId '{$step['animId']}' nao encontrado nas animacoes do heroi, ignorado";
+                        } else {
+                            $start = max(0, min(255, (int)$range['start']));
+                            $count = max(1, min(255, (int)$range['count']));
+                            // So' troca (e reinicia o frame) se a animacao ativa ainda
+                            // NAO for essa - senao uma regra que dispara todo frame (ex:
+                            // "SE Direita pressionada ENTAO Mover") reiniciaria o ciclo
+                            // de animacao a cada frame, travando sempre no frame 0.
+                            $lines[] = "  ; Acao: Trocar animacao do heroi pra '{$step['animId']}' ({$count} frame(s))";
+                            $lines[] = "  LDA player_anim_start";
+                            $lines[] = "  CMP #{$start}";
+                            $albl = $this->soundLabel('ma_', (string)$step['animId']);
+                            $lines[] = "  BEQ {$tag}_{$albl}_skip";
+                            $lines[] = "  LDA #{$start}";
+                            $lines[] = "  STA player_anim_start";
+                            $lines[] = "  STA player_frame";
+                            $lines[] = "  LDA #" . ($start + $count);
+                            $lines[] = "  STA player_anim_end";
+                            $lines[] = "  LDY player_frame";
+                            $lines[] = "  LDA CharDur_{$hbCtx['heroCharIdx']},Y";
+                            $lines[] = "  STA player_timer";
+                            $lines[] = "{$tag}_{$albl}_skip:";
+                        }
+                    }
+                    return $lines;
                 }
-                $direction = (string)($step['direction'] ?? '');
-                $flip = (string)($step['flip'] ?? 'default');
-                if ($direction === 'left') {
-                    $lines = ["  ; Acao: Mover heroi esquerda", "  JSR mv_hero_left"];
-                } elseif ($direction === 'right') {
-                    $lines = ["  ; Acao: Mover heroi direita", "  JSR mv_hero_right"];
-                } elseif ($direction === 'jump') {
-                    $lines = ["  ; Acao: Mover heroi pulo", "  JSR mv_hero_jump"];
-                    if ($flip === 'flip_h') { $lines[] = "  LDA #1"; $lines[] = "  STA player_flip"; }
-                    elseif ($flip === 'default') { $lines[] = "  LDA #0"; $lines[] = "  STA player_flip"; }
-                } else {
-                    // up/down/zigzag: motor atual e' plataforma 2D (sem movimento
-                    // vertical livre nem patrulha zig-zag pro heroi) - Fase 7.
-                    return ["  ; Acao: Mover ({$direction}) - Fase 7 (motor ainda so suporta esquerda/direita/pulo pro heroi) - no-op"];
+                // Fase 9 (rodada 4): personagem/inimigo - movimento com direcao
+                // livre ainda nao existe pra instancia (so' o heroi tem
+                // mv_hero_left/right/jump), mas a TROCA DE ANIMACAO ja pode
+                // aplicar na instancia especifica que bateu na condicao "SE
+                // hitbox" imediatamente anterior (mesma convencao de
+                // kill_character).
+                if (isset($charIndexById[$charId]) && isset($instanceTargets[$charId]) && !empty($step['animId'])) {
+                    $range = $hbCtx['charAnimRangesById'][$charId][$step['animId']] ?? null;
+                    if ($range === null) {
+                        return ["  ; Acao: Mover - animId '{$step['animId']}' nao encontrado nas animacoes desse personagem, ignorado"];
+                    }
+                    $start = max(0, min(255, (int)$range['start']));
+                    $count = max(1, min(255, (int)$range['count']));
+                    $scratchVar = $instanceTargets[$charId];
+                    $albl = $this->soundLabel('ma_', (string)$step['animId']);
+                    return [
+                        "  ; Acao: Mover - direcao livre ainda nao suportada pra personagem (so' pro heroi); troca so' a animacao da instancia que bateu na condicao anterior pra '{$step['animId']}' ({$count} frame(s))",
+                        "  LDX {$scratchVar}",
+                        "  LDA inst_anim_start,X",
+                        "  CMP #{$start}",
+                        "  BEQ {$tag}_{$albl}_skip",
+                        "  LDA #{$start}",
+                        "  STA inst_anim_start,X",
+                        "  STA inst_frame,X",
+                        "  LDA #" . ($start + $count),
+                        "  STA inst_anim_end,X",
+                        "  JSR load_frame_duration",
+                        "  STA inst_timer,X",
+                        "{$tag}_{$albl}_skip:",
+                    ];
                 }
-                if (!empty($step['animId'])) {
-                    $lines[] = "  ; animId '{$step['animId']}' - selecao de animacao por regra ainda nao existe (Fase 7)";
-                }
-                return $lines;
+                return ["  ; Acao: Mover - direcao livre so' suportada pro heroi por enquanto (alvo nao e o heroi, ou nao ha instancia resolvida por um SE hitbox anterior)"];
             }
             case 'play_sound':
                 return $this->compilePlaySound($targetId, $hbCtx);

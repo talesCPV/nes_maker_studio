@@ -11,11 +11,12 @@ return [
         $frames = max(1, (int)($ctx['sprite']['heroFrameCount'] ?? 1));
         $maxCells = max(1, (int)($ctx['sprite']['maxCells'] ?? 4));
         $ovBase = 0x0200 + $maxCells * 4;
+        $firstAnimCount = max(1, (int)($ctx['sprite']['charData'][$hero]['firstAnimCount'] ?? $frames));
         $tpl = file_get_contents(__DIR__ . '/sprite_player.asm.tpl');
         if ($tpl === false) throw new RuntimeException('Template sprite_player ausente.');
         return str_replace(
-            ['@@HERO@@', '@@HERO_FRAMES@@', '@@MAX_CELLS@@', '@@PLAYER_TOTAL_SLOTS@@', '@@PLAYER_OV_BASE@@'],
-            [$hero, $frames, $maxCells, $maxCells + 4, sprintf('$%04X', $ovBase)],
+            ['@@HERO@@', '@@HERO_FRAMES@@', '@@MAX_CELLS@@', '@@PLAYER_TOTAL_SLOTS@@', '@@PLAYER_OV_BASE@@', '@@HERO_FIRST_ANIM_COUNT@@'],
+            [$hero, $frames, $maxCells, $maxCells + 4, sprintf('$%04X', $ovBase), $firstAnimCount],
             trim($tpl)
         );
     },

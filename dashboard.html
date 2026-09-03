@@ -253,12 +253,14 @@
 
         .trashCard,
         .libraryCard,
+        .mergeCard,
         .newprojCard {
             display: none;
         }
 
         .trashCard,
-        .libraryCard {
+        .libraryCard,
+        .mergeCard {
             width: 80vw !important;
             max-width: 900px;
             max-height: 85vh;
@@ -268,7 +270,8 @@
         }
 
         .trashCard h2,
-        .libraryCard h2 {
+        .libraryCard h2,
+        .mergeCard h2 {
             flex: 0 0 auto;
             margin: 0 0 8px;
             align-self: flex-start;
@@ -276,16 +279,76 @@
         }
 
         .trashCard .message,
-        .libraryCard .message {
+        .libraryCard .message,
+        .mergeCard .message {
             flex: 0 0 auto;
         }
 
         .trashCard #trashList,
-        .libraryCard #libraryList {
+        .libraryCard #libraryList,
+        .mergeCard #mergeRomList {
             flex: 1 1 auto;
             min-height: 0;
             overflow-y: auto;
             margin-top: 12px;
+        }
+
+        .merge-tabs {
+            display: flex;
+            gap: 6px;
+            margin: 4px 0 0;
+            flex: 0 0 auto;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .merge-tabs button[data-mapper] {
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #444;
+            background: #1a1a1a;
+            color: #aaa;
+            cursor: pointer;
+        }
+
+        .merge-tabs button[data-mapper].active {
+            background: #8e44ad;
+            border-color: #8e44ad;
+            color: #fff;
+        }
+
+        .merge-rom-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #141414;
+            margin-bottom: 8px;
+        }
+
+        .merge-rom-item .meta { flex: 1; min-width: 0; }
+        .merge-rom-item .meta strong { display: block; color: #eee; font-size: 13px; }
+        .merge-rom-item .meta span { font-size: 11px; color: #777; }
+        .merge-rom-item input.merge-name {
+            width: 100%;
+            max-width: 220px;
+            background: #0a0a0a;
+            border: 1px solid #444;
+            color: #eee;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+        .merge-toolbar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 8px;
+            flex: 0 0 auto;
         }
 
         .library-tabs {
@@ -453,6 +516,16 @@
             </button>
 
             <button
+                id="mergeRomsButton"
+                class="icon-btn secondary"
+                type="button"
+                title="Merge ROMs — multicart por mapper"
+                aria-label="Merge ROMs"
+            >
+                🧬
+            </button>
+
+            <button
                 id="logoutButton"
                 class="icon-btn secondary"
                 type="button"
@@ -612,6 +685,39 @@
             id="libraryList"
             class="project-list"
         ></div>
+
+    </div>
+
+    <div class="card dash-card mergeCard">
+
+        <button
+            id="closeMergeModal"
+            class="close"
+            type="button"
+        >
+        &times;
+        </button>
+
+        <h2>🧬 Merge ROMs (multicart)</h2>
+
+        <p class="message" style="color:#888;margin:0 0 8px;font-size:12px;line-height:1.45">
+            Envie arquivos <b>.nes</b>. O mapper é detectado pelo header iNES.
+            Cada aba agrupa ROMs do <b>mesmo mapper</b> — não é possível misturar mappers num único multicart.
+            Voltar ao menu no cartucho = <b>Reset</b>.
+        </p>
+
+        <div class="merge-toolbar">
+            <button type="button" id="mergeUploadBtn" class="icon-btn" title="Adicionar ROM .nes" style="width:auto;padding:6px 12px;border-radius:6px">⬆ Adicionar .nes</button>
+            <input type="file" id="mergeRomInput" accept=".nes,application/octet-stream" multiple style="display:none">
+            <button type="button" id="mergeBuildBtn" class="icon-btn" title="Gerar multicart desta aba" style="width:auto;padding:6px 12px;border-radius:6px;background:#8e44ad;border-color:#8e44ad;color:#fff" disabled>🔨 Gerar multicart</button>
+            <span id="mergeStatus" class="message" style="margin:0;font-size:12px;color:#aaa"></span>
+        </div>
+
+        <div class="merge-tabs" id="mergeMapperTabs">
+            <span style="font-size:11px;color:#666">Nenhuma ROM ainda — faça upload</span>
+        </div>
+
+        <div id="mergeRomList" class="project-list"></div>
 
     </div>
 
@@ -1626,6 +1732,7 @@ function openEditProjectModal(project) {
 
     trashCard.classList.remove('open');
     if (libraryCard) libraryCard.classList.remove('open');
+    if (mergeCard) mergeCard.classList.remove('open');
     modal.classList.add('open');
     newprojCard.classList.add('open');
 }
@@ -1642,6 +1749,7 @@ document
             setProjectModalMode('create');
             trashCard.classList.remove('open');
             if (libraryCard) libraryCard.classList.remove('open');
+            if (mergeCard) mergeCard.classList.remove('open');
             modal.classList.add('open');
             newprojCard.classList.add('open');
         }
@@ -1653,12 +1761,14 @@ document
    ========================================================= */
 
 const libraryCard = document.querySelector('.libraryCard');
+const mergeCard = document.querySelector('.mergeCard');
 let libraryActiveType = 'sound';
 
 function closeDashboardModal() {
     modal.classList.remove('open');
     trashCard.classList.remove('open');
     if (libraryCard) libraryCard.classList.remove('open');
+    if (mergeCard) mergeCard.classList.remove('open');
     newprojCard.classList.remove('open');
 }
 
@@ -1672,6 +1782,10 @@ document
 
 document
     .getElementById('closeLibraryModal')
+    ?.addEventListener('click', closeDashboardModal);
+
+document
+    .getElementById('closeMergeModal')
     ?.addEventListener('click', closeDashboardModal);
 
 /*
@@ -1700,6 +1814,7 @@ modal.addEventListener(
         async () => {
             newprojCard.classList.remove('open');
             if (libraryCard) libraryCard.classList.remove('open');
+            if (mergeCard) mergeCard.classList.remove('open');
             modal.classList.add('open');
             trashCard.classList.add('open');
             await loadTrash();
@@ -1821,6 +1936,7 @@ async function loadLibrary(type) {
 document.getElementById('libraryButton')?.addEventListener('click', async () => {
     newprojCard.classList.remove('open');
     trashCard.classList.remove('open');
+    if (mergeCard) mergeCard.classList.remove('open');
     modal.classList.add('open');
     if (libraryCard) libraryCard.classList.add('open');
     await loadLibrary(libraryActiveType);
@@ -2168,6 +2284,227 @@ document.getElementById('importNmsInput')?.addEventListener('change', async (e) 
     if (f) await importNmsFile(f);
     e.target.value = '';
 });
+
+
+/* =========================================================
+   MERGE ROMs — multicart por mapper (UI + detecção iNES)
+   ========================================================= */
+
+/** @type {Map<number, Array<{id:string,menuName:string,fileName:string,mapper:number,prgBanks:number,chrBanks:number,prgSize:number,chrSize:number,mirroring:string,bytes:Uint8Array}>>} */
+const mergeRomsByMapper = new Map();
+let mergeActiveMapper = null;
+let mergeIdSeq = 1;
+
+const MAPPER_NAMES = {
+    0: 'NROM', 1: 'MMC1', 2: 'UNROM', 3: 'CNROM', 4: 'MMC3',
+    7: 'AxROM', 9: 'MMC2', 10: 'MMC4', 11: 'Color Dreams',
+    30: 'UNROM-512', 66: 'GxROM', 69: 'FME-7', 71: 'Camerica'
+};
+
+function mapperLabel(m) {
+    const n = MAPPER_NAMES[m];
+    return n ? `${m} · ${n}` : `Mapper ${m}`;
+}
+
+function parseInesHeader(u8) {
+    if (!u8 || u8.length < 16) throw new Error('Arquivo muito curto');
+    if (u8[0] !== 0x4E || u8[1] !== 0x45 || u8[2] !== 0x53 || u8[3] !== 0x1A) {
+        throw new Error('Não é um arquivo iNES (.nes)');
+    }
+    const prgBanks = u8[4];
+    const chrBanks = u8[5];
+    const f6 = u8[6];
+    const f7 = u8[7];
+    // iNES 1.0 mapper; se iNES2 (f7 & 0x0C)==0x08, ainda usamos nibble clássico + upper
+    let mapper = (f6 >> 4) | (f7 & 0xF0);
+    if ((f7 & 0x0C) === 0x08) {
+        // iNES 2.0: mapper 12-bit
+        mapper = (f6 >> 4) | (f7 & 0xF0) | ((u8[8] & 0x0F) << 8);
+    }
+    const mirroring = (f6 & 1) ? 'vertical' : 'horizontal';
+    const hasTrainer = !!(f6 & 4);
+    const prgSize = prgBanks * 16384;
+    const chrSize = chrBanks * 8192;
+    const headerExtra = 16 + (hasTrainer ? 512 : 0);
+    if (u8.length < headerExtra + prgSize + chrSize) {
+        // alguns dumps têm sobra/falta — só avisa se PRG não cabe
+        if (u8.length < headerExtra + Math.min(prgSize, 16384)) {
+            throw new Error('Arquivo truncado (PRG incompleto)');
+        }
+    }
+    return {
+        mapper, prgBanks, chrBanks, prgSize, chrSize, mirroring, hasTrainer
+    };
+}
+
+function mergeSetStatus(msg, isError) {
+    const el = document.getElementById('mergeStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.color = isError ? '#e74c3c' : '#aaa';
+}
+
+function mergeRenderTabs() {
+    const tabs = document.getElementById('mergeMapperTabs');
+    if (!tabs) return;
+    const mappers = [...mergeRomsByMapper.keys()].sort((a, b) => a - b);
+    if (!mappers.length) {
+        tabs.innerHTML = '<span style="font-size:11px;color:#666">Nenhuma ROM ainda — faça upload</span>';
+        mergeActiveMapper = null;
+        return;
+    }
+    if (mergeActiveMapper === null || !mergeRomsByMapper.has(mergeActiveMapper)) {
+        mergeActiveMapper = mappers[0];
+    }
+    tabs.innerHTML = '';
+    mappers.forEach(m => {
+        const count = (mergeRomsByMapper.get(m) || []).length;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('data-mapper', String(m));
+        btn.className = m === mergeActiveMapper ? 'active' : '';
+        btn.textContent = `${mapperLabel(m)} (${count})`;
+        btn.addEventListener('click', () => {
+            mergeActiveMapper = m;
+            mergeRenderTabs();
+            mergeRenderList();
+        });
+        tabs.appendChild(btn);
+    });
+}
+
+function mergeRenderList() {
+    const list = document.getElementById('mergeRomList');
+    const buildBtn = document.getElementById('mergeBuildBtn');
+    if (!list) return;
+    list.innerHTML = '';
+    const items = mergeActiveMapper != null ? (mergeRomsByMapper.get(mergeActiveMapper) || []) : [];
+    if (buildBtn) buildBtn.disabled = items.length < 1;
+
+    if (!items.length) {
+        list.innerHTML = '<div class="message" style="color:#666">Nenhuma ROM nesta aba.</div>';
+        return;
+    }
+
+    items.forEach((rom, index) => {
+        const row = document.createElement('div');
+        row.className = 'merge-rom-item';
+        row.innerHTML = `
+            <div class="meta">
+                <input type="text" class="merge-name" maxlength="28" value="">
+                <span></span>
+            </div>
+            <div class="actions" style="display:flex;gap:6px;flex-shrink:0">
+                <button type="button" class="icon-btn secondary" title="Remover" data-act="del">🗑</button>
+            </div>
+        `;
+        const nameInput = row.querySelector('.merge-name');
+        nameInput.value = rom.menuName;
+        nameInput.addEventListener('change', () => {
+            rom.menuName = (nameInput.value || '').trim() || rom.fileName.replace(/\.nes$/i, '');
+            nameInput.value = rom.menuName;
+        });
+        row.querySelector('span').textContent =
+            `${rom.fileName} · PRG ${(rom.prgSize/1024)|0}KB · CHR ${rom.chrBanks ? ((rom.chrSize/1024)|0)+'KB' : 'RAM'} · ${rom.mirroring}`;
+        row.querySelector('[data-act="del"]').addEventListener('click', () => {
+            const arr = mergeRomsByMapper.get(rom.mapper) || [];
+            const i = arr.findIndex(x => x.id === rom.id);
+            if (i >= 0) arr.splice(i, 1);
+            if (!arr.length) mergeRomsByMapper.delete(rom.mapper);
+            mergeRenderTabs();
+            mergeRenderList();
+            mergeSetStatus('ROM removida.');
+        });
+        list.appendChild(row);
+    });
+}
+
+async function mergeAddFiles(fileList) {
+    const files = [...(fileList || [])];
+    if (!files.length) return;
+    let added = 0;
+    let errors = [];
+    for (const file of files) {
+        try {
+            const buf = new Uint8Array(await file.arrayBuffer());
+            const info = parseInesHeader(buf);
+            const base = (file.name || 'jogo').replace(/\.nes$/i, '');
+            const entry = {
+                id: 'rom_' + (mergeIdSeq++),
+                menuName: base.slice(0, 28),
+                fileName: file.name || (base + '.nes'),
+                mapper: info.mapper,
+                prgBanks: info.prgBanks,
+                chrBanks: info.chrBanks,
+                prgSize: info.prgSize,
+                chrSize: info.chrSize,
+                mirroring: info.mirroring,
+                bytes: buf
+            };
+            if (!mergeRomsByMapper.has(info.mapper)) {
+                mergeRomsByMapper.set(info.mapper, []);
+            }
+            mergeRomsByMapper.get(info.mapper).push(entry);
+            mergeActiveMapper = info.mapper;
+            added++;
+        } catch (err) {
+            errors.push((file.name || '?') + ': ' + (err.message || err));
+        }
+    }
+    mergeRenderTabs();
+    mergeRenderList();
+    if (added) {
+        mergeSetStatus(
+            `+${added} ROM(s) · aba ${mapperLabel(mergeActiveMapper)}` +
+            (errors.length ? ` · ${errors.length} erro(s)` : '')
+        );
+    }
+    if (errors.length) {
+        alert('Algumas ROMs não foram aceitas:\n\n' + errors.slice(0, 8).join('\n'));
+    }
+}
+
+function openMergeModal() {
+    newprojCard.classList.remove('open');
+    trashCard.classList.remove('open');
+    if (libraryCard) libraryCard.classList.remove('open');
+    modal.classList.add('open');
+    if (mergeCard) mergeCard.classList.add('open');
+    mergeRenderTabs();
+    mergeRenderList();
+    mergeSetStatus(mergeRomsByMapper.size
+        ? 'Selecione a aba do mapper e gere o multicart (em breve: montagem ca65).'
+        : 'Adicione arquivos .nes para começar.');
+}
+
+document.getElementById('mergeRomsButton')?.addEventListener('click', openMergeModal);
+
+document.getElementById('mergeUploadBtn')?.addEventListener('click', () => {
+    document.getElementById('mergeRomInput')?.click();
+});
+
+document.getElementById('mergeRomInput')?.addEventListener('change', async (e) => {
+    const files = e.target.files;
+    if (files && files.length) await mergeAddFiles(files);
+    e.target.value = '';
+});
+
+document.getElementById('mergeBuildBtn')?.addEventListener('click', () => {
+    const items = mergeActiveMapper != null ? (mergeRomsByMapper.get(mergeActiveMapper) || []) : [];
+    if (items.length < 1) {
+        alert('Adicione pelo menos uma ROM nesta aba.');
+        return;
+    }
+    const names = items.map((r, i) => `${i + 1}. ${r.menuName} (${r.fileName})`).join('\n');
+    alert(
+        'Montagem do multicart (ca65) ainda não está ligada.\n\n' +
+        `Mapper: ${mapperLabel(mergeActiveMapper)}\n` +
+        `Jogos (${items.length}):\n${names}\n\n` +
+        'Próximo passo: empacotar bancos + menu ASM e gerar a .nes.'
+    );
+    mergeSetStatus(`Pronto para merge: ${items.length} jogo(s) · ${mapperLabel(mergeActiveMapper)} (build em breve)`);
+});
+
 
 /* =========================================================
    INICIALIZAÇÃO

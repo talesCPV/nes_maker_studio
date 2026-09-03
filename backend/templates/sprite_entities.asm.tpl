@@ -41,6 +41,11 @@ se_loop:
   LDA #0
   STA inst_dir,X
   STA inst_frame,X
+  STA inst_anim_start,X
+  LDA inst_char,X
+  TAY
+  LDA CharFirstAnimCount,Y
+  STA inst_anim_end,X
   LDA play_idx
   STA inst_screen,X   ; Fase 9: esta instancia pertence a tela play_idx
   ; load_frame_duration usa Y/tmp0/tmp1 como scratch - e' exatamente o que o loop
@@ -110,6 +115,11 @@ sae_use_slot:
   LDA #0
   STA inst_dir,X
   STA inst_frame,X
+  STA inst_anim_start,X
+  LDA inst_char,X
+  TAY
+  LDA CharFirstAnimCount,Y
+  STA inst_anim_end,X
   LDA spn_target
   STA inst_screen,X
   TYA
@@ -452,12 +462,10 @@ ai_loop:
   LDA inst_timer,X
   BNE ai_next
   INC inst_frame,X
-  LDA inst_char,X
-  TAY
-  LDA CharFrameCount,Y
-  CMP inst_frame,X      ; Z=1 se estourou (frame chegou no total)
+  LDA inst_anim_end,X
+  CMP inst_frame,X      ; Z=1 se estourou (frame chegou no fim da animacao ativa)
   BNE ai_reload
-  LDA #0
+  LDA inst_anim_start,X
   STA inst_frame,X
 ai_reload:
   JSR load_frame_duration

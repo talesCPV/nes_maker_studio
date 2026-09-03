@@ -313,10 +313,27 @@ final class ProjectParser
         $maxCells = 1;
         foreach ($chars as $ci => $c) {
             if (!is_array($c)) $c = [];
-            $anim = is_array($c['animations'][0] ?? null) ? $c['animations'][0] : ['name'=>'Idle','loop'=>true,'frames'=>[]];
-            $framesIn = is_array($anim['frames'] ?? null) ? $anim['frames'] : [];
+            // Fase 9 fix (rodada 4): antes so' a 1a animacao (animations[0])
+            // virava dado na ROM - "walk"/"jump"/etc que o usuario criava
+            // depois nunca eram embedadas, entao a acao "Mover" (que ja deixa
+            // escolher qual animacao usar) nunca tinha o que mostrar. Agora
+            // percorre TODAS as animacoes do personagem, concatenando os
+            // frames num unico array plano (mesma tabela CharN/CharXxxPtr de
+            // sempre, sem precisar de outro nivel de indirecao) e guardando
+            // o intervalo [inicio,contagem] de cada uma por id - e' isso que
+            // ProgramCompiler::compileAction (move_character) usa pra
+            // resolver o animId escolhido na regra em tempo de build.
+            $anims = is_array($c['animations'] ?? null) ? $c['animations'] : [];
+            if (!$anims) $anims = [['id' => 'idle', 'name' => 'Idle', 'loop' => true, 'frames' => []]];
             $frames = [];
-            foreach ($framesIn as $fi => $f) {
+            $animRanges = [];
+            $firstAnimCount = 0;
+            foreach ($anims as $ai => $anim) {
+                if (!is_array($anim)) continue;
+                $animId = (string)($anim['id'] ?? '');
+                $framesIn = is_array($anim['frames'] ?? null) ? $anim['frames'] : [];
+                $startIdx = count($frames);
+                foreach ($framesIn as $fi => $f) {
                 if (!is_array($f)) $f = [];
                 $mtId = (string)($f['metatileId'] ?? '');
                 $mt = $mtById[$mtId] ?? null;
@@ -385,12 +402,19 @@ final class ProjectParser
                     ];
                 }
                 $frames[] = ['w'=>$w, 'h'=>$h, 'cellsN'=>$cellsN, 'flipsN'=>$flipsN, 'cellsF'=>$cellsF, 'flipsF'=>$flipsF, 'duration'=>$duration, 'overlay'=>$overlay];
+                }
+                $countAdded = count($frames) - $startIdx;
+                if ($countAdded > 0 && $animId !== '') $animRanges[$animId] = ['start' => $startIdx, 'count' => $countAdded];
+                if ($ai === 0) $firstAnimCount = $countAdded;
             }
             if (!$frames) $frames[] = ['w'=>0, 'h'=>0, 'cellsN'=>[], 'flipsN'=>[], 'cellsF'=>[], 'flipsF'=>[], 'duration'=>8, 'overlay'=>null];
+            if ($firstAnimCount <= 0) $firstAnimCount = count($frames);
             $charData[] = [
                 'id' => $c['id'] ?? null,
                 'name' => $c['name'] ?? "Character {$ci}",
-                'frames' => $frames
+                'frames' => $frames,
+                'animRanges' => $animRanges,
+                'firstAnimCount' => min($firstAnimCount, count($frames)),
             ];
         }
 

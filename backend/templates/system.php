@@ -66,6 +66,8 @@ ASM;
         $lines[] = 'player_flip:.res 1    ; 0=normal !=0 flip H';
         $lines[] = 'player_frame: .res 1  ; frame atual da animacao do heroi (mesmo pool de sprite dos inimigos)';
         $lines[] = 'player_timer: .res 1  ; frames restantes ate proximo frame';
+        $lines[] = 'player_anim_start: .res 1  ; Fase 9 fix (rodada 4): inicio (indice global de frame) da animacao ativa';
+        $lines[] = 'player_anim_end:   .res 1  ; fim EXCLUSIVO da animacao ativa - animate_player da a volta aqui, nao em @@HERO_FRAMES@@';
         $lines[] = 'on_ground:  .res 1';
         $lines[] = 'jump_cnt:   .res 1    ; frames restantes de impulso de pulo';
         $lines[] = 'col_x:      .res 1    ; tile X para consulta';
@@ -82,6 +84,8 @@ ASM;
         $lines[] = "inst_frame:   .res {$numInstances}   ; frame atual da animacao padrao";
         $lines[] = "inst_timer:   .res {$numInstances}   ; frames restantes ate proximo frame";
         $lines[] = "inst_screen:  .res {$numInstances}   ; Fase 9: indice de tela (play_idx) a que inst_x se refere";
+        $lines[] = "inst_anim_start: .res {$numInstances}   ; Fase 9 fix (rodada 4): inicio da animacao ativa desta instancia";
+        $lines[] = "inst_anim_end:   .res {$numInstances}   ; fim EXCLUSIVO da animacao ativa - animate_instances da a volta aqui";
         $lines[] = 'spn_target:   .res 1   ; Fase 9: indice de tela alvo do spawn_append_screen em andamento';
         $lines[] = 'inst_tmp:     .res 1   ; indice de loop / scratch';
         $lines[] = 'oam_off:      .res 1   ; scratch: offset (via OamOffTable) dentro da pagina $02xx';
@@ -321,7 +325,19 @@ ASM;
     },
 
     'collision' => static function(array $ctx): string {
-        return <<<'ASM'
+        $s = $ctx['sprite'] ?? [];
+        $bx = (int)($s['heroBodyX'] ?? 2);
+        $by = (int)($s['heroBodyY'] ?? 0);
+        $bw = (int)($s['heroBodyW'] ?? 12);
+        $bh = (int)($s['heroBodyH'] ?? 16);
+        $repl = [
+            '@@HB_BOTTOM@@' => (string)($by + $bh),
+            '@@HB_LEFT@@' => (string)$bx,
+            '@@HB_RIGHT@@' => (string)($bx + $bw - 1),
+            '@@HB_TOP_PROBE@@' => (string)($by + 4),
+            '@@HB_BOTTOM_PROBE@@' => (string)max($by + 4, $by + $bh - 4),
+        ];
+        $asm = <<<'ASM'
 ; ---- Collision lookup ----
 ; col_x (0-31), col_y (0-29) -> col_result (tipo 0-5)
 get_collision:
@@ -435,14 +451,14 @@ check_ground:
   STA on_ground
   LDA player_y
   CLC
-  ADC #16
+  ADC #@@HB_BOTTOM@@
   LSR A
   LSR A
   LSR A
   STA col_y
   LDA player_x
   CLC
-  ADC #2
+  ADC #@@HB_LEFT@@
   JSR world_col_from
   JSR get_collision2
   LDA col_result
@@ -452,7 +468,7 @@ check_ground:
   BEQ cg_yes
   LDA player_x
   CLC
-  ADC #13
+  ADC #@@HB_RIGHT@@
   JSR world_col_from
   JSR get_collision2
   LDA col_result
@@ -469,7 +485,7 @@ cg_yes:
   ASL A
   ASL A
   SEC
-  SBC #16
+  SBC #@@HB_BOTTOM@@
   STA player_y
   RTS
 
@@ -489,7 +505,7 @@ is_yes:
 check_wall_at:
   LDA player_y
   CLC
-  ADC #4
+  ADC #@@HB_TOP_PROBE@@
   LSR A
   LSR A
   LSR A
@@ -500,7 +516,7 @@ check_wall_at:
   BNE cw_hit
   LDA player_y
   CLC
-  ADC #12
+  ADC #@@HB_BOTTOM_PROBE@@
   LSR A
   LSR A
   LSR A
@@ -517,6 +533,7 @@ cw_hit:
   STA col_result
   RTS
 ASM;
+        return str_replace(array_keys($repl), array_values($repl), $asm);
     },
 
     'player_manual_move' => static function(array $ctx): string {
