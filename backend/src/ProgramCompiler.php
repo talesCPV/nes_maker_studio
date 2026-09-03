@@ -100,13 +100,11 @@ final class ProgramCompiler
 
         $chars = is_array($project['characters'] ?? null) ? $project['characters'] : [];
         $charIndexById = [];
-        $heroIds = [];
         $charHitboxesById = [];
         foreach ($chars as $i => $c) {
             if (!is_array($c) || !isset($c['id'])) continue;
             $id = (string)$c['id'];
             $charIndexById[$id] = (int)$i;
-            if (stripos((string)($c['name'] ?? ''), 'hero') !== false) $heroIds[$id] = true;
             $hbs = is_array($c['hitboxes'] ?? null) ? $c['hitboxes'] : [];
             $byHbId = [];
             foreach ($hbs as $hb) {
@@ -120,7 +118,16 @@ final class ProgramCompiler
             }
             $charHitboxesById[$id] = $byHbId;
         }
-
+        // Fase 9 fix (rodada 3): so' UM personagem e' o heroi (mesma
+        // prioridade de ProjectParser::pickHeroIndex - type=player+nome
+        // "hero" > type=player > nome "hero" > 1o personagem). Antes disso,
+        // marcar TODO character com type=player como heroi era o bug: esse
+        // campo nasce "player" por padrao ao criar qualquer personagem, um
+        // projeto pode ter varios assim (inimigo nunca corrigido) e todos
+        // viravam alvo valido de "Mover heroi"/etc.
+        $heroIds = [];
+        $heroIdx = self::pickHeroIndex($chars);
+        if (isset($chars[$heroIdx]['id'])) $heroIds[(string)$chars[$heroIdx]['id']] = true;
         $phases = is_array($project['phases'] ?? null) ? $project['phases'] : [];
         $phaseIndexById = [];
         foreach ($phases as $i => $p) {
@@ -865,6 +872,27 @@ final class ProgramCompiler
 
     /** Canais (tipo APU) que um item (música ou SFX) realmente usa, na ordem
      * fixa pulse1/pulse2/triangle/noise - 1 por tipo, igual ao music.php. */
+    /**
+     * Fase 9 fix (rodada 3): mesma prioridade de ProjectParser::pickHeroIndex
+     * (mantida duplicada de proposito - as duas classes nao compartilham uma
+     * base comum hoje, e e' um calculo pequeno o bastante pra nao valer criar
+     * uma dependencia so' por isso). type=player+nome "hero" > type=player >
+     * nome "hero" > indice 0.
+     */
+    private static function pickHeroIndex(array $chars): int
+    {
+        $playerHeroIdx = null; $playerIdx = null; $nameHeroIdx = null;
+        foreach ($chars as $i => $c) {
+            if (!is_array($c)) continue;
+            $isPlayerType = ($c['type'] ?? '') === 'player';
+            $isHeroName = stripos((string)($c['name'] ?? ''), 'hero') !== false;
+            if ($isPlayerType && $isHeroName && $playerHeroIdx === null) $playerHeroIdx = (int)$i;
+            if ($isPlayerType && $playerIdx === null) $playerIdx = (int)$i;
+            if ($isHeroName && $nameHeroIdx === null) $nameHeroIdx = (int)$i;
+        }
+        return $playerHeroIdx ?? $playerIdx ?? $nameHeroIdx ?? 0;
+    }
+
     private function resolveUsedChannelTypes(array $item): array
     {
         $order = ['pulse1', 'pulse2', 'triangle', 'noise'];

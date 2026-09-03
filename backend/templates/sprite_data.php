@@ -91,10 +91,17 @@ return [
             $lines[] = "CharN_{$ci}:  ; " . str_replace(["\n","\r"], '', $name);
             $lines[] = $fmt($nBytes);
             foreach ($ptrGroups as $g) {
-                $lines[] = "Char{$ci}{$g}PtrLo:"; $lines[] = '  .byte ' . implode(', ', array_map(static fn($l) => "<{$l}", $ptrArr[$g]));
-                $lines[] = "Char{$ci}{$g}PtrHi:"; $lines[] = '  .byte ' . implode(', ', array_map(static fn($l) => ">{$l}", $ptrArr[$g]));
-                $ptrTblLines[$g]['Lo'][] = "Char{$ci}{$g}PtrLo";
-                $ptrTblLines[$g]['Hi'][] = "Char{$ci}{$g}PtrHi";
+                // Fase 9 fix: array INTERCALADO (lo,hi por frame) - o loader em
+                // sprite_entities.asm.tpl/sprite_player.asm.tpl faz frame*2 e le
+                // (ptr),Y / (ptr),Y+1 de UM SO ponteiro; com 2 arrays separados
+                // (lo-only e hi-only) isso lia o byte errado (a "sujeira" nos
+                // tiles dos inimigos) a partir do 2o frame em diante.
+                $lines[] = "Char{$ci}{$g}Ptr:";
+                $bytes = [];
+                foreach ($ptrArr[$g] as $l) { $bytes[] = "<{$l}"; $bytes[] = ">{$l}"; }
+                $lines[] = '  .byte ' . implode(', ', $bytes);
+                $ptrTblLines[$g]['Lo'][] = "Char{$ci}{$g}Ptr";
+                $ptrTblLines[$g]['Hi'][] = "Char{$ci}{$g}Ptr";
             }
 
             $ovCells = $ovFlips = $ovDx = $ovDy = $ovCellsFlip = $ovFlipsFlip = $ovDxFlip = [];

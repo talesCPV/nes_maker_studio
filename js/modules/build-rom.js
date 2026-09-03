@@ -1,13 +1,19 @@
-// BUILD ROM v1.1.0 - NGC (ASM) + assemble.php (ca65/ld65 → .nes)
+// BUILD ROM v1.2.0 - NGC + ca65/ld65 + EmulatorJS (play in-page)
 const BUILD = (() => {
   let lastASM = "";
   let lastCFG = "";
   let lastNES = null; // { filename, bytes: Uint8Array }
+  let emuBlobUrl = null;
+  let emuLoaderInjected = false;
 
   const NGC_BACKEND_ENABLED = true;
   const NGC_ENDPOINT = "backend/build.php";
   const CFG_ENDPOINT = "backend/cfg.php";
   const ASSEMBLE_ENDPOINT = "backend/assemble.php";
+
+  // EmulatorJS (CDN oficial)
+  const EJS_DATA = "https://cdn.emulatorjs.org/stable/data/";
+  const EJS_LOADER = EJS_DATA + "loader.js";
 
   function buildHTML(){
     const root = document.getElementById("mod-build"); if(!root) return;
@@ -17,6 +23,8 @@ const BUILD = (() => {
           <h3 style="font-size:12px;color:#4ec9b0">🔨 BUILD ROM</h3>
           <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             <button class="btn-tool" onclick="BUILD.buildROM()" style="background:#27ae60;color:#fff;padding:6px 14px;font-weight:bold">🔨 Build ROM</button>
+            <button class="btn-tool" onclick="BUILD.playROM()" id="btnPlayNES" style="display:none;background:#3498db;color:#fff;font-weight:bold">▶ Jogar</button>
+            <button class="btn-tool" onclick="BUILD.stopEmu()" id="btnStopEmu" style="display:none;background:#7f8c8d;color:#fff">⏹ Parar</button>
             <button class="btn-tool" onclick="BUILD.downloadNES()" id="btnDownloadNES" style="display:none;background:#e67e22;color:#fff;font-weight:bold">⬇ Baixar ROM</button>
             <button class="btn-tool" onclick="BUILD.downloadASM()" id="btnDownloadASM" style="display:none;background:#8e44ad;color:#fff">⬇ .asm</button>
             <button class="btn-tool" onclick="BUILD.downloadCFG()" id="btnDownloadCFG" style="display:none;background:#d35400;color:#fff">⬇ nrom.cfg</button>
@@ -29,15 +37,24 @@ const BUILD = (() => {
               <div style="font-size:11px;color:#999;line-height:1.6">
                 1) NGC gera o .asm<br>
                 2) Backend gera o nrom.cfg<br>
-                3) assemble.php chama ca65/ld65 e devolve a .nes
+                3) assemble.php → ca65/ld65 → .nes<br>
+                4) ▶ Jogar abre o emulador nesta tela
               </div>
             </div>
             <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px">
-              <h4 style="font-size:10px;color:#8585ff;margin-bottom:4px">🐧 PIPELINE</h4>
-              <div style="font-size:10px;color:#aaa;line-height:1.5;font-family:monospace">
-                build.php → .asm<br>
-                cfg.php → nrom.cfg<br>
-                assemble.php → ca65 + ld65 → .nes
+              <h4 style="font-size:10px;color:#8585ff;margin-bottom:4px">🎮 CONTROLES (teclado)</h4>
+              <div style="font-size:10px;color:#aaa;line-height:1.55;font-family:monospace">
+                Setas — direção<br>
+                Z / A — A<br>
+                X / S — B<br>
+                Enter — Start<br>
+                Shift — Select
+              </div>
+            </div>
+            <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
+              <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:6px">EMULADOR</h4>
+              <div style="font-size:11px;color:#888;line-height:1.5">
+                Após o build, use <b style="color:#3498db">▶ Jogar</b> para abrir o emulador em tela grande (modal).
               </div>
             </div>
           </div>
@@ -57,6 +74,24 @@ const BUILD = (() => {
           </div>
         </div>
       </div>
+
+      <!-- Modal do emulador (tela grande) -->
+      <div id="buildEmuModal" style="display:none;position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:16px;box-sizing:border-box">
+        <div style="position:relative;width:min(960px,96vw);max-height:96vh;background:#121212;border:1px solid #444;border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.7);display:flex;flex-direction:column;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#1e1e1e;border-bottom:1px solid #333;flex-shrink:0">
+            <span style="font-size:13px;color:#4ec9b0;font-weight:600">▶ Emulador NES</span>
+            <span id="buildEmuModalTitle" style="font-size:12px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+            <button type="button" id="buildEmuModalClose" onclick="BUILD.stopEmu()" title="Fechar e parar"
+              style="margin-left:auto;width:36px;height:36px;border:none;border-radius:8px;background:#333;color:#fff;font-size:22px;line-height:1;cursor:pointer">&times;</button>
+          </div>
+          <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px;background:#000">
+            <div id="buildEmuPlayer" style="width:min(896px,92vw);aspect-ratio:256/240;max-height:calc(96vh - 80px);background:#000"></div>
+          </div>
+          <div style="padding:8px 14px;font-size:11px;color:#666;border-top:1px solid #222;flex-shrink:0">
+            Setas · Z/A = A · X/S = B · Enter = Start · Shift = Select · clique no jogo para focar
+          </div>
+        </div>
+      </div>
     `;
   }
 
@@ -66,12 +101,10 @@ const BUILD = (() => {
   }
 
   function hideDownloadButtons(){
-    const nes = document.getElementById("btnDownloadNES");
-    const asm = document.getElementById("btnDownloadASM");
-    const cfg = document.getElementById("btnDownloadCFG");
-    if(nes) nes.style.display = "none";
-    if(asm) asm.style.display = "none";
-    if(cfg) cfg.style.display = "none";
+    ["btnDownloadNES","btnDownloadASM","btnDownloadCFG","btnPlayNES","btnStopEmu"].forEach(id=>{
+      const el = document.getElementById(id);
+      if(el) el.style.display = "none";
+    });
   }
 
   function getFirstScreenForThumbnail(){
@@ -194,9 +227,119 @@ const BUILD = (() => {
     return out;
   }
 
+  function loadEmulatorLoader(){
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[data-ejs-loader]');
+      if (existing) {
+        existing.addEventListener("load", () => resolve());
+        existing.addEventListener("error", () => reject(new Error("Falha ao carregar EmulatorJS")));
+        if (existing.dataset.loaded === "1") resolve();
+        return;
+      }
+      const s = document.createElement("script");
+      s.src = EJS_LOADER;
+      s.async = true;
+      s.dataset.ejsLoader = "1";
+      s.onload = () => { s.dataset.loaded = "1"; emuLoaderInjected = true; resolve(); };
+      s.onerror = () => reject(new Error("Não foi possível carregar o EmulatorJS (CDN). Verifique a rede / HTTPS."));
+      document.body.appendChild(s);
+    });
+  }
+
+  function stopEmu(){
+    const player = document.getElementById("buildEmuPlayer");
+    if (player) player.innerHTML = "";
+    if (emuBlobUrl) {
+      try { URL.revokeObjectURL(emuBlobUrl); } catch(e) {}
+      emuBlobUrl = null;
+    }
+    try {
+      delete window.EJS_player;
+      delete window.EJS_gameUrl;
+      delete window.EJS_core;
+      delete window.EJS_gameName;
+      delete window.EJS_pathtodata;
+      delete window.EJS_startOnLoaded;
+      delete window.EJS_Buttons;
+    } catch(e) {}
+    const modal = document.getElementById("buildEmuModal");
+    if (modal) modal.style.display = "none";
+    const btnStop = document.getElementById("btnStopEmu");
+    if (btnStop) btnStop.style.display = "none";
+    log("⏹ Emulador fechado.");
+  }
+
+  async function playROM(){
+    if (!lastNES || !lastNES.bytes || !lastNES.bytes.length) {
+      alert("Nenhuma ROM pronta. Rode o Build com sucesso primeiro.");
+      return;
+    }
+
+    // Limpa sessão anterior sem esconder o fluxo
+    const player0 = document.getElementById("buildEmuPlayer");
+    if (player0) player0.innerHTML = "";
+    if (emuBlobUrl) {
+      try { URL.revokeObjectURL(emuBlobUrl); } catch(e) {}
+      emuBlobUrl = null;
+    }
+
+    const modal = document.getElementById("buildEmuModal");
+    const title = document.getElementById("buildEmuModalTitle");
+    if (title) title.textContent = lastNES.filename || "game.nes";
+    if (modal) modal.style.display = "flex";
+
+    const blob = new Blob([lastNES.bytes], { type: "application/octet-stream" });
+    emuBlobUrl = URL.createObjectURL(blob);
+
+    window.EJS_player = "#buildEmuPlayer";
+    window.EJS_gameName = lastNES.filename || "game.nes";
+    window.EJS_gameUrl = emuBlobUrl;
+    window.EJS_core = "nes";
+    window.EJS_pathtodata = EJS_DATA;
+    window.EJS_startOnLoaded = true;
+    window.EJS_Buttons = {
+      playPause: true,
+      restart: true,
+      mute: true,
+      settings: false,
+      fullscreen: true,
+      saveState: false,
+      loadState: false,
+      screenRecord: false,
+      gamepad: true,
+      cheat: false,
+      volume: true,
+      saveSavFiles: false,
+      loadSavFiles: false,
+      quickSave: false,
+      quickLoad: false,
+      screenshot: false,
+      cacheManager: false
+    };
+
+    log("▶ Abrindo emulador em modal...");
+    try {
+      document.querySelectorAll('script[data-ejs-loader]').forEach(n => n.remove());
+      emuLoaderInjected = false;
+
+      const player = document.getElementById("buildEmuPlayer");
+      if (player) player.innerHTML = "";
+
+      await loadEmulatorLoader();
+      const btnStop = document.getElementById("btnStopEmu");
+      if (btnStop) btnStop.style.display = "inline-block";
+      log("✅ Emulador iniciado — use o ✕ para fechar e parar.");
+    } catch (e) {
+      log("❌ Emulador: " + e.message);
+      alert("Não foi possível iniciar o emulador:\n" + e.message);
+      stopEmu();
+    }
+  }
+
   async function buildROM(){
     const logEl = document.getElementById("buildLog");
     if(logEl) logEl.textContent = "Iniciando build (NGC + ca65)...\n";
+    stopEmu();
     lastNES = null;
     lastASM = "";
     lastCFG = "";
@@ -204,7 +347,6 @@ const BUILD = (() => {
 
     const stats = document.getElementById("buildStats");
     try{
-      // 1) ASM via NGC
       log("① Enviando project.data pro NGC (build.php)...");
       let asm = null;
       try {
@@ -231,7 +373,6 @@ const BUILD = (() => {
       const btnAsm = document.getElementById("btnDownloadASM");
       if(btnAsm) btnAsm.style.display = "inline-block";
 
-      // 2) CFG no backend
       log("② Gerando nrom.cfg (cfg.php)...");
       let cfg;
       try {
@@ -247,7 +388,6 @@ const BUILD = (() => {
         return;
       }
 
-      // 3) Assemble
       log("③ Montando ROM (assemble.php → ca65 + ld65)...");
       try {
         const assembled = await assembleOnBackend(asm, cfg);
@@ -265,6 +405,8 @@ const BUILD = (() => {
         }
         const btnNes = document.getElementById("btnDownloadNES");
         if(btnNes) btnNes.style.display = "inline-block";
+        const btnPlay = document.getElementById("btnPlayNES");
+        if(btnPlay) btnPlay.style.display = "inline-block";
         if(stats){
           stats.innerHTML =
             "ASM: " + asm.length + " chars<br>" +
@@ -327,7 +469,22 @@ const BUILD = (() => {
   }
 
   return {
-    init(){ buildHTML(); },
-    buildROM, downloadASM, downloadCFG, downloadNES, copyASM
+    init(){
+      buildHTML();
+      // Clique no backdrop fecha e para
+      const modal = document.getElementById("buildEmuModal");
+      if (modal) {
+        modal.addEventListener("click", (e) => {
+          if (e.target === modal) stopEmu();
+        });
+      }
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          const m = document.getElementById("buildEmuModal");
+          if (m && m.style.display === "flex") stopEmu();
+        }
+      });
+    },
+    buildROM, downloadASM, downloadCFG, downloadNES, copyASM, playROM, stopEmu
   };
 })();

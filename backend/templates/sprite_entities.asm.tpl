@@ -476,35 +476,47 @@ ai_done:
 check_ground_inst:
   LDA #0
   STA inst_grounded
+  LDA inst_char,X
+  TAY
   LDA inst_y,X
   CLC
-  ADC #16
+  ADC CharBodyBottom,Y
   LSR A
   LSR A
   LSR A
   STA col_y
   LDA inst_x,X
   CLC
-  ADC #2
+  ADC CharBodyLeft,Y
   LSR A
   LSR A
   LSR A
   STA col_x
+  LDA inst_screen,X
+  TAY
+  LDA PlayScreenTable,Y
+  STA gcw_screen
   STX inst_tmp
-  JSR get_collision
+  JSR get_collision2
   LDX inst_tmp
   LDA col_result
   JSR is_solid
   BNE cgi_yes
+  LDA inst_char,X
+  TAY
   LDA inst_x,X
   CLC
-  ADC #13
+  ADC CharBodyRight,Y
   LSR A
   LSR A
   LSR A
   STA col_x
+  LDA inst_screen,X
+  TAY
+  LDA PlayScreenTable,Y
+  STA gcw_screen
   STX inst_tmp
-  JSR get_collision
+  JSR get_collision2
   LDX inst_tmp
   LDA col_result
   JSR is_solid
@@ -513,39 +525,53 @@ check_ground_inst:
 cgi_yes:
   LDA #1
   STA inst_grounded
+  LDA inst_char,X
+  TAY
   LDA col_y
   ASL A
   ASL A
   ASL A
   SEC
-  SBC #16
+  SBC CharBodyBottom,Y
   STA inst_y,X
   RTS
 
 ; col_x ja setado pelo chamador; testa 2 pontos verticais do corpo (X=slot).
 check_wall_at_inst:
+  LDA inst_char,X
+  TAY
   LDA inst_y,X
   CLC
-  ADC #4
+  ADC CharBodyTopProbe,Y
   LSR A
   LSR A
   LSR A
   STA col_y
+  LDA inst_screen,X
+  TAY
+  LDA PlayScreenTable,Y
+  STA gcw_screen
   STX inst_tmp
-  JSR get_collision
+  JSR get_collision2
   LDX inst_tmp
   LDA col_result
   JSR is_solid
   BNE cwi_hit
+  LDA inst_char,X
+  TAY
   LDA inst_y,X
   CLC
-  ADC #12
+  ADC CharBodyBottomProbe,Y
   LSR A
   LSR A
   LSR A
   STA col_y
+  LDA inst_screen,X
+  TAY
+  LDA PlayScreenTable,Y
+  STA gcw_screen
   STX inst_tmp
-  JSR get_collision
+  JSR get_collision2
   LDX inst_tmp
   LDA col_result
   JSR is_solid
@@ -581,12 +607,14 @@ uia_walk:
   LDA inst_dir,X
   AND #$40
   BNE uia_left
-  ; indo pra direita: testa parede na borda direita proposta (x+1+13)
+  ; indo pra direita: testa parede na borda direita proposta (x+1+CharBodyRight)
+  LDA inst_char,X
+  TAY
   LDA inst_x,X
   CLC
   ADC #1
   CLC
-  ADC #13
+  ADC CharBodyRight,Y
   LSR A
   LSR A
   LSR A
@@ -606,12 +634,14 @@ uia_turn_left:
   STA inst_dir,X
   JMP uia_next
 uia_left:
-  ; indo pra esquerda: testa parede na borda esquerda proposta (x-1+2)
+  ; indo pra esquerda: testa parede na borda esquerda proposta (x-1+CharBodyLeft)
+  LDA inst_char,X
+  TAY
   LDA inst_x,X
   SEC
   SBC #1
   CLC
-  ADC #2
+  ADC CharBodyLeft,Y
   LSR A
   LSR A
   LSR A
@@ -708,3 +738,5 @@ hide_player:
 
 
 @@OAM_OFF_TABLE@@
+
+@@BODY_TABLES@@

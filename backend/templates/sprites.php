@@ -30,9 +30,23 @@ return [
         $offTable = [];
         for ($i = 0; $i < $n; $i++) $offTable[] = ($base + $i * $stride) - 0x0200; // oam_off e' relativo a $0200 (usado como Y em STA $0200,Y)
         $oamOffTableAsm = "OamOffTable:\n  .byte " . implode(', ', array_map(static fn($v) => sprintf('$%02X', $v & 0xFF), $offTable));
+
+        // Fase 9 fix: check_ground_inst/check_wall_at_inst usavam offsets de
+        // corpo hardcoded (16/2/13/4/12, o corpo antigo fixo de 2x2) pra
+        // TODOS os personagens - cada um pode ter seu proprio hb_body agora,
+        // entao viram tabelas indexadas por personagem (CharBody*,Y com
+        // Y=inst_char) em vez de constantes fixas.
+        $bb = is_array($ctx['sprite']['bodyBottom'] ?? null) ? $ctx['sprite']['bodyBottom'] : [16];
+        $bl = is_array($ctx['sprite']['bodyLeft'] ?? null) ? $ctx['sprite']['bodyLeft'] : [2];
+        $br = is_array($ctx['sprite']['bodyRight'] ?? null) ? $ctx['sprite']['bodyRight'] : [13];
+        $btp = is_array($ctx['sprite']['bodyTopProbe'] ?? null) ? $ctx['sprite']['bodyTopProbe'] : [4];
+        $bbp = is_array($ctx['sprite']['bodyBottomProbe'] ?? null) ? $ctx['sprite']['bodyBottomProbe'] : [12];
+        $bytesOf = static fn(array $a) => '.byte ' . implode(', ', array_map(static fn($v) => (string)(max(0, min(255, (int)$v))), $a ?: [0]));
+        $bodyTables = "CharBodyBottom:\n  {$bytesOf($bb)}\nCharBodyLeft:\n  {$bytesOf($bl)}\nCharBodyRight:\n  {$bytesOf($br)}\nCharBodyTopProbe:\n  {$bytesOf($btp)}\nCharBodyBottomProbe:\n  {$bytesOf($bbp)}";
+
         return str_replace(
-            ['@@NUM_INSTANCES@@', '@@MAX_CELLS@@', '@@OAM_OFF_TABLE@@'],
-            [(string)$n, (string)$maxCells, $oamOffTableAsm],
+            ['@@NUM_INSTANCES@@', '@@MAX_CELLS@@', '@@OAM_OFF_TABLE@@', '@@BODY_TABLES@@'],
+            [(string)$n, (string)$maxCells, $oamOffTableAsm, $bodyTables],
             trim($tpl)
         );
     },

@@ -103,19 +103,62 @@ final class ProjectParser
         $packed = $this->packSpriteCHR($project, $chars);
         $charData = $packed['charData'];
         $maxCells = max(1, (int)$packed['maxCells']);
-        $heroIdx = 0;
-        $heroFound = false;
-        foreach ($chars as $i => $c) {
-            if (is_array($c) && stripos((string)($c['name'] ?? ''), 'hero') !== false) {
-                $heroIdx = (int)$i;
-                $heroFound = true;
-                break;
-            }
-        }
+        // Fase 9 fix (rodada 3): personagem tem um campo explicito no editor
+        // (type: player/enemy/item/npc/boss) - e' isso que deveria decidir
+        // quem e' o heroi, nao um "hero" no nome. Esse campo nasce com
+        // "player" por padrao ao criar qualquer personagem (projeto antigo
+        // pode ter varios assim, nunca corrigidos pra enemy/npc/etc), entao
+        // usa "hero" no nome como desempate entre os candidatos type=player
+        // antes de so' pegar o 1o - ver pickHeroIndex().
+        $heroIdx = self::pickHeroIndex($chars);
+        $heroFound = isset($chars[$heroIdx]) && is_array($chars[$heroIdx])
+            && (($chars[$heroIdx]['type'] ?? '') === 'player' || stripos((string)($chars[$heroIdx]['name'] ?? ''), 'hero') !== false);
         $heroFrames = 1;
         if (isset($charData[$heroIdx]) && is_array($charData[$heroIdx])) {
             $heroFrames = max(1, count(is_array($charData[$heroIdx]['frames'] ?? null) ? $charData[$heroIdx]['frames'] : []));
         }
+
+        // Fase 9 fix (rodada 2): o fallback de hitbox continuava fixo em 16px
+        // mesmo pra personagem sem hb_body configurado - com o limite 2x2
+        // removido, um personagem desenhado maior mas sem hitbox customizada
+        // ficava com colisao presa no tamanho antigo (heroi "andando pela
+        // cintura", inimigo grande atravessando o chao pelas pernas). Sem
+        // hb_body, o fallback agora e' o tamanho REAL do frame 0 desse
+        // personagem (w*8 x h*8, cobrindo o sprite inteiro) em vez de um
+        // 16x16 fixo - so continua fixo em 16 se nem isso existir. Quem
+        // configurar hb_body manualmente continua tendo prioridade total.
+        $resolveBody = static function (?array $c, array $cd) : array {
+            $frame0 = is_array($cd['frames'][0] ?? null) ? $cd['frames'][0] : [];
+            $fw = max(1, (int)($frame0['w'] ?? 2));
+            $fh = max(1, (int)($frame0['h'] ?? 2));
+            $body = ['x' => 0, 'y' => 0, 'w' => $fw * 8, 'h' => $fh * 8];
+            if (is_array($c) && is_array($c['hitboxes'] ?? null)) {
+                foreach ($c['hitboxes'] as $hb) {
+                    if (is_array($hb) && (($hb['type'] ?? '') === 'body' || ($hb['id'] ?? '') === 'hb_body')) {
+                        $body = [
+                            'x' => max(0, min(63, (int)($hb['x'] ?? 0))),
+                            'y' => max(0, min(63, (int)($hb['y'] ?? 0))),
+                            'w' => max(1, min(64, (int)($hb['w'] ?? ($fw * 8)))),
+                            'h' => max(1, min(64, (int)($hb['h'] ?? ($fh * 8)))),
+                        ];
+                        break;
+                    }
+                }
+            }
+            return $body;
+        };
+        $heroBody = $resolveBody($chars[$heroIdx] ?? null, $charData[$heroIdx] ?? []);
+
+        $bodyBottom = []; $bodyLeft = []; $bodyRight = []; $bodyTopProbe = []; $bodyBottomProbe = [];
+        foreach ($chars as $ci => $c) {
+            $b = $resolveBody(is_array($c) ? $c : null, $charData[$ci] ?? []);
+            $bodyBottom[] = $b['y'] + $b['h'];
+            $bodyLeft[] = $b['x'];
+            $bodyRight[] = $b['x'] + $b['w'] - 1;
+            $bodyTopProbe[] = $b['y'] + 4;
+            $bodyBottomProbe[] = max($b['y'] + 4, $b['y'] + $b['h'] - 4);
+        }
+        if (!$bodyBottom) { $bodyBottom = [16]; $bodyLeft = [2]; $bodyRight = [13]; $bodyTopProbe = [4]; $bodyBottomProbe = [12]; }
 
         // Fase 9 (graficos): sem mais o limite fixo de 4 sprites OAM (2x2) por
         // instancia - agora cada personagem pode usar ate maxCells sprites (o
@@ -134,10 +177,12 @@ final class ProjectParser
         $heroIds = [];
         foreach ($chars as $i => $c) {
             if (!is_array($c) || !isset($c['id'])) continue;
-            $id = (string)$c['id'];
-            $charIndexById[$id] = (int)$i;
-            if (stripos((string)($c['name'] ?? ''), 'hero') !== false) $heroIds[$id] = true;
+            $charIndexById[(string)$c['id']] = (int)$i;
         }
+        // Mesmo heroi ja identificado la em cima (type=player -> nome "hero" ->
+        // 1o personagem) - usado aqui so' pra excluir o heroi da lista de
+        // spawn de inimigos.
+        if (isset($chars[$heroIdx]['id'])) $heroIds[(string)$chars[$heroIdx]['id']] = true;
 
         $instances = is_array($project['hitboxInstances'] ?? null) ? $project['hitboxInstances'] : [];
         $objects = is_array($project['hitboxObjects'] ?? null) ? $project['hitboxObjects'] : [];
@@ -180,6 +225,15 @@ final class ProjectParser
             'numInstances' => $numInstances,
             'requestedInstances' => $requested,
             'maxCells' => $maxCells,
+            'heroBodyX' => $heroBody['x'],
+            'heroBodyY' => $heroBody['y'],
+            'heroBodyW' => $heroBody['w'],
+            'heroBodyH' => $heroBody['h'],
+            'bodyBottom' => $bodyBottom,
+            'bodyLeft' => $bodyLeft,
+            'bodyRight' => $bodyRight,
+            'bodyTopProbe' => $bodyTopProbe,
+            'bodyBottomProbe' => $bodyBottomProbe,
             'enemySpawns' => $enemySpawns,
         ];
     }
@@ -199,6 +253,32 @@ final class ProjectParser
      *   opcional) continua limitado a 2x2 por enquanto (fora do escopo desta
      *   fase, que foi especificamente sobre o corpo do personagem).
      */
+    /**
+     * Fase 9 fix (rodada 3): decide qual personagem e' o heroi. Prioridade:
+     * (1) type=player E "hero" no nome - sinal duplo, mais confiavel;
+     * (2) type=player (1o encontrado) - o campo explicito do editor;
+     * (3) "hero" no nome (1o encontrado) - rede de seguranca pra projeto
+     *     salvo antes do campo "type" existir;
+     * (4) indice 0 - ultimo recurso, nunca deixa a build sem heroi.
+     * O motivo de checar (1)/(2) separado: "type" nasce como "player" por
+     * padrao ao criar qualquer personagem no editor, entao um projeto pode
+     * ter varios personagens com type=player (inimigos que nunca foram
+     * trocados) - o nome desempata entre eles antes de so' pegar o 1o.
+     */
+    private static function pickHeroIndex(array $chars): int
+    {
+        $playerHeroIdx = null; $playerIdx = null; $nameHeroIdx = null;
+        foreach ($chars as $i => $c) {
+            if (!is_array($c)) continue;
+            $isPlayerType = ($c['type'] ?? '') === 'player';
+            $isHeroName = stripos((string)($c['name'] ?? ''), 'hero') !== false;
+            if ($isPlayerType && $isHeroName && $playerHeroIdx === null) $playerHeroIdx = (int)$i;
+            if ($isPlayerType && $playerIdx === null) $playerIdx = (int)$i;
+            if ($isHeroName && $nameHeroIdx === null) $nameHeroIdx = (int)$i;
+        }
+        return $playerHeroIdx ?? $playerIdx ?? $nameHeroIdx ?? 0;
+    }
+
     private function packSpriteCHR(array $project, array $chars): array
     {
         $chr = is_array($project['chr'] ?? null) ? $project['chr'] : [];

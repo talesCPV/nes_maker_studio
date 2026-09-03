@@ -1,11 +1,19 @@
 <?php
 declare(strict_types=1);
 
+const DB_HOST = '143.95.166.26';
+const DB_PORT = '3306';
+const DB_NAME = 'NGC';
+const DB_USER = 'developer';
+const DB_PASSWORD = '@Xspider0';
+
+/*
 const DB_HOST = '108.167.132.56';
 const DB_PORT = '3306';
 const DB_NAME = 'plan3411_nms';
 const DB_USER = 'plan3411_developer';
 const DB_PASSWORD = 'Xspider@';
+*/
 
 function db(): PDO
 {
