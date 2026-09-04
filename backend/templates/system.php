@@ -587,27 +587,8 @@ mvhl_have:
   LSR A
   LSR A
   STA col_x
-  LDA player_y
-  CLC
-  ADC #4
-  LSR A
-  LSR A
-  LSR A
-  STA col_y
-  JSR get_collision2
+  JSR check_wall_at
   LDA col_result
-  JSR is_solid
-  BNE mvhl_blocked
-  LDA player_y
-  CLC
-  ADC #12
-  LSR A
-  LSR A
-  LSR A
-  STA col_y
-  JSR get_collision2
-  LDA col_result
-  JSR is_solid
   BNE mvhl_blocked
   LDA scroll_x
   SEC
@@ -683,27 +664,8 @@ mvhr_have:
   LSR A
   LSR A
   STA col_x
-  LDA player_y
-  CLC
-  ADC #4
-  LSR A
-  LSR A
-  LSR A
-  STA col_y
-  JSR get_collision2
+  JSR check_wall_at
   LDA col_result
-  JSR is_solid
-  BNE mvhr_blocked
-  LDA player_y
-  CLC
-  ADC #12
-  LSR A
-  LSR A
-  LSR A
-  STA col_y
-  JSR get_collision2
-  LDA col_result
-  JSR is_solid
   BNE mvhr_blocked
   LDA scroll_x
   CLC
@@ -814,28 +776,9 @@ uls_have:
   LSR A
   LSR A
   STA col_x
-  LDA player_y
-  CLC
-  ADC #4
-  LSR A
-  LSR A
-  LSR A
-  STA col_y
-  JSR get_collision2
+  JSR check_wall_at
   LDA col_result
-  JSR is_solid
   BNE up_right         ; bloqueado - segue pro botao direito, igual antes
-  LDA player_y
-  CLC
-  ADC #12
-  LSR A
-  LSR A
-  LSR A
-  STA col_y
-  JSR get_collision2
-  LDA col_result
-  JSR is_solid
-  BNE up_right
   ; livre: rola o mundo pra esquerda
   LDA scroll_x
   SEC
@@ -917,28 +860,9 @@ urs_have:
   LSR A
   LSR A
   STA col_x
-  LDA player_y
-  CLC
-  ADC #4
-  LSR A
-  LSR A
-  LSR A
-  STA col_y
-  JSR get_collision2
+  JSR check_wall_at
   LDA col_result
-  JSR is_solid
   BNE up_jump          ; bloqueado
-  LDA player_y
-  CLC
-  ADC #12
-  LSR A
-  LSR A
-  LSR A
-  STA col_y
-  JSR get_collision2
-  LDA col_result
-  JSR is_solid
-  BNE up_jump
   ; livre: rola o mundo pra direita
   LDA scroll_x
   CLC

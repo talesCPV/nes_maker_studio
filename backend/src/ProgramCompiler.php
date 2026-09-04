@@ -798,10 +798,22 @@ final class ProgramCompiler
                         $lines = ["  ; Acao: Mover heroi pulo", "  JSR mv_hero_jump"];
                         if ($flip === 'flip_h') { $lines[] = "  LDA #1"; $lines[] = "  STA player_flip"; }
                         elseif ($flip === 'default') { $lines[] = "  LDA #0"; $lines[] = "  STA player_flip"; }
+                    } elseif ($direction === '' || $direction === 'up' || $direction === 'down' || $direction === 'zigzag') {
+                        // Fase 9 fix (rodada 5): sem direcao (campo deixado em
+                        // branco) - ou com uma direcao ainda sem movimento
+                        // proprio (up/down/zigzag, Fase 7 pendente) - a acao
+                        // nao move o heroi, mas AINDA ASSIM troca a animacao se
+                        // um animId foi escolhido. E' assim que "SE P1-Idle
+                        // ENTAO Mover [sem direcao, animId=idle]" funciona pra
+                        // voltar a animacao parada quando o jogador solta o
+                        // direcional - sem isso a unica forma de "Mover" fazer
+                        // algo era mexendo a posicao, e a animacao ficava presa
+                        // na ultima usada.
+                        $lines = $direction === ''
+                            ? ["  ; Acao: Mover (sem direcao - so troca a animacao, se houver)"]
+                            : ["  ; Acao: Mover ({$direction}) - Fase 7 (motor ainda so move de verdade esquerda/direita/pulo) - so troca a animacao, se houver"];
                     } else {
-                        // up/down/zigzag: motor atual e' plataforma 2D (sem movimento
-                        // vertical livre nem patrulha zig-zag pro heroi) - Fase 7.
-                        return ["  ; Acao: Mover ({$direction}) - Fase 7 (motor ainda so suporta esquerda/direita/pulo pro heroi) - no-op"];
+                        return ["  ; Acao: Mover ({$direction}) - direcao desconhecida, no-op"];
                     }
                     if (!empty($step['animId'])) {
                         $range = $hbCtx['heroAnimRanges'][$step['animId']] ?? null;
