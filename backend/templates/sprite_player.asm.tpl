@@ -444,6 +444,16 @@ spawn_player:
   STA player_anim_end
   LDA CharDur_@@HERO@@
   STA player_timer
+  LDA #@@HB_BOTTOM@@
+  STA player_hb_bottom
+  LDA #@@HB_LEFT@@
+  STA player_hb_left
+  LDA #@@HB_RIGHT@@
+  STA player_hb_right
+  LDA #@@HB_TOP_PROBE@@
+  STA player_hb_top_probe
+  LDA #@@HB_BOTTOM_PROBE@@
+  STA player_hb_bottom_probe
   LDA #1
   STA player_on
   JSR update_player_oam

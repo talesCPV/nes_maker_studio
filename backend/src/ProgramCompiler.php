@@ -225,6 +225,14 @@ final class ProgramCompiler
                 }
                 return $out;
             })(),
+            'heroAnimBody' => is_array($spriteCtx['heroAnimBody'] ?? null) ? $spriteCtx['heroAnimBody'] : [],
+            'heroBodyDefault' => [
+                'bottom' => (int)($spriteCtx['heroBodyY'] ?? 0) + (int)($spriteCtx['heroBodyH'] ?? 16),
+                'left' => (int)($spriteCtx['heroBodyX'] ?? 2),
+                'right' => (int)($spriteCtx['heroBodyX'] ?? 2) + (int)($spriteCtx['heroBodyW'] ?? 12) - 1,
+                'topProbe' => (int)($spriteCtx['heroBodyY'] ?? 0) + 4,
+                'bottomProbe' => max((int)($spriteCtx['heroBodyY'] ?? 0) + 4, (int)($spriteCtx['heroBodyY'] ?? 0) + (int)($spriteCtx['heroBodyH'] ?? 16) - 4),
+            ],
         ];
 
         $ruleBodies = [];
@@ -839,6 +847,21 @@ final class ProgramCompiler
                             $lines[] = "  LDY player_frame";
                             $lines[] = "  LDA CharDur_{$hbCtx['heroCharIdx']},Y";
                             $lines[] = "  STA player_timer";
+                            // Fase 9 (hitbox por animacao): essa animacao tem hitbox
+                            // propria (anim.hitboxOverride) - troca player_hb_* junto;
+                            // senao volta pro padrao "Corpo" do personagem, caso a
+                            // animacao anterior tivesse deixado uma customizada ligada.
+                            $body = $hbCtx['heroAnimBody'][$step['animId']] ?? $hbCtx['heroBodyDefault'];
+                            $lines[] = "  LDA #{$body['bottom']}";
+                            $lines[] = "  STA player_hb_bottom";
+                            $lines[] = "  LDA #{$body['left']}";
+                            $lines[] = "  STA player_hb_left";
+                            $lines[] = "  LDA #{$body['right']}";
+                            $lines[] = "  STA player_hb_right";
+                            $lines[] = "  LDA #{$body['topProbe']}";
+                            $lines[] = "  STA player_hb_top_probe";
+                            $lines[] = "  LDA #{$body['bottomProbe']}";
+                            $lines[] = "  STA player_hb_bottom_probe";
                             $lines[] = "{$tag}_{$albl}_skip:";
                         }
                     }

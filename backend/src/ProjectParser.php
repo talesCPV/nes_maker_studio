@@ -127,14 +127,28 @@ final class ProjectParser
         // personagem (w*8 x h*8, cobrindo o sprite inteiro) em vez de um
         // 16x16 fixo - so continua fixo em 16 se nem isso existir. Quem
         // configurar hb_body manualmente continua tendo prioridade total.
-        $resolveBody = static function (?array $c, array $cd) : array {
+        $resolveBody = static function (?array $c, array $cd, ?array $override = null) : array {
+            if (is_array($override)) {
+                $frame0 = is_array($cd['frames'][0] ?? null) ? $cd['frames'][0] : [];
+                $fw = max(1, (int)($frame0['w'] ?? 2));
+                $fh = max(1, (int)($frame0['h'] ?? 2));
+                return [
+                    'x' => max(0, min(63, (int)($override['x'] ?? 0))),
+                    'y' => max(0, min(63, (int)($override['y'] ?? 0))),
+                    'w' => max(1, min(64, (int)($override['w'] ?? ($fw * 8)))),
+                    'h' => max(1, min(64, (int)($override['h'] ?? ($fh * 8)))),
+                ];
+            }
             $frame0 = is_array($cd['frames'][0] ?? null) ? $cd['frames'][0] : [];
             $fw = max(1, (int)($frame0['w'] ?? 2));
             $fh = max(1, (int)($frame0['h'] ?? 2));
             $body = ['x' => 0, 'y' => 0, 'w' => $fw * 8, 'h' => $fh * 8];
             if (is_array($c) && is_array($c['hitboxes'] ?? null)) {
                 foreach ($c['hitboxes'] as $hb) {
-                    if (is_array($hb) && (($hb['type'] ?? '') === 'body' || ($hb['id'] ?? '') === 'hb_body')) {
+                    // Fase 9 (hitbox por animacao): hitbox marcada como exclusiva
+                    // de uma animacao (hb.animId setado) NAO conta como a hitbox
+                    // "padrao" do personagem - so' as sem animId (globais).
+                    if (is_array($hb) && empty($hb['animId']) && (($hb['type'] ?? '') === 'body' || ($hb['id'] ?? '') === 'hb_body')) {
                         $body = [
                             'x' => max(0, min(63, (int)($hb['x'] ?? 0))),
                             'y' => max(0, min(63, (int)($hb['y'] ?? 0))),
@@ -148,6 +162,35 @@ final class ProjectParser
             return $body;
         };
         $heroBody = $resolveBody($chars[$heroIdx] ?? null, $charData[$heroIdx] ?? []);
+
+        // Fase 9 (hitbox por animacao): usuario decidiu integrar no controle
+        // de hitbox normal - qualquer hitbox do personagem pode ser marcada
+        // como exclusiva de uma animacao (hb.animId setado em
+        // characters.js), em vez de um campo separado por animacao. So' pro
+        // heroi por enquanto (pedido especifico foi sobre o player agachar) -
+        // ProgramCompiler::compileAction troca player_hb_* junto quando troca
+        // de animacao (ver move_character). Animacao sem hitbox "body"
+        // exclusiva sua usa a hitbox "Corpo" normal do personagem (heroBody).
+        $heroAnimBody = [];
+        $heroHitboxes = is_array($chars[$heroIdx]['hitboxes'] ?? null) ? $chars[$heroIdx]['hitboxes'] : [];
+        $heroAnims = is_array($chars[$heroIdx]['animations'] ?? null) ? $chars[$heroIdx]['animations'] : [];
+        foreach ($heroAnims as $anim) {
+            if (!is_array($anim) || empty($anim['id'])) continue;
+            $animId = (string)$anim['id'];
+            foreach ($heroHitboxes as $hb) {
+                if (!is_array($hb) || ($hb['type'] ?? '') !== 'body') continue;
+                if ((string)($hb['animId'] ?? '') !== $animId) continue;
+                $b = $resolveBody(null, $charData[$heroIdx] ?? [], $hb);
+                $heroAnimBody[$animId] = [
+                    'bottom' => $b['y'] + $b['h'],
+                    'left' => $b['x'],
+                    'right' => $b['x'] + $b['w'] - 1,
+                    'topProbe' => $b['y'] + 4,
+                    'bottomProbe' => max($b['y'] + 4, $b['y'] + $b['h'] - 4),
+                ];
+                break;
+            }
+        }
 
         $bodyBottom = []; $bodyLeft = []; $bodyRight = []; $bodyTopProbe = []; $bodyBottomProbe = [];
         foreach ($chars as $ci => $c) {
@@ -229,6 +272,7 @@ final class ProjectParser
             'heroBodyY' => $heroBody['y'],
             'heroBodyW' => $heroBody['w'],
             'heroBodyH' => $heroBody['h'],
+            'heroAnimBody' => $heroAnimBody,
             'bodyBottom' => $bodyBottom,
             'bodyLeft' => $bodyLeft,
             'bodyRight' => $bodyRight,

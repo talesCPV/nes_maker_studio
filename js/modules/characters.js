@@ -129,6 +129,12 @@ const CHAR = (() => {
     c.hitboxes=ensureHitboxes(c).filter(h=>h.id!==id);
     render();
   }
+  function toggleHitboxAnimExclusive(id, checked){
+    const c=current(), a=anim(); if(!c||!a)return;
+    const hb=ensureHitboxes(c).find(h=>h.id===id); if(!hb)return;
+    hb.animId = checked ? a.id : null;
+    render();
+  }
   function duplicate(){
     const c=current(); if(!c)return;
     const n=JSON.parse(JSON.stringify(c)); n.id='char_'+Date.now(); n.name=c.name+' Copy'; data().push(n); selectedId=n.id; render();
@@ -253,11 +259,16 @@ const CHAR = (() => {
       }
     }
     ctx.strokeStyle='#4ec9b0';ctx.strokeRect(ox,oy,mt.w*8*scale,mt.h*8*scale);
-    const c=current();
-    (c?ensureHitboxes(c):[]).forEach(hb=>{
+    const c=current(); const curAnim=anim();
+    // Fase 9 (hitbox por animacao): so desenha hitboxes globais (sem animId)
+    // + as exclusivas da animacao selecionada agora - feedback visual direto
+    // no mesmo preview que ja existia, sem precisar de outro controle.
+    (c?ensureHitboxes(c):[]).filter(hb=>!hb.animId || hb.animId===curAnim?.id).forEach(hb=>{
       ctx.strokeStyle=HITBOX_TYPE_COLORS[hb.type]||'#fff';
-      ctx.lineWidth=2;
+      ctx.lineWidth=hb.animId?3:2;
+      ctx.setLineDash(hb.animId?[4,2]:[]);
       ctx.strokeRect(ox+hb.x*scale, oy+hb.y*scale, hb.w*scale, hb.h*scale);
+      ctx.setLineDash([]);
       ctx.lineWidth=1;
     });
     const info=document.getElementById('charPreviewInfo');if(info)info.textContent=`${current()?.name||''} • ${anim()?.name||''} • frame ${selectedFrame+1}/${anim()?.frames.length||0} • ${mt.w}x${mt.h} tiles`;
@@ -307,6 +318,7 @@ const CHAR = (() => {
           <div style="display:flex;gap:4px">
             ${['x','y','w','h'].map(f=>`<label style="font-size:9px;color:#777;flex:1">${f.toUpperCase()}<input type="number" min="0" max="255" value="${hb[f]||0}" onchange="CHAR.updateHitboxField('${hb.id}','${f}',this.value)" style="width:100%;background:#000;color:#fff;border:1px solid #444;padding:3px;box-sizing:border-box"></label>`).join('')}
           </div>
+          <label style="font-size:9px;color:${hb.animId===a?.id?'#4ec9b0':'#777'};display:block;margin-top:4px"><input type="checkbox" ${hb.animId===a?.id?'checked':''} ${a?'':'disabled'} onchange="CHAR.toggleHitboxAnimExclusive('${hb.id}',this.checked)"> Exclusiva da animação "${esc(a?.name||'')}"${hb.animId && hb.animId!==a?.id ? ` <span style="color:#e67e22">(hoje exclusiva de outra animação)</span>` : ''}</label>
         </div>`).join('')}
       <button class="btn-tool" onclick="CHAR.addHitbox()" style="margin-bottom:10px">＋ Hitbox</button>
       <div style="display:flex;gap:5px;align-items:end"><div style="flex:1"><label style="font-size:10px;color:#777">Animação</label>
@@ -522,6 +534,7 @@ const CHAR = (() => {
     init, loadData, render, addCharacter, duplicate, deleteCharacter, selectCharacter, selectAnim, selectFrame,
     addAnim, removeAnim, addFrame, removeFrame, moveFrame, useMetatile, setFrameDuration, setField,
     togglePlay, prevFrame, nextFrame, addHitbox, updateHitboxField, deleteHitbox,
+    toggleHitboxAnimExclusive,
     openTileExport, closeTileExport, tileExportToggle, tileExportSelectAll, tileExportSelectNone,
     tileExportSelectUsed, tileExportSelectAllChars, confirmTileExport
   };

@@ -68,6 +68,11 @@ ASM;
         $lines[] = 'player_timer: .res 1  ; frames restantes ate proximo frame';
         $lines[] = 'player_anim_start: .res 1  ; Fase 9 fix (rodada 4): inicio (indice global de frame) da animacao ativa';
         $lines[] = 'player_anim_end:   .res 1  ; fim EXCLUSIVO da animacao ativa - animate_player da a volta aqui, nao em @@HERO_FRAMES@@';
+        $lines[] = 'player_hb_bottom:      .res 1  ; Fase 9 (hitbox por animacao): substitui as constantes @@HB_*@@ fixas - troca junto quando a animacao ativa troca (ver move_character)';
+        $lines[] = 'player_hb_left:        .res 1';
+        $lines[] = 'player_hb_right:       .res 1';
+        $lines[] = 'player_hb_top_probe:   .res 1';
+        $lines[] = 'player_hb_bottom_probe: .res 1';
         $lines[] = 'on_ground:  .res 1';
         $lines[] = 'jump_cnt:   .res 1    ; frames restantes de impulso de pulo';
         $lines[] = 'col_x:      .res 1    ; tile X para consulta';
@@ -325,18 +330,6 @@ ASM;
     },
 
     'collision' => static function(array $ctx): string {
-        $s = $ctx['sprite'] ?? [];
-        $bx = (int)($s['heroBodyX'] ?? 2);
-        $by = (int)($s['heroBodyY'] ?? 0);
-        $bw = (int)($s['heroBodyW'] ?? 12);
-        $bh = (int)($s['heroBodyH'] ?? 16);
-        $repl = [
-            '@@HB_BOTTOM@@' => (string)($by + $bh),
-            '@@HB_LEFT@@' => (string)$bx,
-            '@@HB_RIGHT@@' => (string)($bx + $bw - 1),
-            '@@HB_TOP_PROBE@@' => (string)($by + 4),
-            '@@HB_BOTTOM_PROBE@@' => (string)max($by + 4, $by + $bh - 4),
-        ];
         $asm = <<<'ASM'
 ; ---- Collision lookup ----
 ; col_x (0-31), col_y (0-29) -> col_result (tipo 0-5)
@@ -451,14 +444,14 @@ check_ground:
   STA on_ground
   LDA player_y
   CLC
-  ADC #@@HB_BOTTOM@@
+  ADC player_hb_bottom
   LSR A
   LSR A
   LSR A
   STA col_y
   LDA player_x
   CLC
-  ADC #@@HB_LEFT@@
+  ADC player_hb_left
   JSR world_col_from
   JSR get_collision2
   LDA col_result
@@ -468,7 +461,7 @@ check_ground:
   BEQ cg_yes
   LDA player_x
   CLC
-  ADC #@@HB_RIGHT@@
+  ADC player_hb_right
   JSR world_col_from
   JSR get_collision2
   LDA col_result
@@ -485,7 +478,7 @@ cg_yes:
   ASL A
   ASL A
   SEC
-  SBC #@@HB_BOTTOM@@
+  SBC player_hb_bottom
   STA player_y
   RTS
 
@@ -505,7 +498,7 @@ is_yes:
 check_wall_at:
   LDA player_y
   CLC
-  ADC #@@HB_TOP_PROBE@@
+  ADC player_hb_top_probe
   LSR A
   LSR A
   LSR A
@@ -516,7 +509,7 @@ check_wall_at:
   BNE cw_hit
   LDA player_y
   CLC
-  ADC #@@HB_BOTTOM_PROBE@@
+  ADC player_hb_bottom_probe
   LSR A
   LSR A
   LSR A
@@ -533,7 +526,7 @@ cw_hit:
   STA col_result
   RTS
 ASM;
-        return str_replace(array_keys($repl), array_values($repl), $asm);
+        return $asm;
     },
 
     'player_manual_move' => static function(array $ctx): string {

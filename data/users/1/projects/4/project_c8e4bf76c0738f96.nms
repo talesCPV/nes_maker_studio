@@ -13720,10 +13720,31 @@
                     "id": "hb_body",
                     "name": "Corpo",
                     "type": "body",
-                    "x": 1,
+                    "x": 0,
+                    "y": 24,
+                    "w": 16,
+                    "h": 8,
+                    "animId": "anim_1788049311073"
+                },
+                {
+                    "id": "hb_1788521398891",
+                    "name": "Hitbox 2",
+                    "type": "body",
+                    "x": 0,
                     "y": 2,
-                    "w": 13,
-                    "h": 30
+                    "w": 16,
+                    "h": 22,
+                    "animId": null
+                },
+                {
+                    "id": "hb_1788521786047",
+                    "name": "Hitbox 3",
+                    "type": "body",
+                    "x": 0,
+                    "y": 24,
+                    "w": 16,
+                    "h": 8,
+                    "animId": "idle"
                 }
             ],
             "jumpForceId": "jf_1788357343390",
@@ -13741,7 +13762,13 @@
                             "offsetX": 0,
                             "offsetY": 0
                         }
-                    ]
+                    ],
+                    "hitboxOverride": {
+                        "x": 4,
+                        "y": 2,
+                        "w": 15,
+                        "h": 24
+                    }
                 },
                 {
                     "id": "anim_1788049311073",
@@ -13776,7 +13803,7 @@
                     ]
                 },
                 {
-                    "id": "anim_1788049435163",
+                    "id": "anim_1788516575042",
                     "name": "jump",
                     "fps": 8,
                     "loop": true,
@@ -14036,7 +14063,7 @@
                     "eventId": "",
                     "actionId": "move_character",
                     "charId": "char_1788049242917",
-                    "animId": "anim_1788049435163",
+                    "animId": "anim_1788516575042",
                     "direction": "jump"
                 }
             ]
@@ -14143,7 +14170,7 @@
                     "eventId": "",
                     "actionId": "move_character",
                     "charId": "char_1788049242917",
-                    "animId": "anim_1788049435163"
+                    "animId": "anim_1788516575042"
                 }
             ]
         }
@@ -18149,7 +18176,7 @@
         ],
         "asm": ""
     },
-    "savedAt": 1788490738198,
+    "savedAt": 1788521829911,
     "paletteBank": [
         {
             "id": "pal_1",
