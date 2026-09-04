@@ -49,11 +49,11 @@ try {
 
     foreach ($rows as $row) {
         $projectId = (int) $row['id'];
-        $thumbPath = $baseDir .
+        $projDir = $baseDir .
             DIRECTORY_SEPARATOR .
-            $projectId .
-            DIRECTORY_SEPARATOR .
-            'thumbnail.png';
+            $projectId;
+        $thumbPath = $projDir . DIRECTORY_SEPARATOR . 'thumbnail.png';
+        $romPath = $projDir . DIRECTORY_SEPARATOR . 'game.nes';
 
         $projects[] = [
             'id' => $projectId,
@@ -66,6 +66,8 @@ try {
                 ? (string) $row['parent_name']
                 : null,
             'has_thumbnail' => is_file($thumbPath),
+            'has_rom' => is_file($romPath),
+            'rom_size' => is_file($romPath) ? (int) filesize($romPath) : 0,
             'created_at' => $row['created_at'],
             'updated_at' => $row['updated_at']
         ];

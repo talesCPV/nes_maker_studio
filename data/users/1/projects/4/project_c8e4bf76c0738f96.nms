@@ -449,6 +449,38 @@
         0,
         0,
         0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
         30,
         15,
         0,
@@ -539,38 +571,6 @@
         228,
         226,
         193,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
         0,
         0,
         0,
@@ -8344,16 +8344,20 @@
             "id": "mt_1788049090518",
             "name": "jump",
             "w": 2,
-            "h": 3,
+            "h": 4,
             "tiles": [
                 24,
                 25,
                 26,
                 27,
                 28,
-                29
+                29,
+                30,
+                31
             ],
             "flips": [
+                0,
+                0,
                 0,
                 0,
                 0,
@@ -13717,34 +13721,14 @@
             },
             "hitboxes": [
                 {
-                    "id": "hb_body",
-                    "name": "Corpo",
-                    "type": "body",
-                    "x": 0,
-                    "y": 24,
-                    "w": 16,
-                    "h": 8,
-                    "animId": "anim_1788049311073"
-                },
-                {
                     "id": "hb_1788521398891",
-                    "name": "Hitbox 2",
+                    "name": "Parte de Baixo",
                     "type": "body",
                     "x": 0,
-                    "y": 2,
+                    "y": 10,
                     "w": 16,
                     "h": 22,
                     "animId": null
-                },
-                {
-                    "id": "hb_1788521786047",
-                    "name": "Hitbox 3",
-                    "type": "body",
-                    "x": 0,
-                    "y": 24,
-                    "w": 16,
-                    "h": 8,
-                    "animId": "idle"
                 }
             ],
             "jumpForceId": "jf_1788357343390",
@@ -13873,6 +13857,13 @@
             "type": "byte",
             "zeroPage": true,
             "initialValue": 3
+        },
+        {
+            "id": "var_1788556481040",
+            "name": "stand",
+            "type": "bool",
+            "zeroPage": false,
+            "initialValue": 1
         }
     ],
     "events": [
@@ -13987,6 +13978,12 @@
                     "eventId": "ev_1788113618276"
                 },
                 {
+                    "type": "if_var",
+                    "eventId": "",
+                    "varId": "var_1788556481040",
+                    "value": 1
+                },
+                {
                     "type": "action",
                     "eventId": "",
                     "actionId": "move_character",
@@ -14018,6 +14015,12 @@
                 {
                     "type": "if_event",
                     "eventId": "ev_1788113609762"
+                },
+                {
+                    "type": "if_var",
+                    "eventId": "",
+                    "varId": "var_1788556481040",
+                    "value": 1
                 },
                 {
                     "type": "action",
@@ -14153,6 +14156,12 @@
                     "actionId": "move_character",
                     "charId": "char_1788049242917",
                     "animId": "idle"
+                },
+                {
+                    "type": "set_var",
+                    "eventId": "",
+                    "varId": "var_1788556481040",
+                    "value": 1
                 }
             ]
         },
@@ -14171,6 +14180,12 @@
                     "actionId": "move_character",
                     "charId": "char_1788049242917",
                     "animId": "anim_1788516575042"
+                },
+                {
+                    "type": "set_var",
+                    "eventId": "",
+                    "varId": "var_1788556481040",
+                    "value": 0
                 }
             ]
         }
@@ -18176,7 +18191,7 @@
         ],
         "asm": ""
     },
-    "savedAt": 1788521829911,
+    "savedAt": 1788556649775,
     "paletteBank": [
         {
             "id": "pal_1",

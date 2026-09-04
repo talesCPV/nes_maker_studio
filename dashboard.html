@@ -701,13 +701,15 @@
         <h2>🧬 Merge ROMs (multicart)</h2>
 
         <p class="message" style="color:#888;margin:0 0 8px;font-size:12px;line-height:1.45">
-            Envie arquivos <b>.nes</b>. O mapper é detectado pelo header iNES.
-            Cada aba agrupa ROMs do <b>mesmo mapper</b> — não é possível misturar mappers num único multicart.
-            Voltar ao menu no cartucho = <b>Reset</b>.
+            ROMs ficam só nesta sessão do navegador (não é repositório de jogos).
+            O mapper vem do header iNES; cada aba = um mapper (sem misturar).
+            Dá para importar <b>game.nes</b> já compiladas dos seus projetos.
+            Voltar ao menu no cartucho = <b>Reset</b>. Após o merge, nada fica guardado aqui.
         </p>
 
         <div class="merge-toolbar">
-            <button type="button" id="mergeUploadBtn" class="icon-btn" title="Adicionar ROM .nes" style="width:auto;padding:6px 12px;border-radius:6px">⬆ Adicionar .nes</button>
+            <button type="button" id="mergeUploadBtn" class="icon-btn" title="Adicionar ROM .nes do computador" style="width:auto;padding:6px 12px;border-radius:6px">⬆ PC</button>
+            <button type="button" id="mergeImportProjectsBtn" class="icon-btn" title="Importar game.nes dos meus projetos" style="width:auto;padding:6px 12px;border-radius:6px;background:#16a085;border-color:#16a085;color:#fff">📦 Meus projetos</button>
             <input type="file" id="mergeRomInput" accept=".nes,application/octet-stream" multiple style="display:none">
             <button type="button" id="mergeBuildBtn" class="icon-btn" title="Gerar multicart desta aba" style="width:auto;padding:6px 12px;border-radius:6px;background:#8e44ad;border-color:#8e44ad;color:#fff" disabled>🔨 Gerar multicart</button>
             <span id="mergeStatus" class="message" style="margin:0;font-size:12px;color:#aaa"></span>
@@ -2419,6 +2421,29 @@ function mergeRenderList() {
     });
 }
 
+function mergeAddRomBytes(buf, fileName, menuNameHint) {
+    const info = parseInesHeader(buf);
+    const base = (menuNameHint || fileName || 'jogo').replace(/\.nes$/i, '');
+    const entry = {
+        id: 'rom_' + (mergeIdSeq++),
+        menuName: String(base).slice(0, 28),
+        fileName: fileName || (base + '.nes'),
+        mapper: info.mapper,
+        prgBanks: info.prgBanks,
+        chrBanks: info.chrBanks,
+        prgSize: info.prgSize,
+        chrSize: info.chrSize,
+        mirroring: info.mirroring,
+        bytes: buf
+    };
+    if (!mergeRomsByMapper.has(info.mapper)) {
+        mergeRomsByMapper.set(info.mapper, []);
+    }
+    mergeRomsByMapper.get(info.mapper).push(entry);
+    mergeActiveMapper = info.mapper;
+    return entry;
+}
+
 async function mergeAddFiles(fileList) {
     const files = [...(fileList || [])];
     if (!files.length) return;
@@ -2427,25 +2452,7 @@ async function mergeAddFiles(fileList) {
     for (const file of files) {
         try {
             const buf = new Uint8Array(await file.arrayBuffer());
-            const info = parseInesHeader(buf);
-            const base = (file.name || 'jogo').replace(/\.nes$/i, '');
-            const entry = {
-                id: 'rom_' + (mergeIdSeq++),
-                menuName: base.slice(0, 28),
-                fileName: file.name || (base + '.nes'),
-                mapper: info.mapper,
-                prgBanks: info.prgBanks,
-                chrBanks: info.chrBanks,
-                prgSize: info.prgSize,
-                chrSize: info.chrSize,
-                mirroring: info.mirroring,
-                bytes: buf
-            };
-            if (!mergeRomsByMapper.has(info.mapper)) {
-                mergeRomsByMapper.set(info.mapper, []);
-            }
-            mergeRomsByMapper.get(info.mapper).push(entry);
-            mergeActiveMapper = info.mapper;
+            mergeAddRomBytes(buf, file.name || 'jogo.nes', (file.name || 'jogo').replace(/\.nes$/i, ''));
             added++;
         } catch (err) {
             errors.push((file.name || '?') + ': ' + (err.message || err));
@@ -2464,6 +2471,88 @@ async function mergeAddFiles(fileList) {
     }
 }
 
+/** Importa game.nes já compiladas dos projetos do usuário (não é repositório permanente do merge). */
+async function mergeImportFromProjects() {
+    mergeSetStatus('Listando projetos com ROM...');
+    try {
+        const res = await fetch('backend/projects/list.php', {
+            method: 'GET',
+            credentials: 'same-origin',
+            cache: 'no-store'
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+            throw new Error(data.message || 'Falha ao listar projetos.');
+        }
+        const withRom = (data.projects || []).filter(p => p.has_rom);
+        if (!withRom.length) {
+            alert('Nenhum projeto com game.nes.\nFaça Build ROM no editor para gerar a ROM do projeto.');
+            mergeSetStatus('Nenhum projeto com game.nes.');
+            return;
+        }
+        const lines = withRom.map((p, i) => {
+            const kb = p.rom_size ? ` (${Math.round(p.rom_size / 1024)} KB)` : '';
+            return `${i + 1}. ${p.name} (#${p.id})${kb}`;
+        });
+        const pick = prompt(
+            'Projetos com game.nes:\n' + lines.join('\n') +
+            '\n\nDigite os números separados por vírgula (ex: 1,3) ou "all":',
+            'all'
+        );
+        if (pick === null) {
+            mergeSetStatus('');
+            return;
+        }
+        let indices = [];
+        const raw = pick.trim().toLowerCase();
+        if (raw === 'all' || raw === '*') {
+            indices = withRom.map((_, i) => i);
+        } else {
+            indices = raw.split(/[,\s]+/).map(s => parseInt(s, 10) - 1).filter(n => n >= 0 && n < withRom.length);
+        }
+        if (!indices.length) {
+            alert('Nenhuma seleção válida.');
+            return;
+        }
+        let added = 0;
+        const errors = [];
+        for (const idx of indices) {
+            const proj = withRom[idx];
+            try {
+                const r = await fetch('backend/projects/rom.php?id=' + encodeURIComponent(proj.id), {
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                });
+                if (!r.ok) {
+                    let msg = 'HTTP ' + r.status;
+                    try {
+                        const j = await r.json();
+                        if (j.message) msg = j.message;
+                    } catch (e) {}
+                    throw new Error(msg);
+                }
+                const buf = new Uint8Array(await r.arrayBuffer());
+                mergeAddRomBytes(buf, (proj.name || 'projeto') + '.nes', proj.name || 'projeto');
+                added++;
+            } catch (err) {
+                errors.push((proj.name || ('#' + proj.id)) + ': ' + (err.message || err));
+            }
+        }
+        mergeRenderTabs();
+        mergeRenderList();
+        mergeSetStatus(
+            added ? `+${added} do(s) projeto(s) · ${mapperLabel(mergeActiveMapper)}` : 'Nada importado'
+        );
+        if (errors.length) {
+            alert('Falhas na importação:\n\n' + errors.slice(0, 8).join('\n'));
+        }
+    } catch (err) {
+        console.error(err);
+        mergeSetStatus(err.message || 'Erro', true);
+        alert(err.message || 'Erro ao importar dos projetos.');
+    }
+}
+
 function openMergeModal() {
     newprojCard.classList.remove('open');
     trashCard.classList.remove('open');
@@ -2473,8 +2562,8 @@ function openMergeModal() {
     mergeRenderTabs();
     mergeRenderList();
     mergeSetStatus(mergeRomsByMapper.size
-        ? 'Selecione a aba do mapper e gere o multicart (em breve: montagem ca65).'
-        : 'Adicione arquivos .nes para começar.');
+        ? 'Selecione a aba do mapper e gere o multicart (montagem ca65 em breve).'
+        : 'PC ou Meus projetos — ROMs só nesta sessão.');
 }
 
 document.getElementById('mergeRomsButton')?.addEventListener('click', openMergeModal);
@@ -2483,26 +2572,87 @@ document.getElementById('mergeUploadBtn')?.addEventListener('click', () => {
     document.getElementById('mergeRomInput')?.click();
 });
 
+document.getElementById('mergeImportProjectsBtn')?.addEventListener('click', () => {
+    mergeImportFromProjects();
+});
+
 document.getElementById('mergeRomInput')?.addEventListener('change', async (e) => {
     const files = e.target.files;
     if (files && files.length) await mergeAddFiles(files);
     e.target.value = '';
 });
 
-document.getElementById('mergeBuildBtn')?.addEventListener('click', () => {
+function u8ToBase64(u8) {
+    let s = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < u8.length; i += chunk) {
+        s += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
+    }
+    return btoa(s);
+}
+
+function mergeDownloadBytes(filename, u8) {
+    const blob = new Blob([u8], { type: 'application/octet-stream' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename || 'multicart.nes';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+document.getElementById('mergeBuildBtn')?.addEventListener('click', async () => {
     const items = mergeActiveMapper != null ? (mergeRomsByMapper.get(mergeActiveMapper) || []) : [];
     if (items.length < 1) {
         alert('Adicione pelo menos uma ROM nesta aba.');
         return;
     }
-    const names = items.map((r, i) => `${i + 1}. ${r.menuName} (${r.fileName})`).join('\n');
-    alert(
-        'Montagem do multicart (ca65) ainda não está ligada.\n\n' +
-        `Mapper: ${mapperLabel(mergeActiveMapper)}\n` +
-        `Jogos (${items.length}):\n${names}\n\n` +
-        'Próximo passo: empacotar bancos + menu ASM e gerar a .nes.'
-    );
-    mergeSetStatus(`Pronto para merge: ${items.length} jogo(s) · ${mapperLabel(mergeActiveMapper)} (build em breve)`);
+    // v1 backend: NROM (0) ou AxROM (7) → multicart mapper 7
+    if (mergeActiveMapper !== 0 && mergeActiveMapper !== 7) {
+        alert(
+            'A montagem v1 só gera multicart a partir de ROMs NROM (mapper 0) ou AxROM (7).\n' +
+            'Mapper desta aba: ' + mapperLabel(mergeActiveMapper) + '\n\n' +
+            'UNROM e outros mappers virão em versões seguintes.'
+        );
+        return;
+    }
+    const btn = document.getElementById('mergeBuildBtn');
+    if (btn) btn.disabled = true;
+    mergeSetStatus('Montando multicart no servidor...');
+    try {
+        const games = items.map(r => ({
+            name: r.menuName,
+            rom: u8ToBase64(r.bytes)
+        }));
+        const res = await fetch('backend/multicart/build.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({
+                title: 'MULTICART',
+                games
+            })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+            const msg = data.error || ('HTTP ' + res.status);
+            if (data.log) console.warn(data.log);
+            throw new Error(msg + (data.log ? '\n\n' + data.log.slice(0, 800) : ''));
+        }
+        const bin = Uint8Array.from(atob(data.nes), c => c.charCodeAt(0));
+        mergeDownloadBytes(data.filename || 'multicart.nes', bin);
+        mergeSetStatus(
+            'Multicart OK · mapper ' + (data.mapper ?? 7) + ' · ' + bin.length + ' bytes' +
+            (data.saved_path ? ' · salvo no servidor' : '')
+        );
+        alert('Multicart gerado!\n\n' + (data.games || []).map((n,i)=> (i+1)+'. '+n).join('\n') +
+            '\n\nMapper: 7 (AxROM)\nVoltar ao menu: Reset');
+    } catch (err) {
+        console.error(err);
+        mergeSetStatus(err.message || 'Falha no merge', true);
+        alert('Falha ao gerar multicart:\n' + (err.message || err));
+    } finally {
+        if (btn) btn.disabled = items.length < 1;
+    }
 });
 
 
