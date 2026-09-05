@@ -72,6 +72,77 @@ final class ProjectParser
         }
         if (!$playScreenHardCut) $playScreenHardCut[] = 0;
 
+        // Fase 9 (gravidade por fase): phase.gravity ('none'/'down'/'up'/
+        // 'left'/'right') e phase.gravityStrength eram 100% ignorados - a
+        // queda sempre acontecia (pra baixo, 4px/frame fixo) nao importa o
+        // que o Dashboard mostrasse. Por enquanto so' "none" (desliga queda
+        // e pulo de vez) e "down" (com a forca configuravel) sao tratados de
+        // verdade - "up"/"left"/"right" (gravidade virada) precisam de uma
+        // reformulacao maior de check_ground/check_wall_at (o que "chao" e
+        // "parede" significam muda com a direcao) e ficam pra depois, caindo
+        // no mesmo "down" de sempre por enquanto.
+        $playScreenGravityOff = []; $playScreenGravityStrength = [];
+        foreach ($playIdxs as $gi) {
+            $sc = $screenData[$gi] ?? null;
+            $pid = is_array($sc) ? ($sc['phaseId'] ?? null) : null;
+            $ph = null;
+            if ($pid !== null) {
+                foreach ((is_array($project['phases'] ?? null) ? $project['phases'] : []) as $p) {
+                    if (is_array($p) && (string)($p['id'] ?? '') === (string)$pid) { $ph = $p; break; }
+                }
+            }
+            $grav = (string)($ph['gravity'] ?? 'down');
+            $strength = max(1, min(16, (int)($ph['gravityStrength'] ?? 4)));
+            $playScreenGravityOff[] = ($grav === 'none') ? 1 : 0;
+            $playScreenGravityStrength[] = $strength;
+        }
+        if (!$playScreenGravityOff) { $playScreenGravityOff[] = 0; $playScreenGravityStrength[] = 4; }
+
+        // Fase 9 fix (grade real): o levelMap eh uma grade 2D (cols x rows),
+        // mas ate agora o compilador so guardava a ORDEM linear em que as
+        // celulas preenchidas apareciam no scan (linha a linha) - "direita"
+        // e' so' "proximo indice da lista", nao o vizinho espacial de
+        // verdade. Isso faz hard-cut (e no futuro scroll vertical) se
+        // comportarem errado em qualquer grade que nao seja uma unica linha
+        // preenchida (ex: mapa estilo Zelda com varias linhas). Agora
+        // calcula os vizinhos reais (direita/esquerda/cima/baixo) pela
+        // posicao (gridX,gridY) de cada tela dentro da MESMA fase, e traduz
+        // pra play_idx (255 = nao ha vizinho ali). Cima/baixo ficam prontos
+        // pro scroll vertical futuro; hard-cut hoje so usa direita/esquerda.
+        $bgIdToPlayIdx = [];
+        foreach ($playIdxs as $pi => $gi) {
+            $sc = $screenData[$gi] ?? null;
+            if (is_array($sc) && isset($sc['id'])) $bgIdToPlayIdx[(string)$sc['id']] = $pi;
+        }
+        $cellByPhaseXY = [];
+        foreach ((is_array($project['phases'] ?? null) ? $project['phases'] : []) as $ph) {
+            if (!is_array($ph) || !isset($ph['id'])) continue;
+            $lm = $ph['levelMap'] ?? null;
+            if (!is_array($lm) || !is_array($lm['cells'] ?? null)) continue;
+            $cellByPhaseXY[(string)$ph['id']] = $lm['cells'];
+        }
+        $neighborRight = []; $neighborLeft = []; $neighborUp = []; $neighborDown = [];
+        foreach ($playIdxs as $pi => $gi) {
+            $sc = $screenData[$gi] ?? null;
+            $nR = 255; $nL = 255; $nU = 255; $nD = 255;
+            if (is_array($sc) && isset($sc['gridX'], $sc['gridY'], $sc['phaseId'])) {
+                $cells = $cellByPhaseXY[(string)$sc['phaseId']] ?? null;
+                $gx = (int)$sc['gridX']; $gy = (int)$sc['gridY'];
+                if (is_array($cells)) {
+                    $lookup = static function (int $x, int $y) use ($cells, $bgIdToPlayIdx): int {
+                        $cell = $cells[$x . ',' . $y] ?? null;
+                        $bgId = is_array($cell) ? (string)($cell['bgId'] ?? '') : '';
+                        return $bgId !== '' && isset($bgIdToPlayIdx[$bgId]) ? $bgIdToPlayIdx[$bgId] : 255;
+                    };
+                    $nR = $lookup($gx + 1, $gy);
+                    $nL = $lookup($gx - 1, $gy);
+                    $nU = $lookup($gx, $gy - 1);
+                    $nD = $lookup($gx, $gy + 1);
+                }
+            }
+            $neighborRight[] = $nR; $neighborLeft[] = $nL; $neighborUp[] = $nU; $neighborDown[] = $nD;
+        }
+
         // Stage 15: o empacotamento CHR dos sprites passa a ser responsabilidade do NGC.
         // O backend usa diretamente project.chr + project.metatiles + project.characters.
         $sprite = $this->buildSpriteContext($project, $screenData, $playIdxs);
@@ -117,6 +188,12 @@ final class ProjectParser
             'playCount' => count($playIdxs),
             'lastPlayIdx' => count($playIdxs) ? count($playIdxs) - 1 : 0,
             'playScreenHardCut' => $playScreenHardCut,
+            'playScreenGravityOff' => $playScreenGravityOff,
+            'playScreenGravityStrength' => $playScreenGravityStrength,
+            'screenNeighborRight' => $neighborRight,
+            'screenNeighborLeft' => $neighborLeft,
+            'screenNeighborUp' => $neighborUp,
+            'screenNeighborDown' => $neighborDown,
             'sprite' => $sprite,
         ];
     }
@@ -668,6 +745,8 @@ final class ProjectParser
                         'phaseId' => $ph['id'] ?? null,
                         'phaseName' => $ph['name'] ?? null,
                         'role' => $isSplash ? 'splash' : 'play',
+                        'gridX' => $x,
+                        'gridY' => $y,
                     ]);
                 }
             }

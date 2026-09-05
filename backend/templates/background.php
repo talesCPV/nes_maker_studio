@@ -63,6 +63,10 @@ ls_at:
   CPY #64
   BNE ls_at
   ; scroll zerado
+  LDA #0
+  STA nt_page          ; Fase 9 fix: sem isso, a NMI (que sempre le nt_page/
+  STA scroll_x          ; scroll_x pra desenhar) reescrevia por cima com o
+                         ; valor antigo (de antes do corte) logo no proximo frame
   BIT $2002
   LDA #0
   STA $2005

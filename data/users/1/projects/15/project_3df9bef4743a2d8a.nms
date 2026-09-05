@@ -16398,8 +16398,8 @@
             "description": "Primeira fase",
             "mapper": 0,
             "bank": 0,
-            "gravity": "none",
-            "gravityStrength": 4,
+            "gravity": "left",
+            "gravityStrength": 16,
             "scroll": "static",
             "mirroring": "vertical",
             "background": "",
@@ -16661,6 +16661,13 @@
                     "charId": "char_1788575618869",
                     "animId": "idle",
                     "direction": "up"
+                },
+                {
+                    "type": "action",
+                    "eventId": "",
+                    "actionId": "apply_speed_level",
+                    "targetId": "sp_1788576151111",
+                    "charId": "char_1788575618869"
                 }
             ]
         },
@@ -16680,6 +16687,13 @@
                     "charId": "char_1788575618869",
                     "animId": "idle",
                     "direction": "down"
+                },
+                {
+                    "type": "action",
+                    "eventId": "",
+                    "actionId": "apply_speed_level",
+                    "targetId": "sp_1788576151111",
+                    "charId": "char_1788575618869"
                 }
             ]
         },
@@ -16809,7 +16823,7 @@
         ],
         "asm": ""
     },
-    "savedAt": 1788577662912,
+    "savedAt": 1788612908835,
     "paletteBank": [
         {
             "id": "pal_1",

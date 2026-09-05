@@ -907,6 +907,15 @@ up_right_move:
   LDA #0
   STA player_flip
 up_jump:
+  ; Fase 9 (gravidade por fase): "None" (Dashboard) - sem queda nem pulo,
+  ; o heroi so anda nos eixos que o motor ja suporta (hoje: esquerda/direita).
+  LDX play_idx
+  LDA PlayScreenGravityOff,X
+  BEQ up_grav_on
+  LDA #1
+  STA on_ground
+  JMP up_done
+up_grav_on:
   ; B ou A (edge) + on_ground → pulo
   LDA pad1_edge
   AND #%00000011      ; A ou B
@@ -934,9 +943,10 @@ up_fall:
   JSR check_ground
   LDA on_ground
   BNE up_done
+  LDX play_idx
   LDA player_y
   CLC
-  ADC #4
+  ADC PlayScreenGravityStrength,X
   STA player_y
   CMP #240
   BCC up_done
@@ -991,12 +1001,17 @@ goto_play_screen:
   JSR load_screen
   RTS
 
+; Fase 9 fix (grade real): usa o vizinho de verdade da grade 2D da fase
+; (ScreenNeighborRight/Left, ver ProjectParser::collectGameScreens) em vez de
+; so' incrementar/decrementar play_idx - senao "direita" podia pular pra uma
+; sala sem relacao nenhuma espacial (proxima da lista, nao vizinha de fato)
+; em qualquer grade com mais de 1 linha usada.
 try_screen_right:
-  LDA play_idx
-  CMP #{{LAST_PLAY_IDX}}
-  BCS tsr_done
-  INC play_idx
-  LDA play_idx
+  LDX play_idx
+  LDA ScreenNeighborRight,X
+  CMP #255
+  BEQ tsr_done          ; nao ha sala a direita - bloqueado
+  STA play_idx
   JSR goto_play_screen
   LDA #12             ; entra pela esquerda
   STA player_x
@@ -1007,10 +1022,11 @@ tsr_done:
   RTS
 
 try_screen_left:
-  LDA play_idx
-  BEQ tsl_done
-  DEC play_idx
-  LDA play_idx
+  LDX play_idx
+  LDA ScreenNeighborLeft,X
+  CMP #255
+  BEQ tsl_done          ; nao ha sala a esquerda - bloqueado
+  STA play_idx
   JSR goto_play_screen
   LDA #230            ; entra pela direita
   STA player_x

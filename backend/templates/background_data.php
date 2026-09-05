@@ -34,6 +34,23 @@ return [
         if (!$hc) $hc = [0];
         $lines[] = 'PlayScreenHardCut:';
         $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => ((int)$v) ? '1' : '0', $hc));
+        // Fase 9 fix (grade real): vizinho de verdade na grade 2D da fase,
+        // indexado por play_idx - 255 = nao ha sala ali (bloqueado).
+        foreach (['Right' => 'screenNeighborRight', 'Left' => 'screenNeighborLeft', 'Up' => 'screenNeighborUp', 'Down' => 'screenNeighborDown'] as $label => $key) {
+            $vals = is_array($ctx[$key] ?? null) ? $ctx[$key] : [255];
+            if (!$vals) $vals = [255];
+            $lines[] = "ScreenNeighbor{$label}:";
+            $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => (string)max(0, min(255, (int)$v)), $vals));
+        }
+        // Fase 9 (gravidade por fase): 1 = "None" (Dashboard, sem queda/pulo).
+        $go = is_array($ctx['playScreenGravityOff'] ?? null) ? $ctx['playScreenGravityOff'] : [0];
+        if (!$go) $go = [0];
+        $lines[] = 'PlayScreenGravityOff:';
+        $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => ((int)$v) ? '1' : '0', $go));
+        $gs = is_array($ctx['playScreenGravityStrength'] ?? null) ? $ctx['playScreenGravityStrength'] : [4];
+        if (!$gs) $gs = [4];
+        $lines[] = 'PlayScreenGravityStrength:';
+        $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => (string)max(1, min(16, (int)$v)), $gs));
         return implode("\n", $lines);
     },
 
