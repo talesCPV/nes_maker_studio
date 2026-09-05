@@ -701,10 +701,10 @@
         <h2>🧬 Merge ROMs (multicart)</h2>
 
         <p class="message" style="color:#888;margin:0 0 8px;font-size:12px;line-height:1.45">
-            ROMs ficam só nesta sessão do navegador (não é repositório de jogos).
-            O mapper vem do header iNES; cada aba = um mapper (sem misturar).
-            Dá para importar <b>game.nes</b> já compiladas dos seus projetos.
-            Voltar ao menu no cartucho = <b>Reset</b>. Após o merge, nada fica guardado aqui.
+            Só entram ROMs que o merge <b>realmente executa</b>:
+            <b>NROM (0)</b>, <b>CNROM (3) com 1 banco CHR</b> e <b>AxROM (7)</b> — PRG 16/32&nbsp;KB.
+            MMC1, UNROM, MMC3, VRC, CNROM multi-CHR etc. são <b>recusados</b> no upload.
+            Saída: multicart <b>AxROM</b>. Voltar ao menu = <b>Reset</b>. ROMs só nesta sessão.
         </p>
 
         <div class="merge-toolbar">
@@ -2308,6 +2308,24 @@ function mapperLabel(m) {
     return n ? `${m} · ${n}` : `Mapper ${m}`;
 }
 
+/** Só o que build.php (AxROM) executa de verdade */
+function mergeCompatibility(info) {
+    const m = info.mapper | 0;
+    const prg = info.prgBanks | 0;
+    const chr = info.chrBanks | 0;
+    if (prg < 1 || prg > 2) {
+        return { ok: false, reason: 'PRG precisa ser 16KB ou 32KB (1–2 bancos)' };
+    }
+    if (m === 0) return { ok: true, reason: 'NROM → multicart AxROM' };
+    if (m === 7) return { ok: true, reason: 'AxROM → multicart AxROM' };
+    if (m === 3) {
+        if (chr <= 1) return { ok: true, reason: 'CNROM (1×CHR) → multicart AxROM' };
+        return { ok: false, reason: 'CNROM com ' + chr + ' bancos CHR — não suportado' };
+    }
+    const name = MAPPER_NAMES[m] || ('Mapper ' + m);
+    return { ok: false, reason: name + ' não suportado (só NROM / CNROM 1×CHR / AxROM)' };
+}
+
 function parseInesHeader(u8) {
     if (!u8 || u8.length < 16) throw new Error('Arquivo muito curto');
     if (u8[0] !== 0x4E || u8[1] !== 0x45 || u8[2] !== 0x53 || u8[3] !== 0x1A) {
@@ -2423,6 +2441,12 @@ function mergeRenderList() {
 
 function mergeAddRomBytes(buf, fileName, menuNameHint) {
     const info = parseInesHeader(buf);
+    const compat = mergeCompatibility(info);
+    if (!compat.ok) {
+        const err = new Error(compat.reason);
+        err.code = 'INCOMPATIBLE';
+        throw err;
+    }
     const base = (menuNameHint || fileName || 'jogo').replace(/\.nes$/i, '');
     const entry = {
         id: 'rom_' + (mergeIdSeq++),
@@ -2467,7 +2491,7 @@ async function mergeAddFiles(fileList) {
         );
     }
     if (errors.length) {
-        alert('Algumas ROMs não foram aceitas:\n\n' + errors.slice(0, 8).join('\n'));
+        alert('ROMs recusadas (não mergeáveis neste sistema):\n\n' + errors.slice(0, 12).join('\n'));
     }
 }
 
@@ -2606,29 +2630,27 @@ document.getElementById('mergeBuildBtn')?.addEventListener('click', async () => 
         alert('Adicione pelo menos uma ROM nesta aba.');
         return;
     }
-    // v1 backend: NROM (0) ou AxROM (7) → multicart mapper 7
-    if (mergeActiveMapper !== 0 && mergeActiveMapper !== 7) {
-        alert(
-            'A montagem v1 só gera multicart a partir de ROMs NROM (mapper 0) ou AxROM (7).\n' +
-            'Mapper desta aba: ' + mapperLabel(mergeActiveMapper) + '\n\n' +
-            'UNROM e outros mappers virão em versões seguintes.'
-        );
+    // Apenas o que o software executa → sempre AxROM (build.php)
+    if (mergeActiveMapper !== 0 && mergeActiveMapper !== 3 && mergeActiveMapper !== 7) {
+        alert('Esta aba não deveria existir: só NROM (0), CNROM 1×CHR (3) e AxROM (7).');
         return;
     }
+    const endpoint = 'backend/multicart/build.php';
+    const engineLabel = 'AxROM (7)';
     const btn = document.getElementById('mergeBuildBtn');
     if (btn) btn.disabled = true;
-    mergeSetStatus('Montando multicart no servidor...');
+    mergeSetStatus('Montando multicart (' + engineLabel + ')...');
     try {
         const games = items.map(r => ({
             name: r.menuName,
             rom: u8ToBase64(r.bytes)
         }));
-        const res = await fetch('backend/multicart/build.php', {
+        const res = await fetch(endpoint, {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({
-                title: 'MULTICART',
+                title: 'RETROCOMPILER',
                 games
             })
         });
@@ -2641,11 +2663,15 @@ document.getElementById('mergeBuildBtn')?.addEventListener('click', async () => 
         const bin = Uint8Array.from(atob(data.nes), c => c.charCodeAt(0));
         mergeDownloadBytes(data.filename || 'multicart.nes', bin);
         mergeSetStatus(
-            'Multicart OK · mapper ' + (data.mapper ?? 7) + ' · ' + bin.length + ' bytes' +
+            'Multicart OK · mapper ' + (data.mapper ?? '?') + ' · ' + engineLabel + ' · ' + bin.length + ' bytes' +
             (data.saved_path ? ' · salvo no servidor' : '')
         );
-        alert('Multicart gerado!\n\n' + (data.games || []).map((n,i)=> (i+1)+'. '+n).join('\n') +
-            '\n\nMapper: 7 (AxROM)\nVoltar ao menu: Reset');
+        alert(
+            'Multicart gerado!\n\n' + (data.games || []).map((n,i)=> (i+1)+'. '+n).join('\n') +
+            '\n\nMotor: ' + engineLabel + '\nMapper saída: ' + (data.mapper ?? '?') +
+            '\nVoltar ao menu: Reset' +
+            (data.note ? '\n\n' + data.note : '')
+        );
     } catch (err) {
         console.error(err);
         mergeSetStatus(err.message || 'Falha no merge', true);
