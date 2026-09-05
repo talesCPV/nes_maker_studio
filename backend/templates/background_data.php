@@ -27,6 +27,13 @@ return [
         $bytes = array_map(static fn($i) => ((int)$i) & 0xFF, $playIdxs);
         if (!$bytes) $bytes = [0];
         $lines[] = '  .byte ' . implode(', ', array_map(static fn($b) => sprintf('$%02X', $b), $bytes));
+        // Fase 9 (transicoes de tela): 1 = fase dessa tela e' Hard-Cut
+        // (Dashboard), 0 = scroll continuo (default, comportamento de sempre).
+        // Indexado por play_idx, igual PlayScreenTable.
+        $hc = is_array($ctx['playScreenHardCut'] ?? null) ? $ctx['playScreenHardCut'] : [0];
+        if (!$hc) $hc = [0];
+        $lines[] = 'PlayScreenHardCut:';
+        $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => ((int)$v) ? '1' : '0', $hc));
         return implode("\n", $lines);
     },
 

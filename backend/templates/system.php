@@ -544,12 +544,25 @@ mv_hero_left:
   BCC mvhl_deadzone
   JMP mvhl_move
 mvhl_deadzone:
+  LDX play_idx
+  LDA PlayScreenHardCut,X
+  BNE mvhl_hardcut_edge
   LDA play_idx
   BNE mvhl_try_scroll
   LDA player_x
   CMP #8
   BCS mvhl_move
   RTS                  ; bloqueado - borda esquerda absoluta do jogo (tela 0)
+mvhl_hardcut_edge:
+  ; Fase 9 (transicoes de tela): fase configurada como Hard-Cut no Dashboard -
+  ; sem scroll continuo aqui, so' anda normal ate a borda de verdade e troca
+  ; de tela na hora (try_screen_left ja reusa o mesmo load_screen+respawn do
+  ; boot/warp - so' nunca tinha sido ligado a nada ate agora).
+  LDA player_x
+  CMP #8
+  BCS mvhl_move
+  JSR try_screen_left
+  RTS
 mvhl_try_scroll:
   LDA #98
   SEC
@@ -620,6 +633,9 @@ mv_hero_right:
   BCS mvhr_deadzone
   JMP mvhr_move
 mvhr_deadzone:
+  LDX play_idx
+  LDA PlayScreenHardCut,X
+  BNE mvhr_hardcut_edge
   LDA play_idx
   CMP #{{LAST_PLAY_IDX}}
   BCC mvhr_try_scroll
@@ -627,6 +643,12 @@ mvhr_deadzone:
   CMP #244
   BCC mvhr_move
   RTS                  ; bloqueado - borda direita absoluta do jogo (ultima tela)
+mvhr_hardcut_edge:
+  LDA player_x
+  CMP #244
+  BCC mvhr_move
+  JSR try_screen_right
+  RTS
 mvhr_try_scroll:
   LDA #165
   CLC
@@ -979,6 +1001,8 @@ try_screen_right:
   LDA #12             ; entra pela esquerda
   STA player_x
   JSR spawn_enemies
+  LDA #1
+  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela" (tambem no hard-cut)
 tsr_done:
   RTS
 
@@ -991,6 +1015,8 @@ try_screen_left:
   LDA #230            ; entra pela direita
   STA player_x
   JSR spawn_enemies
+  LDA #1
+  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela" (tambem no hard-cut)
 tsl_done:
   RTS
 

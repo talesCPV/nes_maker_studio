@@ -13823,7 +13823,7 @@
                     "name": "Corpo",
                     "type": "body",
                     "x": 0,
-                    "y": 5,
+                    "y": 13,
                     "w": 16,
                     "h": 19
                 }
@@ -14212,19 +14212,19 @@
     ],
     "hitboxInstances": [
         {
-            "id": "inst_1788448548074999",
+            "id": "inst_1788568205459703",
             "screenId": "scr_1788113096427",
-            "hitboxObjectId": "hb_1788448548074805",
-            "characterId": "char_1788448478168",
-            "x": 202,
-            "y": 79
+            "hitboxObjectId": "hb_1788113788623",
+            "characterId": "char_1788049242917",
+            "x": 201,
+            "y": 53
         },
         {
-            "id": "inst_178848996152731",
+            "id": "inst_1788568219556293",
             "screenId": "scr_1788489836085",
             "hitboxObjectId": "hb_1788113788623",
             "characterId": "char_1788049242917",
-            "x": 129,
+            "x": 26,
             "y": 78
         }
     ],
@@ -18191,7 +18191,7 @@
         ],
         "asm": ""
     },
-    "savedAt": 1788556649775,
+    "savedAt": 1788568231745,
     "paletteBank": [
         {
             "id": "pal_1",

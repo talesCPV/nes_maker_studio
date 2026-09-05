@@ -48,6 +48,30 @@ final class ProjectParser
         }
         if (!$playIdxs) $playIdxs = array_keys($screenData);
 
+        // Fase 9 (transicoes de tela): cada FASE escolhe no Dashboard como
+        // suas telas se conectam (transitionType em phase.levelMap - "hard_cut"
+        // Zelda-like, ou "scroll_h"/"scroll_v" continuo). Ate agora o
+        // compilador ignorava esse campo por completo e sempre gerava scroll
+        // horizontal continuo, faca o Dashboard mostrar o que mostrasse.
+        // scroll_v ainda nao tem motor proprio (fica pra depois) - por
+        // enquanto cai no mesmo scroll horizontal de sempre, so' "hard_cut" e'
+        // tratado de verdade. Tabela por play_idx (nao por fase) porque
+        // mv_hero_left/right (system.php) decidem por tela, nao por fase.
+        $phaseTransitionById = [];
+        foreach ((is_array($project['phases'] ?? null) ? $project['phases'] : []) as $ph) {
+            if (is_array($ph) && isset($ph['id'])) {
+                $phaseTransitionById[(string)$ph['id']] = (string)($ph['levelMap']['transitionType'] ?? 'scroll_h');
+            }
+        }
+        $playScreenHardCut = [];
+        foreach ($playIdxs as $gi) {
+            $sc = $screenData[$gi] ?? null;
+            $pid = is_array($sc) ? ($sc['phaseId'] ?? null) : null;
+            $tt = ($pid !== null && isset($phaseTransitionById[(string)$pid])) ? $phaseTransitionById[(string)$pid] : 'scroll_h';
+            $playScreenHardCut[] = ($tt === 'hard_cut') ? 1 : 0;
+        }
+        if (!$playScreenHardCut) $playScreenHardCut[] = 0;
+
         // Stage 15: o empacotamento CHR dos sprites passa a ser responsabilidade do NGC.
         // O backend usa diretamente project.chr + project.metatiles + project.characters.
         $sprite = $this->buildSpriteContext($project, $screenData, $playIdxs);
@@ -92,6 +116,7 @@ final class ProjectParser
             'secondPlayScreenIdx' => count($playIdxs) > 1 ? $playIdxs[1] : null,
             'playCount' => count($playIdxs),
             'lastPlayIdx' => count($playIdxs) ? count($playIdxs) - 1 : 0,
+            'playScreenHardCut' => $playScreenHardCut,
             'sprite' => $sprite,
         ];
     }

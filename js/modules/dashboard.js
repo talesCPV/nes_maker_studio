@@ -12,7 +12,7 @@ const DASHBOARD = (() => {
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:auto">
         <div style="padding:16px 20px;background:#252526;border-bottom:1px solid #333;display:flex;align-items:center;gap:12px">
-          <h2 style="font-size:14px;color:#4ec9b0;margin:0">📊 DASHBOARD • Dados do Projeto & Gameplay</h2>
+          <h2 style="font-size:14px;color:#4ec9b0;margin:0">📊 CONFIGURAÇÕES • Dados do Projeto & Gameplay</h2>
           <div style="margin-left:auto;display:flex;gap:8px">
             <button class="btn-tool" onclick="Project.save()" style="background:#27ae60;color:#fff">💾 Salvar .NMS</button>
             <button class="btn-tool" onclick="DASHBOARD.exportSummary()">📄 Resumo</button>

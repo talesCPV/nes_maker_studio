@@ -3,20 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NES Maker Studio v0.6.5 FINAL</title>
+<title>retrocompiler</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" href="assets/icon.png" type="image/png">
 </head>
 <body>
 <div id="topbar">
-  <div class="top-logo"><span>▶</span> NES MAKER STUDIO v0.6.5 FINAL EXATO</div>
+  <div class="top-logo"><span>▶</span> www.retrocompiler.com</div>
   <div class="divider"></div>
   <button class="icon-btn" title="Salvar no servidor (Ctrl+S)" onclick="Project.save()">💾</button>
   <button class="icon-btn" title="Voltar para o Dashboard" onclick="goToDashboard()">🏠</button>
 
   <div class="divider"></div>
-  <span style="font-size:11px;color:#00ff00">v0.6.5 FINAL - Scroll Fix Exato + CHR Page - FUNCIONANDO</span>
-  <button class="icon-btn" title="Sobre" onclick="alert('NES Maker Studio v0.6.5 FINAL\nScroll fix exato do usuário\nCHR Page Selector\nOAM DMA removido conforme exemplo\nFUNCIONANDO PERFEITAMENTE')" style="margin-left:auto">❓</button>
+  <span style="font-size:11px;color:#00ff00">v0.6.5</span>
+  <button class="icon-btn" title="Sobre" onclick="alert('RETROCOMPILER v0.6.5 \n desenvolvido por: Tales Cembraneli Dantas')" style="margin-left:auto">❓</button>
   <div class="proj-info">
     <span id="projNameLabel">Sem projeto</span>
     <b id="projFileLabel">—</b>
@@ -29,8 +29,8 @@
       <span class="side-title">Módulos</span>
       <button type="button" class="side-toggle" id="btnSideToggle" title="Recolher menu" onclick="UI.toggleSidebar()">«</button>
     </div>
-    <div class="side-item active" data-mod="dashboard" onclick="UI.switchModule('dashboard')" title="Dashboard">
-      <span class="side-ico">📊</span><span class="side-label">Dashboard</span>
+    <div class="side-item active" data-mod="dashboard" onclick="UI.switchModule('dashboard')" title="Configuração">
+      <span class="side-ico">📊</span><span class="side-label">Config</span>
     </div>
     <div class="side-item" data-mod="chr" onclick="UI.switchModule('chr')" title="CHR Editor">
       <span class="side-ico">🎨</span><span class="side-label">CHR Editor</span>

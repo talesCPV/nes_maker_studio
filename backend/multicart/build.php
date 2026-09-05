@@ -198,12 +198,14 @@ rj:
   rts
 
 handle_input:
+  ; bits: A B Select Start Up Down Left Right (bit7..bit0)
   lda joy
   eor joy_old
   and joy
   sta tmp
+  ; Down = bit2
   lda tmp
-  and #%00100000
+  and #%00000100
   beq not_dn
   inc sel
   lda sel
@@ -214,8 +216,9 @@ handle_input:
 dn_ok:
   jsr draw_all
 not_dn:
+  ; Up = bit3
   lda tmp
-  and #%00010000
+  and #%00001000
   beq not_up
   lda sel
   beq up_w
@@ -230,8 +233,9 @@ up_w:
 up_d:
   jsr draw_all
 not_up:
+  ; Start = bit4 (só Start, não A)
   lda tmp
-  and #%10010000
+  and #%00010000
   beq not_go
   jsr boot_game
 not_go:
@@ -298,7 +302,7 @@ draw_all:
   ; title
   lda #\$20
   sta \$2006
-  lda #\$44
+  lda #\$45
   sta \$2006
   ldx #0
 tl:
@@ -379,22 +383,22 @@ items_done:
 ; Fonte mínima: preenche tiles \$20-\$5A com padrões simples (bloco/linhas)
 ; Para legibilidade básica; emuladores aceitam CHR-RAM.
 upload_font:
-  lda #\$00
-  sta \$2006
-  sta \$2006
-  ; tile 0-31 vazio
-  ldx #0
   lda #0
-z0:
-  sta \$2007
-  inx
-  bne z0
-  ; tiles \$20+ : use simple ROM patterns from font_data for 40 chars (*16 bytes)
-  ldx #0
+  sta \$2006
+  sta \$2006
+  lda #<chr_blob
+  sta ptr_lo
+  lda #>chr_blob
+  sta ptr_hi
+  ldx #\$20
+  ldy #0
 uf:
-  lda font_data,x
+  lda (ptr_lo),y
   sta \$2007
-  inx
+  iny
+  bne uf
+  inc ptr_hi
+  dex
   bne uf
   rts
 
@@ -463,7 +467,7 @@ if (count($gamesIn) > 15) {
     mc_json(['ok' => false, 'error' => 'Máximo de 15 jogos por multicart (v1).'], 400);
 }
 
-$title = mc_sanitize_name((string)($body['title'] ?? 'MULTICART'));
+$title = mc_sanitize_name((string)($body['title'] ?? 'www.retrocompiler.com'), 28);
 $log = [];
 $names = [];
 $prgs = [];
@@ -879,12 +883,14 @@ rj:
   bne rj
   rts
 handle_input:
+  ; bits: A B Select Start Up Down Left Right (bit7..bit0)
   lda joy
   eor joy_old
   and joy
   sta tmp
+  ; Down = bit2
   lda tmp
-  and #%00100000
+  and #%00000100
   beq not_dn
   inc sel
   lda sel
@@ -895,8 +901,9 @@ handle_input:
 dn_ok:
   jsr draw_all
 not_dn:
+  ; Up = bit3
   lda tmp
-  and #%00010000
+  and #%00001000
   beq not_up
   lda sel
   beq up_w
@@ -911,13 +918,15 @@ up_w:
 up_d:
   jsr draw_all
 not_up:
+  ; Start = bit4 (só Start, não A)
   lda tmp
-  and #%10010000
+  and #%00010000
   beq not_go
   jsr boot_game
 not_go:
   rts
 boot_game:
+  sei
   lda #0
   sta \$2000
   sta \$2001
@@ -925,10 +934,13 @@ boot_game:
 bv1:
   bit \$2002
   bpl bv1
+bv2:
+  bit \$2002
+  bpl bv2
   ldx #0
 ctr:
   lda tramp,x
-  sta \$0100,x
+  sta \$0300,x
   inx
   cpx #tramp_end-tramp
   bne ctr
@@ -941,10 +953,10 @@ ctr:
   sta \$00
   lda game_reset_hi,y
   sta \$01
-  jmp \$0100
+  jmp \$0300
 
-; RAM trampoline: $00/$01=reset $02=prg bank $03=chr bank
 tramp:
+  sei
   lda \$03
   sta \$8000
   lda #0
@@ -969,6 +981,8 @@ chr_copy:
   lda #0
   sta \$2005
   sta \$2005
+  sta \$2000
+  sta \$2001
   jmp (\$0000)
 tramp_end:
 
@@ -1004,7 +1018,7 @@ draw_all:
   sta \$2000
   lda #\$20
   sta \$2006
-  lda #\$44
+  lda #\$45
   sta \$2006
   ldx #0
 tl:
@@ -1071,24 +1085,42 @@ ncdone:
   inc row
   jmp item
 items_done:
+  lda sel
+  asl a
+  asl a
+  asl a
+  clc
+  adc #47
+  sta \$0200
+  lda #0
+  sta \$0201
+  lda #0
+  sta \$0202
+  lda #24
+  sta \$0203
+  lda #\$ff
+  sta \$0204
+  lda #0
+  sta \$2003
+  lda #\$02
+  sta \$4014
   lda #0
   sta \$2005
   sta \$2005
   lda #%00011110
   sta \$2001
-  lda #%10000000
+  lda #%10010000
   sta \$2000
   rts
 upload_font:
-  lda #\$00
+  lda #0
   sta \$2006
   sta \$2006
-  ; copia 4096 bytes (font_data) — 256 tiles
-  lda #<font_data
+  lda #<chr_blob
   sta ptr_lo
-  lda #>font_data
+  lda #>chr_blob
   sta ptr_hi
-  ldx #\$10
+  ldx #\$20
   ldy #0
 uf:
   lda (ptr_lo),y
@@ -1121,6 +1153,9 @@ game_chr_bank:
   .byte {$rstHi}
 {$nameBytes}
 {$fontAsm}
+chr_blob:
+  .incbin "novo.chr"
+
 .segment "VECTORS"
   .word nmi
   .word reset
@@ -1159,6 +1194,30 @@ if (!@mkdir($work, 0755, true) && !is_dir($work)) {
 try {
     file_put_contents($work . '/menu.asm', $asm);
     file_put_contents($work . '/menu.cfg', $cfg);
+
+    // CHR do menu: assets/novo.chr (página 1 = ASCII nas posições corretas)
+    $chrSrc = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'novo.chr';
+    if (!is_file($chrSrc)) {
+        $alt = realpath(__DIR__ . '/../../assets/novo.chr');
+        if ($alt !== false) {
+            $chrSrc = $alt;
+        }
+    }
+    if (!is_file($chrSrc)) {
+        mc_json(['ok' => false, 'error' => 'assets/novo.chr não encontrado no servidor.', 'log' => implode("\n", $log)], 500);
+    }
+    $chrBin = file_get_contents($chrSrc);
+    if ($chrBin === false || strlen($chrBin) < 8192) {
+        mc_json(['ok' => false, 'error' => 'novo.chr inválido (esperado 8KB).', 'log' => implode("\n", $log)], 500);
+    }
+    $chrBin = substr($chrBin, 0, 8192);
+    // Cursor na página 0, tile $00 (seta)
+    $cursor = "\x00\x40\x60\x70\x78\x70\x60\x40\x00\x00\x00\x00\x00\x00\x00\x00";
+    for ($ci = 0; $ci < 16; $ci++) {
+        $chrBin[$ci] = $cursor[$ci];
+    }
+    file_put_contents($work . '/novo.chr', $chrBin);
+    $log[] = 'CHR menu: novo.chr + cursor tile $00 (pag0)';
 
     $r1 = multicart_run_cmd([$ca65, 'menu.asm', '-o', 'menu.o'], $work, 60);
     $log[] = '$ ' . $r1['cmd'];
