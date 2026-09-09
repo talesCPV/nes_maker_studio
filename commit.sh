@@ -20,7 +20,7 @@ then
     git add register.html
     git add index.html
     git add intro.md
-
+    git add deploy.sh
     
     git commit -m "by_script"
 
