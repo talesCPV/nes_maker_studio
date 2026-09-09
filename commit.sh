@@ -1,0 +1,38 @@
+#!/bin/bash
+# Upload files to Github - git@github.com:talesCPV/nes_maker_studio.git
+# Teste de debug no sistema user: teste@Xspider0.com pass: #Master26!
+
+read -p "Are you sure to commit nes_maker_studio Project to GitHub ? (Y/n)" -n 1 -r
+echo 
+if [[ $REPLY =~ ^[Yy]$ ]]
+then
+
+    cp ~/Documentos/SQL/nes_maker_studio/*.sql sql/
+
+    git init
+
+    git add asm/
+    git add assets/
+    git add backend/
+    git add css/
+    git add js/
+    git add projetos/
+    git add data/
+    git add commit.sh
+    git add dashboard.html
+    git add login.html
+    git add register.html
+    git add index.html
+    git add editor.html
+    git add intro.md
+    git add upload.sh
+    
+    git commit -m "by_script"
+
+#    git branch -M main
+#    git remote add origin git@github.com:talesCPV/nes_maker_studio.git
+    git remote set-url origin git@github.com:talesCPV/nes_maker_studio.git
+
+    git push -u -f origin main
+
+fi

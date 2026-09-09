@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<script>
+/** APP() inline — não depende de arquivo externo */
+(function () {
+  function detect() {
+    if (typeof window.APP_BASE === 'string' && window.APP_BASE !== '') {
+      return String(window.APP_BASE).replace(/\/$/, '');
+    }
+    var p = location.pathname || '';
+    var entries = ['/login.html', '/register.html', '/index.html'];
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (p.length >= e.length && p.slice(-e.length) === e) {
+        var b = p.slice(0, -e.length);
+        return b === '/' ? '' : b;
+      }
+    }
+    var idxNes = p.indexOf('/nes/');
+    if (idxNes >= 0) return p.slice(0, idxNes);
+    var idxA = p.indexOf('/a2600/');
+    if (idxA >= 0) return p.slice(0, idxA);
+    if (p.length >= 4 && p.slice(-4) === '/nes') return p.slice(0, -4);
+    if (p.length >= 6 && p.slice(-6) === '/a2600') return p.slice(0, -6);
+    if (p === '/' || p === '') return '';
+    if (p.slice(-1) === '/') {
+      var d = p.slice(0, -1);
+      return d === '' ? '' : d;
+    }
+    return '';
+  }
+  window.APP_BASE = detect();
+  window.APP = function (path) {
+    var b = String(window.APP_BASE || '').replace(/\/$/, '');
+    var x = String(path || '');
+    if (!x) return b || '/';
+    if (/^https?:\/\//i.test(x)) return x;
+    if (x.charAt(0) !== '/') x = '/' + x;
+    return b + x;
+  };
+})();
+</script>
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RetroCompiler - Login</title>
+  <script>
+    document.write('<link rel="stylesheet" href="' + APP('/nes/css/auth.css') + '">');
+    document.write('<link rel="icon" href="' + APP('/nes/assets/icon.png') + '" type="image/png">');
+  </script>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <img class="img-logo" id="logo" alt="RetroCompiler">
+      <form id="loginForm">
+        <label for="email">E-mail</label>
+        <input id="email" type="email" required autocomplete="email">
+        <label for="password">Senha</label>
+        <input id="password" type="password" required autocomplete="current-password">
+        <button type="submit">Entrar</button>
+      </form>
+      <div id="message" class="message"></div>
+      <p>Ainda não possui conta? <a href="register.html">Criar conta</a></p>
+    </div>
+  </div>
+  <script>
+    document.getElementById('logo').src = APP('/nes/assets/ngc-logo.png');
+    (async function checkAlreadyLogged(){
+      try {
+        const r = await fetch(APP('/backend/auth/session.php'), { credentials:'same-origin' });
+        const j = await r.json().catch(()=>({}));
+        if (j && j.authenticated) location.replace(APP('/'));
+      } catch(e) {}
+    })();
+    document.getElementById('loginForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const m = document.getElementById('message');
+      m.textContent = 'Entrando...';
+      try {
+        const r = await fetch(APP('/backend/auth/login.php'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ email: email.value, password: password.value })
+        });
+        const d = await r.json();
+        if (d.success) { location.href = APP('/'); return; }
+        m.textContent = d.message || 'Não foi possível entrar.';
+      } catch (x) {
+        m.textContent = 'Erro de comunicação com o servidor.';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<script>
+/** APP() inline — não depende de arquivo externo */
+(function () {
+  function detect() {
+    if (typeof window.APP_BASE === 'string' && window.APP_BASE !== '') {
+      return String(window.APP_BASE).replace(/\/$/, '');
+    }
+    var p = location.pathname || '';
+    var entries = ['/login.html', '/register.html', '/index.html'];
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (p.length >= e.length && p.slice(-e.length) === e) {
+        var b = p.slice(0, -e.length);
+        return b === '/' ? '' : b;
+      }
+    }
+    var idxNes = p.indexOf('/nes/');
+    if (idxNes >= 0) return p.slice(0, idxNes);
+    var idxA = p.indexOf('/a2600/');
+    if (idxA >= 0) return p.slice(0, idxA);
+    if (p.length >= 4 && p.slice(-4) === '/nes') return p.slice(0, -4);
+    if (p.length >= 6 && p.slice(-6) === '/a2600') return p.slice(0, -6);
+    if (p === '/' || p === '') return '';
+    if (p.slice(-1) === '/') {
+      var d = p.slice(0, -1);
+      return d === '' ? '' : d;
+    }
+    return '';
+  }
+  window.APP_BASE = detect();
+  window.APP = function (path) {
+    var b = String(window.APP_BASE || '').replace(/\/$/, '');
+    var x = String(path || '');
+    if (!x) return b || '/';
+    if (/^https?:\/\//i.test(x)) return x;
+    if (x.charAt(0) !== '/') x = '/' + x;
+    return b + x;
+  };
+})();
+</script>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RetroCompiler</title>
+  <script>
+    document.write('<link rel="icon" href="' + APP('/nes/assets/icon.png') + '" type="image/png">');
+    document.write('<link rel="stylesheet" href="' + APP('/nes/css/auth.css') + '">');
+  </script>
+  <style>
+    body { background:#0d0f14; color:#ccc; font-family: system-ui, sans-serif; margin:0; min-height:100vh; }
+    .hub { max-width: 920px; margin: 0 auto; padding: 40px 20px; display:none; }
+    .hub-head { display:flex; align-items:center; gap:16px; margin-bottom:32px; flex-wrap:wrap; }
+    .hub-head img { height: 56px; }
+    .hub-head h1 { margin:0; font-size:22px; color:#fff; }
+    .hub-head p { margin:4px 0 0; font-size:13px; color:#888; }
+    .hub-actions { margin-left:auto; display:flex; gap:8px; }
+    .btn { display:inline-block; padding:8px 14px; border-radius:6px; border:1px solid #333; background:#1a1e28; color:#ddd; text-decoration:none; font-size:13px; cursor:pointer; }
+    .btn:hover { border-color:#4ec9b0; color:#fff; }
+    .btn-primary { background:#1a3a32; border-color:#2a6a55; color:#7dcea0; }
+    .systems { display:grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap:16px; margin-bottom:36px; }
+    .sys-card { background: linear-gradient(180deg,#1a1f2b,#12151c); border:1px solid #333; border-radius:12px; padding:18px; }
+    .sys-card h2 { margin:0 0 6px; font-size:16px; color:#ffcc00; }
+    .sys-card p { margin:0 0 14px; font-size:12px; color:#888; line-height:1.45; min-height:36px; }
+    .badge { display:inline-block; font-size:10px; padding:2px 8px; border-radius:999px; background:#243; color:#7dcea0; border:1px solid #2a5a4a; }
+    .badge.off { background:#2a2a2a; color:#777; border-color:#444; }
+    .user-line { font-size:12px; color:#666; margin-bottom:20px; }
+    .user-line b { color:#4ec9b0; }
+    .boot { padding:40px 20px; text-align:center; color:#666; font-size:13px; }
+  </style>
+</head>
+<body>
+  <div class="boot" id="bootMsg">Verificando sessão…</div>
+  <div class="hub" id="hub">
+    <div class="hub-head">
+      <img id="hubLogo" alt="RetroCompiler">
+      <div>
+        <h1>RetroCompiler</h1>
+        <p>Escolha o sistema para abrir seus projetos.</p>
+      </div>
+      <div class="hub-actions" id="hubActions">
+        <button type="button" class="btn" id="btnLogout">Sair</button>
+      </div>
+    </div>
+    <div class="user-line" id="userLine"></div>
+    <div class="systems">
+      <div class="sys-card">
+        <span class="badge">disponível</span>
+        <h2>NES</h2>
+        <p>NGC — CHR, fases, programação, build com ca65 e multicart NROM.</p>
+        <a class="btn btn-primary" id="linkNesDash" href="#">Abrir dashboard NES</a>
+      </div>
+      <div class="sys-card">
+        <span class="badge">disponível</span>
+        <h2>Atari 2600</h2>
+        <p>AGC — projetos, dashboard e editor base (módulos em construção).</p>
+        <a class="btn btn-primary" id="linkA2600Dash" href="#">Abrir dashboard Atari</a>
+      </div>
+    </div>
+  </div>
+  <script>
+    document.getElementById('hubLogo').src = APP('/nes/assets/ngc-logo.png');
+    document.getElementById('linkNesDash').href = APP('/nes/dashboard.html');
+    var a26=document.getElementById('linkA2600Dash'); if(a26) a26.href = APP('/a2600/dashboard.html');
+    (async () => {
+      const boot = document.getElementById('bootMsg');
+      const hub = document.getElementById('hub');
+      const userLine = document.getElementById('userLine');
+      try {
+        const r = await fetch(APP('/backend/auth/session.php'), { credentials: 'same-origin' });
+        const j = await r.json().catch(() => ({}));
+        if (!j || !j.authenticated) {
+          window.location.replace(APP('/login.html'));
+          return;
+        }
+        boot.style.display = 'none';
+        hub.style.display = 'block';
+        userLine.innerHTML = 'Logado como <b>' + (j.user?.name || j.user?.email || 'usuário') + '</b>';
+        document.getElementById('btnLogout').onclick = async () => {
+          await fetch(APP('/backend/auth/logout.php'), { method: 'POST', credentials: 'same-origin' });
+          window.location.replace(APP('/login.html'));
+        };
+      } catch (e) {
+        window.location.replace(APP('/login.html'));
+      }
+    })();
+  </script>
+</body>
+</html>
