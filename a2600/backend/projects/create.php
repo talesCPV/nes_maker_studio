@@ -1,0 +1,561 @@
+<?php
+
+declare(strict_types=1);
+
+require_once dirname(__DIR__, 3) . '/backend/auth/auth_check.php';
+require_once dirname(__DIR__, 3) . '/backend/config/database.php';
+
+header('Content-Type: application/json; charset=utf-8');
+
+
+function response(
+    array $data,
+    int $status = 200
+): never {
+
+    http_response_code($status);
+
+    echo json_encode(
+        $data,
+        JSON_UNESCAPED_UNICODE |
+        JSON_UNESCAPED_SLASHES
+    );
+
+    exit;
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * SOMENTE POST
+ * ---------------------------------------------------------
+ */
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+
+    response([
+        'success' => false,
+        'message' => 'Método não permitido.'
+    ], 405);
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * DADOS RECEBIDOS
+ * ---------------------------------------------------------
+ */
+
+$raw =
+    file_get_contents('php://input');
+
+
+$data =
+    json_decode(
+        $raw ?: '',
+        true
+    );
+
+
+if (!is_array($data)) {
+
+    response([
+        'success' => false,
+        'message' => 'JSON inválido.'
+    ], 400);
+}
+
+
+$name =
+    trim(
+        (string) ($data['name'] ?? '')
+    );
+
+
+$description =
+    trim(
+        (string) ($data['description'] ?? '')
+    );
+
+
+if ($name === '') {
+
+    response([
+        'success' => false,
+        'message' => 'Informe o nome do projeto.'
+    ], 422);
+}
+
+
+if (mb_strlen($name) > 150) {
+
+    response([
+        'success' => false,
+        'message' => 'O nome do projeto é muito grande.'
+    ], 422);
+}
+
+
+if (mb_strlen($description) > 65535) {
+
+    response([
+        'success' => false,
+        'message' => 'A descrição é muito grande.'
+    ], 422);
+}
+
+
+/*
+ * parent_project_id opcional (fork).
+ * Null / ausente = projeto raiz.
+ */
+$parentProjectId = null;
+if (array_key_exists('parent_project_id', $data) && $data['parent_project_id'] !== null && $data['parent_project_id'] !== '') {
+    $parentProjectId = filter_var(
+        $data['parent_project_id'],
+        FILTER_VALIDATE_INT
+    );
+    if ($parentProjectId === false || $parentProjectId <= 0) {
+        response([
+            'success' => false,
+            'message' => 'parent_project_id inválido.'
+        ], 422);
+    }
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * USUÁRIO
+ * ---------------------------------------------------------
+ */
+
+$userId =
+    (int) $_SESSION['user_id'];
+
+
+$userName =
+    trim(
+        (string) (
+            $_SESSION['user_name'] ??
+            ''
+        )
+    );
+
+
+/*
+ * ---------------------------------------------------------
+ * TEMPLATE
+ * ---------------------------------------------------------
+ *
+ * Um único template mestre é utilizado para novos projetos.
+ *
+ * IMPORTANTE:
+ *
+ * Não usamos str_replace().
+ *
+ * O arquivo é interpretado como JSON e somente os campos
+ * de metadata são alterados.
+ */
+
+$templatePath =
+    __DIR__ .
+    DIRECTORY_SEPARATOR .
+    'templates' .
+    DIRECTORY_SEPARATOR .
+    'new-game.agc';
+
+
+$templateContents = is_file($templatePath)
+    ? file_get_contents($templatePath)
+    : false;
+
+if ($templateContents === false || $templateContents === '') {
+    // Fallback embutido — permite criar projeto mesmo sem o arquivo no disco
+    $templateContents = json_encode([
+        'version' => '0.1.0',
+        'system' => 'A2600',
+        'name' => 'Novo Jogo Atari',
+        'author' => '',
+        'description' => '',
+        'romSize' => 4096,
+        'tv' => 'NTSC',
+        'created' => 0,
+        'playfields' => [],
+        'sprites' => [],
+        'sounds' => [],
+        'variables' => [],
+        'rules' => [],
+        'kernel' => 'single_screen',
+    ], JSON_UNESCAPED_UNICODE);
+}
+
+$template =
+    json_decode(
+        $templateContents,
+        true
+    );
+
+
+if (
+    !is_array($template) ||
+    json_last_error() !== JSON_ERROR_NONE
+) {
+
+    response([
+        'success' => false,
+        'message' =>
+            'O template new-game.agc possui JSON inválido.'
+    ], 500);
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * VALIDAR ESTRUTURA MÍNIMA DO TEMPLATE
+ * ---------------------------------------------------------
+ *
+ * O formato AGC utiliza os campos diretamente na raiz.
+ * Não existe um objeto "metadata".
+ */
+
+ if (
+    !array_key_exists('name', $template) ||
+    !array_key_exists('author', $template) ||
+    !array_key_exists('description', $template)
+) {
+
+    response([
+        'success' => false,
+        'message' =>
+            'O template AGC não possui os campos básicos de projeto.'
+    ], 500);
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * PERSONALIZAR PROJETO
+ * ---------------------------------------------------------
+ *
+ * IMPORTANTE:
+ *
+ * O AGC inteiro veio do template.
+ *
+ * Alteramos SOMENTE:
+ *
+ *   name
+ *   author
+ *   description
+ *
+ * CHR, palettes, phases, events, gameConfig,
+ * sons etc. permanecem os do template.
+ */
+
+$template['name'] =
+    $name;
+
+
+$template['description'] =
+    $description;
+
+
+$template['author'] =
+    $userName;
+
+$template['system'] = 'A2600';
+$template['created'] = time();
+
+/*
+ * ---------------------------------------------------------
+ * CONECTAR AO BANCO
+ * ---------------------------------------------------------
+ */
+
+$pdo = null;
+
+
+try {
+
+    $pdo =
+        db();
+
+
+    $pdo->beginTransaction();
+
+
+    /*
+     * Se for fork, o projeto pai precisa existir,
+     * pertencer ao usuário e não estar na lixeira.
+     */
+    if ($parentProjectId !== null) {
+        $parentStmt = $pdo->prepare(
+            'SELECT id
+             FROM projects
+             WHERE id = :id
+               AND user_id = :user_id
+               AND is_deleted = 0
+             LIMIT 1'
+        );
+        $parentStmt->execute([
+            ':id' => $parentProjectId,
+            ':user_id' => $userId
+        ]);
+        if (!$parentStmt->fetch()) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            response([
+                'success' => false,
+                'message' => 'Projeto de origem do fork não encontrado.'
+            ], 404);
+        }
+    }
+
+
+    /*
+     * Nome físico do arquivo.
+     *
+     * Não utilizamos o nome do projeto diretamente no nome
+     * do arquivo para evitar problemas com caracteres especiais,
+     * espaços, barras etc.
+     */
+
+    $filename =
+        'project_' .
+        bin2hex(
+            random_bytes(8)
+        ) .
+        '.agc';
+
+
+    /*
+     * -----------------------------------------------------
+     * INSERT
+     * -----------------------------------------------------
+     */
+
+    try {
+        $stmt = $pdo->prepare(
+            'INSERT INTO projects
+            (user_id, parent_project_id, name, description, filename, `system`)
+            VALUES
+            (:user_id, :parent_project_id, :name, :description, :filename, :system)'
+        );
+        $stmt->execute([
+            ':user_id' => $userId,
+            ':parent_project_id' => $parentProjectId,
+            ':name' => $name,
+            ':description' => $description,
+            ':filename' => $filename,
+            ':system' => 'A2600',
+        ]);
+    } catch (Throwable $eIns) {
+        // Coluna system ausente: grava sem ela
+        error_log('AGC create INSERT with system failed: ' . $eIns->getMessage());
+        $stmt = $pdo->prepare(
+            'INSERT INTO projects
+            (user_id, parent_project_id, name, description, filename)
+            VALUES
+            (:user_id, :parent_project_id, :name, :description, :filename)'
+        );
+        $stmt->execute([
+            ':user_id' => $userId,
+            ':parent_project_id' => $parentProjectId,
+            ':name' => $name,
+            ':description' => $description,
+            ':filename' => $filename,
+        ]);
+    }
+
+
+    $projectId =
+        (int) $pdo->lastInsertId();
+
+
+    /*
+     * -----------------------------------------------------
+     * DIRETÓRIO DO PROJETO
+     * -----------------------------------------------------
+     */
+
+    $projectDir =
+        dirname(__DIR__, 3) .
+        DIRECTORY_SEPARATOR .
+        'data' .
+        DIRECTORY_SEPARATOR .
+        'users' .
+        DIRECTORY_SEPARATOR .
+        $userId .
+        DIRECTORY_SEPARATOR .
+        'a2600' . DIRECTORY_SEPARATOR . 'projects' .
+        DIRECTORY_SEPARATOR .
+        $projectId;
+
+
+    if (
+        !is_dir($projectDir) &&
+        !mkdir(
+            $projectDir,
+            0755,
+            true
+        )
+    ) {
+
+        throw new RuntimeException(
+            'Não foi possível criar a pasta do projeto.'
+        );
+    }
+
+
+    /*
+     * -----------------------------------------------------
+     * GERAR AGC
+     * -----------------------------------------------------
+     */
+
+    $nms =
+        json_encode(
+            $template,
+
+            JSON_PRETTY_PRINT |
+            JSON_UNESCAPED_UNICODE |
+            JSON_UNESCAPED_SLASHES |
+            JSON_THROW_ON_ERROR
+        );
+
+
+    /*
+     * -----------------------------------------------------
+     * GRAVAR ARQUIVO
+     * -----------------------------------------------------
+     */
+
+    $nmsPath =
+        $projectDir .
+        DIRECTORY_SEPARATOR .
+        $filename;
+
+
+    $written =
+        file_put_contents(
+            $nmsPath,
+            $nms,
+            LOCK_EX
+        );
+
+
+    if ($written === false) {
+
+        throw new RuntimeException(
+            'Não foi possível gravar o arquivo AGC.'
+        );
+    }
+
+
+    /*
+     * -----------------------------------------------------
+     * FINALIZAR TRANSAÇÃO
+     * -----------------------------------------------------
+     */
+
+    $pdo->commit();
+
+
+    /*
+     * -----------------------------------------------------
+     * RETORNO
+     * -----------------------------------------------------
+     */
+
+    response([
+
+        'success' =>
+            true,
+
+        'message' =>
+            'Projeto criado com sucesso.',
+
+        'project' => [
+
+            'id' =>
+                $projectId,
+
+            'name' =>
+                $name,
+
+            'description' =>
+                $description,
+
+            'filename' =>
+                $filename,
+
+            'parent_project_id' =>
+                $parentProjectId
+
+        ]
+
+    ], 201);
+
+
+} catch (Throwable $e) {
+
+    /*
+     * Rollback caso o INSERT ainda esteja em uma transação.
+     */
+
+    if (
+        $pdo instanceof PDO &&
+        $pdo->inTransaction()
+    ) {
+
+        $pdo->rollBack();
+    }
+
+
+    /*
+     * Se o arquivo/pasta já foi criado e alguma etapa
+     * posterior falhou, tentamos limpar o projeto físico.
+     */
+
+    if (
+        isset($projectDir) &&
+        is_dir($projectDir)
+    ) {
+
+        if (
+            isset($nmsPath) &&
+            is_file($nmsPath)
+        ) {
+
+            @unlink($nmsPath);
+        }
+
+        @rmdir($projectDir);
+    }
+
+
+    error_log(
+        'NGC Project Create Error: ' .
+        $e->getMessage()
+    );
+
+
+    response([
+
+        'success' =>
+            false,
+
+        'message' => 'Não foi possível criar o projeto.',
+        'detail' => $e->getMessage(),
+
+        /*
+         * Temporário durante desenvolvimento.
+         * Retiraremos antes da produção.
+         */
+
+        'debug' =>
+            $e->getMessage()
+
+    ], 500);
+}

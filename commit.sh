@@ -11,21 +11,16 @@ then
 
     git init
 
-    git add asm/
-    git add assets/
+    git add a2600/
     git add backend/
-    git add css/
-    git add js/
-    git add projetos/
-    git add data/
+    git add nes/
     git add commit.sh
-    git add dashboard.html
+    git add app-config.js
     git add login.html
     git add register.html
     git add index.html
-    git add editor.html
     git add intro.md
-    git add upload.sh
+
     
     git commit -m "by_script"
 

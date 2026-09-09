@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<script>
+/** APP() inline — não depende de arquivo externo */
+(function () {
+  function detect() {
+    if (typeof window.APP_BASE === 'string' && window.APP_BASE !== '') {
+      return String(window.APP_BASE).replace(/\/$/, '');
+    }
+    var p = location.pathname || '';
+    var entries = ['/login.html', '/register.html', '/index.html'];
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (p.length >= e.length && p.slice(-e.length) === e) {
+        var b = p.slice(0, -e.length);
+        return b === '/' ? '' : b;
+      }
+    }
+    var idxNes = p.indexOf('/nes/');
+    if (idxNes >= 0) return p.slice(0, idxNes);
+    var idxA = p.indexOf('/a2600/');
+    if (idxA >= 0) return p.slice(0, idxA);
+    if (p.length >= 4 && p.slice(-4) === '/nes') return p.slice(0, -4);
+    if (p.length >= 6 && p.slice(-6) === '/a2600') return p.slice(0, -6);
+    if (p === '/' || p === '') return '';
+    if (p.slice(-1) === '/') {
+      var d = p.slice(0, -1);
+      return d === '' ? '' : d;
+    }
+    return '';
+  }
+  window.APP_BASE = detect();
+  window.APP = function (path) {
+    var b = String(window.APP_BASE || '').replace(/\/$/, '');
+    var x = String(path || '');
+    if (!x) return b || '/';
+    if (/^https?:\/\//i.test(x)) return x;
+    if (x.charAt(0) !== '/') x = '/' + x;
+    return b + x;
+  };
+})();
+</script>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AGC 0.1 — Atari 2600</title>
+  <link rel="stylesheet" href="../nes/css/style.css">
+  <link rel="icon" href="../nes/assets/icon.png" type="image/png">
+  <style>
+    body { margin:0; background:#1e1e1e; color:#ccc; font-family:system-ui,sans-serif; }
+    #topbar { display:flex; align-items:center; gap:10px; padding:8px 12px; background:#252526; border-bottom:1px solid #333; }
+    #topbar .logo { color:#f4a261; font-weight:700; font-size:13px; }
+    .icon-btn { background:#333; border:1px solid #444; color:#fff; border-radius:6px; padding:6px 10px; cursor:pointer; }
+    .icon-btn:hover { border-color:#f4a261; }
+    #main { padding:24px; max-width:720px; }
+    #status { font-size:12px; color:#888; margin-top:12px; }
+    code { color:#7dcea0; }
+  </style>
+</head>
+<body>
+  <div id="topbar">
+    <div class="logo">▶ AGC — Atari 2600</div>
+    <button class="icon-btn" type="button" id="btnSave" title="Salvar">💾 Salvar</button>
+    <button class="icon-btn" type="button" id="btnDash" title="Dashboard">🏠 Dashboard</button>
+    <span style="margin-left:auto;font-size:11px;color:#666">v0.1 — editor em construção</span>
+  </div>
+  <div id="main">
+    <h2 style="color:#f4a261;margin:0 0 8px">Editor Atari 2600</h2>
+    <p style="line-height:1.5">Projeto carregado. Os módulos (playfield, sprites, som, kernel, build) entram a partir daqui.</p>
+    <div id="projInfo" style="background:#111;border:1px solid #333;border-radius:8px;padding:12px;font-size:13px"></div>
+    <div id="status">—</div>
+  </div>
+  <script>
+    let projectId = null;
+    let projectData = null;
+
+    function qsProjectId() {
+      const u = new URL(location.href);
+      return u.searchParams.get('project') || u.searchParams.get('id');
+    }
+
+    async function ensureSession() {
+      const r = await fetch(APP('/backend/auth/session.php'), { credentials: 'same-origin' });
+      const j = await r.json().catch(() => ({}));
+      if (!j.authenticated) {
+        location.replace(APP('/login.html') + '?next=' + encodeURIComponent(location.pathname + location.search));
+        return false;
+      }
+      return true;
+    }
+
+    async function loadProject(id) {
+      const r = await fetch(APP('/a2600/backend/projects/load.php?id=' + encodeURIComponent(id)), {
+        credentials: 'same-origin'
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.success) throw new Error(j.message || 'Falha ao carregar');
+      projectId = id;
+      projectData = j.nms || j.agc || j.project || j.data || j;
+      // load.php NES devolve { success, nms: {...} } — mantemos compat
+      if (j.nms) projectData = j.nms;
+      const info = document.getElementById('projInfo');
+      info.innerHTML =
+        '<div><b style="color:#fff">' + (projectData.name || 'Sem nome') + '</b></div>' +
+        '<div style="color:#888;margin-top:6px">ID: ' + id + ' · system: ' + (projectData.system || 'a2600') + '</div>' +
+        '<div style="color:#888">ROM: ' + (projectData.romSize || 4096) + ' bytes · TV: ' + (projectData.tv || 'NTSC') + '</div>' +
+        '<div style="color:#888">Kernel: <code>' + (projectData.kernel || 'single_screen') + '</code></div>';
+      document.getElementById('status').textContent = 'Projeto carregado.';
+    }
+
+    async function saveProject() {
+      if (!projectId || !projectData) return alert('Nenhum projeto carregado');
+      projectData.system = 'a2600';
+      projectData.savedAt = Date.now();
+      const r = await fetch(APP('/a2600/backend/projects/save.php'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ project_id: projectId, nms: projectData })
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.success) {
+        alert(j.message || 'Erro ao salvar');
+        return;
+      }
+      document.getElementById('status').textContent = 'Salvo no servidor.';
+    }
+
+    document.getElementById('btnDash').onclick = () => {
+      location.href = APP('/a2600/dashboard.html');
+    };
+    document.getElementById('btnSave').onclick = () => saveProject();
+
+    (async () => {
+      if (!(await ensureSession())) return;
+      const id = qsProjectId();
+      if (!id) {
+        document.getElementById('projInfo').textContent = 'Abra um projeto a partir do dashboard Atari.';
+        return;
+      }
+      try {
+        await loadProject(id);
+      } catch (e) {
+        document.getElementById('status').textContent = 'Erro: ' + (e.message || e);
+        alert('Erro ao carregar o projeto: ' + (e.message || e));
+      }
+    })();
+  </script>
+</body>
+</html>

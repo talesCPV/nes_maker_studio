@@ -1,0 +1,2747 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<script>
+/** APP() inline — não depende de arquivo externo */
+(function () {
+  function detect() {
+    if (typeof window.APP_BASE === 'string' && window.APP_BASE !== '') {
+      return String(window.APP_BASE).replace(/\/$/, '');
+    }
+    var p = location.pathname || '';
+    var entries = ['/login.html', '/register.html', '/index.html'];
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (p.length >= e.length && p.slice(-e.length) === e) {
+        var b = p.slice(0, -e.length);
+        return b === '/' ? '' : b;
+      }
+    }
+    var idxNes = p.indexOf('/nes/');
+    if (idxNes >= 0) return p.slice(0, idxNes);
+    var idxA = p.indexOf('/a2600/');
+    if (idxA >= 0) return p.slice(0, idxA);
+    if (p.length >= 4 && p.slice(-4) === '/nes') return p.slice(0, -4);
+    if (p.length >= 6 && p.slice(-6) === '/a2600') return p.slice(0, -6);
+    if (p === '/' || p === '') return '';
+    if (p.slice(-1) === '/') {
+      var d = p.slice(0, -1);
+      return d === '' ? '' : d;
+    }
+    return '';
+  }
+  window.APP_BASE = detect();
+  window.APP = function (path) {
+    var b = String(window.APP_BASE || '').replace(/\/$/, '');
+    var x = String(path || '');
+    if (!x) return b || '/';
+    if (/^https?:\/\//i.test(x)) return x;
+    if (x.charAt(0) !== '/') x = '/' + x;
+    return b + x;
+  };
+})();
+</script>
+
+<meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>AGC - Dashboard Atari 2600</title>
+
+    <link rel="stylesheet" href="../nes/css/auth.css">
+    <link rel="icon" href="../nes/assets/icon.png" type="image/png">
+
+    <style>
+        /* Layout dashboard: barra superior + conteúdo */
+        body {
+            overflow: hidden;
+        }
+
+        .container {
+            max-width: none;
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            margin: 0;
+            padding: 0;
+            gap: 0;
+            justify-content: flex-start;
+            align-items: stretch;
+            background: url('../nes/assets/wallpaper.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .card {
+            background: linear-gradient(180deg, rgba(26, 31, 43, 0.95), rgba(18, 21, 28, 0.5));
+        }
+
+        /* Barra superior (não é mais card) */
+        .dash-head {
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 12px 24px;
+            background: rgba(18, 21, 28, 0.95);
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .dash-head .img-logo {
+            max-height: 48px;
+            max-width: 48px;
+            width: auto;
+            height: auto;
+            border-radius: 8px;
+            flex-shrink: 0;
+        }
+
+        .dash-head #welcome {
+            margin: 0;
+            flex: 1;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .dash-head .actions {
+            flex-shrink: 0;
+        }
+
+        /* Card de projetos */
+        .projects-panel {
+            flex: 1 1 auto;
+            min-height: 0;
+            width: min(80vw, 1100px);
+            margin: 20px auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: stretch;
+            overflow: hidden;
+        }
+
+        .projects-panel h2 {
+            flex: 0 0 auto;
+            margin: 0 0 8px;
+            align-self: flex-start;
+        }
+
+        .projects-panel .message {
+            flex: 0 0 auto;
+        }
+
+        .project-list {
+            display: grid;
+            gap: 12px;
+            margin-top: 12px;
+            width: 100%;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .project {
+            padding: 16px;
+            border: 1px solid #303744;
+            border-radius: 8px;
+            background: #11151ca5;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .project-main {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 14px;
+            width: 100%;
+        }
+
+        .project-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .project-thumb {
+            width: 96px;
+            height: 90px;
+            flex-shrink: 0;
+            border-radius: 6px;
+            border: 1px solid #303744;
+            background: #0a0c10;
+            object-fit: contain;
+            image-rendering: pixelated;
+            display: block;
+        }
+
+        .project h3 {
+            margin: 0 0 6px;
+        }
+
+        .project p {
+            margin: 5px 0;
+            color: #b8c0cc;
+        }
+
+        .project small {
+            color: #7f8998;
+        }
+
+        .project-fork {
+            display: block;
+            margin-top: 4px;
+            font-size: 0.8rem;
+            color: #8b9bb4;
+        }
+
+        .project-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            width: 100%;
+        }
+
+        .project-actions-left,
+        .project-actions-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .project-actions-right {
+            margin-left: auto;
+        }
+
+        .project-actions .icon-btn {
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: linear-gradient(180deg, #4b8fff, var(--accent));
+            color: #fff;
+            font-size: 1.15rem;
+            line-height: 1;
+            cursor: pointer;
+            transition: transform 0.12s ease, filter 0.15s ease, box-shadow 0.15s ease;
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
+        }
+
+        .icon-btn:hover {
+            filter: brightness(1.08);
+            transform: translateY(-1px);
+        }
+
+        .icon-btn:active {
+            transform: translateY(0);
+            filter: brightness(0.96);
+        }
+
+        .icon-btn.secondary {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.12);
+            color: var(--text);
+            box-shadow: none;
+        }
+
+        .icon-btn.secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            filter: none;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 100;
+        }
+
+        .trashCard,
+        .libraryCard,
+        .mergeCard,
+        .newprojCard {
+            display: none;
+        }
+
+        .trashCard,
+        .libraryCard,
+        .mergeCard {
+            width: 80vw !important;
+            max-width: 900px;
+            max-height: 85vh;
+            overflow: hidden;
+            justify-content: flex-start;
+            align-items: stretch;
+        }
+
+        .trashCard h2,
+        .libraryCard h2,
+        .mergeCard h2 {
+            flex: 0 0 auto;
+            margin: 0 0 8px;
+            align-self: flex-start;
+            padding-right: 36px;
+        }
+
+        .trashCard .message,
+        .libraryCard .message,
+        .mergeCard .message {
+            flex: 0 0 auto;
+        }
+
+        .trashCard #trashList,
+        .libraryCard #libraryList,
+        .mergeCard #mergeRomList {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            margin-top: 12px;
+        }
+
+        .merge-tabs {
+            display: flex;
+            gap: 6px;
+            margin: 4px 0 0;
+            flex: 0 0 auto;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .merge-tabs button[data-mapper] {
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #444;
+            background: #1a1a1a;
+            color: #aaa;
+            cursor: pointer;
+        }
+
+        .merge-tabs button[data-mapper].active {
+            background: #8e44ad;
+            border-color: #8e44ad;
+            color: #fff;
+        }
+
+        .merge-rom-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #141414;
+            margin-bottom: 8px;
+        }
+
+        .merge-rom-item .meta { flex: 1; min-width: 0; }
+        .merge-rom-item .meta strong { display: block; color: #eee; font-size: 13px; }
+        .merge-rom-item .meta span { font-size: 11px; color: #777; }
+        .merge-rom-item input.merge-name {
+            width: 100%;
+            max-width: 220px;
+            background: #0a0a0a;
+            border: 1px solid #444;
+            color: #eee;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+        .merge-toolbar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 8px;
+            flex: 0 0 auto;
+        }
+
+        .library-tabs {
+            display: flex;
+            gap: 6px;
+            margin: 4px 0 0;
+            flex: 0 0 auto;
+        }
+
+        .library-tabs button {
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #444;
+            background: #1a1a1a;
+            color: #aaa;
+            cursor: pointer;
+        }
+
+        .library-tabs button.active {
+            background: #007acc;
+            border-color: #007acc;
+            color: #fff;
+        }
+
+        .library-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #141414;
+            margin-bottom: 8px;
+        }
+
+        .library-item .meta {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .library-item .meta strong {
+            display: block;
+            color: #eee;
+            font-size: 13px;
+        }
+
+        .library-item .meta span {
+            font-size: 11px;
+            color: #777;
+        }
+
+        .library-item .actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .open {
+            display: flex;
+        }
+
+        .modal .card {
+            width: min(500px, 100%);
+        }
+
+        .close {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            font-size: 2em;
+            background: unset;
+            color: white;
+            border: unset;
+            cursor: pointer;
+            line-height: 1;
+            z-index: 2;
+        }
+
+        @media (max-width: 640px) {
+            .dash-head {
+                padding: 10px 12px;
+                flex-wrap: wrap;
+            }
+
+            .dash-head .img-logo {
+                max-height: 40px;
+                max-width: 40px;
+            }
+
+            .projects-panel {
+                width: 100%;
+                margin: 12px 0;
+                border-radius: 0;
+            }
+
+            .trashCard {
+                width: 100% !important;
+                max-height: 90vh;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <!-- CABEÇALHO (barra superior) -->
+
+    <header class="dash-head">
+
+        <img class="img-logo" src="../nes/assets/icon.png" alt="NGC">
+
+        <p id="welcome">
+            Verificando sessão...
+        </p>
+
+        <div class="actions">
+
+            <button
+                id="newProjectButton"
+                class="icon-btn"
+                type="button"
+                title="Novo projeto"
+                aria-label="Novo projeto"
+            >
+                +
+            </button>
+
+            <button
+                id="importAgcButton"
+                class="icon-btn secondary"
+                type="button"
+                title="Importar projeto .agc"
+                aria-label="Importar projeto .agc"
+            >
+                📂
+            </button>
+            <input
+                type="file"
+                id="importAgcInput"
+                accept=".agc,.json,application/json"
+                style="display:none"
+            >
+
+            <button
+                id="libraryButton" style="display:none"
+                class="icon-btn secondary"
+                type="button"
+                title="Biblioteca de assets"
+                aria-label="Biblioteca"
+            >
+                📚
+            </button>
+
+            <button
+                id="trashButton"
+                class="icon-btn secondary"
+                type="button"
+                title="Lixeira"
+                aria-label="Lixeira"
+            >
+                🗑
+            </button>
+
+            
+
+
+            <button
+                id="systemsHubButton"
+                class="icon-btn secondary"
+                type="button"
+                title="Menu de sistemas"
+                aria-label="Menu de sistemas"
+            >
+                🏠
+            </button>
+
+            <button
+                id="logoutButton"
+                class="icon-btn secondary"
+                type="button"
+                title="Logout"
+                aria-label="Logout"
+            >
+                ⏻
+            </button>
+
+        </div>
+
+    </header>
+
+
+    <!-- PROJETOS -->
+
+    <div class="card dash-card projects-panel">
+
+        <h2>Meus projetos Atari 2600</h2>
+
+        <div
+            id="projectMessage"
+            class="message"
+        >
+            Carregando projetos...
+        </div>
+
+        <div
+            id="projectList"
+            class="project-list"
+        ></div>
+
+    </div>
+
+</div>
+
+
+<!-- =========================================================
+     MODAL - NOVO PROJETO
+     ========================================================= -->
+
+<div
+    id="newProjectModal"
+    class="modal"
+>
+
+    <div class="card newprojCard">
+
+        <button
+            id="closeModal"
+            class="close"
+            type="button"
+            onkeyup="closeModal"
+        >
+        &times;
+        </button>
+
+        <h2 id="projectModalTitle">Novo projeto</h2>
+
+
+        <form id="projectForm">
+
+            <input type="hidden" id="projectEditId" value="">
+
+            <label for="projectName">
+                Nome
+            </label>
+
+            <input
+                id="projectName"
+                type="text"
+                maxlength="150"
+                required
+                autocomplete="off"
+            >
+
+
+            <label for="projectDescription">
+                Descrição
+            </label>
+
+            <input
+                id="projectDescription"
+                type="text"
+                maxlength="1000"
+                autocomplete="off"
+            >
+
+
+            <button type="submit" id="projectFormSubmit">
+                Criar projeto
+            </button>
+
+        </form>
+
+
+        <div
+            id="createMessage"
+            class="message"
+        ></div>
+
+    </div>
+
+    <div class="card dash-card trashCard" >
+
+        <button
+            id="closeTrashModal"
+            class="close"
+            type="button"
+        >
+        &times;
+        </button>
+
+        <h2>🗑 Lixeira</h2>
+    
+        <div
+            id="trashMessage"
+            class="message"
+        >
+            Carregando...
+        </div>
+    
+        <div
+            id="trashList"
+            class="project-list"
+        ></div>
+    
+    </div>
+
+    <div class="card dash-card libraryCard">
+
+        <button
+            id="closeLibraryModal"
+            class="close"
+            type="button"
+        >
+        &times;
+        </button>
+
+        <h2>📚 Biblioteca</h2>
+
+        <div class="library-tabs">
+            <button type="button" id="libTabSound" class="active" data-lib-type="sound">Sons (.nsound)</button>
+            <button type="button" id="libTabTile" data-lib-type="tile">Tiles (.tile)</button>
+            <button type="button" id="libImportBtn" title="Importar arquivo local para a biblioteca" style="margin-left:auto;background:#27ae60;border-color:#27ae60;color:#fff">⬆ Importar</button>
+        </div>
+        <input type="file" id="libImportInput" accept=".nsound,.tile,application/json,.json" style="display:none">
+
+        <div
+            id="libraryMessage"
+            class="message"
+        >
+            Carregando...
+        </div>
+
+        <div
+            id="libraryList"
+            class="project-list"
+        ></div>
+
+    </div>
+
+    <div class="card dash-card mergeCard">
+
+        <button
+            id="closeMergeModal"
+            class="close"
+            type="button"
+        >
+        &times;
+        </button>
+
+        <h2>🧬 Merge ROMs (multicart)</h2>
+
+        <p class="message" style="color:#888;margin:0 0 8px;font-size:12px;line-height:1.45">
+            Só entram ROMs que o merge <b>realmente executa</b>:
+            <b>NROM (0)</b>, <b>CNROM (3) 1×CHR</b>, <b>AxROM (7)</b> (PRG 16/32&nbsp;KB)
+            e <b>UNROM (2)</b> (PRG 32–512&nbsp;KB, endpoint próprio).
+            MMC1, MMC3, VRC, CNROM multi-CHR etc. são <b>recusados</b>.
+            NROM/CNROM/AxROM → cartucho AxROM. UNROM → cartucho UNROM (AxROM+thunk).
+            Voltar ao menu = <b>Reset</b>. ROMs só nesta sessão.
+        </p>
+
+        <div class="merge-toolbar">
+            <button type="button" id="mergeUploadBtn" class="icon-btn" title="Adicionar ROM .nes do computador" style="width:auto;padding:6px 12px;border-radius:6px">⬆ PC</button>
+            <button type="button" id="mergeImportProjectsBtn" class="icon-btn" title="Importar game.nes dos meus projetos" style="width:auto;padding:6px 12px;border-radius:6px;background:#16a085;border-color:#16a085;color:#fff">📦 Meus projetos Atari 2600</button>
+            <input type="file" id="mergeRomInput" accept=".nes,application/octet-stream" multiple style="display:none">
+            <button type="button" id="mergeBuildBtn" class="icon-btn" title="Gerar multicart desta aba" style="width:auto;padding:6px 12px;border-radius:6px;background:#8e44ad;border-color:#8e44ad;color:#fff" disabled>🔨 Gerar multicart</button>
+            <span id="mergeStatus" class="message" style="margin:0;font-size:12px;color:#aaa"></span>
+        </div>
+
+        <div class="merge-tabs" id="mergeMapperTabs">
+            <span style="font-size:11px;color:#666">Nenhuma ROM ainda — faça upload</span>
+        </div>
+
+        <div id="mergeRomList" class="project-list"></div>
+
+    </div>
+
+</div>
+
+<script src="js/library.js"></script>
+<script>
+
+/* =========================================================
+   ELEMENTOS DA INTERFACE
+   ========================================================= */
+
+const welcome = document.getElementById('welcome');
+
+const projectMessage = document.getElementById('projectMessage');
+
+const projectList = document.getElementById('projectList');
+
+const modal = document.getElementById('newProjectModal');
+
+const trashCard = document.querySelector('.trashCard');
+
+const newprojCard = document.querySelector('.newprojCard');
+
+const projectForm = document.getElementById('projectForm');
+
+const createMessage = document.getElementById('createMessage');
+
+
+/* =========================================================
+   SESSÃO
+   ========================================================= */
+
+async function loadSession() {
+
+    try {
+
+        const response = await fetch(
+            APP('/backend/auth/session.php'),
+            {
+                credentials: 'same-origin'
+            }
+        );
+
+
+        if (!response.ok) {
+
+            window.location.href =
+                APP('/login.html');
+
+            return;
+        }
+
+
+        const data =
+            await response.json();
+
+
+        if (!data.authenticated) {
+
+            window.location.href =
+                APP('/login.html');
+
+            return;
+        }
+
+
+        welcome.textContent =
+            `Olá, ${data.user.name}!`;
+
+
+        /*
+         * Sessão válida.
+         * Agora carregamos os projetos.
+         */
+
+        await loadProjects();
+
+
+    } catch (error) {
+
+        console.error(
+            'Erro ao verificar sessão:',
+            error
+        );
+
+        window.location.href =
+            APP('/login.html');
+    }
+}
+
+
+/* =========================================================
+   LISTAR PROJETOS
+   ========================================================= */
+
+async function loadProjects() {
+
+    projectMessage.textContent =
+        'Carregando projetos...';
+
+    projectList.innerHTML = '';
+
+
+    try {
+
+        const response =
+            await fetch(
+                APP('/a2600/backend/projects/list.php'),
+                {
+                    credentials:
+                        'same-origin'
+                }
+            );
+
+
+        const raw = await response.text();
+        let data = null;
+        try {
+            data = raw ? JSON.parse(raw) : null;
+        } catch (parseErr) {
+            console.error('list.php resposta não-JSON', response.status, raw.slice(0, 300));
+            projectMessage.textContent =
+                'Erro ao carregar projetos: resposta inválida do servidor (HTTP ' +
+                response.status + ').';
+            return;
+        }
+        if (!data || !data.success) {
+            projectMessage.textContent =
+                (data && data.message) ||
+                'Erro ao carregar projetos.';
+            if (data && data.detail) console.error(data.detail);
+            return;
+        }
+
+
+        /*
+         * Nenhum projeto ainda.
+         */
+
+        if (
+            !data.projects ||
+            data.projects.length === 0
+        ) {
+
+            projectMessage.textContent =
+                'Você ainda não possui projetos.';
+
+            return;
+        }
+
+
+        projectMessage.textContent =
+            '';
+
+
+        /*
+         * Cria os cards dos projetos.
+         */
+
+        data.projects.forEach(
+            project => {
+
+                const item = document.createElement('div');
+                item.className = 'project';
+
+                // Parte superior: dados + thumbnail
+                const main = document.createElement('div');
+                main.className = 'project-main';
+
+                const info = document.createElement('div');
+                info.className = 'project-info';
+
+                const title = document.createElement('h3');
+                title.textContent = project.name;
+                info.appendChild(title);
+
+                const sysBadge = document.createElement('span');
+                sysBadge.className = 'project-system-badge';
+                sysBadge.textContent = 'ATARI 2600';
+                sysBadge.title = 'Sistema: Atari 2600';
+                info.appendChild(sysBadge);
+
+                const description = document.createElement('p');
+                description.textContent = project.description || 'Sem descrição.';
+                info.appendChild(description);
+
+                const id = document.createElement('small');
+                id.textContent = `Projeto #${project.id}`;
+                info.appendChild(id);
+
+                if (project.parent_project_id) {
+                    const fork = document.createElement('span');
+                    fork.className = 'project-fork';
+                    const parentLabel = project.parent_name
+                        ? `${project.parent_name} (#${project.parent_project_id})`
+                        : `#${project.parent_project_id}`;
+                    fork.textContent = `⑂ Fork de ${parentLabel}`;
+                    info.appendChild(fork);
+                }
+
+                const thumb = document.createElement('img');
+                thumb.className = 'project-thumb';
+                thumb.alt = project.name || 'Thumbnail';
+                thumb.loading = 'lazy';
+                if (project.has_thumbnail) {
+                    thumb.src = APP(`/a2600/backend/projects/thumbnail.php?id=${encodeURIComponent(project.id)}&t=${Date.now()}`);
+                } else {
+                    thumb.src = '../nes/assets/cartridge.png';
+                    thumb.title = 'Sem thumbnail — faça um Build ou altere a capa';
+                }
+
+                main.appendChild(info);
+                main.appendChild(thumb);
+                item.appendChild(main);
+
+                // Barra inferior: ações principais à esquerda, capa à direita
+                const projectActions = document.createElement('div');
+                projectActions.className = 'project-actions';
+
+                const leftActions = document.createElement('div');
+                leftActions.className = 'project-actions-left';
+
+                const openButton = document.createElement('button');
+                openButton.type = 'button';
+                openButton.className = 'icon-btn';
+                openButton.textContent = '▶';
+                openButton.title = 'Abrir no editor';
+                openButton.setAttribute('aria-label', 'Abrir no editor');
+                openButton.addEventListener(
+                    'click',
+                    () => openProject(project.id)
+                );
+
+                const editButton = document.createElement('button');
+                editButton.type = 'button';
+                editButton.className = 'icon-btn secondary';
+                editButton.textContent = '✎';
+                editButton.title = 'Editar nome e descrição';
+                editButton.setAttribute('aria-label', 'Editar projeto');
+                editButton.addEventListener(
+                    'click',
+                    () => openEditProjectModal(project)
+                );
+
+                const exportButton = document.createElement('button');
+                exportButton.type = 'button';
+                exportButton.className = 'icon-btn secondary';
+                exportButton.textContent = '⬇';
+                exportButton.title = 'Exportar .nms';
+                exportButton.setAttribute('aria-label', 'Exportar projeto');
+                exportButton.addEventListener(
+                    'click',
+                    () => exportProject(project)
+                );
+
+                const forkButton = document.createElement('button');
+                forkButton.type = 'button';
+                forkButton.className = 'icon-btn secondary';
+                forkButton.textContent = '⑂';
+                forkButton.title = 'Fork — criar cópia';
+                forkButton.setAttribute('aria-label', 'Fork do projeto');
+                forkButton.addEventListener(
+                    'click',
+                    () => forkProjectFromDashboard(project)
+                );
+
+                const deleteButton = document.createElement('button');
+                deleteButton.type = 'button';
+                deleteButton.className = 'icon-btn secondary';
+                deleteButton.textContent = '🗑';
+                deleteButton.title = 'Excluir projeto';
+                deleteButton.setAttribute('aria-label', 'Excluir projeto');
+                deleteButton.addEventListener(
+                    'click',
+                    () => deleteProject(
+                        project.id,
+                        project.name
+                    )
+                );
+
+                leftActions.appendChild(openButton);
+                leftActions.appendChild(editButton);
+                leftActions.appendChild(exportButton);
+                leftActions.appendChild(forkButton);
+                leftActions.appendChild(deleteButton);
+
+                const rightActions = document.createElement('div');
+                rightActions.className = 'project-actions-right';
+
+                const changeThumbBtn = document.createElement('button');
+                changeThumbBtn.type = 'button';
+                changeThumbBtn.className = 'icon-btn secondary';
+                changeThumbBtn.textContent = '🖼';
+                changeThumbBtn.title = 'Alterar thumbnail';
+                changeThumbBtn.setAttribute('aria-label', 'Alterar thumbnail');
+                changeThumbBtn.addEventListener('click', () => {
+                    pickProjectThumbnail(project.id, thumb);
+                });
+
+                const clearThumbBtn = document.createElement('button');
+                clearThumbBtn.type = 'button';
+                clearThumbBtn.className = 'icon-btn secondary';
+                clearThumbBtn.textContent = '✕';
+                clearThumbBtn.title = 'Remover thumbnail';
+                clearThumbBtn.setAttribute('aria-label', 'Remover thumbnail');
+                clearThumbBtn.addEventListener('click', () => {
+                    clearProjectThumbnail(project.id, thumb);
+                });
+
+                rightActions.appendChild(changeThumbBtn);
+                rightActions.appendChild(clearThumbBtn);
+
+                projectActions.appendChild(leftActions);
+                projectActions.appendChild(rightActions);
+                item.appendChild(projectActions);
+
+                projectList.appendChild(item);
+            }
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            'Erro ao carregar projetos:',
+            error
+        );
+
+
+        projectMessage.textContent =
+            'Erro de comunicação com o servidor.';
+    }
+}
+
+/* =========================================================
+   EXPORTAR / FORK (dashboard)
+   ========================================================= */
+
+async function fetchProjectNms(projectId) {
+    const response = await fetch(
+        APP(`/a2600/backend/projects/load.php?id=${encodeURIComponent(projectId)}`),
+        { credentials: 'same-origin' }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success || !data.nms) {
+        const err = new Error(
+            data.message || 'Não foi possível carregar o projeto.'
+        );
+        err.status = response.status;
+        throw err;
+    }
+    return data;
+}
+
+async function exportProject(project) {
+    if (!project || !project.id) return;
+    try {
+        const data = await fetchProjectNms(project.id);
+        const nms = data.nms;
+        const baseName = (
+            (nms && nms.name) ||
+            project.name ||
+            `projeto_${project.id}`
+        ).replace(/[\\/:*?"<>|]+/g, '_').trim() || `projeto_${project.id}`;
+        const filename = baseName.endsWith('.nms')
+            ? baseName
+            : `${baseName}.nms`;
+
+        const blob = new Blob(
+            [JSON.stringify(nms, null, 2)],
+            { type: 'application/json' }
+        );
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    } catch (err) {
+        console.error('Erro ao exportar:', err);
+        alert(err.message || 'Erro ao exportar o projeto.');
+    }
+}
+
+async function forkProjectFromDashboard(project) {
+    if (!project || !project.id) return;
+
+    const baseName = (project.name || 'Meu Jogo').trim() || 'Meu Jogo';
+    const suggested = baseName.startsWith('Cópia de ')
+        ? baseName
+        : `Cópia de ${baseName}`;
+    const name = prompt('Nome do fork (novo projeto):', suggested);
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed) {
+        alert('Informe um nome para o fork.');
+        return;
+    }
+
+    try {
+        const loaded = await fetchProjectNms(project.id);
+        const nms = loaded.nms;
+        if (!nms || typeof nms !== 'object') {
+            alert('Conteúdo do projeto inválido.');
+            return;
+        }
+        nms.name = trimmed;
+
+        const createRes = await fetch(
+            APP('/a2600/backend/projects/create.php'),
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    name: trimmed,
+                    description: nms.description || project.description || '',
+                    parent_project_id: project.id
+                })
+            }
+        );
+        const createData = await createRes.json().catch(() => ({}));
+        if (!createRes.ok || !createData.success || !createData.project?.id) {
+            alert(
+                createData.message ||
+                'Não foi possível criar o fork.'
+            );
+            return;
+        }
+
+        const newId = createData.project.id;
+        const saveRes = await fetch(
+            APP('/a2600/backend/projects/save.php'),
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    project_id: newId,
+                    nms: nms
+                })
+            }
+        );
+        const saveData = await saveRes.json().catch(() => ({}));
+        if (!saveRes.ok || !saveData.success) {
+            alert(
+                saveData.message ||
+                'Fork criado, mas falhou ao gravar o conteúdo NMS.'
+            );
+            await loadProjects();
+            return;
+        }
+
+        await loadProjects();
+    } catch (err) {
+        console.error('Erro no fork:', err);
+        alert(err.message || 'Erro ao criar o fork.');
+    }
+}
+
+/* =========================================================
+   THUMBNAIL MANUAL
+   ========================================================= */
+
+async function clearProjectThumbnail(projectId, imgEl) {
+    const confirmed = confirm(
+        'Remover o thumbnail deste projeto?\nA capa padrão (cartucho) voltará a ser usada.'
+    );
+    if (!confirmed) return;
+
+    try {
+        const response = await fetch(
+            APP('/a2600/backend/projects/thumbnail.php'),
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    project_id: projectId,
+                    action: 'clear'
+                })
+            }
+        );
+        const rawText = await response.text();
+        let data = {};
+        try {
+            data = rawText ? JSON.parse(rawText) : {};
+        } catch (e) {
+            console.error('Clear thumb non-JSON:', response.status, rawText.slice(0, 200));
+            alert(
+                response.status === 404
+                    ? 'Endpoint thumbnail.php não encontrado no servidor.'
+                    : 'Resposta inválida ao remover thumbnail.'
+            );
+            return;
+        }
+
+        // Exige cleared=true: evita falso sucesso do ramo "skipped" de versões antigas
+        if (!response.ok || !data.success || data.skipped || !data.cleared) {
+            alert(
+                data.message ||
+                'Não foi possível remover o thumbnail no servidor. Atualize /a2600/backend/projects/thumbnail.php.'
+            );
+            return;
+        }
+
+        if (imgEl) {
+            imgEl.src = '../nes/assets/cartridge.png';
+            imgEl.title = 'Sem thumbnail — faça um Build ou altere a capa';
+        }
+    } catch (err) {
+        console.error(err);
+        alert('Erro de comunicação com o servidor.');
+    }
+}
+
+function pickProjectThumbnail(projectId, imgEl) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/webp,image/gif';
+    input.style.display = 'none';
+
+    input.addEventListener('change', async () => {
+        const file = input.files && input.files[0];
+        input.remove();
+        if (!file) return;
+
+        try {
+            const dataUrl = await fileToPngDataUrl(file, 256, 240);
+            const response = await fetch(
+                APP('/a2600/backend/projects/thumbnail.php'),
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        project_id: projectId,
+                        image: dataUrl,
+                        force: true
+                    })
+                }
+            );
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok || !data.success) {
+                alert(
+                    data.message ||
+                    'Não foi possível salvar o thumbnail.'
+                );
+                return;
+            }
+
+            if (imgEl) {
+                imgEl.src =
+                    APP(`/a2600/backend/projects/thumbnail.php?id=${encodeURIComponent(projectId)}&t=${Date.now()}`);
+                imgEl.title = '';
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Erro ao processar a imagem.');
+        }
+    });
+
+    document.body.appendChild(input);
+    input.click();
+}
+
+/**
+ * Redimensiona a imagem para caber em maxW x maxH
+ * e devolve data URL PNG.
+ */
+function fileToPngDataUrl(file, maxW, maxH) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Falha ao ler arquivo'));
+        reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+                let w = img.naturalWidth || img.width;
+                let h = img.naturalHeight || img.height;
+                if (!w || !h) {
+                    reject(new Error('Imagem inválida'));
+                    return;
+                }
+                const scale = Math.min(maxW / w, maxH / h, 1);
+                w = Math.max(1, Math.round(w * scale));
+                h = Math.max(1, Math.round(h * scale));
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => reject(new Error('Não foi possível decodificar a imagem'));
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+/* =========================================================
+   DELETAR PROJETOS
+   ========================================================= */
+
+async function deleteProject(
+    projectId,
+    projectName) {
+
+    const confirmed =
+        confirm(
+            `Enviar o projeto "${projectName}" para a lixeira?`
+        );
+
+    if (!confirmed) return;
+
+    closeDashboardModal();
+
+    try {
+
+        const response =
+            await fetch(
+                APP('/a2600/backend/projects/delete.php'),
+                {
+                    method: 'POST',
+
+                    headers: {
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    credentials:
+                        'same-origin',
+
+                    body:
+                        JSON.stringify({
+                            id: projectId
+                        })
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (
+            !response.ok ||
+            !data.success
+        ) {
+
+            alert(
+                data.message ||
+                'Não foi possível excluir o projeto.'
+            );
+
+            return;
+        }
+
+
+        await loadProjects();
+
+        /*
+         * Se a lixeira estiver aberta,
+         * atualiza a lista sem reabrir o modal.
+         */
+        if (
+            trashCard.classList.contains('open') &&
+            typeof loadTrash === 'function'
+        ) {
+            await loadTrash();
+        }
+
+
+    } catch (error) {
+
+        console.error(
+            'Erro ao excluir projeto:',
+            error
+        );
+
+        alert(
+            'Erro de comunicação com o servidor.'
+        );
+    }
+}
+
+/* =========================================================
+   LIXEIRA
+   ========================================================= */
+
+async function loadTrash() {
+
+    modal.classList.add(
+                'open'
+            );
+
+    const trashMessage =
+        document.getElementById(
+            'trashMessage'
+        );
+
+    const trashList =
+        document.getElementById(
+            'trashList'
+        );
+
+    if (!trashMessage || !trashList)
+        return;
+
+
+    trashMessage.textContent =
+        'Carregando lixeira...';
+
+    trashList.innerHTML = '';
+
+
+    try {
+
+        const response =
+            await fetch(
+                APP('/a2600/backend/projects/trash.php'),
+                {
+                    method: 'GET',
+                    credentials: 'same-origin'
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (
+            !response.ok ||
+            !data.success
+        ) {
+
+            trashMessage.textContent =
+                data.message ||
+                'Não foi possível carregar a lixeira.';
+
+            return;
+        }
+
+
+        if (
+            !data.projects ||
+            data.projects.length === 0
+        ) {
+
+            trashMessage.textContent =
+                'A lixeira está vazia.';
+
+            return;
+        }
+
+
+        trashMessage.textContent =
+            '';
+
+
+        data.projects.forEach(
+            project => {
+
+                const item =
+                    document.createElement('div');
+
+                item.className =
+                    'project';
+
+
+                const title =
+                    document.createElement('h3');
+
+                title.textContent =
+                    project.name;
+
+
+                const description =
+                    document.createElement('p');
+
+                description.textContent =
+                    project.description ||
+                    'Sem descrição.';
+
+
+                const id =
+                    document.createElement('small');
+
+                id.textContent =
+                    `Projeto #${project.id}`;
+
+
+                const actions =
+                    document.createElement('div');
+
+                actions.className =
+                    'project-actions';
+
+
+                const restore =
+                    document.createElement('button');
+
+                restore.type = 'button';
+                restore.className = 'icon-btn';
+                restore.textContent = '♻';
+                restore.title = 'Restaurar';
+                restore.setAttribute('aria-label', 'Restaurar');
+
+                restore.addEventListener(
+                    'click',
+                    () => restoreProject(
+                        project.id,
+                        project.name
+                    )
+                );
+
+                const purgeBtn =
+                    document.createElement('button');
+
+                purgeBtn.type = 'button';
+                purgeBtn.className = 'icon-btn secondary';
+                purgeBtn.textContent = '☠';
+                purgeBtn.title = 'Excluir permanentemente';
+                purgeBtn.setAttribute('aria-label', 'Excluir permanentemente');
+
+                purgeBtn.addEventListener(
+                    'click',
+                    () => purgeProject(
+                        project.id,
+                        project.name
+                    )
+                );
+
+                actions.appendChild(restore);
+                actions.appendChild(purgeBtn);
+
+                item.appendChild(title);
+                item.appendChild(description);
+                item.appendChild(id);
+                item.appendChild(actions);
+
+                trashList.appendChild(item);
+            }
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            'Erro ao carregar lixeira:',
+            error
+        );
+
+        trashMessage.textContent =
+            'Erro de comunicação com o servidor.';
+    }
+}
+
+/* =========================================================
+   RESTAURAR PROJETOS
+   ========================================================= */
+
+async function purgeProject(projectId, projectName) {
+    const confirmed = confirm(
+        `Excluir PERMANENTEMENTE o projeto "${projectName}"?\n\n` +
+        'Esta ação não pode ser desfeita. Arquivos e dados serão apagados.'
+    );
+    if (!confirmed) return;
+
+    try {
+        const response = await fetch(
+            APP('/a2600/backend/projects/purge.php'),
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    id: projectId
+                })
+            }
+        );
+
+        const rawText = await response.text();
+        let data = {};
+        try {
+            data = rawText ? JSON.parse(rawText) : {};
+        } catch (e) {
+            console.error('Purge non-JSON:', response.status, rawText.slice(0, 200));
+            alert(
+                response.status === 404
+                    ? 'Endpoint purge.php não encontrado. Copie /a2600/backend/projects/purge.php para o servidor.'
+                    : 'Resposta inválida do servidor.'
+            );
+            return;
+        }
+
+        if (!response.ok || !data.success) {
+            alert(
+                data.message ||
+                'Não foi possível excluir o projeto permanentemente.'
+            );
+            return;
+        }
+
+        await loadTrash();
+    } catch (err) {
+        console.error('Erro ao excluir permanentemente:', err);
+        alert('Erro de comunicação com o servidor.');
+    }
+}
+
+   async function restoreProject(
+    projectId,
+    projectName) {
+
+    const confirmed =
+        confirm(
+            `Restaurar o projeto "${projectName}"?`
+        );
+
+    if (!confirmed) return;
+
+
+    try {
+
+        const response =
+            await fetch(
+                APP('/a2600/backend/projects/restore.php'),
+                {
+                    method: 'POST',
+
+                    headers: {
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    credentials:
+                        'same-origin',
+
+                    body:
+                        JSON.stringify({
+                            id: projectId
+                        })
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (
+            !response.ok ||
+            !data.success
+        ) {
+
+            alert(
+                data.message ||
+                'Não foi possível restaurar o projeto.'
+            );
+
+            return;
+        }
+
+
+        await loadProjects();
+
+        await loadTrash();
+
+
+    } catch (error) {
+
+        console.error(
+            'Erro ao restaurar projeto:',
+            error
+        );
+
+        alert(
+            'Erro de comunicação com o servidor.'
+        );
+    }
+}
+
+/* =========================================================
+   ABRIR MODAL
+   ========================================================= */
+
+function setProjectModalMode(mode) {
+    const titleEl = document.getElementById('projectModalTitle');
+    const submitEl = document.getElementById('projectFormSubmit');
+    const editIdEl = document.getElementById('projectEditId');
+
+    if (mode === 'edit') {
+        if (titleEl) titleEl.textContent = 'Editar projeto';
+        if (submitEl) submitEl.textContent = 'Salvar alterações';
+    } else {
+        if (titleEl) titleEl.textContent = 'Novo projeto';
+        if (submitEl) submitEl.textContent = 'Criar projeto';
+        if (editIdEl) editIdEl.value = '';
+    }
+}
+
+function openEditProjectModal(project) {
+    createMessage.textContent = '';
+    projectForm.reset();
+    setProjectModalMode('edit');
+
+    const editIdEl = document.getElementById('projectEditId');
+    const nameEl = document.getElementById('projectName');
+    const descEl = document.getElementById('projectDescription');
+
+    if (editIdEl) editIdEl.value = String(project.id || '');
+    if (nameEl) nameEl.value = project.name || '';
+    if (descEl) descEl.value = project.description || '';
+
+    trashCard.classList.remove('open');
+    if (libraryCard) libraryCard.classList.remove('open');
+    if (mergeCard) mergeCard.classList.remove('open');
+    modal.classList.add('open');
+    newprojCard.classList.add('open');
+}
+
+document
+    .getElementById(
+        'newProjectButton'
+    )
+    .addEventListener(
+        'click',
+        () => {
+            createMessage.textContent = '';
+            projectForm.reset();
+            setProjectModalMode('create');
+            trashCard.classList.remove('open');
+            if (libraryCard) libraryCard.classList.remove('open');
+            if (mergeCard) mergeCard.classList.remove('open');
+            modal.classList.add('open');
+            newprojCard.classList.add('open');
+        }
+    );
+
+
+/* =========================================================
+   FECHAR MODAL
+   ========================================================= */
+
+const libraryCard = document.querySelector('.libraryCard');
+const mergeCard = document.querySelector('.mergeCard');
+let libraryActiveType = 'sound';
+
+function closeDashboardModal() {
+    modal.classList.remove('open');
+    trashCard.classList.remove('open');
+    if (libraryCard) libraryCard.classList.remove('open');
+    if (mergeCard) mergeCard.classList.remove('open');
+    newprojCard.classList.remove('open');
+}
+
+document
+    .getElementById('closeModal')
+    .addEventListener('click', closeDashboardModal);
+
+document
+    .getElementById('closeTrashModal')
+    .addEventListener('click', closeDashboardModal);
+
+document
+    .getElementById('closeLibraryModal')
+    ?.addEventListener('click', closeDashboardModal);
+
+document
+    .getElementById('closeMergeModal')
+    ?.addEventListener('click', closeDashboardModal);
+
+/*
+ * Também permite fechar clicando
+ * fora do cartão.
+ */
+
+modal.addEventListener(
+    'click',
+    event => {
+        if (event.target === modal) {
+            closeDashboardModal();
+        }
+    }
+);
+
+
+/* =========================================================
+   ABRIR E FECHAR LIXEIRA
+   ========================================================= */
+
+   document
+    .getElementById('trashButton')
+    ?.addEventListener(
+        'click',
+        async () => {
+            newprojCard.classList.remove('open');
+            if (libraryCard) libraryCard.classList.remove('open');
+            if (mergeCard) mergeCard.classList.remove('open');
+            modal.classList.add('open');
+            trashCard.classList.add('open');
+            await loadTrash();
+        }
+    );
+
+/* =========================================================
+   BIBLIOTECA DE ASSETS (.nsound / .tile)
+   ========================================================= */
+
+function formatBytes(n) {
+    n = Number(n) || 0;
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    return (n / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function setLibraryTab(type) {
+    libraryActiveType = type === 'tile' ? 'tile' : 'sound';
+    document.querySelectorAll('.library-tabs button').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-lib-type') === libraryActiveType);
+    });
+}
+
+async function loadLibrary(type) {
+    if (type) setLibraryTab(type);
+    const msg = document.getElementById('libraryMessage');
+    const list = document.getElementById('libraryList');
+    if (!msg || !list) return;
+
+    msg.textContent = 'Carregando biblioteca...';
+    list.innerHTML = '';
+
+    if (typeof AssetLibrary === 'undefined') {
+        msg.textContent = 'Biblioteca indisponível (js/library.js).';
+        return;
+    }
+
+    try {
+        const items = await AssetLibrary.list(libraryActiveType);
+        if (!items.length) {
+            msg.textContent = libraryActiveType === 'tile'
+                ? 'Nenhum .tile salvo. Exporte metatiles em Personagens.'
+                : 'Nenhum .nsound salvo. Exporte no editor de som.';
+            return;
+        }
+        msg.textContent = items.length + ' item(ns)';
+
+        items.forEach(it => {
+            const row = document.createElement('div');
+            row.className = 'library-item';
+
+            const extra = libraryActiveType === 'tile'
+                ? `${it.metatile_count || 0} metatile(s)` +
+                  (it.character_count ? ` · ${it.character_count} char(s)` : '')
+                : `${it.item_count || 0} peça(s)`;
+
+            const updated = it.updated_at
+                ? new Date(it.updated_at).toLocaleString()
+                : '—';
+
+            row.innerHTML = `
+                <div class="meta">
+                    <strong></strong>
+                    <span></span>
+                </div>
+                <div class="actions">
+                    <button type="button" class="icon-btn" title="Baixar arquivo" data-act="dl">⬇</button>
+                    <button type="button" class="icon-btn secondary" title="Excluir da biblioteca" data-act="del" style="background:#5a1a1a;border-color:#7d2525">🗑</button>
+                </div>
+            `;
+            row.querySelector('strong').textContent = it.name || it.id;
+            row.querySelector('span').textContent =
+                `${extra} · ${formatBytes(it.size)} · ${updated}`;
+
+            row.querySelector('[data-act="dl"]').addEventListener('click', async () => {
+                try {
+                    const loaded = await AssetLibrary.load(libraryActiveType, it.id);
+                    const ext = libraryActiveType === 'tile' ? 'tile' : 'nsound';
+                    const safe = String(loaded.name || it.id)
+                        .replace(/[^a-zA-Z0-9_\-]+/g, '_')
+                        .slice(0, 40);
+                    const blob = new Blob(
+                        [JSON.stringify(loaded.data, null, 2)],
+                        { type: 'application/json' }
+                    );
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = safe + '.' + ext;
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => {
+                        URL.revokeObjectURL(a.href);
+                        a.remove();
+                    }, 500);
+                } catch (err) {
+                    alert(err.message || 'Falha no download');
+                }
+            });
+
+            row.querySelector('[data-act="del"]').addEventListener('click', async () => {
+                if (!confirm(`Remover "${it.name || it.id}" da biblioteca?`)) return;
+                try {
+                    await AssetLibrary.remove(libraryActiveType, it.id);
+                    await loadLibrary();
+                } catch (err) {
+                    alert(err.message || 'Falha ao remover');
+                }
+            });
+
+            list.appendChild(row);
+        });
+    } catch (err) {
+        console.error(err);
+        msg.textContent = err.message || 'Não foi possível carregar a biblioteca.';
+    }
+}
+
+document.getElementById('libraryButton')?.addEventListener('click', async () => {
+    newprojCard.classList.remove('open');
+    trashCard.classList.remove('open');
+    if (mergeCard) mergeCard.classList.remove('open');
+    modal.classList.add('open');
+    if (libraryCard) libraryCard.classList.add('open');
+    await loadLibrary(libraryActiveType);
+});
+
+document.getElementById('libTabSound')?.addEventListener('click', () => loadLibrary('sound'));
+document.getElementById('libTabTile')?.addEventListener('click', () => loadLibrary('tile'));
+
+/** Importa .nsound / .tile local para a biblioteca do usuário (troca entre usuários). */
+async function importFileToLibrary(file) {
+    if (!file || typeof AssetLibrary === 'undefined') return;
+    const msg = document.getElementById('libraryMessage');
+    const nameLower = (file.name || '').toLowerCase();
+
+    try {
+        const text = await file.text();
+        const doc = JSON.parse(text);
+
+        let type = null;
+        if (doc.format === 'tile' || nameLower.endsWith('.tile')) {
+            type = 'tile';
+            if (!doc.chr || !Array.isArray(doc.metatiles)) {
+                throw new Error('Arquivo .tile inválido (precisa de chr e metatiles).');
+            }
+            if (doc.format !== 'tile') doc.format = 'tile';
+        } else if (doc.format === 'nsound' || nameLower.endsWith('.nsound') || Array.isArray(doc.items)) {
+            type = 'sound';
+            if (doc.format !== 'nsound') {
+                doc.format = 'nsound';
+                doc.version = doc.version || 1;
+                if (!Array.isArray(doc.items) && doc.item) doc.items = [doc.item];
+                if (!Array.isArray(doc.items) && (doc.channels || doc.type === 'song' || doc.type === 'sfx')) {
+                    doc.items = [doc];
+                }
+            }
+            if (!Array.isArray(doc.items) || !doc.items.length) {
+                throw new Error('Arquivo .nsound inválido (sem peças).');
+            }
+        } else {
+            throw new Error('Formato não reconhecido. Use .nsound ou .tile.');
+        }
+
+        if (!doc.name) {
+            doc.name = file.name.replace(/\.(nsound|tile|json)$/i, '') || 'importado';
+        }
+
+        const saved = await AssetLibrary.save(type, doc, { name: doc.name });
+        setLibraryTab(type);
+        if (msg) msg.textContent = `Importado: "${saved.name || doc.name}"`;
+        await loadLibrary(type);
+    } catch (err) {
+        console.error(err);
+        alert(err.message || 'Falha ao importar arquivo.');
+        if (msg) msg.textContent = err.message || 'Falha ao importar.';
+    }
+}
+
+document.getElementById('libImportBtn')?.addEventListener('click', () => {
+    document.getElementById('libImportInput')?.click();
+});
+
+document.getElementById('libImportInput')?.addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) await importFileToLibrary(f);
+    e.target.value = '';
+});
+
+// Ao abrir novo projeto / editar, fecha a biblioteca também
+document.getElementById('newProjectButton')?.addEventListener('click', () => {
+    if (libraryCard) libraryCard.classList.remove('open');
+}, true);
+
+/* =========================================================
+   CRIAR PROJETO
+   ========================================================= */
+
+projectForm.addEventListener(
+    'submit',
+    async event => {
+
+        event.preventDefault();
+
+        const name =
+            document
+                .getElementById(
+                    'projectName'
+                )
+                .value
+                .trim();
+
+        const description =
+            document
+                .getElementById(
+                    'projectDescription'
+                )
+                .value
+                .trim();
+
+        const editIdRaw =
+            document
+                .getElementById(
+                    'projectEditId'
+                )
+                ?.value
+                ?.trim() || '';
+
+        const editId = parseInt(editIdRaw, 10) || 0;
+        const isEdit = editId > 0;
+
+        if (!name) {
+            createMessage.textContent =
+                'Informe o nome do projeto.';
+            return;
+        }
+
+        createMessage.textContent = isEdit
+            ? 'Salvando alterações...'
+            : 'Criando projeto...';
+
+        try {
+            const endpoint = isEdit
+                ? APP('/a2600/backend/projects/update.php')
+                : APP('/a2600/backend/projects/create.php');
+
+            const payload = isEdit
+                ? {
+                    id: editId,
+                    name: name,
+                    description: description
+                }
+                : {
+                    name: name,
+                    description: description
+                };
+
+            const response =
+                await fetch(
+                    endpoint,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type':
+                                'application/json'
+                        },
+                        credentials:
+                            'same-origin',
+                        body:
+                            JSON.stringify(payload)
+                    }
+                );
+
+            const rawText = await response.text();
+            let data = null;
+            try {
+                data = rawText ? JSON.parse(rawText) : null;
+            } catch (parseErr) {
+                console.error(
+                    isEdit
+                        ? 'Erro ao atualizar projeto (resposta não-JSON):'
+                        : 'Erro ao criar projeto (resposta não-JSON):',
+                    response.status,
+                    rawText.slice(0, 300)
+                );
+                createMessage.textContent =
+                    response.status === 404
+                        ? 'Endpoint não encontrado (/a2600/backend/projects/update.php). Verifique se o arquivo está no servidor.'
+                        : `Resposta inválida do servidor (HTTP ${response.status}).`;
+                return;
+            }
+
+            if (!data || !data.success) {
+                createMessage.textContent =
+                    (data && data.message) ||
+                    (isEdit
+                        ? 'Não foi possível atualizar o projeto.'
+                        : 'Não foi possível criar o projeto.');
+                return;
+            }
+
+            closeDashboardModal();
+            await loadProjects();
+
+        } catch (error) {
+            console.error(
+                isEdit
+                    ? 'Erro ao atualizar projeto:'
+                    : 'Erro ao criar projeto:',
+                error
+            );
+            createMessage.textContent =
+                'Erro de comunicação com o servidor.';
+        }
+    }
+);
+
+
+/* =========================================================
+   ABRIR PROJETO NO NGC
+   ========================================================= */
+
+   function openProject(projectId) {
+        window.location.href = APP('/a2600/editor.html') + '?project=' + encodeURIComponent(projectId);
+    }
+
+/* =========================================================
+   LOGOUT
+   ========================================================= */
+
+document.getElementById('systemsHubButton')?.addEventListener('click', () => {
+    window.location.href = (typeof APP === 'function') ? APP('/') : '/';
+});
+
+document.getElementById('logoutButton')?.addEventListener('click', async () => {
+    try {
+        await fetch(APP('/backend/auth/logout.php'), {
+            method: 'POST',
+            credentials: 'same-origin'
+        });
+    } catch (error) {
+        console.error('Erro no logout:', error);
+    } finally {
+        window.location.href = APP('/login.html');
+    }
+});
+
+
+/* =========================================================
+   IMPORTAR PROJETO .NMS (arquivo local → backend)
+   ========================================================= */
+
+async function importNmsFile(file) {
+    if (!file) return;
+
+    const projectMessage = document.getElementById('projectMessage');
+    if (projectMessage) {
+        projectMessage.textContent = 'Importando ' + file.name + '...';
+    }
+
+    try {
+        const text = await file.text();
+        let nms;
+        try {
+            nms = JSON.parse(text);
+        } catch (e) {
+            throw new Error('Arquivo .nms inválido (JSON).');
+        }
+
+        if (!nms.chr || !nms.palettes) {
+            throw new Error('Arquivo .nms inválido (faltam chr ou palettes).');
+        }
+
+        const fromFile = (file.name || '')
+            .replace(/\.(nms|json)$/i, '')
+            .trim();
+        const suggested = (nms.name || fromFile || 'Projeto importado').trim();
+        const name = prompt('Nome do projeto importado:', suggested);
+        if (name === null) {
+            if (projectMessage) projectMessage.textContent = '';
+            return;
+        }
+        const trimmed = name.trim();
+        if (!trimmed) {
+            alert('Informe um nome.');
+            if (projectMessage) projectMessage.textContent = '';
+            return;
+        }
+
+        nms.name = trimmed;
+        if (nms.description == null) nms.description = '';
+
+        // 1) Cria projeto no backend (template)
+        const createRes = await fetch(APP('/a2600/backend/projects/create.php'), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: trimmed,
+                description: String(nms.description || '').slice(0, 1000)
+            })
+        });
+        const createData = await createRes.json().catch(() => ({}));
+        if (!createRes.ok || !createData.success || !createData.project?.id) {
+            throw new Error(createData.message || 'Falha ao criar projeto no servidor.');
+        }
+
+        const projectId = parseInt(createData.project.id, 10);
+
+        // 2) Grava o NMS importado por cima do template
+        const saveRes = await fetch(APP('/a2600/backend/projects/save.php'), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                project_id: projectId,
+                nms: nms
+            })
+        });
+        const saveData = await saveRes.json().catch(() => ({}));
+        if (!saveRes.ok || !saveData.success) {
+            throw new Error(saveData.message || 'Projeto criado, mas falhou ao gravar o .nms.');
+        }
+
+        if (projectMessage) {
+            projectMessage.textContent = `Importado: "${trimmed}" (#${projectId})`;
+        }
+
+        await loadProjects();
+
+        if (confirm(`Projeto importado com sucesso.\nAbrir no editor agora?`)) {
+            openProject(projectId);
+        }
+    } catch (err) {
+        console.error('Import .nms:', err);
+        alert(err.message || 'Falha ao importar .nms');
+        if (projectMessage) {
+            projectMessage.textContent = err.message || 'Falha ao importar.';
+        }
+    }
+}
+
+document.getElementById('importAgcButton')?.addEventListener('click', () => {
+    document.getElementById('importAgcInput')?.click();
+});
+
+document.getElementById('importAgcInput')?.addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) await importNmsFile(f);
+    e.target.value = '';
+});
+
+
+/* =========================================================
+   MERGE ROMs — multicart por mapper (UI + detecção iNES)
+   ========================================================= */
+
+/** @type {Map<number, Array<{id:string,menuName:string,fileName:string,mapper:number,prgBanks:number,chrBanks:number,prgSize:number,chrSize:number,mirroring:string,bytes:Uint8Array}>>} */
+const mergeRomsByMapper = new Map();
+let mergeActiveMapper = null;
+let mergeIdSeq = 1;
+
+const MAPPER_NAMES = {
+    0: 'NROM', 1: 'MMC1', 2: 'UNROM', 3: 'CNROM', 4: 'MMC3',
+    7: 'AxROM', 9: 'MMC2', 10: 'MMC4', 11: 'Color Dreams',
+    30: 'UNROM-512', 66: 'GxROM', 69: 'FME-7', 71: 'Camerica'
+};
+
+function mapperLabel(m) {
+    const n = MAPPER_NAMES[m];
+    return n ? `${m} · ${n}` : `Mapper ${m}`;
+}
+
+/** NROM/CNROM/AxROM → build.php; UNROM → build-unrom.php */
+function mergeCompatibility(info) {
+    const m = info.mapper | 0;
+    const prg = info.prgBanks | 0;
+    const chr = info.chrBanks | 0;
+    if (m === 0) {
+        if (prg < 1 || prg > 2) return { ok: false, reason: 'NROM: PRG 16 ou 32KB' };
+        return { ok: true, reason: 'NROM → multicart AxROM' };
+    }
+    if (m === 7) {
+        if (prg < 1 || prg > 2) return { ok: false, reason: 'AxROM: PRG 16 ou 32KB' };
+        return { ok: true, reason: 'AxROM → multicart AxROM' };
+    }
+    if (m === 3) {
+        if (prg < 1 || prg > 2) return { ok: false, reason: 'CNROM: PRG 16 ou 32KB' };
+        if (chr <= 1) return { ok: true, reason: 'CNROM (1×CHR) → multicart AxROM' };
+        return { ok: false, reason: 'CNROM com ' + chr + ' bancos CHR — não suportado' };
+    }
+    if (m === 2 || m === 71) {
+        if (prg < 2 || prg > 32) return { ok: false, reason: 'UNROM: PRG 32–512KB' };
+        return { ok: true, reason: 'UNROM → multicart UNROM' };
+    }
+    const name = MAPPER_NAMES[m] || ('Mapper ' + m);
+    return { ok: false, reason: name + ' não suportado neste merge' };
+}
+
+function parseInesHeader(u8) {
+    if (!u8 || u8.length < 16) throw new Error('Arquivo muito curto');
+    if (u8[0] !== 0x4E || u8[1] !== 0x45 || u8[2] !== 0x53 || u8[3] !== 0x1A) {
+        throw new Error('Não é um arquivo iNES (.nes)');
+    }
+    const prgBanks = u8[4];
+    const chrBanks = u8[5];
+    const f6 = u8[6];
+    const f7 = u8[7];
+    // iNES 1.0 mapper; se iNES2 (f7 & 0x0C)==0x08, ainda usamos nibble clássico + upper
+    let mapper = (f6 >> 4) | (f7 & 0xF0);
+    if ((f7 & 0x0C) === 0x08) {
+        // iNES 2.0: mapper 12-bit
+        mapper = (f6 >> 4) | (f7 & 0xF0) | ((u8[8] & 0x0F) << 8);
+    }
+    const mirroring = (f6 & 1) ? 'vertical' : 'horizontal';
+    const hasTrainer = !!(f6 & 4);
+    const prgSize = prgBanks * 16384;
+    const chrSize = chrBanks * 8192;
+    const headerExtra = 16 + (hasTrainer ? 512 : 0);
+    if (u8.length < headerExtra + prgSize + chrSize) {
+        // alguns dumps têm sobra/falta — só avisa se PRG não cabe
+        if (u8.length < headerExtra + Math.min(prgSize, 16384)) {
+            throw new Error('Arquivo truncado (PRG incompleto)');
+        }
+    }
+    return {
+        mapper, prgBanks, chrBanks, prgSize, chrSize, mirroring, hasTrainer
+    };
+}
+
+function mergeSetStatus(msg, isError) {
+    const el = document.getElementById('mergeStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.color = isError ? '#e74c3c' : '#aaa';
+}
+
+function mergeRenderTabs() {
+    const tabs = document.getElementById('mergeMapperTabs');
+    if (!tabs) return;
+    const mappers = [...mergeRomsByMapper.keys()].sort((a, b) => a - b);
+    if (!mappers.length) {
+        tabs.innerHTML = '<span style="font-size:11px;color:#666">Nenhuma ROM ainda — faça upload</span>';
+        mergeActiveMapper = null;
+        return;
+    }
+    if (mergeActiveMapper === null || !mergeRomsByMapper.has(mergeActiveMapper)) {
+        mergeActiveMapper = mappers[0];
+    }
+    tabs.innerHTML = '';
+    mappers.forEach(m => {
+        const count = (mergeRomsByMapper.get(m) || []).length;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('data-mapper', String(m));
+        btn.className = m === mergeActiveMapper ? 'active' : '';
+        btn.textContent = `${mapperLabel(m)} (${count})`;
+        btn.addEventListener('click', () => {
+            mergeActiveMapper = m;
+            mergeRenderTabs();
+            mergeRenderList();
+        });
+        tabs.appendChild(btn);
+    });
+}
+
+function mergeRenderList() {
+    const list = document.getElementById('mergeRomList');
+    const buildBtn = document.getElementById('mergeBuildBtn');
+    if (!list) return;
+    list.innerHTML = '';
+    const items = mergeActiveMapper != null ? (mergeRomsByMapper.get(mergeActiveMapper) || []) : [];
+    if (buildBtn) buildBtn.disabled = items.length < 1;
+
+    if (!items.length) {
+        list.innerHTML = '<div class="message" style="color:#666">Nenhuma ROM nesta aba.</div>';
+        return;
+    }
+
+    items.forEach((rom, index) => {
+        const row = document.createElement('div');
+        row.className = 'merge-rom-item';
+        row.innerHTML = `
+            <div class="meta">
+                <input type="text" class="merge-name" maxlength="28" value="">
+                <span></span>
+            </div>
+            <div class="actions" style="display:flex;gap:6px;flex-shrink:0">
+                <button type="button" class="icon-btn secondary" title="Remover" data-act="del">🗑</button>
+            </div>
+        `;
+        const nameInput = row.querySelector('.merge-name');
+        nameInput.value = rom.menuName;
+        nameInput.addEventListener('change', () => {
+            rom.menuName = (nameInput.value || '').trim() || rom.fileName.replace(/\.nes$/i, '');
+            nameInput.value = rom.menuName;
+        });
+        row.querySelector('span').textContent =
+            `${rom.fileName} · PRG ${(rom.prgSize/1024)|0}KB · CHR ${rom.chrBanks ? ((rom.chrSize/1024)|0)+'KB' : 'RAM'} · ${rom.mirroring}`;
+        row.querySelector('[data-act="del"]').addEventListener('click', () => {
+            const arr = mergeRomsByMapper.get(rom.mapper) || [];
+            const i = arr.findIndex(x => x.id === rom.id);
+            if (i >= 0) arr.splice(i, 1);
+            if (!arr.length) mergeRomsByMapper.delete(rom.mapper);
+            mergeRenderTabs();
+            mergeRenderList();
+            mergeSetStatus('ROM removida.');
+        });
+        list.appendChild(row);
+    });
+}
+
+function mergeAddRomBytes(buf, fileName, menuNameHint) {
+    const info = parseInesHeader(buf);
+    const compat = mergeCompatibility(info);
+    if (!compat.ok) {
+        const err = new Error(compat.reason);
+        err.code = 'INCOMPATIBLE';
+        throw err;
+    }
+    const base = (menuNameHint || fileName || 'jogo').replace(/\.nes$/i, '');
+    const entry = {
+        id: 'rom_' + (mergeIdSeq++),
+        menuName: String(base).slice(0, 28),
+        fileName: fileName || (base + '.nes'),
+        mapper: info.mapper,
+        prgBanks: info.prgBanks,
+        chrBanks: info.chrBanks,
+        prgSize: info.prgSize,
+        chrSize: info.chrSize,
+        mirroring: info.mirroring,
+        bytes: buf
+    };
+    if (!mergeRomsByMapper.has(info.mapper)) {
+        mergeRomsByMapper.set(info.mapper, []);
+    }
+    mergeRomsByMapper.get(info.mapper).push(entry);
+    mergeActiveMapper = info.mapper;
+    return entry;
+}
+
+async function mergeAddFiles(fileList) {
+    const files = [...(fileList || [])];
+    if (!files.length) return;
+    let added = 0;
+    let errors = [];
+    for (const file of files) {
+        try {
+            const buf = new Uint8Array(await file.arrayBuffer());
+            mergeAddRomBytes(buf, file.name || 'jogo.nes', (file.name || 'jogo').replace(/\.nes$/i, ''));
+            added++;
+        } catch (err) {
+            errors.push((file.name || '?') + ': ' + (err.message || err));
+        }
+    }
+    mergeRenderTabs();
+    mergeRenderList();
+    if (added) {
+        mergeSetStatus(
+            `+${added} ROM(s) · aba ${mapperLabel(mergeActiveMapper)}` +
+            (errors.length ? ` · ${errors.length} erro(s)` : '')
+        );
+    }
+    if (errors.length) {
+        alert('ROMs recusadas (não mergeáveis neste sistema):\n\n' + errors.slice(0, 12).join('\n'));
+    }
+}
+
+/** Importa game.nes já compiladas dos projetos do usuário (não é repositório permanente do merge). */
+async function mergeImportFromProjects() {
+    mergeSetStatus('Listando projetos com ROM...');
+    try {
+        const res = await fetch(APP('/a2600/backend/projects/list.php'), {
+            method: 'GET',
+            credentials: 'same-origin',
+            cache: 'no-store'
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+            throw new Error(data.message || 'Falha ao listar projetos.');
+        }
+        const withRom = (data.projects || []).filter(p => p.has_rom);
+        if (!withRom.length) {
+            alert('Nenhum projeto com game.nes.\nFaça Build ROM no editor para gerar a ROM do projeto.');
+            mergeSetStatus('Nenhum projeto com game.nes.');
+            return;
+        }
+        const lines = withRom.map((p, i) => {
+            const kb = p.rom_size ? ` (${Math.round(p.rom_size / 1024)} KB)` : '';
+            return `${i + 1}. ${p.name} (#${p.id})${kb}`;
+        });
+        const pick = prompt(
+            'Projetos com game.nes:\n' + lines.join('\n') +
+            '\n\nDigite os números separados por vírgula (ex: 1,3) ou "all":',
+            'all'
+        );
+        if (pick === null) {
+            mergeSetStatus('');
+            return;
+        }
+        let indices = [];
+        const raw = pick.trim().toLowerCase();
+        if (raw === 'all' || raw === '*') {
+            indices = withRom.map((_, i) => i);
+        } else {
+            indices = raw.split(/[,\s]+/).map(s => parseInt(s, 10) - 1).filter(n => n >= 0 && n < withRom.length);
+        }
+        if (!indices.length) {
+            alert('Nenhuma seleção válida.');
+            return;
+        }
+        let added = 0;
+        const errors = [];
+        for (const idx of indices) {
+            const proj = withRom[idx];
+            try {
+                const r = await fetch(APP('/a2600/backend/projects/rom.php?id=') + encodeURIComponent(proj.id), {
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                });
+                if (!r.ok) {
+                    let msg = 'HTTP ' + r.status;
+                    try {
+                        const j = await r.json();
+                        if (j.message) msg = j.message;
+                    } catch (e) {}
+                    throw new Error(msg);
+                }
+                const buf = new Uint8Array(await r.arrayBuffer());
+                mergeAddRomBytes(buf, (proj.name || 'projeto') + '.nes', proj.name || 'projeto');
+                added++;
+            } catch (err) {
+                errors.push((proj.name || ('#' + proj.id)) + ': ' + (err.message || err));
+            }
+        }
+        mergeRenderTabs();
+        mergeRenderList();
+        mergeSetStatus(
+            added ? `+${added} do(s) projeto(s) · ${mapperLabel(mergeActiveMapper)}` : 'Nada importado'
+        );
+        if (errors.length) {
+            alert('Falhas na importação:\n\n' + errors.slice(0, 8).join('\n'));
+        }
+    } catch (err) {
+        console.error(err);
+        mergeSetStatus(err.message || 'Erro', true);
+        alert(err.message || 'Erro ao importar dos projetos.');
+    }
+}
+
+function openMergeModal() {
+    newprojCard.classList.remove('open');
+    trashCard.classList.remove('open');
+    if (libraryCard) libraryCard.classList.remove('open');
+    modal.classList.add('open');
+    if (mergeCard) mergeCard.classList.add('open');
+    mergeRenderTabs();
+    mergeRenderList();
+    mergeSetStatus(mergeRomsByMapper.size
+        ? 'Selecione a aba do mapper e gere o multicart (montagem ca65 em breve).'
+        : 'PC ou Meus projetos Atari 2600 — ROMs só nesta sessão.');
+}
+
+document.getElementById('mergeRomsButton')?.addEventListener('click', openMergeModal);
+
+document.getElementById('mergeUploadBtn')?.addEventListener('click', () => {
+    document.getElementById('mergeRomInput')?.click();
+});
+
+document.getElementById('mergeImportProjectsBtn')?.addEventListener('click', () => {
+    mergeImportFromProjects();
+});
+
+document.getElementById('mergeRomInput')?.addEventListener('change', async (e) => {
+    const files = e.target.files;
+    if (files && files.length) await mergeAddFiles(files);
+    e.target.value = '';
+});
+
+function u8ToBase64(u8) {
+    let s = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < u8.length; i += chunk) {
+        s += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
+    }
+    return btoa(s);
+}
+
+function mergeDownloadBytes(filename, u8) {
+    const blob = new Blob([u8], { type: 'application/octet-stream' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename || 'multicart.nes';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+document.getElementById('mergeBuildBtn')?.addEventListener('click', async () => {
+    const items = mergeActiveMapper != null ? (mergeRomsByMapper.get(mergeActiveMapper) || []) : [];
+    if (items.length < 1) {
+        alert('Adicione pelo menos uma ROM nesta aba.');
+        return;
+    }
+    let endpoint;
+    let engineLabel;
+    if (mergeActiveMapper === 0 || mergeActiveMapper === 3 || mergeActiveMapper === 7) {
+        endpoint = APP('/a2600/backend/multicart/build.php');
+        engineLabel = 'AxROM / NROM (7)';
+    } else if (mergeActiveMapper === 2 || mergeActiveMapper === 71) {
+        endpoint = APP('/a2600/backend/multicart/build-unrom.php');
+        engineLabel = 'UNROM (AxROM+thunk)';
+    } else {
+        alert('Esta aba não é mergeável: só NROM, CNROM 1×CHR, AxROM e UNROM.');
+        return;
+    }
+    const btn = document.getElementById('mergeBuildBtn');
+    if (btn) btn.disabled = true;
+    mergeSetStatus('Montando multicart (' + engineLabel + ')...');
+    try {
+        const games = items.map(r => ({
+            name: r.menuName,
+            rom: u8ToBase64(r.bytes)
+        }));
+        const res = await fetch(endpoint, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({
+                title: 'RETROCOMPILER',
+                games
+            })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+            const msg = data.error || ('HTTP ' + res.status);
+            if (data.log) console.warn(data.log);
+            throw new Error(msg + (data.log ? '\n\n' + data.log.slice(0, 800) : ''));
+        }
+        const bin = Uint8Array.from(atob(data.nes), c => c.charCodeAt(0));
+        mergeDownloadBytes(data.filename || 'multicart.nes', bin);
+        mergeSetStatus(
+            'Multicart OK · mapper ' + (data.mapper ?? '?') + ' · ' + engineLabel + ' · ' + bin.length + ' bytes' +
+            (data.saved_path ? ' · salvo no servidor' : '')
+        );
+        alert(
+            'Multicart gerado!\n\n' + (data.games || []).map((n,i)=> (i+1)+'. '+n).join('\n') +
+            '\n\nMotor: ' + engineLabel + '\nMapper saída: ' + (data.mapper ?? '?') +
+            '\nVoltar ao menu: Reset' +
+            (data.note ? '\n\n' + data.note : '')
+        );
+    } catch (err) {
+        console.error(err);
+        mergeSetStatus(err.message || 'Falha no merge', true);
+        alert('Falha ao gerar multicart:\n' + (err.message || err));
+    } finally {
+        if (btn) btn.disabled = items.length < 1;
+    }
+});
+
+
+/* =========================================================
+   INICIALIZAÇÃO
+   ========================================================= */
+
+loadSession();
+
+</script>
+
+</body>
+</html>
