@@ -7,27 +7,49 @@
  */
 return [
     'background' => static function(array $ctx): string {
-        return <<<'ASM'
+        $cnrom = (int)($ctx['mapperInfo']['mapper'] ?? 0) === 3;
+        $bankSwitch = '';
+        if ($cnrom) {
+            // Camada 7 (mappers plugaveis): troca o banco de CHR ANTES de
+            // desenhar a tela (aqui, com rendering/NMI ja desligados por
+            // load_screen alguns bytes abaixo - a janela mais segura que
+            // existe, nem precisa caber no orcamento de vblank da NMI).
+            // CnromBankSelect,X vale X - a escrita e' o PROPRIO valor que ja
+            // esta gravado naquele endereco da ROM, o que evita bus conflict
+            // no board CNROM classico (a CPU e a ROM concordam no mesmo bit
+            // no barramento, entao nao ha disputa eletrica).
+            $bankSwitch = <<<'ASM'
+
+  ; Camada 7 (CNROM): troca de banco de CHR pra essa tela
+  LDX cur_screen
+  LDA ScreenBank,X
+  TAX
+  LDA CnromBankSelect,X
+  STA CnromBankSelect,X
+ASM;
+        }
+        $tail = $cnrom ? "\n\nCnromBankSelect:\n  .byte \$00, \$01, \$02, \$03" : '';
+        $part1 = <<<ASM
 ; ---- Background / Screen Loading (NGC) ----
 ; Carrega nametable+attrs da tela A (hard cut, rendering off)
 load_screen:
   STA cur_screen
   ; desliga rendering E a geracao de NMI - a escrita de ~1000 bytes
-  ; leva mais de um frame; sem isso, o NMI pode disparar no meio da sequencia $2006/$2007.
+  ; leva mais de um frame; sem isso, o NMI pode disparar no meio da sequencia \$2006/\$2007.
   LDA #0
-  STA $2001
-  STA $2000
+  STA \$2001
+  STA \$2000{$bankSwitch}
   ; ponteiro da nametable (tabela de 1 byte por tela)
   LDX cur_screen
   LDA ScreenNtLo,X
   STA tmp0
   LDA ScreenNtHi,X
   STA tmp1
-  BIT $2002
-  LDA #$20
-  STA $2006
-  LDA #$00
-  STA $2006
+  BIT \$2002
+  LDA #\$20
+  STA \$2006
+  LDA #\$00
+  STA \$2006
   LDY #0
   LDX #4
 ls_nt_outer:
@@ -35,7 +57,7 @@ ls_nt_outer:
   STA ls_count
 ls_nt_inner:
   LDA (tmp0),Y
-  STA $2007
+  STA \$2007
   INY
   BNE ls_nt_noinc
   INC tmp1
@@ -50,15 +72,15 @@ ls_nt_noinc:
   STA tmp0
   LDA ScreenAtHi,X
   STA tmp1
-  BIT $2002
-  LDA #$23
-  STA $2006
-  LDA #$C0
-  STA $2006
+  BIT \$2002
+  LDA #\$23
+  STA \$2006
+  LDA #\$C0
+  STA \$2006
   LDY #0
 ls_at:
   LDA (tmp0),Y
-  STA $2007
+  STA \$2007
   INY
   CPY #64
   BNE ls_at
@@ -67,17 +89,22 @@ ls_at:
   STA nt_page          ; Fase 9 fix: sem isso, a NMI (que sempre le nt_page/
   STA scroll_x          ; scroll_x pra desenhar) reescrevia por cima com o
                          ; valor antigo (de antes do corte) logo no proximo frame
-  BIT $2002
+  BIT \$2002
   LDA #0
-  STA $2005
-  STA $2005
+  STA \$2005
+  STA \$2005
   ; religa NMI + rendering
   LDA #%10010000
-  STA $2000
+  STA \$2000
   LDA #%00011110
-  STA $2001
-  RTS
-
+  STA \$2001
+  RTS{$tail}
+ASM;
+        // Camada 7: o resto (preload_screen_nt em diante) nao muda com o
+        // mapper - fica num nowdoc separado (sem interpolacao) igual sempre
+        // foi, so' precisou virar 2 pedacos porque o load_screen acima ganhou
+        // {$bankSwitch}/{$tail} (interpolados).
+        $part2 = <<<'ASM2'
 ; Escreve uma tela numa das duas nametables fisicas ($2000/$2400), sem alterar scroll_x.
 ; Entrada: A = indice global da tela; psn_base_hi = $20 ou $24.
 preload_screen_nt:
@@ -137,6 +164,7 @@ psn_at:
   LDA #%00011110
   STA $2001
   RTS
-ASM;
+ASM2;
+        return $part1 . "\n" . $part2;
     },
 ];

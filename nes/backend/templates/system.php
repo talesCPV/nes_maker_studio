@@ -7,11 +7,22 @@
  */
 return [
     'header' => static function(array $ctx): string {
-        // Mantém exatamente o cabeçalho usado pelo gerador atual.
-        return <<<'ASM'
-.segment "HEADER"
-  .byte $4E,$45,$53,$1A,2,1,$01,0,0,0,0,0,0,0,0,0  ; NROM-256 (32KB PRG), vertical mirroring
-ASM;
+        // Camada 7 (mappers plugaveis): o header iNES era 100% fixo (sempre
+        // mapper 0/NROM) antes disso - agora reflete o mapper resolvido em
+        // ProjectParser::resolveMapperBanks() (ver $ctx['mapperInfo']).
+        // CNROM (mapper 3) muda 2 bytes: quantidade de bancos de CHR (4 em
+        // vez de 1 - ver CnromCfg::generate(), sempre gera os 4 mesmo que o
+        // projeto use menos combinacoes) e o nibble alto do byte 6 (numero
+        // do mapper, baixo nibble aqui - mapper 3 cabe inteiro nele, entao o
+        // byte 7 nao muda). Mirroring continua fixo vertical, como sempre foi.
+        $mapper = (int)($ctx['mapperInfo']['mapper'] ?? 0);
+        $chrBanks = ($mapper === 3) ? 4 : 1;
+        $flags6 = ((($mapper) & 0x0F) << 4) | 0x01;
+        $comment = ($mapper === 3)
+            ? 'CNROM (32KB PRG fixa + CHR em 4 bancos de 8KB, trocados em runtime), vertical mirroring'
+            : 'NROM-256 (32KB PRG), vertical mirroring';
+        $b6 = sprintf('$%02X', $flags6);
+        return ".segment \"HEADER\"\n  .byte \$4E,\$45,\$53,\$1A,2,{$chrBanks},{$b6},0,0,0,0,0,0,0,0,0  ; {$comment}";
     },
 
     'vectors' => static function(array $ctx): string {

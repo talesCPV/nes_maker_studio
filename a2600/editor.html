@@ -182,10 +182,10 @@ body {
     <div class="side-item" data-mod="sprites" title="Sprites">
       <span class="side-ico">👾</span><span class="side-label">Sprites</span>
     </div>
-    <div class="side-item disabled" data-mod="sound" title="Em breve">
+    <div class="side-item" data-mod="sound" title="Som TIA">
       <span class="side-ico">🎵</span><span class="side-label">Som TIA</span>
     </div>
-    <div class="side-item disabled" data-mod="program" title="Em breve">
+    <div class="side-item" data-mod="program" title="Programação">
       <span class="side-ico">🧠</span><span class="side-label">Programação</span>
     </div>
     <div class="side-item disabled" data-mod="build" title="Em breve">
@@ -214,6 +214,8 @@ body {
 <script src="js/modules/config.js"></script>
 <script src="js/modules/playfield.js"></script>
 <script src="js/modules/sprites.js"></script>
+<script src="js/modules/sound.js"></script>
+<script src="js/modules/program.js"></script>
 <script>
 const UI = {
   current: 'config',
@@ -254,6 +256,8 @@ const UI = {
     if (mod === 'config' && typeof CONFIG !== 'undefined') CONFIG.init();
     if (mod === 'playfield' && typeof PLAYFIELD !== 'undefined') PLAYFIELD.init();
     if (mod === 'sprites' && typeof SPRITES !== 'undefined') SPRITES.init();
+    if (mod === 'sound' && typeof SOUND !== 'undefined') SOUND.init();
+    if (mod === 'program' && typeof PROGRAM !== 'undefined') PROGRAM.init();
     this.refreshFooter();
   },
 

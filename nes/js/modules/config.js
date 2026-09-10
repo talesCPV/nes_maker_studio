@@ -468,6 +468,22 @@ const CONFIG = (() => {
     // bank legado = par aproximado (compat)
     phase.bank = Math.floor(Math.min(phase.sprite_page, phase.bg_page) / 2);
   }
+  // Camada 7 (mappers plugaveis): espelha resolveMapperBanks() do backend (PHP) -
+  // so' pra dar feedback imediato no editor (contador + bloqueio de uma 5a
+  // combinacao); quem decide de verdade e' o backend na hora do build.
+  function computeCnromBanks(excludePhaseId){
+    const phases = Project.data?.phases || [];
+    const banks = [];
+    const keyToIndex = {};
+    phases.forEach(p=>{
+      if(excludePhaseId && p.id === excludePhaseId) return;
+      const sp = p.sprite_page|0, bg = p.bg_page|0;
+      const key = sp+':'+bg;
+      if(!(key in keyToIndex)){ keyToIndex[key] = banks.length; banks.push({sp,bg}); }
+    });
+    return banks;
+  }
+
   function pageOptionsHtml(selected, roleFilter){
     const pages = getChrPagesMeta();
     let html = '';
@@ -613,9 +629,12 @@ const CONFIG = (() => {
           Para CHR diferente por fase, mude o mapper do projeto para <b>CNROM</b>.
         </div>`;
     } else {
+      const bankCount = computeCnromBanks(null).length;
+      const bankColor = bankCount >= 4 ? '#e67e22' : '#7dcea0';
       mapperWarning = `
         <div style="background:#1a2a1a;border:1px solid #2a5a2a;border-radius:4px;padding:8px;font-size:10px;color:#8d8;line-height:1.4">
           <b style="color:#7dcea0">CNROM</b> — ${totalPages} página(s) de 4KB. Escolha o par SPR+BG desta fase (monta 8KB no build).
+          <br><b style="color:${bankColor}">${bankCount}/4 bancos</b> em uso no jogo todo (CNROM só suporta 4 combinações distintas).
         </div>`;
     }
 
@@ -717,9 +736,19 @@ const CONFIG = (() => {
     const mapper = (Project.data.mapper === 3) ? 3 : 0;
     phase.mapper = mapper;
     if(mapper === 3){
-      phase.sprite_page = parseInt(document.getElementById('editPhaseSpritePage')?.value ?? 0, 10) || 0;
-      phase.bg_page = parseInt(document.getElementById('editPhaseBgPage')?.value ?? 1, 10) || 0;
-      migratePhaseChrPages(phase);
+      const newSp = parseInt(document.getElementById('editPhaseSpritePage')?.value ?? 0, 10) || 0;
+      const newBg = parseInt(document.getElementById('editPhaseBgPage')?.value ?? 1, 10) || 0;
+      const otherBanks = computeCnromBanks(phase.id);
+      const already = otherBanks.some(b=>b.sp===newSp && b.bg===newBg);
+      if(!already && otherBanks.length >= 4){
+        const list = otherBanks.map((b,i)=>`banco ${i}: SPR ${b.sp} + BG ${b.bg}`).join(', ');
+        alert(`CNROM só suporta 4 combinações de página (sprite+background) em todo o jogo.\n\nJá em uso: ${list}.\n\nEscolha uma dessas combinações pra esta fase, ou libere uma trocando outra fase primeiro.`);
+        // Nao aplica a mudanca - mantem sprite_page/bg_page como estavam antes.
+      } else {
+        phase.sprite_page = newSp;
+        phase.bg_page = newBg;
+        migratePhaseChrPages(phase);
+      }
     } else {
       phase.sprite_page = 0;
       phase.bg_page = 1;

@@ -25,6 +25,7 @@ try {
     $templates = array_merge($templates, require __DIR__ . '/templates/sprite_data.php');
     $templates = array_merge($templates, require __DIR__ . '/templates/sprite_chr.php');
     $templates = array_merge($templates, require __DIR__ . '/templates/background_chr.php');
+    $templates = array_merge($templates, require __DIR__ . '/templates/chars_segments.php');
     $templates = array_merge($templates, require __DIR__ . '/templates/palette_data.php');
     $templates = array_merge($templates, require __DIR__ . '/templates/program.php');
     $templates = array_merge($templates, require __DIR__ . '/templates/music.php');

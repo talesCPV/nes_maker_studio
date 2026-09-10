@@ -39,8 +39,7 @@ final class NGC
 
         $header = $this->renderTemplate('header', $context);
         $vectors = $this->renderTemplate('vectors', $context);
-        $zeropage = $this->renderTemplate('zeropage', $context);
-        $nmi = $this->renderTemplate('nmi', $context);
+        $zeropage = $this->renderTemplate('zeropage', $context);        $nmi = $this->renderTemplate('nmi', $context);
         $reset = $this->renderTemplate('reset', $context);
         $input = $this->renderTemplate('input', $context);
         $mainLoop = $this->renderTemplate('main_loop', $context);
@@ -56,6 +55,11 @@ final class NGC
         $spriteData = $this->renderTemplate('sprite_data', $context);
         $spriteChr = $this->renderTemplate('sprite_chr', $context);
         $backgroundChr = $this->renderTemplate('background_chr', $context);
+        // Camada 7 (mappers plugaveis): sprite_chr/background_chr acima continuam
+        // rendendo so' o banco 0 (mantidos pro debug=true abaixo) - quem realmente
+        // vai pro .asm final e' charsSegments, que sabe emitir 1 segmento (NROM) ou
+        // ate 4 (CNROM, casando com CnromCfg.php) a partir de spriteChrBanks/bgChrBanks.
+        $charsSegments = $this->renderTemplate('chars_segments', $context);
         $music = $this->renderTemplate('music', $context);
         $gameFlow = $this->renderTemplate('game_flow', $context);
         $paletteData = $this->renderTemplate('palette_data', $context);
@@ -110,10 +114,7 @@ final class NGC
         $builder->add($backgroundData);
         if ($musicData !== '') $builder->add($musicData);
         $builder->add($vectors);
-        $builder->add('.segment "CHARS"');
-        $builder->add($spriteChr);
-        $builder->add("; \$1000 background");
-        $builder->add($backgroundChr);
+        $builder->add($charsSegments);
 
         $result = [
             'ok' => true,

@@ -2,6 +2,7 @@
 const BUILD = (() => {
   let lastASM = "";
   let lastCFG = "";
+  let lastCFGFilename = "nrom.cfg";
   let lastNES = null; // { filename, bytes: Uint8Array }
   let emuBlobUrl = null;
   let emuLoaderInjected = false;
@@ -206,6 +207,7 @@ const BUILD = (() => {
     if(!response.ok || !data.ok || typeof data.cfg !== "string"){
       throw new Error(data.error || "Falha ao gerar nrom.cfg no backend.");
     }
+    lastCFGFilename = (typeof data.filename === "string" && data.filename) ? data.filename : "nrom.cfg";
     return data.cfg;
   }
 
@@ -477,6 +479,7 @@ const BUILD = (() => {
     lastNES = null;
     lastASM = "";
     lastCFG = "";
+    lastCFGFilename = "nrom.cfg";
     hideDownloadButtons();
 
     const stats = document.getElementById("buildStats");
@@ -595,7 +598,7 @@ const BUILD = (() => {
     const blob = new Blob([lastCFG], { type: "text/plain;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "nrom.cfg";
+    a.download = lastCFGFilename || "nrom.cfg";
     a.click();
   }
 

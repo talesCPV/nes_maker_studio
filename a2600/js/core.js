@@ -67,6 +67,12 @@ const Project = {
     if (typeof SPRITES !== 'undefined' && SPRITES.flush) {
       try { SPRITES.flush(); } catch (e) { console.warn(e); }
     }
+    if (typeof SOUND !== 'undefined' && SOUND.flush) {
+      try { SOUND.flush(); } catch (e) { console.warn(e); }
+    }
+    if (typeof PROGRAM !== 'undefined' && PROGRAM.flush) {
+      try { PROGRAM.flush(); } catch (e) { console.warn(e); }
+    }
     this.data.system = 'A2600';
     this.data.updated = Date.now();
     return this.data;

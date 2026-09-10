@@ -23,6 +23,19 @@ return [
         foreach ($screens as $i => $_) $lines[] = "  .byte <Collision_{$i}";
         $lines[] = 'ScreenColHi:';
         foreach ($screens as $i => $_) $lines[] = "  .byte >Collision_{$i}";
+        // Camada 7 (mappers plugaveis): so' existe quando o projeto usa CNROM -
+        // 1 byte por tela (indice GLOBAL, o mesmo de cur_screen) dizendo qual dos
+        // ate 4 bancos de CHR essa tela espera ativo. Lido em load_screen (ver
+        // templates/background.php) antes de desenhar a tela, pra trocar o banco
+        // ANTES de qualquer coisa aparecer na tela errada.
+        if ((int)($ctx['mapperInfo']['mapper'] ?? 0) === 3) {
+            $sb = is_array($ctx['screenBankIndex'] ?? null) ? $ctx['screenBankIndex'] : [];
+            $lines[] = 'ScreenBank:';
+            $bytes = [];
+            foreach ($screens as $i => $_) $bytes[] = max(0, min(3, (int)($sb[$i] ?? 0)));
+            if (!$bytes) $bytes = [0];
+            $lines[] = '  .byte ' . implode(', ', $bytes);
+        }
         $lines[] = 'PlayScreenTable:  ; indices globais das telas de jogo (em ordem)';
         $bytes = array_map(static fn($i) => ((int)$i) & 0xFF, $playIdxs);
         if (!$bytes) $bytes = [0];

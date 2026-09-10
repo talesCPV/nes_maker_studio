@@ -154,16 +154,74 @@ final class ProjectParser
             $neighborRight[] = $nR; $neighborLeft[] = $nL; $neighborUp[] = $nU; $neighborDown[] = $nD;
         }
 
+        // Camada 7 (mappers plugaveis): decide de uma vez, pra ROM inteira,
+        // quantos bancos de CHR existem e qual fase usa qual - ver
+        // resolveMapperBanks(). NROM cai sempre em 1 banco so' (paginas 0+1,
+        // igual sempre foi) - so' CNROM (mapper 3) de fato usa mais de 1.
+        $mapperInfo = $this->resolveMapperBanks($project);
+        $cnrom = $mapperInfo['mapper'] === 3;
+        $defaultBank = $mapperInfo['banks'][$mapperInfo['defaultBankIndex']];
+
         // Stage 15: o empacotamento CHR dos sprites passa a ser responsabilidade do NGC.
         // O backend usa diretamente project.chr + project.metatiles + project.characters.
-        $sprite = $this->buildSpriteContext($project, $screenData, $playIdxs);
+        // Camada 7: a ATRIBUICAO de indice (qual tile usado vira qual slot 0-255) continua
+        // uma unica passada global (senao o mesmo personagem podia acabar com indices
+        // diferentes em bancos diferentes, e a ASM que desenha sprite usa indice fixo por
+        // quadro de animacao) - so' os BYTES de origem mudam de banco pra banco (mesmo
+        // indice de saida, pagina de origem diferente). Ver spriteChrBanks abaixo.
+        $sprite = $this->buildSpriteContext($project, $screenData, $playIdxs, $defaultBank['spritePage'], $cnrom ? 256 : 512);
 
         // Stage 18: o empacotamento CHR do background também é feito aqui,
         // remapeando contra project.chr e injetando remappedNt de volta em
         // screenData, mantendo background_data.php/background_tables.php inalterados.
+        // Camada 7: pro CNROM, cada banco tem seu PROPRIO remapeamento (so' as telas das
+        // fases daquele banco entram na conta) - diferente do sprite, isso nao tem problema
+        // de indice cruzado entre bancos porque cada tela le seu remappedNt fresco quando
+        // carrega (nao existe ASM com indice de tile de fundo fixo/compartilhado).
         $chrRaw = is_array($project['chr'] ?? null) ? $project['chr'] : [];
-        $bgPack = $this->packBackgroundChr($chrRaw, $screenData);
-        $screenData = $bgPack['screens'];
+        if ($cnrom) {
+            $screensByBank = [];
+            $screenBankIndex = array_fill(0, count($screenData), 0);
+            foreach ($screenData as $i => $sc) {
+                $pid = is_array($sc) ? ($sc['phaseId'] ?? null) : null;
+                $bi = ($pid !== null && isset($mapperInfo['phaseBankIndex'][(string)$pid]))
+                    ? $mapperInfo['phaseBankIndex'][(string)$pid]
+                    : $mapperInfo['defaultBankIndex'];
+                $screensByBank[$bi][] = $i;
+                $screenBankIndex[$i] = $bi;
+            }
+            $bgChrBanks = [];
+            $spriteChrBanks = [];
+            $bgUsedCount = 0;
+            $bgOverflowCount = 0;
+            $mergedScreens = $screenData;
+            foreach ($mapperInfo['banks'] as $bi => $bank) {
+                $idxList = $screensByBank[$bi] ?? [];
+                $screensForBank = [];
+                foreach ($idxList as $idx) $screensForBank[] = $screenData[$idx];
+                $pack = $this->packBackgroundChr($chrRaw, $screensForBank, $bank['bgPage'], 256);
+                $bgChrBanks[$bi] = $pack['bgChr'];
+                $bgUsedCount += $pack['usedCount'];
+                $bgOverflowCount += $pack['overflowCount'];
+                foreach ($idxList as $k => $idx) $mergedScreens[$idx] = $pack['screens'][$k];
+
+                $spriteChrBanks[$bi] = ($bi === $mapperInfo['defaultBankIndex'])
+                    ? $sprite['spriteChr']
+                    : $this->packChrBytesForTiles($sprite['usedTiles'] ?? [], $chrRaw, $bank['spritePage'], 256);
+            }
+            $screenData = $mergedScreens;
+            $bgPack = [
+                'bgChr' => $bgChrBanks[$mapperInfo['defaultBankIndex']],
+                'usedCount' => $bgUsedCount,
+                'overflowCount' => $bgOverflowCount,
+            ];
+        } else {
+            $bgPack = $this->packBackgroundChr($chrRaw, $screenData);
+            $screenData = $bgPack['screens'];
+            $bgChrBanks = [0 => $bgPack['bgChr']];
+            $spriteChrBanks = [0 => $sprite['spriteChr']];
+            $screenBankIndex = [];
+        }
 
         // Stage 19: PaletteData (as 8 paletas de 4 cores + a cor de fundo universal,
         // detectada olhando o PIXEL real do tile 0 da 1ª tela) passa a ser calculada
@@ -205,6 +263,10 @@ final class ProjectParser
                 'usedCount' => $bgPack['usedCount'],
                 'overflowCount' => $bgPack['overflowCount'],
             ],
+            'mapperInfo' => $mapperInfo,
+            'bgChrBanks' => $bgChrBanks,
+            'spriteChrBanks' => $spriteChrBanks,
+            'screenBankIndex' => $screenBankIndex,
             'program' => $program,
             'playIdxs' => $playIdxs,
             'splashIdx' => $this->findRoleIndex($screens, 'splash', 0),
@@ -225,10 +287,10 @@ final class ProjectParser
     }
 
 
-    private function buildSpriteContext(array $project, array $screenData, array $playIdxs): array
+    private function buildSpriteContext(array $project, array $screenData, array $playIdxs, int $chrPageBase = 0, int $chrPageMod = 512): array
     {
         $chars = is_array($project['characters'] ?? null) ? $project['characters'] : [];
-        $packed = $this->packSpriteCHR($project, $chars);
+        $packed = $this->packSpriteCHR($project, $chars, $chrPageBase, $chrPageMod);
         $charData = $packed['charData'];
         $maxCells = max(1, (int)$packed['maxCells']);
         // Fase 9 fix (rodada 3): personagem tem um campo explicito no editor
@@ -407,6 +469,7 @@ final class ProjectParser
             'bodyTopProbe' => $bodyTopProbe,
             'bodyBottomProbe' => $bodyBottomProbe,
             'enemySpawns' => $enemySpawns,
+            'usedTiles' => $packed['usedTiles'] ?? [],
         ];
     }
 
@@ -451,7 +514,7 @@ final class ProjectParser
         return $playerHeroIdx ?? $playerIdx ?? $nameHeroIdx ?? 0;
     }
 
-    private function packSpriteCHR(array $project, array $chars): array
+    private function packSpriteCHR(array $project, array $chars, int $chrPageBase = 0, int $chrPageMod = 512): array
     {
         $chr = is_array($project['chr'] ?? null) ? $project['chr'] : [];
         $metatiles = is_array($project['metatiles'] ?? null) ? $project['metatiles'] : [];
@@ -590,15 +653,7 @@ final class ProjectParser
             ];
         }
 
-        $spriteChr = array_fill(0, 4096, 0);
-        foreach ($usedTiles as $i => $srcIdx) {
-            $srcIdx = ((int)$srcIdx) % 512;
-            $srcOff = $srcIdx * 16;
-            $dstOff = $i * 16;
-            for ($j=0; $j<16; $j++) {
-                $spriteChr[$dstOff+$j] = (int)($chr[$srcOff+$j] ?? 0) & 0xFF;
-            }
-        }
+        $spriteChr = $this->packChrBytesForTiles($usedTiles, $chr, $chrPageBase, $chrPageMod);
 
         return [
             'spriteChr' => $spriteChr,
@@ -607,6 +662,7 @@ final class ProjectParser
             'overflowCount' => count($overflow),
             'truncated' => $truncated,
             'maxCells' => $maxCells,
+            'usedTiles' => $usedTiles,
         ];
     }
 
@@ -674,7 +730,94 @@ final class ProjectParser
      * convenção do banco de sprites). Devolve os screens com remappedNt
      * calculado, prontos para background_data.php/background_tables.php.
      */
-    private function packBackgroundChr(array $chr, array $screens): array
+    /**
+     * Camada 7 (mappers plugaveis): extrai os 16 bytes de cada tile "usado"
+     * (usedTiles, na ordem de saida ja decidida por quem chamou) de uma
+     * pagina especifica do CHR bruto do projeto, montando um bloco pronto
+     * de 4KB (256 tiles). $chrPageBase e' o indice da pagina de origem (0 =
+     * primeiros 4096 bytes, 1 = proximos 4096, etc) e $chrPageMod limita o
+     * indice de tile de origem antes de aplicar esse offset - por padrao
+     * (512) preserva o comportamento antigo (NROM: sempre paginas 0+1
+     * combinadas, sem offset de pagina real); CNROM passa 256 (1 pagina so)
+     * + o offset da pagina escolhida pra fase/banco em questao.
+     */
+    private function packChrBytesForTiles(array $usedTiles, array $chr, int $chrPageBase = 0, int $chrPageMod = 512): array
+    {
+        $out = array_fill(0, 4096, 0);
+        foreach ($usedTiles as $i => $srcIdx) {
+            $srcIdx = ((int)$srcIdx) % $chrPageMod;
+            $srcOff = ($chrPageBase * 4096) + ($srcIdx * 16);
+            $dstOff = $i * 16;
+            for ($j = 0; $j < 16; $j++) {
+                $out[$dstOff + $j] = (int)($chr[$srcOff + $j] ?? 0) & 0xFF;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Camada 7 (mappers plugaveis): decide, a partir de project.mapper e
+     * project.phases[].sprite_page/bg_page, quantos "bancos" de CHR o jogo
+     * precisa e qual fase usa qual. Mappers ainda nao suportados caem no
+     * mesmo comportamento fixo de sempre (1 banco so', paginas 0+1).
+     *
+     * CNROM troca CHR inteiro em blocos de 8KB - sprite E background juntos,
+     * nao independente - entao cada combinacao DISTINTA de (sprite_page,
+     * bg_page) usada por alguma fase vira 1 banco fisico, e o hardware (2
+     * bits no registrador de banco do board CNROM padrao) so' suporta 4.
+     */
+    private function resolveMapperBanks(array $project): array
+    {
+        $mapper = (int)($project['mapper'] ?? 0);
+        if ($mapper !== 3) {
+            return [
+                'mapper' => 0,
+                'banks' => [['spritePage' => 0, 'bgPage' => 1]],
+                'phaseBankIndex' => [],
+                'defaultBankIndex' => 0,
+            ];
+        }
+
+        $banks = [];
+        $bankKeyToIndex = [];
+        $phaseBankIndex = [];
+
+        foreach ((is_array($project['phases'] ?? null) ? $project['phases'] : []) as $ph) {
+            if (!is_array($ph) || !isset($ph['id'])) continue;
+            $sp = max(0, (int)($ph['sprite_page'] ?? 0));
+            $bg = max(0, (int)($ph['bg_page'] ?? 1));
+            $key = $sp . ':' . $bg;
+            if (!isset($bankKeyToIndex[$key])) {
+                if (count($banks) >= 4) {
+                    $usedList = [];
+                    foreach ($banks as $bi => $b) {
+                        $usedList[] = "banco {$bi} (sprites pág {$b['spritePage']} + bg pág {$b['bgPage']})";
+                    }
+                    $phaseName = (string)($ph['name'] ?? $ph['id']);
+                    throw new RuntimeException(
+                        "CNROM só suporta 4 combinações distintas de página de sprite+background em todo o jogo. " .
+                        "A fase \"{$phaseName}\" pede uma 5ª combinação (sprites pág {$sp} + bg pág {$bg}). " .
+                        "Já em uso: " . implode(', ', $usedList) . ". Reaproveite uma dessas combinações nessa fase, " .
+                        "ou reorganize as páginas de CHR."
+                    );
+                }
+                $bankKeyToIndex[$key] = count($banks);
+                $banks[] = ['spritePage' => $sp, 'bgPage' => $bg];
+            }
+            $phaseBankIndex[(string)$ph['id']] = $bankKeyToIndex[$key];
+        }
+
+        if (!$banks) $banks[] = ['spritePage' => 0, 'bgPage' => 1];
+
+        return [
+            'mapper' => 3,
+            'banks' => $banks,
+            'phaseBankIndex' => $phaseBankIndex,
+            'defaultBankIndex' => 0,
+        ];
+    }
+
+    private function packBackgroundChr(array $chr, array $screens, int $chrPageBase = 0, int $chrPageMod = 512): array
     {
         $mapping = [0 => 0];
         $usedTiles = [0];
@@ -691,15 +834,7 @@ final class ProjectParser
             }
         }
 
-        $bgChr = array_fill(0, 4096, 0);
-        foreach ($usedTiles as $i => $srcIdx) {
-            $srcIdx = ((int)$srcIdx) % 512;
-            $srcOff = $srcIdx * 16;
-            $dstOff = $i * 16;
-            for ($j = 0; $j < 16; $j++) {
-                $bgChr[$dstOff + $j] = (int)($chr[$srcOff + $j] ?? 0) & 0xFF;
-            }
-        }
+        $bgChr = $this->packChrBytesForTiles($usedTiles, $chr, $chrPageBase, $chrPageMod);
 
         $remappedScreens = [];
         foreach ($screens as $sc) {

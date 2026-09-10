@@ -3,7 +3,8 @@ declare(strict_types=1);
 
 /**
  * GET/POST backend/cfg.php
- * Gera o nrom.cfg (NROM-256) para o projeto.
+ * Gera o linker script (.cfg) pro projeto - NROM ou CNROM, dependendo de
+ * project.mapper (Camada 7: mappers plugáveis - ver CnromCfg.php).
  *
  * POST JSON opcional: { "project": { "name": "...", "mapper": 0 } }
  * GET: usa defaults.
@@ -13,6 +14,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
 require_once __DIR__ . '/src/NromCfg.php';
+require_once __DIR__ . '/src/CnromCfg.php';
 
 try {
     $project = [];
@@ -31,12 +33,13 @@ try {
         }
     }
 
-    $cfg = NromCfg::generate($project);
+    $isCnrom = (int)($project['mapper'] ?? 0) === 3;
+    $cfg = $isCnrom ? CnromCfg::generate($project) : NromCfg::generate($project);
 
     echo json_encode([
         'ok' => true,
         'cfg' => $cfg,
-        'filename' => 'nrom.cfg',
+        'filename' => $isCnrom ? 'cnrom.cfg' : 'nrom.cfg',
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
     http_response_code(400);

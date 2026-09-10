@@ -1,34 +1,30 @@
 /**
  * SPRITES — players do Atari 2600
  *
- * Hardware:
- *  - Player0 / Player1: 8 bits horizontais (GRP0/GRP1)
- *  - Altura livre (uma escrita por scanline)
- *  - NUSIZ: largura 1x/2x/4x e cópias
- *  - Cor: COLUP0 / COLUP1
- *  - Missiles/Ball entram numa próxima iteração
- *
- * No .agc: Project.data.sprites[]
+ * Hardware: GRP0/GRP1 = 8 bits de largura fixos.
+ * Altura livre (1 byte por scanline).
+ * NUSIZ: cópias e largura 1x/2x/4x (não muda resolução do bitmap).
+ * Cor por scanline: COLUPx (barra à direita do grid).
  */
 const SPRITES = (() => {
-  const PW = 8;           // largura lógica do player
+  const PW = 8;
   const H_DEFAULT = 16;
-  const CELL_H = 10;      // preview 4:3-ish: sprite estreito vira retângulo largo na TV
-
-  let selectedId = null;
-  let pixels = null;      // Uint8Array PW * height
-  let height = H_DEFAULT;
-  let color = 0x2a;       // COLUPx (cor padrão / pincel de linha)
-  let lineColors = null;  // Uint8Array height — cor TIA por scanline
-  let colorLineMode = false; // clicar na faixa aplica cor à linha
-  let nusiz = 0;          // 0=1x, 1=2 copies close, ... 5=2x width, 7=4x width (simplificado)
-  let player = 0;         // 0 ou 1
-  let tool = 'paint';
-  let painting = false;
-  let zoom = 2;           // sprites começam um pouco maiores
-  const undoStack = [];
+  const CELL_H = 10;
+  const GUTTER = 16;
+  const GAP = 8;
   const UNDO_MAX = 40;
 
+  let selectedId = null;
+  let pixels = null;
+  let height = H_DEFAULT;
+  let color = 0x2a;
+  let lineColors = null;
+  let nusiz = 0;
+  let player = 0;
+  let tool = 'paint';
+  let painting = false;
+  let zoom = 2;
+  const undoStack = [];
 
   const TIA_NTSC = buildTiaNtsc();
 
@@ -75,40 +71,22 @@ const SPRITES = (() => {
     return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
   }
 
-  /** Largura visual do pixel na TV (~4:3 com 8 cols × height linhas numa “janela” de sprite) */
   function cellSize(h) {
     const z = Math.max(1, Math.min(6, zoom | 0));
     const cellH = CELL_H * z;
     const cellW = Math.max(3, Math.round(cellH * (160 / 192)));
-    return { cellW, cellH, canvasW: PW * cellW, canvasH: h * cellH, zoom: z };
+    return { cellW, cellH, zoom: z };
   }
 
-  function pushUndo() {
-    if (!pixels) return;
-    undoStack.push({
-      height: height,
-      pixels: new Uint8Array(pixels),
-      lineColors: lineColors ? new Uint8Array(lineColors) : null,
-    });
-    if (undoStack.length > UNDO_MAX) undoStack.shift();
-  }
-
-  function undo() {
-    if (!undoStack.length) {
-      if (typeof Project.status === 'function') Project.status('nada para desfazer');
-      return;
-    }
-    const snap = undoStack.pop();
-    height = snap.height;
-    pixels = snap.pixels;
-    lineColors = snap.lineColors ? new Uint8Array(snap.lineColors) : null;
-    if (!lineColors) ensureLineColors(height, color);
-    const hEl = document.getElementById('spHeight');
-    if (hEl) hEl.value = height;
-    persist();
-    resizeCanvas();
-    redraw();
-    if (typeof Project.status === 'function') Project.status('desfeito');
+  function canvasDims(h) {
+    const { cellW, cellH } = cellSize(h);
+    return {
+      cellW,
+      cellH,
+      gridW: PW * cellW,
+      canvasW: PW * cellW + GAP + GUTTER,
+      canvasH: h * cellH,
+    };
   }
 
   function ensureData() {
@@ -137,20 +115,6 @@ const SPRITES = (() => {
     return u8;
   }
 
-
-  function ensureLineColors(h, fill) {
-    const next = new Uint8Array(h);
-    const base = (fill != null ? fill : color) & 0xfe;
-    if (lineColors && lineColors.length) {
-      for (let i = 0; i < h; i++) {
-        next[i] = i < lineColors.length ? (lineColors[i] & 0xfe) : base;
-      }
-    } else {
-      next.fill(base);
-    }
-    lineColors = next;
-  }
-
   function lineColorsToB64(u8) {
     let bin = '';
     for (let i = 0; i < u8.length; i++) bin += String.fromCharCode(u8[i] & 0xff);
@@ -167,6 +131,15 @@ const SPRITES = (() => {
       for (let i = 0; i < n; i++) next[i] = bin.charCodeAt(i) & 0xfe;
     } catch (e) {}
     return next;
+  }
+
+  function ensureLineColors(h, fill) {
+    const next = new Uint8Array(h);
+    const base = (fill != null ? fill : color) & 0xfe;
+    if (lineColors && lineColors.length) {
+      for (let i = 0; i < h; i++) next[i] = i < lineColors.length ? (lineColors[i] & 0xfe) : base;
+    } else next.fill(base);
+    lineColors = next;
   }
 
   function uid() {
@@ -192,6 +165,7 @@ const SPRITES = (() => {
         color: 0x2a,
         nusiz: 0,
         data: toB64(emptyPixels(H_DEFAULT)),
+        lineColors: lineColorsToB64(new Uint8Array(H_DEFAULT).fill(0x2a)),
       };
       arr.push(s);
       selectedId = s.id;
@@ -222,6 +196,49 @@ const SPRITES = (() => {
     if (typeof Project.status === 'function') Project.status('sprite alterado — salve o projeto');
   }
 
+  function pushUndo() {
+    if (!pixels) return;
+    undoStack.push({
+      height,
+      pixels: new Uint8Array(pixels),
+      lineColors: lineColors ? new Uint8Array(lineColors) : null,
+    });
+    if (undoStack.length > UNDO_MAX) undoStack.shift();
+  }
+
+  function undo() {
+    if (!undoStack.length) {
+      if (typeof Project.status === 'function') Project.status('nada para desfazer');
+      return;
+    }
+    const snap = undoStack.pop();
+    height = snap.height;
+    pixels = snap.pixels;
+    lineColors = snap.lineColors ? new Uint8Array(snap.lineColors) : null;
+    if (!lineColors) ensureLineColors(height, color);
+    const hEl = document.getElementById('spHeight');
+    if (hEl) hEl.value = height;
+    persist();
+    resizeCanvas();
+    redraw();
+    if (typeof Project.status === 'function') Project.status('desfeito');
+  }
+
+  function floodFill(x, y, toVal) {
+    if (x < 0 || y < 0 || x >= PW || y >= height) return;
+    const from = pixels[y * PW + x] & 1;
+    const to = toVal ? 1 : 0;
+    if (from === to) return;
+    const stack = [[x, y]];
+    while (stack.length) {
+      const [cx, cy] = stack.pop();
+      if (cx < 0 || cy < 0 || cx >= PW || cy >= height) continue;
+      if ((pixels[cy * PW + cx] & 1) !== from) continue;
+      pixels[cy * PW + cx] = to;
+      stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+    }
+  }
+
   function buildHTML() {
     const root = document.getElementById('mod-sprites');
     if (!root) return;
@@ -229,15 +246,18 @@ const SPRITES = (() => {
     const arr = list();
     const s = find(selectedId);
 
-    const listHtml = arr.map((sp) => `
+    const listHtml = arr
+      .map(
+        (sp) => `
       <div class="sp-item ${sp.id === selectedId ? 'active' : ''}" data-id="${sp.id}">
         <canvas class="sp-thumb" width="32" height="32" data-thumb="${sp.id}"></canvas>
         <div class="sp-item-meta">
           <div class="sp-item-name">${escapeHtml(sp.name || 'Sprite')}</div>
           <div class="sp-item-sub">P${sp.player | 0} · ${sp.height | 0} linhas</div>
         </div>
-      </div>
-    `).join('');
+      </div>`
+      )
+      .join('');
 
     root.innerHTML = `
       <div class="sp-wrap">
@@ -258,7 +278,7 @@ const SPRITES = (() => {
               </select>
             </label>
             <label>Altura <input type="number" id="spHeight" min="1" max="192" value="${height}" style="width:56px" /></label>
-            <label>NUSIZ
+            <label title="Largura do bitmap é sempre 8 bits (GRP). NUSIZ só estica/copia na tela.">NUSIZ
               <select id="spNusiz">
                 <option value="0" ${nusiz === 0 ? 'selected' : ''}>1 cópia · 1x</option>
                 <option value="1" ${nusiz === 1 ? 'selected' : ''}>2 cópias próximas</option>
@@ -271,18 +291,18 @@ const SPRITES = (() => {
               </select>
             </label>
             <div class="sp-tools">
-              <button type="button" class="sp-tool active" data-tool="paint" title="Pintar">🖌</button>
-              <button type="button" class="sp-tool" data-tool="erase" title="Apagar">⌫</button>
-              <button type="button" class="sp-tool" id="spColorLine" title="Pintar cor da linha (scanline)">🎨</button>
+              <button type="button" class="sp-tool active" data-tool="paint" title="Pincel">🖌</button>
+              <button type="button" class="sp-tool" data-tool="erase" title="Borracha">⌫</button>
+              <button type="button" class="sp-tool" data-tool="fill" title="Balde">🪣</button>
             </div>
             <div class="sp-tools">
               <button type="button" class="sp-tool" id="spZoomOut" title="Zoom −">−</button>
-              <span id="spZoomLabel" style="font-size:11px;color:#aaa;min-width:28px;text-align:center">2×</span>
+              <span id="spZoomLabel" style="font-size:11px;color:#aaa;min-width:28px;text-align:center">${zoom}×</span>
               <button type="button" class="sp-tool" id="spZoomIn" title="Zoom +">+</button>
               <button type="button" class="sp-tool" id="spUndo" title="Desfazer (Ctrl+Z)">↩</button>
             </div>
             <button type="button" class="sp-btn danger" id="spDelete">🗑</button>
-            <span class="sp-hint">8×${height} · GRP0/1 · preview ~proporção TV</span>
+            <span class="sp-hint">8×${height} fixo · NUSIZ estica na TV · cores na barra à direita</span>
           </div>
           <div class="sp-body">
             <div class="sp-canvas-box">
@@ -290,16 +310,20 @@ const SPRITES = (() => {
             </div>
             <div class="sp-side">
               <div class="sp-card">
-                <div class="sp-card-title">COLUP${player} <code id="spHex" style="float:right;color:#8dcea0">$${(color & 0xff).toString(16).padStart(2, '0')}</code></div>
+                <div class="sp-card-title">COLUP${player} <code id="spHex" style="float:right;color:#8dcea0">$${(
+      color & 0xff
+    )
+      .toString(16)
+      .padStart(2, '0')}</code></div>
                 <div class="tia-palette" id="spPalette"></div>
-                <div class="tia-legend">Clique numa célula · selecionada em <span class="pf">laranja</span></div>
+                <div class="tia-legend">Selecione a cor e clique na <span class="pf">barra à direita</span> do grid para pintar a scanline.</div>
               </div>
               <div class="sp-card">
                 <div class="sp-card-title">Hardware</div>
                 <p class="sp-note">
-                  Cada linha = 1 byte <b>GRP0/GRP1</b>. Com <b>🎨</b> você define
-                  <b>COLUPx por scanline</b> (sprite multicolor clássico).
-                  Clique na faixa colorida à esquerda do grid ou na própria linha.
+                  Largura do bitmap = <b>8 pixels</b> (registrador GRP0/GRP1).
+                  Não há seletor de largura em pixels: só <b>NUSIZ</b> (1x / 2x / 4x e cópias na tela).
+                  Altura é livre (um byte por linha).
                 </p>
               </div>
             </div>
@@ -333,7 +357,7 @@ const SPRITES = (() => {
       .sp-toolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:8px 12px; background:#252526; border-bottom:1px solid #333; }
       .sp-toolbar label { font-size:11px; color:#888; display:flex; align-items:center; gap:6px; }
       .sp-toolbar input, .sp-toolbar select { background:#111; color:#eee; border:1px solid #444; border-radius:5px; padding:4px 6px; font-size:12px; }
-      .sp-tools { display:flex; gap:4px; }
+      .sp-tools { display:flex; gap:4px; align-items:center; }
       .sp-tool { width:32px; height:32px; border-radius:6px; border:1px solid #444; background:#2a2a2a; color:#ccc; cursor:pointer; }
       .sp-tool.active { border-color:#f4a261; background:#2a2218; color:#f4a261; }
       .sp-btn { background:#2a2a2a; border:1px solid #444; color:#ccc; border-radius:6px; padding:5px 10px; cursor:pointer; font-size:12px; }
@@ -343,48 +367,59 @@ const SPRITES = (() => {
       .sp-body { flex:1; display:flex; gap:12px; padding:12px; overflow:auto; min-height:0; }
       .sp-canvas-box { background:#0a0a0a; border:1px solid #333; border-radius:8px; padding:10px; align-self:flex-start; }
       #spCanvas { image-rendering:pixelated; cursor:crosshair; display:block; }
-      .sp-side { width:220px; flex-shrink:0; display:flex; flex-direction:column; gap:10px; }
+      .sp-side { width:240px; flex-shrink:0; display:flex; flex-direction:column; gap:10px; }
       .sp-card { background:linear-gradient(180deg,#1e222c,#161920); border:1px solid #333; border-radius:10px; padding:12px; }
       .sp-card-title { font-size:12px; color:#f4a261; font-weight:700; margin-bottom:10px; }
-      .sp-color-row { display:flex; align-items:center; gap:8px; }
-      .sp-color-row input[type=range] { flex:1; }
-      .sp-swatch { width:28px; height:28px; border-radius:6px; border:1px solid #555; }
-      .sp-card code { color:#8dcea0; font-size:12px; }
       .sp-note { font-size:11px; color:#777; line-height:1.45; margin:0; }
       .sp-note b { color:#aaa; }
-
-      .tia-palette {
-        display: grid;
-        grid-template-columns: repeat(8, 1fr);
-        gap: 2px;
-        margin-top: 6px;
-      }
-      .tia-cell {
-        aspect-ratio: 1;
-        border-radius: 3px;
-        border: 2px solid transparent;
-        cursor: pointer;
-        min-height: 16px;
-        padding: 0;
-      }
-      .tia-cell:hover { outline: 1px solid #fff8; }
-      .tia-cell.sel-pf { border-color: #f4a261; box-shadow: 0 0 0 1px #f4a261; }
-      .tia-cell.sel-bk { border-color: #5dade2; box-shadow: 0 0 0 1px #5dade2; }
-      .tia-cell.sel-both { border-color: #fff; box-shadow: inset 0 0 0 1px #000; }
-      .tia-legend { font-size: 10px; color: #666; margin-top: 6px; line-height: 1.4; }
-      .tia-legend span.pf { color: #f4a261; }
-      .tia-legend span.bk { color: #5dade2; }
-      .tia-radios { display: flex; gap: 12px; font-size: 11px; color: #aaa; margin: 6px 0; }
-      .tia-radios label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+      .tia-palette { display:grid; grid-template-columns:repeat(8,1fr); gap:2px; margin-top:6px; }
+      .tia-cell { aspect-ratio:1; border-radius:3px; border:2px solid transparent; cursor:pointer; min-height:16px; padding:0; }
+      .tia-cell:hover { outline:1px solid #fff8; }
+      .tia-cell.sel-pf { border-color:#f4a261; box-shadow:0 0 0 1px #f4a261; }
+      .tia-legend { font-size:10px; color:#666; margin-top:6px; line-height:1.4; }
+      .tia-legend span.pf { color:#f4a261; }
     `;
     document.head.appendChild(s);
   }
 
   function escapeHtml(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
   function escapeAttr(s) {
     return escapeHtml(s).replace(/"/g, '&quot;');
+  }
+
+  function updateSwatch() {
+    const hx = document.getElementById('spHex');
+    if (hx) hx.textContent = '$' + (color & 0xff).toString(16).padStart(2, '0');
+    document.querySelectorAll('#spPalette .tia-cell').forEach((el) => {
+      const v = parseInt(el.getAttribute('data-c'), 10);
+      el.classList.toggle('sel-pf', v === (color & 0xfe));
+    });
+  }
+
+  function buildPalette() {
+    const root = document.getElementById('spPalette');
+    if (!root) return;
+    root.innerHTML = '';
+    for (let i = 0; i < 128; i++) {
+      const reg = (i << 1) & 0xfe;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tia-cell';
+      btn.setAttribute('data-c', String(reg));
+      btn.title = '$' + reg.toString(16).padStart(2, '0');
+      btn.style.background = tiaCss(reg);
+      btn.addEventListener('click', () => {
+        color = reg;
+        updateSwatch();
+        persist();
+        redraw();
+        drawThumbs();
+      });
+      root.appendChild(btn);
+    }
+    updateSwatch();
   }
 
   function bind() {
@@ -399,19 +434,25 @@ const SPRITES = (() => {
         color: n % 2 ? 0x4a : 0x2a,
         nusiz: 0,
         data: toB64(emptyPixels(H_DEFAULT)),
+        lineColors: lineColorsToB64(new Uint8Array(H_DEFAULT).fill(n % 2 ? 0x4a : 0x2a)),
       };
       list().push(s);
       selectedId = s.id;
+      undoStack.length = 0;
       buildHTML();
     });
 
     document.getElementById('spDelete')?.addEventListener('click', () => {
-      if (list().length <= 1) { alert('Precisa de pelo menos um sprite.'); return; }
+      if (list().length <= 1) {
+        alert('Precisa de pelo menos um sprite.');
+        return;
+      }
       if (!confirm('Remover este sprite?')) return;
       const arr = list();
       const i = arr.findIndex((x) => x.id === selectedId);
       if (i >= 0) arr.splice(i, 1);
       selectedId = arr[0].id;
+      undoStack.length = 0;
       buildHTML();
       Project.status('sprite removido — salve o projeto');
     });
@@ -420,6 +461,7 @@ const SPRITES = (() => {
       el.addEventListener('click', () => {
         persist();
         selectedId = el.getAttribute('data-id');
+        undoStack.length = 0;
         buildHTML();
       });
     });
@@ -434,7 +476,11 @@ const SPRITES = (() => {
       player = parseInt(e.target.value, 10) || 0;
       persist();
       const t = document.querySelector('.sp-card-title');
-      if (t) t.textContent = 'COLUP' + player;
+      if (t) {
+        const hx = document.getElementById('spHex');
+        t.childNodes[0].textContent = 'COLUP' + player + ' ';
+        if (hx) t.appendChild(hx);
+      }
     });
     document.getElementById('spNusiz')?.addEventListener('change', (e) => {
       nusiz = parseInt(e.target.value, 10) || 0;
@@ -444,6 +490,7 @@ const SPRITES = (() => {
       let h = parseInt(e.target.value, 10) || H_DEFAULT;
       h = Math.max(1, Math.min(192, h));
       e.target.value = h;
+      pushUndo();
       const next = emptyPixels(h);
       next.set(pixels.subarray(0, Math.min(pixels.length, next.length)));
       height = h;
@@ -471,10 +518,9 @@ const SPRITES = (() => {
       }
     });
 
-    document.querySelectorAll('.sp-tool').forEach((btn) => {
-
+    document.querySelectorAll('.sp-tool[data-tool]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.sp-tool').forEach((b) => b.classList.remove('active'));
+        document.querySelectorAll('.sp-tool[data-tool]').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         tool = btn.getAttribute('data-tool');
       });
@@ -485,118 +531,78 @@ const SPRITES = (() => {
     const canvas = document.getElementById('spCanvas');
     if (!canvas) return;
 
-    const G = 14;
     const pos = (ev) => {
       const r = canvas.getBoundingClientRect();
-      const { cellW, cellH } = cellSize(height);
+      const { cellW, cellH, gridW } = canvasDims(height);
       const sx = canvas.width / r.width;
       const sy = canvas.height / r.height;
       const px = (ev.clientX - r.left) * sx;
       const py = (ev.clientY - r.top) * sy;
       const y = Math.floor(py / cellH);
-      if (px < G) return { x: -1, y, gutter: true };
-      return { x: Math.floor((px - G) / cellW), y, gutter: false };
+      if (px >= gridW + GAP) return { x: -1, y, gutter: true };
+      if (px >= gridW) return { x: -1, y, gap: true };
+      return { x: Math.floor(px / cellW), y, gutter: false };
     };
-    const paintAt = (x, y, val) => {
-      if (x < 0 || y < 0 || x >= PW || y >= height) return;
-      pixels[y * PW + x] = val ? 1 : 0;
-    };
+
     const paintLineColor = (y) => {
       if (y < 0 || y >= height) return;
       if (!lineColors || lineColors.length !== height) ensureLineColors(height, color);
       lineColors[y] = color & 0xfe;
     };
 
-    document.getElementById('spColorLine')?.addEventListener('click', () => {
-      colorLineMode = !colorLineMode;
-      const b = document.getElementById('spColorLine');
-      if (b) b.classList.toggle('active', colorLineMode);
-      if (colorLineMode) {
-        document.querySelectorAll('.sp-tool[data-tool]').forEach((x) => x.classList.remove('active'));
-      }
-    });
-
     canvas.addEventListener('mousedown', (ev) => {
       painting = true;
       pushUndo();
-      const { x, y, gutter } = pos(ev);
-      if (gutter || colorLineMode || tool === 'colorline') {
-        paintLineColor(y);
+      const p = pos(ev);
+      if (p.gap) {
+        painting = false;
+        return;
+      }
+      if (p.gutter) {
+        paintLineColor(p.y);
+      } else if (tool === 'fill') {
+        floodFill(p.x, p.y, !(ev.button === 2));
+        painting = false;
       } else {
-        const val = (ev.button === 2 || tool === 'erase') ? 0 : 1;
-        paintAt(x, y, val);
+        const val = tool === 'erase' || ev.button === 2 ? 0 : 1;
+        if (p.x >= 0 && p.y >= 0 && p.x < PW && p.y < height) pixels[p.y * PW + p.x] = val;
       }
       redraw();
       drawThumbs();
       persist();
       ev.preventDefault();
     });
-    window.addEventListener('mouseup', () => { painting = false; });
+    window.addEventListener('mouseup', () => {
+      painting = false;
+    });
     canvas.addEventListener('mousemove', (ev) => {
       if (!painting) return;
-      const { x, y, gutter } = pos(ev);
-      if (gutter || colorLineMode) paintLineColor(y);
-      else if (tool !== 'erase' || true) {
-        if (!gutter && !colorLineMode)
-          paintAt(x, y, tool === 'erase' || ev.buttons === 2 ? 0 : 1);
+      const p = pos(ev);
+      if (p.gap) return;
+      if (p.gutter) paintLineColor(p.y);
+      else if (tool === 'fill') return;
+      else {
+        const val = tool === 'erase' || ev.buttons === 2 ? 0 : 1;
+        if (p.x >= 0 && p.y >= 0 && p.x < PW && p.y < height) pixels[p.y * PW + p.x] = val;
       }
       redraw();
     });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
-  function updateSwatch() {
-    const hx = document.getElementById('spHex');
-    if (hx) hx.textContent = '$' + (color & 0xff).toString(16).padStart(2, '0');
-    // marca seleção na paleta
-    document.querySelectorAll('#spPalette .tia-cell').forEach((el) => {
-      const v = parseInt(el.getAttribute('data-c'), 10);
-      el.classList.toggle('sel-pf', v === (color & 0xfe));
-    });
-  }
-
-  function buildPalette() {
-    const root = document.getElementById('spPalette');
-    if (!root) return;
-    root.innerHTML = '';
-    // 128 cores TIA (índices 0..127 → valor registro i*2)
-    for (let i = 0; i < 128; i++) {
-      const reg = (i << 1) & 0xfe;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'tia-cell';
-      btn.setAttribute('data-c', String(reg));
-      btn.title = '$' + reg.toString(16).padStart(2, '0');
-      btn.style.background = tiaCss(reg);
-      btn.addEventListener('click', () => {
-        color = reg;
-        updateSwatch();
-        persist();
-        redraw();
-        drawThumbs();
-      });
-      root.appendChild(btn);
-    }
-    updateSwatch();
-  }
-
   function resizeCanvas() {
     const canvas = document.getElementById('spCanvas');
     if (!canvas) return;
-    const G = 14;
-    const { cellW, cellH } = cellSize(height);
-    canvas.width = G + PW * cellW;
-    canvas.height = height * cellH;
+    const { canvasW, canvasH } = canvasDims(height);
+    canvas.width = canvasW;
+    canvas.height = canvasH;
   }
 
   function redraw() {
     const canvas = document.getElementById('spCanvas');
     if (!canvas || !pixels) return;
     if (!lineColors || lineColors.length !== height) ensureLineColors(height, color);
-    const G = 14; // faixa de cor por linha
-    const { cellW, cellH } = cellSize(height);
-    const canvasW = G + PW * cellW;
-    const canvasH = height * cellH;
+    const { cellW, cellH, gridW, canvasW, canvasH } = canvasDims(height);
     if (canvas.width !== canvasW || canvas.height !== canvasH) {
       canvas.width = canvasW;
       canvas.height = canvasH;
@@ -605,14 +611,28 @@ const SPRITES = (() => {
     const bg = [20, 20, 24];
     const img = ctx.createImageData(canvasW, canvasH);
     const data = img.data;
+
+    for (let y = 0; y < canvasH; y++) {
+      for (let x = gridW; x < gridW + GAP; x++) {
+        const i = (y * canvasW + x) * 4;
+        data[i] = 14;
+        data[i + 1] = 14;
+        data[i + 2] = 18;
+        data[i + 3] = 255;
+      }
+    }
+
     for (let y = 0; y < height; y++) {
       const lc = (lineColors[y] != null ? lineColors[y] : color) & 0xfe;
       const fg = TIA_NTSC[(lc >> 1) & 0x7f];
-      // gutter
+      const gx0 = gridW + GAP;
       for (let dy = 0; dy < cellH; dy++) {
-        for (let dx = 0; dx < G; dx++) {
-          const i = ((y * cellH + dy) * canvasW + dx) * 4;
-          data[i] = fg[0]; data[i + 1] = fg[1]; data[i + 2] = fg[2]; data[i + 3] = 255;
+        for (let dx = 0; dx < GUTTER; dx++) {
+          const i = ((y * cellH + dy) * canvasW + (gx0 + dx)) * 4;
+          data[i] = fg[0];
+          data[i + 1] = fg[1];
+          data[i + 2] = fg[2];
+          data[i + 3] = 255;
         }
       }
       for (let x = 0; x < PW; x++) {
@@ -620,8 +640,11 @@ const SPRITES = (() => {
         const c = on ? fg : bg;
         for (let dy = 0; dy < cellH; dy++) {
           for (let dx = 0; dx < cellW; dx++) {
-            const i = ((y * cellH + dy) * canvasW + (G + x * cellW + dx)) * 4;
-            data[i] = c[0]; data[i + 1] = c[1]; data[i + 2] = c[2]; data[i + 3] = 255;
+            const i = ((y * cellH + dy) * canvasW + (x * cellW + dx)) * 4;
+            data[i] = c[0];
+            data[i + 1] = c[1];
+            data[i + 2] = c[2];
+            data[i + 3] = 255;
           }
         }
       }
@@ -630,8 +653,8 @@ const SPRITES = (() => {
     ctx.strokeStyle = 'rgba(255,255,255,0.08)';
     for (let x = 0; x <= PW; x++) {
       ctx.beginPath();
-      ctx.moveTo(G + x * cellW + 0.5, 0);
-      ctx.lineTo(G + x * cellW + 0.5, canvasH);
+      ctx.moveTo(x * cellW + 0.5, 0);
+      ctx.lineTo(x * cellW + 0.5, canvasH);
       ctx.stroke();
     }
   }
@@ -643,13 +666,14 @@ const SPRITES = (() => {
       if (!s) return;
       const h = Math.max(1, s.height | 0);
       const pix = fromB64(s.data, h);
+      const lcols = lineColorsFromB64(s.lineColors, h, s.color || 0x2a);
       const ctx = cv.getContext('2d');
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, 32, 32);
-      const fg = TIA_NTSC[((s.color || 0x2a) >> 1) & 0x7f];
       const scaleX = 32 / PW;
       const scaleY = 32 / h;
       for (let y = 0; y < h; y++) {
+        const fg = TIA_NTSC[((lcols[y] & 0xfe) >> 1) & 0x7f];
         for (let x = 0; x < PW; x++) {
           if (!(pix[y * PW + x] & 1)) continue;
           ctx.fillStyle = 'rgb(' + fg[0] + ',' + fg[1] + ',' + fg[2] + ')';
