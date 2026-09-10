@@ -2,7 +2,6 @@
 <html lang="pt-BR">
 <head>
 <script>
-/** APP() inline — não depende de arquivo externo */
 (function () {
   function detect() {
     if (typeof window.APP_BASE === 'string' && window.APP_BASE !== '') {
@@ -41,111 +40,302 @@
   };
 })();
 </script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AGC 0.1 — Atari 2600</title>
+<link rel="icon" href="../nes/assets/icon.png" type="image/png">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', Tahoma, system-ui, sans-serif;
+  background: #121212; color: #d4d4d4;
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
 
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AGC 0.1 — Atari 2600</title>
-  <link rel="stylesheet" href="../nes/css/style.css">
-  <link rel="icon" href="../nes/assets/icon.png" type="image/png">
-  <style>
-    body { margin:0; background:#1e1e1e; color:#ccc; font-family:system-ui,sans-serif; }
-    #topbar { display:flex; align-items:center; gap:10px; padding:8px 12px; background:#252526; border-bottom:1px solid #333; }
-    #topbar .logo { color:#f4a261; font-weight:700; font-size:13px; }
-    .icon-btn { background:#333; border:1px solid #444; color:#fff; border-radius:6px; padding:6px 10px; cursor:pointer; }
-    .icon-btn:hover { border-color:#f4a261; }
-    #main { padding:24px; max-width:720px; }
-    #status { font-size:12px; color:#888; margin-top:12px; }
-    code { color:#7dcea0; }
-  </style>
+/* TOPBAR — mesmo padrão NES, acento Atari */
+#topbar {
+  height: 48px; background: #1e1e1e; border-bottom: 1px solid #333;
+  display: flex; align-items: center; padding: 0 10px; gap: 6px; user-select: none; flex-shrink: 0;
+}
+#topbar .top-logo { color: #f4a261; font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+#topbar .divider { width: 1px; height: 22px; background: #333; margin: 0 4px; }
+#topbar .icon-btn, #topbar button.icon-btn {
+  background: #2a2a2a; border: 1px solid #444; color: #ccc; border-radius: 6px;
+  padding: 6px 10px; cursor: pointer; font-size: 13px;
+}
+#topbar .icon-btn:hover { border-color: #f4a261; color: #fff; }
+#topStatus { font-size: 11px; color: #777; margin-left: 6px; display:none; }
+.proj-info {
+  margin-left: auto; display: flex; align-items: center; gap: 10px;
+  font-size: 12px; color: #aaa; padding-right: 8px;
+}
+.proj-info #projNameLabel { color: #eee; font-weight: 600; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-info #projFileLabel { color: #f4a261; font-family: ui-monospace, monospace; font-size: 11px; font-weight: 600; }
+.proj-info #projStatus { font-size: 11px; color: #27ae60; white-space: nowrap; }
+
+/* APP shell */
+#app { flex: 1; display: flex; min-height: 0; overflow: hidden; }
+
+/* SIDEBAR — igual NES, recolhível */
+#sidebar {
+  width: 200px; min-width: 200px; background: #181818; border-right: 1px solid #2d2d2d;
+  padding: 10px 0; display: flex; flex-direction: column;
+  transition: width .2s ease, min-width .2s ease; overflow: hidden;
+}
+#sidebar.collapsed { width: 56px; min-width: 56px; }
+
+.side-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 12px 12px; gap: 8px;
+}
+.side-title { font-size: 11px; color: #666; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+.side-toggle {
+  width: 28px; height: 28px; flex-shrink: 0; background: #252526; border: 1px solid #333;
+  border-radius: 6px; color: #ccc; cursor: pointer; font-size: 14px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.side-toggle:hover { background: #f4a261; color: #111; border-color: #f4a261; }
+
+.side-item {
+  padding: 9px 14px; font-size: 13px; color: #888; cursor: pointer;
+  border-left: 3px solid transparent; display: flex; gap: 10px; align-items: center;
+  white-space: nowrap;
+}
+.side-item:hover { background: #222; color: #fff; }
+.side-item.active { background: #2a2218; color: #fff; border-left-color: #f4a261; }
+.side-item.disabled { opacity: 0.38; cursor: not-allowed; }
+.side-item.disabled:hover { background: transparent; color: #888; }
+.side-item .side-ico { width: 22px; text-align: center; flex-shrink: 0; font-size: 16px; }
+.side-item .side-label { overflow: hidden; text-overflow: ellipsis; }
+
+#sidebar.collapsed .side-title { display: none; }
+#sidebar.collapsed .side-header { justify-content: center; padding: 8px 4px; }
+#sidebar.collapsed .side-item { justify-content: center; padding: 10px 0; gap: 0; border-left-color: transparent; }
+#sidebar.collapsed .side-item.active { background: #2a2218; box-shadow: inset 3px 0 0 #f4a261; }
+#sidebar.collapsed .side-label { display: none; }
+#sidebar.collapsed .side-footer { display: none; }
+
+.side-footer {
+  margin-top: auto; padding: 12px 14px; font-size: 11px; color: #555; line-height: 1.6;
+  border-top: 1px solid #2a2a2a;
+}
+.side-footer b { color: #f4a261; font-weight: 600; }
+
+/* CONTENT */
+#content { flex: 1; background: #1e1e1e; overflow: auto; position: relative; min-width: 0; }
+.module { display: none; height: 100%; min-height: 100%; }
+.module.active { display: block; }
+
+/* CONFIG styles */
+.cfg-card { background: linear-gradient(180deg,#1e222c,#161920); border: 1px solid #333; border-radius: 10px; padding: 14px 16px; }
+.cfg-card-title { font-size: 12px; color: #f4a261; font-weight: 700; margin-bottom: 10px; letter-spacing: 0.03em; }
+.cfg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cfg-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: #888; }
+.cfg-grid label.full { grid-column: 1 / -1; }
+.cfg-grid input, .cfg-grid select, .cfg-grid textarea {
+  background: #0e1014; border: 1px solid #333; border-radius: 6px; color: #eee; padding: 7px 9px; font-size: 13px;
+}
+.cfg-grid textarea { resize: vertical; min-height: 52px; }
+.cfg-btn { background: #2a3a2a; border: 1px solid #3a5a3a; color: #8dcea0; border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
+.cfg-btn:hover { border-color: #6dcea0; }
+.cfg-btn-sm { background: #2a2e38; border: 1px solid #444; color: #ccc; border-radius: 5px; padding: 4px 8px; cursor: pointer; font-size: 12px; }
+.cfg-btn-sm.danger { background: #3a1a1a; border-color: #5a2a2a; color: #e88; }
+.cfg-btn-sm:disabled { opacity: 0.35; cursor: not-allowed; }
+.cfg-screen-row {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  background: #14171e; border: 1px solid #2a2e38; border-radius: 8px; cursor: pointer;
+}
+.cfg-screen-row:hover { border-color: #444; }
+.cfg-screen-row.active { border-color: #f4a26166; background: #1c1812; }
+@media (max-width: 640px) { .cfg-grid { grid-template-columns: 1fr; } }
+</style>
 </head>
 <body>
-  <div id="topbar">
-    <div class="logo">▶ AGC — Atari 2600</div>
-    <button class="icon-btn" type="button" id="btnSave" title="Salvar">💾 Salvar</button>
-    <button class="icon-btn" type="button" id="btnDash" title="Dashboard">🏠 Dashboard</button>
-    <span style="margin-left:auto;font-size:11px;color:#666">v0.1 — editor em construção</span>
+<div id="topbar">
+  <div class="top-logo"><span>▶</span> AGC — Atari 2600</div>
+  <div class="divider"></div>
+  <button type="button" class="icon-btn" id="btnSave" title="Salvar no servidor (Ctrl+S)">💾 Salvar</button>
+  <button type="button" class="icon-btn" id="btnDash" title="Dashboard Atari">🏠 Dashboard</button>
+  <span id="topStatus" style="display:none">—</span>
+  <div class="proj-info">
+    <span id="projNameLabel">Sem projeto</span>
+    <b id="projFileLabel">—</b>
+    <span id="projStatus">● pronto</span>
   </div>
-  <div id="main">
-    <h2 style="color:#f4a261;margin:0 0 8px">Editor Atari 2600</h2>
-    <p style="line-height:1.5">Projeto carregado. Os módulos (playfield, sprites, som, kernel, build) entram a partir daqui.</p>
-    <div id="projInfo" style="background:#111;border:1px solid #333;border-radius:8px;padding:12px;font-size:13px"></div>
-    <div id="status">—</div>
+</div>
+
+<div id="app">
+  <div id="sidebar">
+    <div class="side-header">
+      <span class="side-title">Módulos</span>
+      <button type="button" class="side-toggle" id="btnSideToggle" title="Recolher menu">«</button>
+    </div>
+
+    <div class="side-item active" data-mod="config" title="Configurações">
+      <span class="side-ico">⚙</span><span class="side-label">Config</span>
+    </div>
+    <div class="side-item" data-mod="playfield" title="Playfield">
+      <span class="side-ico">🏞</span><span class="side-label">Playfield</span>
+    </div>
+    <div class="side-item" data-mod="sprites" title="Sprites">
+      <span class="side-ico">👾</span><span class="side-label">Sprites</span>
+    </div>
+    <div class="side-item disabled" data-mod="sound" title="Em breve">
+      <span class="side-ico">🎵</span><span class="side-label">Som TIA</span>
+    </div>
+    <div class="side-item disabled" data-mod="program" title="Em breve">
+      <span class="side-ico">🧠</span><span class="side-label">Programação</span>
+    </div>
+    <div class="side-item disabled" data-mod="build" title="Em breve">
+      <span class="side-ico">🔨</span><span class="side-label">Build ROM</span>
+    </div>
+
+    <div class="side-footer">
+      <div>ROM: <span id="infoRom">4 KB</span></div>
+      <div>TV: <span id="infoTv">NTSC</span></div>
+      <div>Telas: <span id="infoScreens">1</span></div>
+      <div style="margin-top:6px">Formato: <b>.agc</b></div>
+    </div>
   </div>
-  <script>
-    let projectId = null;
-    let projectData = null;
 
-    function qsProjectId() {
-      const u = new URL(location.href);
-      return u.searchParams.get('project') || u.searchParams.get('id');
+  <div id="content">
+    <div class="module active" id="mod-config"></div>
+    <div class="module" id="mod-playfield"></div>
+    <div class="module" id="mod-sprites"></div>
+    <div class="module" id="mod-sound"></div>
+    <div class="module" id="mod-program"></div>
+    <div class="module" id="mod-build"></div>
+  </div>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/modules/config.js"></script>
+<script src="js/modules/playfield.js"></script>
+<script src="js/modules/sprites.js"></script>
+<script>
+const UI = {
+  current: 'config',
+
+  toggleSidebar() {
+    const sb = document.getElementById('sidebar');
+    const btn = document.getElementById('btnSideToggle');
+    const collapsed = sb.classList.toggle('collapsed');
+    try { localStorage.setItem('agc_sidebar_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+    if (btn) {
+      btn.textContent = collapsed ? '»' : '«';
+      btn.title = collapsed ? 'Expandir menu' : 'Recolher menu';
     }
+  },
 
-    async function ensureSession() {
-      const r = await fetch(APP('/backend/auth/session.php'), { credentials: 'same-origin' });
-      const j = await r.json().catch(() => ({}));
-      if (!j.authenticated) {
-        location.replace(APP('/login.html') + '?next=' + encodeURIComponent(location.pathname + location.search));
-        return false;
+  restoreSidebar() {
+    try {
+      if (localStorage.getItem('agc_sidebar_collapsed') === '1') {
+        const sb = document.getElementById('sidebar');
+        const btn = document.getElementById('btnSideToggle');
+        if (sb) sb.classList.add('collapsed');
+        if (btn) { btn.textContent = '»'; btn.title = 'Expandir menu'; }
       }
-      return true;
+    } catch (e) {}
+  },
+
+  switchModule(mod) {
+    const item = document.querySelector('.side-item[data-mod="' + mod + '"]');
+    if (!item || item.classList.contains('disabled')) return;
+
+    document.querySelectorAll('.side-item').forEach((el) => el.classList.remove('active'));
+    document.querySelectorAll('.module').forEach((el) => el.classList.remove('active'));
+    item.classList.add('active');
+    const panel = document.getElementById('mod-' + mod);
+    if (panel) panel.classList.add('active');
+    this.current = mod;
+
+    if (mod === 'config' && typeof CONFIG !== 'undefined') CONFIG.init();
+    if (mod === 'playfield' && typeof PLAYFIELD !== 'undefined') PLAYFIELD.init();
+    if (mod === 'sprites' && typeof SPRITES !== 'undefined') SPRITES.init();
+    this.refreshFooter();
+  },
+
+  refreshFooter() {
+    const d = (typeof Project !== 'undefined' && Project.data) ? Project.data : null;
+    const rom = document.getElementById('infoRom');
+    const tv = document.getElementById('infoTv');
+    const sc = document.getElementById('infoScreens');
+    if (!d) return;
+    if (rom) {
+      const n = d.romSize || 4096;
+      const kb = n / 1024;
+      const map = n <= 4096 ? 'fixed' : n <= 8192 ? 'F8' : n <= 16384 ? 'F6' : 'F4';
+      rom.textContent = (kb | 0) + ' KB · ' + map;
     }
+    if (tv) tv.textContent = d.tv || 'NTSC';
+    if (sc) sc.textContent = String((d.screens && d.screens.length) || 0);
+  },
+};
 
-    async function loadProject(id) {
-      const r = await fetch(APP('/a2600/backend/projects/load.php?id=' + encodeURIComponent(id)), {
-        credentials: 'same-origin'
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j.success) throw new Error(j.message || 'Falha ao carregar');
-      projectId = id;
-      projectData = j.nms || j.agc || j.project || j.data || j;
-      // load.php NES devolve { success, nms: {...} } — mantemos compat
-      if (j.nms) projectData = j.nms;
-      const info = document.getElementById('projInfo');
-      info.innerHTML =
-        '<div><b style="color:#fff">' + (projectData.name || 'Sem nome') + '</b></div>' +
-        '<div style="color:#888;margin-top:6px">ID: ' + id + ' · system: ' + (projectData.system || 'a2600') + '</div>' +
-        '<div style="color:#888">ROM: ' + (projectData.romSize || 4096) + ' bytes · TV: ' + (projectData.tv || 'NTSC') + '</div>' +
-        '<div style="color:#888">Kernel: <code>' + (projectData.kernel || 'single_screen') + '</code></div>';
-      document.getElementById('status').textContent = 'Projeto carregado.';
-    }
+document.getElementById('btnSideToggle')?.addEventListener('click', () => UI.toggleSidebar());
+document.querySelectorAll('.side-item').forEach((el) => {
+  el.addEventListener('click', () => UI.switchModule(el.getAttribute('data-mod')));
+});
 
-    async function saveProject() {
-      if (!projectId || !projectData) return alert('Nenhum projeto carregado');
-      projectData.system = 'a2600';
-      projectData.savedAt = Date.now();
-      const r = await fetch(APP('/a2600/backend/projects/save.php'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({ project_id: projectId, nms: projectData })
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j.success) {
-        alert(j.message || 'Erro ao salvar');
-        return;
-      }
-      document.getElementById('status').textContent = 'Salvo no servidor.';
-    }
+document.getElementById('btnDash').onclick = () => {
+  location.href = APP('/a2600/dashboard.html');
+};
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    Project.save().then(() => { if (typeof UI !== 'undefined') UI.refreshFooter(); });
+  }
+});
+document.getElementById('btnSave').onclick = async () => {
+  Project.status('Salvando...');
+  await Project.save();
+  UI.refreshFooter();
+};
 
-    document.getElementById('btnDash').onclick = () => {
-      location.href = APP('/a2600/dashboard.html');
-    };
-    document.getElementById('btnSave').onclick = () => saveProject();
+// status → topbar
+/* status já atualiza #projStatus no core */
 
-    (async () => {
-      if (!(await ensureSession())) return;
-      const id = qsProjectId();
-      if (!id) {
-        document.getElementById('projInfo').textContent = 'Abra um projeto a partir do dashboard Atari.';
-        return;
-      }
-      try {
-        await loadProject(id);
-      } catch (e) {
-        document.getElementById('status').textContent = 'Erro: ' + (e.message || e);
-        alert('Erro ao carregar o projeto: ' + (e.message || e));
-      }
-    })();
-  </script>
+
+function qsId() {
+  const u = new URL(location.href);
+  return u.searchParams.get('project') || u.searchParams.get('id');
+}
+
+async function ensureSession() {
+  const r = await fetch(APP('/backend/auth/session.php'), { credentials: 'same-origin' });
+  const j = await r.json().catch(() => ({}));
+  if (!j.authenticated) {
+    location.replace(APP('/login.html') + '?next=' + encodeURIComponent(location.pathname + location.search));
+    return false;
+  }
+  return true;
+}
+
+(async () => {
+  UI.restoreSidebar();
+  if (!(await ensureSession())) return;
+  const id = qsId();
+  if (!id) {
+    Project.status('Abra um projeto pelo dashboard Atari.');
+    Project.data = Project.defaultData();
+    CONFIG.init();
+    if (typeof Project.updateHeader === "function") Project.updateHeader();
+    UI.refreshFooter();
+    return;
+  }
+  try {
+    await Project.loadFromServer(id);
+    Project.status('Projeto: ' + (Project.data.name || id));
+    CONFIG.init();
+    if (typeof Project.updateHeader === "function") Project.updateHeader();
+    UI.refreshFooter();
+  } catch (e) {
+    Project.status('Erro: ' + (e.message || e));
+    alert('Erro ao carregar: ' + (e.message || e));
+  }
+})();
+</script>
 </body>
 </html>

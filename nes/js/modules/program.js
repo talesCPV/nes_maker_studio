@@ -29,6 +29,7 @@ const PROGRAM = (() => {
     set_on_ground: { label: 'Definir On Ground' },
     apply_jump_force: { label: 'Aplicar Força de Pulo' },
     apply_speed_level: { label: 'Aplicar Nível de Velocidade' },
+    apply_palette:     { label: 'Trocar Paleta' },
     play_sound:  { label: 'Tocar Som' },
     open_menu:   { label: 'Abrir Menu' },
     close_menu:  { label: 'Fechar Menu' },
@@ -40,6 +41,9 @@ const PROGRAM = (() => {
     custom:      { label: 'Personalizada (nome livre)' }
   };
   const OPS = ['==','!=','>','<','>=','<='];
+  // Mesma numeração de slot que o backend usa (ProgramCompiler::PALETTE_SLOT_LABELS) -
+  // 0-3 = paletas de background da PPU, 4-7 = paletas de sprite.
+  const PALETTE_SLOT_LABELS = ['BG0','BG1','BG2','BG3','SPR0','SPR1','SPR2','SPR3'];
 
   // Lista unificada de tudo que pode ser "um hitbox" pro passo "SE hitbox... toca...":
   // terreno genérico (Sólido/Plataforma - sem identidade própria, é só o tipo de tile),
@@ -811,6 +815,20 @@ const PROGRAM = (() => {
           <option value="">— velocidade —</option>${levels.map(f=>`<option value="${f.id}" ${step.targetId===f.id?'selected':''}>${f.name} (${f.value})</option>`).join('')}</select>
           <select onchange="PROGRAM.updateStep('${rule.id}',${idx},'charId',this.value)" style="${selStyle}">
             <option value="">— personagem —</option>${chars.map(c=>`<option value="${c.id}" ${step.charId===c.id?'selected':''}>${c.name}</option>`).join('')}</select>`;
+      } else if(step.actionId === 'apply_palette'){
+        // Camada 6: a acao so' agenda a troca (ver ProgramCompiler::compileApplyPalette) -
+        // por isso da' pra empilhar varias dessas na mesma regra, uma por slot, pra trocar
+        // mais de 1 (ate as 8) de uma vez no mesmo frame.
+        const bank = Project.data?.paletteBank || [];
+        const slotOptions = (from, to) => Array.from({length:to-from+1}, (_,i)=>from+i)
+          .map(s=>`<option value="${s}" ${String(step.value)===String(s)?'selected':''}>${PALETTE_SLOT_LABELS[s]}</option>`).join('');
+        fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'value',this.value===''?'':parseInt(this.value))" style="${selStyle}">
+          <option value="">— slot —</option>
+          <optgroup label="Background">${slotOptions(0,3)}</optgroup>
+          <optgroup label="Sprites">${slotOptions(4,7)}</optgroup>
+          </select>
+          <select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle}">
+            <option value="">— paleta —</option>${bank.map(p=>`<option value="${p.id}" ${step.targetId===p.id?'selected':''}>${p.name}</option>`).join('')}</select>`;
       } else if(step.actionId === 'play_sound'){
         const soundItems = Project.data?.sounds?.items || [];
         fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle}">

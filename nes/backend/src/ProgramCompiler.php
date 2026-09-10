@@ -188,6 +188,15 @@ final class ProgramCompiler
         foreach ((is_array($project['speedLevels'] ?? null) ? $project['speedLevels'] : []) as $sl) {
             if (is_array($sl) && isset($sl['id'])) $speedLevelById[(string)$sl['id']] = max(0, min(255, (int)($sl['value'] ?? 0)));
         }
+        // Camada 6 (acao "Trocar Paleta"): index = posicao no array, MESMA
+        // ordem que ProjectParser::parse() usa pra gerar os labels
+        // PaletteBank_<indice> em palette_data.php - os dois lados leem
+        // project.paletteBank direto, sem passar nada entre si, entao
+        // precisam concordar por construcao (mesma fonte, mesma ordem).
+        $paletteBankById = [];
+        foreach ((is_array($project['paletteBank'] ?? null) ? $project['paletteBank'] : []) as $i => $pb) {
+            if (is_array($pb) && isset($pb['id'])) $paletteBankById[(string)$pb['id']] = (int)$i;
+        }
         // Fase 6.1: pra ação Carregar Fase - acha a tela de entrada de cada
         // fase (a splash dela, senão o primeiro background). Splash sempre
         // tem prioridade sobre background, independente da ordem em que
@@ -212,6 +221,7 @@ final class ProgramCompiler
             'charIndexById' => $charIndexById,
             'jumpForceById' => $jumpForceById,
             'speedLevelById' => $speedLevelById,
+            'paletteBankById' => $paletteBankById,
             'phaseEntryScreen' => $phaseEntryScreen,
             'phaseIndexById' => $phaseIndexById,
             'screenIndexById' => $screenIndexById,
@@ -793,6 +803,8 @@ final class ProgramCompiler
                 }
                 $val = $hbCtx['speedLevelById'][$targetId];
                 return ["  ; Acao: Aplicar Nivel de Velocidade ({$val} px/frame)", "  LDA #{$val}", "  STA pv_move_speed"];
+            case 'apply_palette':
+                return $this->compileApplyPalette($step, $hbCtx);
             case 'move_character': {
                 $charId = (string)($step['charId'] ?? '');
                 if (isset($heroIds[$charId])) {
@@ -1081,6 +1093,46 @@ final class ProgramCompiler
         }
         return $lines;
     }
+
+    /**
+     * Camada 6 (acao "Trocar Paleta"): so' agenda o pedido (seta o bit do
+     * slot em pal_pending_mask + guarda o ponteiro pra entrada do banco em
+     * pal_pending_lo/hi,slot) - quem realmente escreve na PPU e' a NMI (ver
+     * templates/system.php), porque a RAM de paleta so' pode ser escrita
+     * com segurança fora do rendering ativo (vblank). Isso e' o que permite
+     * empilhar varias acoes "Trocar Paleta" na mesma regra pra trocar mais
+     * de 1 slot no mesmo frame: cada uma seta o SEU bit e o SEU ponteiro,
+     * sem pisar nas outras.
+     */
+    private function compileApplyPalette(array $step, array $hbCtx): array
+    {
+        $slot = (int)($step['value'] ?? -1);
+        if ($slot < 0 || $slot > 7) {
+            return ["  ; Acao: Trocar Paleta - slot invalido, ignorado"];
+        }
+        $targetId = (string)($step['targetId'] ?? '');
+        if (!isset($hbCtx['paletteBankById'][$targetId])) {
+            return ["  ; Acao: Trocar Paleta - entrada '{$targetId}' nao encontrada no banco, ignorado"];
+        }
+        $idx = $hbCtx['paletteBankById'][$targetId];
+        $slotLabel = self::PALETTE_SLOT_LABELS[$slot] ?? "slot {$slot}";
+        $bit = 1 << $slot;
+        return [
+            "  ; Acao: Trocar Paleta ({$slotLabel} <- banco #{$idx}) - so agenda, a NMI escreve na PPU",
+            "  LDA #<PaletteBank_{$idx}",
+            "  STA pal_pending_lo+{$slot}",
+            "  LDA #>PaletteBank_{$idx}",
+            "  STA pal_pending_hi+{$slot}",
+            "  LDA pal_pending_mask",
+            "  ORA #{$bit}",
+            "  STA pal_pending_mask",
+        ];
+    }
+
+    private const PALETTE_SLOT_LABELS = [
+        0 => 'BG0', 1 => 'BG1', 2 => 'BG2', 3 => 'BG3',
+        4 => 'SPR0', 5 => 'SPR1', 6 => 'SPR2', 7 => 'SPR3',
+    ];
 
     private function compileGotoWarp(string $tag, string $targetId, array $hbCtx): array
     {

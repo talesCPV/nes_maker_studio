@@ -169,6 +169,48 @@ ASM;
         $lines[] = '  ; garante sprites ligados';
         $lines[] = '  LDA #%00011110';
         $lines[] = '  STA $2001';
+        if (!empty($ctx['paletteSwapEnabled'])) {
+            // Camada 6 (acao "Trocar Paleta"): tem que rodar ANTES do bloco
+            // de scroll logo abaixo - os dois usam $2006, e cada um reseta o
+            // latch de endereco (via BIT $2002) por conta propria antes de
+            // escrever, entao a ordem entre eles nao importa pro scroll,
+            // mas escrever a paleta cedo evita 1 frame de atraso visual.
+            $lines[] = '  ; Camada 6: aplica trocas de paleta pendentes (acao "Trocar Paleta")';
+            $lines[] = '  LDA pal_pending_mask';
+            $lines[] = '  BEQ pal_swap_done';
+            $lines[] = '  LDX #0';
+            $lines[] = 'pal_swap_loop:';
+            $lines[] = '  LDA pal_pending_mask';
+            $lines[] = '  AND pal_bit_table,X';
+            $lines[] = '  BEQ pal_swap_next';
+            $lines[] = '  TXA';
+            $lines[] = '  ASL A';
+            $lines[] = '  ASL A            ; offset dentro dos 32 bytes de paleta = slot*4';
+            $lines[] = '  STA pal_ptr_lo   ; scratch (reaproveitado antes de virar ponteiro abaixo)';
+            $lines[] = '  BIT $2002';
+            $lines[] = '  LDA #$3F';
+            $lines[] = '  STA $2006';
+            $lines[] = '  LDA pal_ptr_lo';
+            $lines[] = '  STA $2006';
+            $lines[] = '  LDA pal_pending_lo,X';
+            $lines[] = '  STA pal_ptr_lo';
+            $lines[] = '  LDA pal_pending_hi,X';
+            $lines[] = '  STA pal_ptr_hi';
+            $lines[] = '  LDY #0';
+            $lines[] = 'pal_swap_bytes:';
+            $lines[] = '  LDA (pal_ptr_lo),Y';
+            $lines[] = '  STA $2007';
+            $lines[] = '  INY';
+            $lines[] = '  CPY #4';
+            $lines[] = '  BNE pal_swap_bytes';
+            $lines[] = 'pal_swap_next:';
+            $lines[] = '  INX';
+            $lines[] = '  CPX #8';
+            $lines[] = '  BCC pal_swap_loop';
+            $lines[] = '  LDA #0';
+            $lines[] = '  STA pal_pending_mask';
+            $lines[] = 'pal_swap_done:';
+        }
         $lines[] = '  ; Camada 5: scroll continuo - so durante o jogo (fora disso fica fixo em 0,0)';
         $lines[] = '  LDA game_state';
         $lines[] = '  CMP #1';

@@ -116,39 +116,27 @@ if (!is_array($nms)) {
 
 /*
  * ---------------------------------------------------------
- * VALIDAÇÃO MÍNIMA DO AGC
+ * VALIDAÇÃO MÍNIMA DO AGC (Atari 2600)
  * ---------------------------------------------------------
- *
- * Não alteramos o conteúdo recebido.
- *
- * Apenas garantimos que é um projeto AGC
- * minimamente válido.
+ * Não exige chr/palettes (isso é formato NES/.nms).
+ * Campos mínimos: name; system opcional (A2600).
  */
 
-if (
-    !array_key_exists('chr', $nms) ||
-    !array_key_exists('palettes', $nms)
-) {
-
+if (!array_key_exists('name', $nms)) {
     response([
         'success' => false,
-        'message' =>
-            'O arquivo AGC não possui uma estrutura válida.'
+        'message' => 'O arquivo AGC não possui uma estrutura válida (falta name).'
     ], 422);
 }
 
+// Normaliza system
+$nms['system'] = 'A2600';
 
-/*
- * CHR precisa ser um array.
- */
-
-if (!is_array($nms['chr'])) {
-
-    response([
-        'success' => false,
-        'message' =>
-            'O CHR do projeto é inválido.'
-    ], 422);
+// Garante arrays opcionais
+foreach (['screens', 'playfields', 'sprites', 'sounds', 'variables', 'rules'] as $k) {
+    if (!array_key_exists($k, $nms) || !is_array($nms[$k])) {
+        $nms[$k] = [];
+    }
 }
 
 

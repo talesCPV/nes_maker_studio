@@ -66,7 +66,7 @@
             gap: 0;
             justify-content: flex-start;
             align-items: stretch;
-            background: url('../nes/assets/wallpaper.jpg');
+            background: url('assets/wallpaper.webp');
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
@@ -85,7 +85,7 @@
             justify-content: space-between;
             gap: 16px;
             padding: 12px 24px;
-            background: rgba(18, 21, 28, 0.95);
+            background: rgba(18, 21, 28, 0.75);
             border-bottom: 1px solid var(--border);
             backdrop-filter: blur(12px);
             position: sticky;
@@ -974,7 +974,7 @@ async function loadProjects() {
                 if (project.has_thumbnail) {
                     thumb.src = APP(`/a2600/backend/projects/thumbnail.php?id=${encodeURIComponent(project.id)}&t=${Date.now()}`);
                 } else {
-                    thumb.src = '../nes/assets/cartridge.png';
+                    thumb.src = 'assets/cartridge.png';
                     thumb.title = 'Sem thumbnail — faça um Build ou altere a capa';
                 }
 

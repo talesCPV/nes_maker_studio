@@ -52,6 +52,14 @@ return [
         for ($i = 0; $i < $ruleStateBytes; $i++) {
             $lines[] = "pv_rs{$i}: .res 1  ; Camada 6 Fase 2.1: bit de estado (disparo por borda) de ate 8 regra(s)";
         }
+        if (!empty($ctx['paletteSwapEnabled'])) {
+            // Camada 6 (acao "Trocar Paleta"): so' esses 2 bytes PRECISAM ser
+            // ZP (endereçamento indireto (zp),Y na NMI pra ler os 4 bytes da
+            // paleta escolhida) - o resto (mascara + ponteiros pendentes por
+            // slot) fica na RAM comum, ver program_vars_ram.
+            $lines[] = 'pal_ptr_lo: .res 1  ; Camada 6: ponteiro (baixo) usado pela NMI pra copiar 4 bytes de paleta de PaletteBank_N';
+            $lines[] = 'pal_ptr_hi: .res 1  ; Camada 6: ponteiro (alto)';
+        }
         $seen = [];
         foreach ($alloc['vars'] as $v) {
             if (!($v['zeroPage'] ?? false)) continue;
@@ -70,8 +78,21 @@ return [
         $alloc = $ctx['program']['alloc'] ?? ['vars' => [], 'groupInitial' => []];
         $anyRam = false;
         foreach ($alloc['vars'] as $v) if (!($v['zeroPage'] ?? false)) { $anyRam = true; break; }
-        if (!$anyRam) return '';
+        $paletteSwap = !empty($ctx['paletteSwapEnabled']);
+        if (!$anyRam && !$paletteSwap) return '';
         $lines = ['.segment "RAM"'];
+        if ($paletteSwap) {
+            // Camada 6 (acao "Trocar Paleta"): 1 bit por slot da PPU (0-3 BG,
+            // 4-7 SPR) - a NMI varre esses 8 bits todo frame (custa quase
+            // nada quando 0) e, pra cada bit ligado, copia os 4 bytes de
+            // PaletteBank_N (indicado por pal_pending_lo/hi,slot) pro
+            // endereco certo em $3F00-$3F1F. Empilhar varias acoes "Trocar
+            // Paleta" na mesma regra so' liga varios bits de uma vez - cada
+            // slot tem seu proprio par de ponteiro, entao nao se atropelam.
+            $lines[] = 'pal_pending_mask: .res 1  ; Camada 6: 1 bit por slot (0-7) - setado pela acao, limpo pela NMI depois de escrever';
+            $lines[] = 'pal_pending_lo:   .res 8  ; Camada 6: ponteiro (baixo) por slot pra PaletteBank_N';
+            $lines[] = 'pal_pending_hi:   .res 8  ; Camada 6: ponteiro (alto) por slot';
+        }
         $seen = [];
         foreach ($alloc['vars'] as $v) {
             if ($v['zeroPage'] ?? false) continue;

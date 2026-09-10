@@ -6,11 +6,18 @@
   "description": "",
   "romSize": 4096,
   "tv": "NTSC",
+  "kernel": "single_screen",
   "created": 0,
+  "screens": [
+    {
+      "id": "screen_main",
+      "name": "Tela 1",
+      "description": ""
+    }
+  ],
   "playfields": [],
   "sprites": [],
   "sounds": [],
   "variables": [],
-  "rules": [],
-  "kernel": "single_screen"
+  "rules": []
 }

@@ -164,7 +164,13 @@ const BUILD = (() => {
   }
 
   function buildNGCRequest(){
-    const project = JSON.parse(JSON.stringify(Project?.data || {}));
+    // Antes so lia Project.data direto - se o usuario editasse paleta/CHR/fases
+    // e mandasse compilar sem salvar antes, ia com dado velho (os modulos
+    // guardam o estado ao vivo na propria memoria deles, so' escrevem de
+    // volta em Project.data dentro de collectProjectData - a mesma funcao
+    // que save()/fork() ja chamam). Compilar precisa do mesmo frescor.
+    const synced = (typeof Project.collectProjectData === 'function') ? Project.collectProjectData() : null;
+    const project = JSON.parse(JSON.stringify(synced || Project?.data || {}));
     return { version: 1, project };
   }
 

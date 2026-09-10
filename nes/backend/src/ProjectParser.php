@@ -24,6 +24,17 @@ final class ProjectParser
             }
         }
 
+        // Camada 6 (acao "Trocar Paleta"): só paga o custo (ZP + rotina na NMI
+        // + tabela de dados) se alguma regra do projeto realmente usar a
+        // acao - mesmo padrao do musicEnabled acima pra som.
+        $paletteSwapEnabled = false;
+        foreach ((is_array($project['rules'] ?? null) ? $project['rules'] : []) as $r) {
+            if (!is_array($r) || !is_array($r['steps'] ?? null)) continue;
+            foreach ($r['steps'] as $st) {
+                if (is_array($st) && ($st['actionId'] ?? '') === 'apply_palette') { $paletteSwapEnabled = true; break 2; }
+            }
+        }
+
         // Stage 21: a resolução de telas (quais backgrounds/splashes entram no
         // jogo, em que ordem, com que papel) acontece inteiramente aqui a
         // partir do project.data (.nms) bruto - sem nenhum seletor da UI.
@@ -162,6 +173,19 @@ final class ProjectParser
         // assim de propósito pra não mudar o resultado visual do jogo já aprovado.
         $paletteBytes = $this->buildPaletteData($project, $chrRaw, $screenData);
 
+        // Camada 6 (acao "Trocar Paleta"): exporta o BANCO INTEIRO pra ROM
+        // (nao so' as 8 paletas ativas nos slots da PPU que buildPaletteData
+        // acima devolve) - cada entrada vira 4 bytes enderecaveis, na MESMA
+        // ordem em que aparece em project.paletteBank. ProgramCompiler usa
+        // essa mesma ordem (index = posicao no array) pra resolver o
+        // targetId de uma acao "Trocar Paleta" pro label certo - ver
+        // ProgramCompiler::compile() / paletteBankById.
+        $paletteBankBytes = [];
+        foreach ((is_array($project['paletteBank'] ?? null) ? $project['paletteBank'] : []) as $pb) {
+            $colors = is_array($pb['colors'] ?? null) ? $pb['colors'] : [15, 0, 16, 48];
+            for ($c = 0; $c < 4; $c++) $paletteBankBytes[] = (int)($colors[$c] ?? 0) & 0x3F;
+        }
+
         // Camada 6 - Fase 1: variáveis + motor de regras (ver ProgramCompiler.php).
         $program = (new ProgramCompiler())->compile($project, $sprite, $playIdxs, $screenData, $screenIndexById);
 
@@ -171,9 +195,11 @@ final class ProjectParser
             'controlMode' => ($project['controlMode'] ?? 'auto') === 'programmed' ? 'programmed' : 'auto',
             'soundItems' => $soundItems,
             'musicEnabled' => $hasSound,
+            'paletteSwapEnabled' => $paletteSwapEnabled,
             'screens' => $screens,
             'screenData' => $screenData,
             'palette' => $paletteBytes,
+            'paletteBankBytes' => $paletteBankBytes,
             'bg' => [
                 'chr' => $bgPack['bgChr'],
                 'usedCount' => $bgPack['usedCount'],
