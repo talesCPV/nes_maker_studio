@@ -1,0 +1,17 @@
+Técnicas de Compressão de Telas na PRG
+
+Para desenhar dezenas de telas mesmo com esse limite severo de PRG, os programadores utilizavam técnicas de
+estruturação de dados:
+    
+    Metatiles (Blocos de 16x16 ou 32x32): Em vez de salvar a posição de cada tile de 8x8 pixels na PRG-ROM, 
+    os jogos agrupavam 4 tiles em um "Metatile" de 16x16 pixels (2x2). Isso reduz o custo de armazenamento 
+    do mapa na PRG em 75%. Usando blocos de 32x32 pixels, a economia chega a quase 94%.
+
+    Arquitetura por Objetos: Em vez de mapear a tela inteira quadro a quadro, a PRG armazena instruções 
+    abstratas como "desenhe o chão da posição X1 até X10" ou "coloque uma plataforma no ponto (X, Y)". O 
+    código em Assembly interpreta a instrução e desenha a matriz no Nametable dinamicamente na VRAM.
+
+    Compressão RLE (Run-Length Encoding): Substitui sequências de tiles idênticos por um contador (ex: 
+    indicando "12 tiles de céu seguidos"), economizando espaço valioso de memória.
+
+Mesmo dependendo da PRG de 32 KB para armazenar os dados de tela, o uso dessas técnicas aliado à troca de CHR-ROM permitia que jogos como Gradius e DuckTales entregassem mundos extensos e com grande variação visual.

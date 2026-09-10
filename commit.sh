@@ -21,6 +21,7 @@ then
     git add index.html
     git add intro.md
     git add deploy.sh
+    git add futuro.txt
     
     git commit -m "by_script"
 
