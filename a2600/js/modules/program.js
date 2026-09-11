@@ -1,80 +1,36 @@
 /**
  * PROGRAM — lógica do jogo Atari 2600 (6507)
  *
- * Condições de regra (AND):
- *  - var        — compara variável (RAM)
- *  - joy        — joystick P0/P1 (SWCHA + INPT4/INPT5)
- *  - collision  — bits CX* do TIA (P0/P1/M0/M1/BL/PF)
- *  - timer      — INTIM do RIOT
- *  - switch     — Reset / Select / B&W / Difficulty
+ * Adaptado do módulo NES, com limites do 2600:
+ *  - 6507 ≈ 6502, mas só 13 linhas de endereço (8 KB janela típica)
+ *  - RAM útil: 128 bytes no RIOT ($80–$FF)
+ *  - TIA $00–$2C (regs de vídeo/áudio/input)
+ *  - Sem stack profundo para “objetos NES”; regras geram rotinas no overscan/vblank
  *
- * Evento da regra = quando o kernel avalia (vblank, overscan, input…).
- * Condição = filtro dentro desse momento.
+ * Dados em Project.data:
+ *  - variables[]
+ *  - rules[]  (com ruleTabs para organização visual)
+ *  - gameObjects[]  (spawns: tela + x/y + player + sprite)
+ *  - programMeta { notes }
  */
 const PROGRAM = (() => {
-  let activeTab = 'vars';
+  let activeTab = 'vars'; // vars | objects | rules | kernel
+  let selectedObjectId = null;
   let activeRuleTabId = 'main';
   let selectedRuleId = null;
 
   const OPS = ['==', '!=', '>', '<', '>=', '<='];
 
-  const COND_KINDS = [
-    { value: 'var', label: 'Variável' },
-    { value: 'joy', label: 'Joystick' },
-    { value: 'collision', label: 'Colisão TIA' },
-    { value: 'timer', label: 'Timer RIOT' },
-    { value: 'switch', label: 'Chave do console' },
-  ];
-
-  const JOY_PLAYERS = [
-    { value: '0', label: 'P0 (esquerda)' },
-    { value: '1', label: 'P1 (direita)' },
-  ];
-  const JOY_BUTTONS = [
-    { value: 'up', label: 'Cima' },
-    { value: 'down', label: 'Baixo' },
-    { value: 'left', label: 'Esquerda' },
-    { value: 'right', label: 'Direita' },
-    { value: 'fire', label: 'Tiro (botão)' },
-  ];
-  const JOY_STATES = [
-    { value: 'pressed', label: 'pressionado' },
-    { value: 'released', label: 'solto' },
-  ];
-
-  // Registradores CX* do TIA (bit 7 = colisão neste frame, até CXCLR)
-  const COLLISION_PAIRS = [
-    { value: 'p0_pf', label: 'P0 toca Playfield' },
-    { value: 'p1_pf', label: 'P1 toca Playfield' },
-    { value: 'p0_p1', label: 'P0 toca P1' },
-    { value: 'm0_p0', label: 'Missile 0 toca P0' },
-    { value: 'm0_p1', label: 'Missile 0 toca P1' },
-    { value: 'm1_p0', label: 'Missile 1 toca P0' },
-    { value: 'm1_p1', label: 'Missile 1 toca P1' },
-    { value: 'm0_pf', label: 'Missile 0 toca Playfield' },
-    { value: 'm1_pf', label: 'Missile 1 toca Playfield' },
-    { value: 'm0_bl', label: 'Missile 0 toca Ball' },
-    { value: 'm1_bl', label: 'Missile 1 toca Ball' },
-    { value: 'bl_pf', label: 'Ball toca Playfield' },
-    { value: 'bl_p0', label: 'Ball toca P0' },
-    { value: 'bl_p1', label: 'Ball toca P1' },
-  ];
-
-  const SWITCHES = [
-    { value: 'reset', label: 'Reset' },
-    { value: 'select', label: 'Select' },
-    { value: 'bw', label: 'B&W / Color' },
-    { value: 'diff0', label: 'Difficulty P0 (A/B)' },
-    { value: 'diff1', label: 'Difficulty P1 (A/B)' },
-  ];
-
   const EVENT_CATALOG = [
     { value: 'boot', label: 'Boot (início do cartucho)' },
     { value: 'vblank', label: 'VBlank (lógica entre frames)' },
     { value: 'overscan', label: 'Overscan (após desenhar tela)' },
-    { value: 'input', label: 'Input (ler joystick / botão)' },
-    { value: 'timer', label: 'Timer RIOT estourou' },
+    { value: 'input', label: 'Input (joystick / botão)' },
+    { value: 'timer', label: 'Timer RIOT' },
     { value: 'enter_screen', label: 'Ao entrar na tela' },
+    { value: 'collision_m0p1', label: 'Colisão M0–P1' },
+    { value: 'collision_p0pf', label: 'Colisão P0–PF' },
+    { value: 'collision_p1pf', label: 'Colisão P1–PF' },
     { value: 'custom', label: 'Custom (label ASM)' },
   ];
 
@@ -86,17 +42,16 @@ const PROGRAM = (() => {
     { value: 'play_sound', label: 'Tocar som (TIA)' },
     { value: 'stop_sound', label: 'Parar canal de som' },
     { value: 'set_sprite', label: 'Trocar gráfico do player' },
-    { value: 'enable_shot', label: 'Ligar missile/ball' },
-    { value: 'disable_shot', label: 'Desligar missile/ball' },
+    { value: 'spawn_player', label: 'Spawnar player (ponto + sprite)' },
     { value: 'goto_screen', label: 'Ir para tela' },
     { value: 'set_tia', label: 'Escrever registrador TIA' },
-    { value: 'start_timer', label: 'Armar timer RIOT' },
     { value: 'asm', label: 'Bloco ASM livre' },
   ];
 
+  // RAM 2600: $80–$FF = 128 bytes. Reservamos alguns pro runtime.
   const RAM_START = 0x80;
   const RAM_SIZE = 128;
-  const RESERVED_RUNTIME = 16;
+  const RESERVED_RUNTIME = 16; // ponteiros, tmp, seed, etc.
 
   function ensureData() {
     if (!Project.data) Project.data = Project.defaultData();
@@ -105,62 +60,15 @@ const PROGRAM = (() => {
     if (!Array.isArray(Project.data.ruleTabs) || !Project.data.ruleTabs.length) {
       Project.data.ruleTabs = [{ id: 'main', name: 'main' }];
     }
+    if (!Array.isArray(Project.data.gameObjects)) Project.data.gameObjects = [];
+    if (!Array.isArray(Project.data.sprites)) Project.data.sprites = [];
+    if (!Array.isArray(Project.data.screens)) Project.data.screens = [];
     if (!Project.data.programMeta) Project.data.programMeta = { notes: '' };
-    Project.data.rules.forEach((r) => {
-      (r.conditions || []).forEach(normalizeCond);
-    });
     return Project.data;
-  }
-
-  function normalizeCond(c) {
-    if (!c || typeof c !== 'object') return c;
-    if (!c.kind) {
-      // migração: {left, op, right} antigo → var
-      c.kind = 'var';
-    }
-    return c;
   }
 
   function uid(prefix) {
     return (prefix || 'id') + '_' + Date.now().toString(36) + '_' + Math.floor(Math.random() * 1e4).toString(36);
-  }
-
-  function emptyCond(kind) {
-    switch (kind) {
-      case 'joy':
-        return { kind: 'joy', player: '0', button: 'fire', state: 'pressed' };
-      case 'collision':
-        return { kind: 'collision', pair: 'p0_pf', state: 'yes' };
-      case 'timer':
-        return { kind: 'timer', op: '==', right: '0' };
-      case 'switch':
-        return { kind: 'switch', name: 'reset', state: 'pressed' };
-      default:
-        return { kind: 'var', left: '', op: '==', right: '0' };
-    }
-  }
-
-  function condSummary(c) {
-    c = normalizeCond(c) || {};
-    const kind = c.kind || 'var';
-    if (kind === 'joy') {
-      const pl = c.player === '1' ? 'P1' : 'P0';
-      const btn = (JOY_BUTTONS.find((b) => b.value === c.button) || {}).label || c.button;
-      const st = c.state === 'released' ? 'solto' : 'pressionado';
-      return `joy ${pl} ${btn} ${st}`;
-    }
-    if (kind === 'collision') {
-      const p = (COLLISION_PAIRS.find((x) => x.value === c.pair) || {}).label || c.pair;
-      return c.state === 'no' ? `NÃO ${p}` : p;
-    }
-    if (kind === 'timer') {
-      return `INTIM ${c.op || '=='} ${c.right || '0'}`;
-    }
-    if (kind === 'switch') {
-      const n = (SWITCHES.find((x) => x.value === c.name) || {}).label || c.name;
-      return `chave ${n} ${c.state === 'released' ? 'solta' : 'pressionada'}`;
-    }
-    return `${c.left || '?'} ${c.op || '=='} ${c.right || '0'}`;
   }
 
   function computeAllocation(vars) {
@@ -174,7 +82,12 @@ const PROGRAM = (() => {
           boolOpen = true;
           bit = 0;
         }
-        list.push({ ...v, address: RAM_START + byte, bitIndex: bit, sizeBytes: 0 });
+        list.push({
+          ...v,
+          address: RAM_START + byte,
+          bitIndex: bit,
+          sizeBytes: 0,
+        });
         bit++;
         if (bit >= 8) {
           boolOpen = false;
@@ -186,7 +99,12 @@ const PROGRAM = (() => {
           byte++;
         }
         const size = v.type === 'word' ? 2 : 1;
-        list.push({ ...v, address: RAM_START + byte, bitIndex: null, sizeBytes: size });
+        list.push({
+          ...v,
+          address: RAM_START + byte,
+          bitIndex: null,
+          sizeBytes: size,
+        });
         byte += size;
       }
     }
@@ -207,9 +125,10 @@ const PROGRAM = (() => {
     root.innerHTML = `
       <div class="prog-wrap">
         <div class="prog-toolbar">
-          <button type="button" class="prog-tab ${activeTab === 'vars' ? 'active' : ''}" data-tab="vars">Variáveis</button>
-          <button type="button" class="prog-tab ${activeTab === 'rules' ? 'active' : ''}" data-tab="rules">Regras</button>
-          <button type="button" class="prog-tab ${activeTab === 'kernel' ? 'active' : ''}" data-tab="kernel">Kernel / 6507</button>
+          <button type="button" class="prog-tab ${activeTab === 'vars' ? 'active' : ''}" data-tab="vars">📦 Variáveis</button>
+          <button type="button" class="prog-tab ${activeTab === 'objects' ? 'active' : ''}" data-tab="objects">🎯 Objetos</button>
+          <button type="button" class="prog-tab ${activeTab === 'rules' ? 'active' : ''}" data-tab="rules">📜 Regras</button>
+          <button type="button" class="prog-tab ${activeTab === 'kernel' ? 'active' : ''}" data-tab="kernel">⏱ Kernel / 6507</button>
           <span class="prog-hint">RAM $80–$FF · 128 bytes · TIA + RIOT</span>
         </div>
         <div class="prog-body" id="progTabContent"></div>
@@ -229,6 +148,7 @@ const PROGRAM = (() => {
     const cont = document.getElementById('progTabContent');
     if (!cont) return;
     if (activeTab === 'vars') cont.innerHTML = renderVarsTab();
+    else if (activeTab === 'objects') cont.innerHTML = renderObjectsTab();
     else if (activeTab === 'rules') cont.innerHTML = renderRulesTab();
     else cont.innerHTML = renderKernelTab();
     bindTabEvents();
@@ -256,7 +176,7 @@ const PROGRAM = (() => {
           </td>
           <td class="mono">${addr}</td>
           <td><input class="prog-inp" data-f="note" value="${escapeAttr(v.note || '')}" placeholder="nota" /></td>
-          <td><button type="button" class="prog-btn danger prog-del-var" data-idx="${idx}">Excluir</button></td>
+          <td><button type="button" class="prog-btn danger prog-del-var" data-idx="${idx}">🗑</button></td>
         </tr>`;
       })
       .join('');
@@ -286,6 +206,38 @@ const PROGRAM = (() => {
     `;
   }
 
+
+  function renderObjectsTab() {
+    const d = ensureData();
+    const objs = (d.gameObjects || []).filter((o) => (o.kind || 'spawn') === 'spawn');
+    const screens = d.screens || [];
+    const rows = objs
+      .map((o) => {
+        const sc = screens.find((s) => s.id === o.screenId);
+        return (
+          '<tr><td><b>' +
+          escapeHtml(o.name || 'Spawn') +
+          '</b></td><td>' +
+          escapeHtml(sc ? sc.name : '—') +
+          '</td><td class="mono">(' +
+          (o.x | 0) +
+          ',' +
+          (o.y | 0) +
+          ')</td></tr>'
+        );
+      })
+      .join('');
+    return (
+      '<div class="prog-panel">' +
+      '<div class="prog-panel-head"><strong>Pontos de spawn</strong></div>' +
+      '<p class="muted">Crie e posicione os spawns no módulo <b>Playfield</b> (ferramenta 🎯). ' +
+      'Aqui só consultamos a lista. Nas <b>Regras</b>, use a ação <b>Spawnar player</b> escolhendo o ponto e o sprite.</p>' +
+      '<table class="prog-table"><thead><tr><th>Nome</th><th>Tela</th><th>X,Y</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="3" class="muted">Nenhum spawn — abra Playfield e use 🎯</td></tr>') +
+      '</tbody></table></div>'
+    );
+  }
+
   function renderRulesTab() {
     const d = ensureData();
     if (!d.ruleTabs.some((t) => t.id === activeRuleTabId)) {
@@ -304,14 +256,16 @@ const PROGRAM = (() => {
     const rules = d.rules.filter((r) => (r.tabId || 'main') === activeRuleTabId);
     const rulesHtml = rules
       .map((r) => {
-        const cond = (r.conditions || []).map(condSummary).join(' && ') || '(sempre)';
+        const cond = (r.conditions || [])
+          .map((c) => `${c.left || '?'} ${c.op || '=='} ${c.right || '0'}`)
+          .join(' && ') || '(sempre)';
         const acts = (r.actions || []).map((a) => a.type || 'ação').join(', ') || '—';
         return `
         <div class="rule-card ${selectedRuleId === r.id ? 'sel' : ''}" data-rid="${r.id}">
           <div class="rule-card-top">
             <strong>${escapeHtml(r.name || 'Regra')}</strong>
             <span class="pill">${escapeHtml(r.event || 'vblank')}</span>
-            <button type="button" class="prog-btn danger rule-del" data-rid="${r.id}">Excluir</button>
+            <button type="button" class="prog-btn danger rule-del" data-rid="${r.id}">🗑</button>
           </div>
           <div class="muted">se ${escapeHtml(cond)}</div>
           <div class="muted">então ${escapeHtml(acts)}</div>
@@ -339,94 +293,68 @@ const PROGRAM = (() => {
     `;
   }
 
-  function renderCondFields(c, i) {
-    const kind = c.kind || 'var';
-    const kindSel = COND_KINDS.map(
-      (k) => `<option value="${k.value}" ${kind === k.value ? 'selected' : ''}>${k.label}</option>`
-    ).join('');
-
-    let fields = '';
-    if (kind === 'joy') {
-      fields = `
-        <select class="prog-inp cond-player">
-          ${JOY_PLAYERS.map(
-            (p) => `<option value="${p.value}" ${String(c.player) === p.value ? 'selected' : ''}>${p.label}</option>`
-          ).join('')}
-        </select>
-        <select class="prog-inp cond-button">
-          ${JOY_BUTTONS.map(
-            (b) => `<option value="${b.value}" ${c.button === b.value ? 'selected' : ''}>${b.label}</option>`
-          ).join('')}
-        </select>
-        <select class="prog-inp cond-state">
-          ${JOY_STATES.map(
-            (s) => `<option value="${s.value}" ${c.state === s.value ? 'selected' : ''}>${s.label}</option>`
-          ).join('')}
-        </select>`;
-    } else if (kind === 'collision') {
-      fields = `
-        <select class="prog-inp cond-pair">
-          ${COLLISION_PAIRS.map(
-            (p) => `<option value="${p.value}" ${c.pair === p.value ? 'selected' : ''}>${p.label}</option>`
-          ).join('')}
-        </select>
-        <select class="prog-inp cond-colstate">
-          <option value="yes" ${c.state !== 'no' ? 'selected' : ''}>está tocando</option>
-          <option value="no" ${c.state === 'no' ? 'selected' : ''}>não está tocando</option>
-        </select>`;
-    } else if (kind === 'timer') {
-      fields = `
-        <span class="muted">INTIM</span>
-        <select class="prog-inp cond-op">${OPS.map(
-          (op) => `<option ${c.op === op ? 'selected' : ''}>${op}</option>`
-        ).join('')}</select>
-        <input class="prog-inp cond-right" value="${escapeAttr(c.right || '0')}" placeholder="0–255" style="width:72px" />`;
-    } else if (kind === 'switch') {
-      fields = `
-        <select class="prog-inp cond-swname">
-          ${SWITCHES.map(
-            (s) => `<option value="${s.value}" ${c.name === s.value ? 'selected' : ''}>${s.label}</option>`
-          ).join('')}
-        </select>
-        <select class="prog-inp cond-state">
-          <option value="pressed" ${c.state !== 'released' ? 'selected' : ''}>pressionada / A / B&W</option>
-          <option value="released" ${c.state === 'released' ? 'selected' : ''}>solta / B / Color</option>
-        </select>`;
-    } else {
-      fields = `
-        <input class="prog-inp cond-left" value="${escapeAttr(c.left || '')}" placeholder="variável" list="progVarList" />
-        <select class="prog-inp cond-op">${OPS.map(
-          (op) => `<option ${c.op === op ? 'selected' : ''}>${op}</option>`
-        ).join('')}</select>
-        <input class="prog-inp cond-right" value="${escapeAttr(c.right || '')}" placeholder="valor" />`;
-    }
-
-    return `
-      <div class="cond-row" data-i="${i}">
-        <select class="prog-inp cond-kind">${kindSel}</select>
-        ${fields}
-        <button type="button" class="prog-btn danger cond-del" data-i="${i}">×</button>
-      </div>`;
-  }
-
   function renderRuleEditor(r) {
     const d = ensureData();
+    const varOpts = d.variables
+      .map((v) => `<option value="${escapeAttr(v.name)}" ${false ? 'selected' : ''}>${escapeHtml(v.name)}</option>`)
+      .join('');
     const eventOpts = EVENT_CATALOG.map(
       (e) => `<option value="${e.value}" ${r.event === e.value ? 'selected' : ''}>${e.label}</option>`
     ).join('');
 
-    const conds = (r.conditions || []).map((c, i) => renderCondFields(normalizeCond(c), i)).join('');
+    const conds = (r.conditions || [])
+      .map(
+        (c, i) => `
+      <div class="cond-row" data-i="${i}">
+        <input class="prog-inp cond-left" value="${escapeAttr(c.left || '')}" placeholder="var / reg" list="progVarList" />
+        <select class="prog-inp cond-op">${OPS.map(
+          (op) => `<option ${c.op === op ? 'selected' : ''}>${op}</option>`
+        ).join('')}</select>
+        <input class="prog-inp cond-right" value="${escapeAttr(c.right || '')}" placeholder="valor" />
+        <button type="button" class="prog-btn danger cond-del" data-i="${i}">×</button>
+      </div>`
+      )
+      .join('');
 
+    const sprites = d.sprites || [];
+    const spawns = (d.gameObjects || []).filter((o) => (o.kind || 'spawn') === 'spawn');
     const acts = (r.actions || [])
       .map((a, i) => {
         const typeOpts = ACTION_CATALOG.map(
           (t) => `<option value="${t.value}" ${a.type === t.value ? 'selected' : ''}>${t.label}</option>`
         ).join('');
+        let extra = `
+          <input class="prog-inp act-arg" value="${escapeAttr(a.arg || '')}" placeholder="arg / nome / valor" />
+          <input class="prog-inp act-arg2" value="${escapeAttr(a.arg2 || '')}" placeholder="arg2 (opcional)" />`;
+        if (a.type === 'spawn_player') {
+          const sprOpts =
+            `<option value="">— sprite —</option>` +
+            sprites
+              .map(
+                (s) =>
+                  `<option value="${escapeAttr(s.id)}" ${a.arg === s.id ? 'selected' : ''}>${escapeHtml(
+                    s.name || s.id
+                  )}</option>`
+              )
+              .join('');
+          const spnOpts =
+            `<option value="">— spawn —</option>` +
+            spawns
+              .map(
+                (s) =>
+                  `<option value="${escapeAttr(s.id)}" ${a.arg2 === s.id ? 'selected' : ''}>${escapeHtml(
+                    s.name || s.id
+                  )} (P${s.player | 0})</option>`
+              )
+              .join('');
+          extra = `
+            <select class="prog-inp act-arg" title="Sprite / personagem">${sprOpts}</select>
+            <select class="prog-inp act-arg2" title="Ponto de spawn">${spnOpts}</select>`;
+        }
         return `
         <div class="act-row" data-i="${i}">
           <select class="prog-inp act-type">${typeOpts}</select>
-          <input class="prog-inp act-arg" value="${escapeAttr(a.arg || '')}" placeholder="arg / nome / valor" />
-          <input class="prog-inp act-arg2" value="${escapeAttr(a.arg2 || '')}" placeholder="arg2 (opcional)" />
+          ${extra}
           <button type="button" class="prog-btn danger act-del" data-i="${i}">×</button>
         </div>`;
       })
@@ -440,16 +368,9 @@ const PROGRAM = (() => {
         </div>
         <datalist id="progVarList">${d.variables.map((v) => `<option value="${escapeAttr(v.name)}">`).join('')}</datalist>
 
-        <h4>Condições (todas devem ser verdadeiras)</h4>
-        <p class="muted" style="margin-top:-4px">Evento = quando avalia. Condição = filtro (joystick, colisão, timer, variável…).</p>
-        <div id="ruleConds">${conds || '<div class="muted">Sem condições = sempre verdadeiro neste evento</div>'}</div>
-        <div class="cond-add-row">
-          <button type="button" class="prog-btn" data-add-kind="var">+ Variável</button>
-          <button type="button" class="prog-btn" data-add-kind="joy">+ Joystick</button>
-          <button type="button" class="prog-btn" data-add-kind="collision">+ Colisão</button>
-          <button type="button" class="prog-btn" data-add-kind="timer">+ Timer</button>
-          <button type="button" class="prog-btn" data-add-kind="switch">+ Chave</button>
-        </div>
+        <h4>Condições (E)</h4>
+        <div id="ruleConds">${conds || '<div class="muted">Sem condições = sempre verdadeiro</div>'}</div>
+        <button type="button" class="prog-btn" id="ruleAddCond">+ Condição</button>
 
         <h4 style="margin-top:14px">Ações</h4>
         <div id="ruleActs">${acts || '<div class="muted">Nenhuma ação</div>'}</div>
@@ -461,8 +382,8 @@ const PROGRAM = (() => {
         )}</textarea>
 
         <p class="muted" style="margin-top:8px">
-          Colisões TIA valem até o próximo <b>CXCLR</b> (geralmente 1 frame).
-          Joystick: bits invertidos no hardware (0 = pressionado) — o build trata isso.
+          Eventos como <b>vblank</b> e <b>overscan</b> são os lugares seguros para lógica.
+          Evite trabalho pesado durante o kernel de desenho.
         </p>
       </div>
     `;
@@ -477,11 +398,14 @@ const PROGRAM = (() => {
         <ul class="prog-ul">
           <li><b>Scanline a scanline:</b> o kernel desenha PF/players enquanto a TV varre a linha.</li>
           <li><b>VBlank / Overscan:</b> onde as regras de jogo devem rodar (tempo de CPU “livre”).</li>
-          <li><b>Joystick:</b> SWCHA (direções) + INPT4/INPT5 (tiro). Bit 0 = pressionado.</li>
-          <li><b>Colisão:</b> registradores CX* (bit 7). Limpar com CXCLR no fim do frame.</li>
-          <li><b>Timer RIOT:</b> INTIM conta para baixo; útil para cadência de tiro / i-frames.</li>
           <li><b>RAM 128 bytes</b> ($80–$FF): estado do jogo, posições, flags.</li>
+          <li><b>ROM</b> no cartucho (2K–32K com bankswitch F8/F6/F4): código + dados.</li>
+          <li><b>TIA:</b> gráficos e som por registradores; colisões lidas em bits de colisão.</li>
         </ul>
+        <p class="muted">
+          Diferente do NES, não há PPU com nametable. “Programar” aqui é combinar
+          regras de alto nível (que viram ASM no build) com o timing do kernel.
+        </p>
         <h4>Notas do projeto</h4>
         <textarea class="prog-asm" id="progNotes" rows="8" placeholder="Anotações de design / labels / TODOs...">${escapeHtml(
           notes
@@ -490,9 +414,105 @@ const PROGRAM = (() => {
     `;
   }
 
+  function drawObjPreview(o) {
+    const canvas = document.getElementById('objPreview');
+    if (!canvas || !o) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width;
+    const H = canvas.height;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    for (let x = 0; x < W; x += 10) { ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, H); ctx.stroke(); }
+    for (let y = 0; y < H; y += 10) { ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5); ctx.stroke(); }
+    const px = ((o.x | 0) / 160) * W;
+    const py = ((o.y | 0) / 192) * H;
+    ctx.fillStyle = (o.player | 0) === 1 ? '#58d68d' : '#5dade2';
+    ctx.beginPath();
+    ctx.arc(px, py, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff8';
+    ctx.stroke();
+    ctx.fillStyle = '#f4a261';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('P' + (o.player | 0) + ' ' + (o.x | 0) + ',' + (o.y | 0), 6, 12);
+  }
+
   function bindTabEvents() {
     const d = ensureData();
 
+    document.getElementById('progAddSpawn')?.addEventListener('click', () => {
+      const d0 = ensureData();
+      const screenId = (d0.screens[0] && d0.screens[0].id) || '';
+      const spr = (d0.sprites || []).find((s) => (s.player | 0) === 0) || (d0.sprites || [])[0];
+      const o = {
+        id: uid('spawn'),
+        name: 'Spawn ' + (d0.gameObjects.length + 1),
+        kind: 'spawn',
+        screenId,
+        x: 80,
+        y: 80,
+        player: spr ? spr.player | 0 : 0,
+        spriteId: spr ? spr.id : '',
+      };
+      d0.gameObjects.push(o);
+      selectedObjectId = o.id;
+      dirty();
+      renderTab();
+    });
+    document.querySelectorAll('.rule-card[data-oid]').forEach((card) => {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.obj-del')) return;
+        selectedObjectId = card.getAttribute('data-oid');
+        renderTab();
+      });
+    });
+    document.querySelectorAll('.obj-del').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-oid');
+        if (!confirm('Excluir spawn?')) return;
+        d.gameObjects = d.gameObjects.filter((o) => o.id !== id);
+        if (selectedObjectId === id) selectedObjectId = null;
+        dirty();
+        renderTab();
+      });
+    });
+    const curObj = (d.gameObjects || []).find((o) => o.id === selectedObjectId);
+    if (curObj) {
+      document.getElementById('objName')?.addEventListener('input', (e) => { curObj.name = e.target.value; dirty(); });
+      document.getElementById('objScreen')?.addEventListener('change', (e) => { curObj.screenId = e.target.value; dirty(); drawObjPreview(curObj); });
+      document.getElementById('objPlayer')?.addEventListener('change', (e) => { curObj.player = parseInt(e.target.value, 10) || 0; dirty(); drawObjPreview(curObj); });
+      document.getElementById('objSprite')?.addEventListener('change', (e) => { curObj.spriteId = e.target.value; dirty(); });
+      document.getElementById('objX')?.addEventListener('change', (e) => {
+        curObj.x = Math.max(0, Math.min(160, parseInt(e.target.value, 10) || 0));
+        e.target.value = curObj.x; dirty(); drawObjPreview(curObj);
+      });
+      document.getElementById('objY')?.addEventListener('change', (e) => {
+        curObj.y = Math.max(0, Math.min(192, parseInt(e.target.value, 10) || 0));
+        e.target.value = curObj.y; dirty(); drawObjPreview(curObj);
+      });
+      const canvas = document.getElementById('objPreview');
+      if (canvas) {
+        drawObjPreview(curObj);
+        canvas.addEventListener('click', (ev) => {
+          const r = canvas.getBoundingClientRect();
+          const px = (ev.clientX - r.left) / r.width;
+          const py = (ev.clientY - r.top) / r.height;
+          curObj.x = Math.max(0, Math.min(160, Math.round(px * 160)));
+          curObj.y = Math.max(0, Math.min(192, Math.round(py * 192)));
+          const xEl = document.getElementById('objX');
+          const yEl = document.getElementById('objY');
+          if (xEl) xEl.value = curObj.x;
+          if (yEl) yEl.value = curObj.y;
+          dirty();
+          drawObjPreview(curObj);
+        });
+      }
+    }
+
+
+    // vars
     document.getElementById('progAddVar')?.addEventListener('click', () => {
       d.variables.push({
         id: uid('var'),
@@ -523,6 +543,7 @@ const PROGRAM = (() => {
       });
     });
 
+    // rules tabs
     document.querySelectorAll('.rule-tab[data-tid]').forEach((btn) => {
       btn.addEventListener('click', () => {
         activeRuleTabId = btn.getAttribute('data-tid');
@@ -599,6 +620,7 @@ const PROGRAM = (() => {
       });
     });
 
+    // rule editor
     const rule = d.rules.find((r) => r.id === selectedRuleId);
     if (rule) {
       document.getElementById('ruleName')?.addEventListener('input', (e) => {
@@ -613,66 +635,30 @@ const PROGRAM = (() => {
         rule.asm = e.target.value;
         dirty();
       });
-
-      document.querySelectorAll('[data-add-kind]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          if (!rule.conditions) rule.conditions = [];
-          rule.conditions.push(emptyCond(btn.getAttribute('data-add-kind')));
-          dirty();
-          renderTab();
-        });
+      document.getElementById('ruleAddCond')?.addEventListener('click', () => {
+        if (!rule.conditions) rule.conditions = [];
+        rule.conditions.push({ left: '', op: '==', right: '0' });
+        dirty();
+        renderTab();
       });
-
       document.getElementById('ruleAddAct')?.addEventListener('click', () => {
         if (!rule.actions) rule.actions = [];
         rule.actions.push({ type: 'set_var', arg: '', arg2: '' });
         dirty();
         renderTab();
       });
-
       document.querySelectorAll('.cond-row').forEach((row) => {
         const i = parseInt(row.getAttribute('data-i'), 10);
-        const c = rule.conditions[i];
-        row.querySelector('.cond-kind')?.addEventListener('change', (e) => {
-          const next = emptyCond(e.target.value);
-          rule.conditions[i] = next;
-          dirty();
-          renderTab();
-        });
         row.querySelector('.cond-left')?.addEventListener('change', (e) => {
-          c.left = e.target.value;
+          rule.conditions[i].left = e.target.value;
           dirty();
         });
         row.querySelector('.cond-op')?.addEventListener('change', (e) => {
-          c.op = e.target.value;
+          rule.conditions[i].op = e.target.value;
           dirty();
         });
         row.querySelector('.cond-right')?.addEventListener('change', (e) => {
-          c.right = e.target.value;
-          dirty();
-        });
-        row.querySelector('.cond-player')?.addEventListener('change', (e) => {
-          c.player = e.target.value;
-          dirty();
-        });
-        row.querySelector('.cond-button')?.addEventListener('change', (e) => {
-          c.button = e.target.value;
-          dirty();
-        });
-        row.querySelector('.cond-state')?.addEventListener('change', (e) => {
-          c.state = e.target.value;
-          dirty();
-        });
-        row.querySelector('.cond-pair')?.addEventListener('change', (e) => {
-          c.pair = e.target.value;
-          dirty();
-        });
-        row.querySelector('.cond-colstate')?.addEventListener('change', (e) => {
-          c.state = e.target.value;
-          dirty();
-        });
-        row.querySelector('.cond-swname')?.addEventListener('change', (e) => {
-          c.name = e.target.value;
+          rule.conditions[i].right = e.target.value;
           dirty();
         });
         row.querySelector('.cond-del')?.addEventListener('click', () => {
@@ -681,7 +667,6 @@ const PROGRAM = (() => {
           renderTab();
         });
       });
-
       document.querySelectorAll('.act-row').forEach((row) => {
         const i = parseInt(row.getAttribute('data-i'), 10);
         row.querySelector('.act-type')?.addEventListener('change', (e) => {
@@ -715,9 +700,7 @@ const PROGRAM = (() => {
   }
 
   function injectStyles() {
-    if (document.getElementById('prog-styles')) {
-      document.getElementById('prog-styles').remove();
-    }
+    if (document.getElementById('prog-styles')) return;
     const s = document.createElement('style');
     s.id = 'prog-styles';
     s.textContent = `
@@ -762,7 +745,7 @@ const PROGRAM = (() => {
         padding:8px; font-family:ui-monospace,monospace; font-size:12px; resize:vertical; box-sizing:border-box;
       }
       .prog-rules-layout { display:flex; gap:12px; min-height:100%; align-items:stretch; }
-      .prog-rules-list { width:300px; flex-shrink:0; display:flex; flex-direction:column; gap:8px; }
+      .prog-rules-list { width:280px; flex-shrink:0; display:flex; flex-direction:column; gap:8px; }
       .prog-rules-edit { flex:1; min-width:0; }
       .rule-tabs { display:flex; flex-wrap:wrap; gap:4px; }
       .rule-tab {
@@ -781,17 +764,20 @@ const PROGRAM = (() => {
       .rule-card-top strong { flex:1; color:#eee; font-size:12px; }
       .pill { font-size:10px; background:#2a2a2a; color:#f4a261; padding:2px 6px; border-radius:99px; }
       .cond-row, .act-row { display:flex; gap:6px; margin-bottom:6px; flex-wrap:wrap; align-items:center; }
-      .cond-add-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
       h4 { color:#f4a261; font-size:12px; margin:12px 0 8px; }
+      .obj-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+      .obj-grid label { display:flex; flex-direction:column; gap:4px; font-size:11px; color:#888; }
+      .obj-preview-wrap { margin-top:8px; }
+      #objPreview { background:#000; border:1px solid #333; border-radius:6px; cursor:crosshair; image-rendering:pixelated; width:100%; max-width:320px; height:auto; }
     `;
     document.head.appendChild(s);
   }
 
   function escapeHtml(s) {
-    return String(s ?? '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+    return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
   function escapeAttr(s) {
-    return escapeHtml(s).replace(/"/g, '"');
+    return escapeHtml(s).replace(/"/g, '&quot;');
   }
 
   function flush() {

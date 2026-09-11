@@ -51,6 +51,19 @@ load_screen:
   LDA #\$00
   STA \$2006
   LDY #0
+  ; Camada 8 (compressão por metatile): se essa tela for comprimida,
+  ; expande MetatileIndex_<tela> (240 bytes) em vez de copiar
+  ; Nametable_<tela> (960 bytes) cru - tmp0/tmp1 já apontam pro que for
+  ; certo (ScreenNtLo/Hi resolve pro label certo em tempo de build).
+  ; IMPORTANTE: usa X aqui só pra esse teste, ANTES do LDX #4 do loop cru -
+  ; um bug anterior fazia LDA cur_screen/TAX pisar no X#4 do contador do
+  ; loop de cópia, criando um loop bem mais longo que o esperado.
+  LDX cur_screen
+  LDA ScreenCompressed,X
+  BEQ ls_nt_raw
+  JSR mtx_expand_nt
+  JMP ls_nt_after
+ls_nt_raw:
   LDX #4
 ls_nt_outer:
   LDA #240
@@ -66,6 +79,7 @@ ls_nt_noinc:
   BNE ls_nt_inner
   DEX
   BNE ls_nt_outer
+ls_nt_after:
   ; attributes
   LDX cur_screen
   LDA ScreenAtLo,X
@@ -165,6 +179,59 @@ psn_at:
   STA $2001
   RTS
 ASM2;
-        return $part1 . "\n" . $part2;
+        // Camada 8 (compressão por metatile): expande MetatileIndex_<tela>
+        // (240 bytes) em bytes de nametable de verdade, direto na PPU - 15
+        // linhas de metatile, cada uma em 2 passadas (tiles de cima TL/TR,
+        // depois de baixo BL/BR) porque uma linha de nametable de verdade
+        // (32 bytes) só cobre a METADE de cima de uma linha de metatiles.
+        // Não precisa de tabela de índice de tile nenhuma: cada metatile
+        // local ocupa SEMPRE os slots 4*id..4*id+3 no banco de CHR
+        // compactado (ver ProjectParser::buildMetatileCompression) - é
+        // aritmética pura (id*4 + 0/1/2/3), não indireção.
+        $part3 = <<<'ASM3'
+mtx_expand_nt:
+  LDX #0
+mtx_row_loop:
+  LDY #0
+mtx_top_loop:
+  LDA (tmp0),Y
+  ASL A
+  ASL A
+  STA mtx_scratch
+  STA $2007
+  LDA mtx_scratch
+  ORA #1
+  STA $2007
+  INY
+  CPY #16
+  BNE mtx_top_loop
+  LDY #0
+mtx_bot_loop:
+  LDA (tmp0),Y
+  ASL A
+  ASL A
+  STA mtx_scratch
+  ORA #2
+  STA $2007
+  LDA mtx_scratch
+  ORA #3
+  STA $2007
+  INY
+  CPY #16
+  BNE mtx_bot_loop
+  LDA tmp0
+  CLC
+  ADC #16
+  STA tmp0
+  BCC mtx_row_nc
+  INC tmp1
+mtx_row_nc:
+  INX
+  CPX #15
+  BNE mtx_row_loop
+  RTS
+ASM3;
+
+        return $part1 . "\n" . $part2 . "\n" . $part3;
     },
 ];

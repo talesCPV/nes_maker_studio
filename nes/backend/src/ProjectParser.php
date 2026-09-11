@@ -163,6 +163,32 @@ final class ProjectParser
         $cnrom = $mapperInfo['mapper'] === 3;
         $defaultBank = $mapperInfo['banks'][$mapperInfo['defaultBankIndex']];
 
+        // Camada 7: telas -> banco (mesma tabela usada pelo CNROM pra saber
+        // qual fase usa qual banco - NROM cai sempre em 1 banco só/todas as
+        // telas, mas passa pelo MESMO caminho, sem se especializar).
+        $screensByBank = [];
+        $screenBankIndex = array_fill(0, count($screenData), 0);
+        foreach ($screenData as $i => $sc) {
+            $pid = is_array($sc) ? ($sc['phaseId'] ?? null) : null;
+            $bi = ($cnrom && $pid !== null && isset($mapperInfo['phaseBankIndex'][(string)$pid]))
+                ? $mapperInfo['phaseBankIndex'][(string)$pid]
+                : $mapperInfo['defaultBankIndex'];
+            $screensByBank[$bi][] = $i;
+            $screenBankIndex[$i] = $bi;
+        }
+
+        // Camada 8 (compressão por metatile): telas "limpas" (metatileGrid
+        // completo, sem nenhuma célula null, todo id existente em
+        // project.metatiles) viram MetatileIndex_<tela> (240 bytes) em vez
+        // de Nametable_<tela>/Collision_<tela> (960+960 bytes cada) - o
+        // resto (telas antigas, ou com alguma edição manual que invalidou
+        // uma célula) continua exatamente como sempre foi. Precisa rodar
+        // ANTES do empacotamento de CHR de baixo porque os tiles dos
+        // metatiles comprimidos reservam um PREFIXO do espaço compacto de
+        // 256 tiles do banco (posição fixa 4*idLocal+subpos, sem tabela de
+        // índice) - as telas sujas usam o que sobra, escaneadas por cima.
+        $metatileCompression = $this->buildMetatileCompression($project, $screenData, $screensByBank);
+
         // Stage 15: o empacotamento CHR dos sprites passa a ser responsabilidade do NGC.
         // O backend usa diretamente project.chr + project.metatiles + project.characters.
         // Camada 7: a ATRIBUICAO de indice (qual tile usado vira qual slot 0-255) continua
@@ -179,50 +205,38 @@ final class ProjectParser
         // fases daquele banco entram na conta) - diferente do sprite, isso nao tem problema
         // de indice cruzado entre bancos porque cada tela le seu remappedNt fresco quando
         // carrega (nao existe ASM com indice de tile de fundo fixo/compartilhado).
+        // Camada 8: só as telas SUJAS desse banco entram na varredura de nametable cru -
+        // as limpas já reservaram seu prefixo via $seedMapping/$seedUsedTiles.
         $chrRaw = is_array($project['chr'] ?? null) ? $project['chr'] : [];
-        if ($cnrom) {
-            $screensByBank = [];
-            $screenBankIndex = array_fill(0, count($screenData), 0);
-            foreach ($screenData as $i => $sc) {
-                $pid = is_array($sc) ? ($sc['phaseId'] ?? null) : null;
-                $bi = ($pid !== null && isset($mapperInfo['phaseBankIndex'][(string)$pid]))
-                    ? $mapperInfo['phaseBankIndex'][(string)$pid]
-                    : $mapperInfo['defaultBankIndex'];
-                $screensByBank[$bi][] = $i;
-                $screenBankIndex[$i] = $bi;
-            }
-            $bgChrBanks = [];
-            $spriteChrBanks = [];
-            $bgUsedCount = 0;
-            $bgOverflowCount = 0;
-            $mergedScreens = $screenData;
-            foreach ($mapperInfo['banks'] as $bi => $bank) {
-                $idxList = $screensByBank[$bi] ?? [];
-                $screensForBank = [];
-                foreach ($idxList as $idx) $screensForBank[] = $screenData[$idx];
-                $pack = $this->packBackgroundChr($chrRaw, $screensForBank, $bank['bgPage'], 256);
-                $bgChrBanks[$bi] = $pack['bgChr'];
-                $bgUsedCount += $pack['usedCount'];
-                $bgOverflowCount += $pack['overflowCount'];
-                foreach ($idxList as $k => $idx) $mergedScreens[$idx] = $pack['screens'][$k];
+        $bgChrBanks = [];
+        $spriteChrBanks = [];
+        $bgUsedCount = 0;
+        $bgOverflowCount = 0;
+        $mergedScreens = $screenData;
+        foreach ($mapperInfo['banks'] as $bi => $bank) {
+            $idxList = $screensByBank[$bi] ?? [];
+            $mtBank = $metatileCompression['banks'][$bi] ?? ['seedMapping' => [0 => 0], 'seedUsedTiles' => [0], 'dirtyScreenIdx' => $idxList];
+            $dirtyIdx = $mtBank['dirtyScreenIdx'];
+            $screensForBank = [];
+            foreach ($dirtyIdx as $idx) $screensForBank[] = $screenData[$idx];
+            $chrPageBase = $cnrom ? $bank['bgPage'] : 0; // Camada 7: NROM sempre leu da pág 0 (comportamento legado preservado)
+            $chrPageMod = $cnrom ? 256 : 512;
+            $pack = $this->packBackgroundChr($chrRaw, $screensForBank, $chrPageBase, $chrPageMod, $mtBank['seedMapping'], $mtBank['seedUsedTiles']);
+            $bgChrBanks[$bi] = $pack['bgChr'];
+            $bgUsedCount += $pack['usedCount'];
+            $bgOverflowCount += $pack['overflowCount'];
+            foreach ($dirtyIdx as $k => $idx) $mergedScreens[$idx] = $pack['screens'][$k];
 
-                $spriteChrBanks[$bi] = ($bi === $mapperInfo['defaultBankIndex'])
-                    ? $sprite['spriteChr']
-                    : $this->packChrBytesForTiles($sprite['usedTiles'] ?? [], $chrRaw, $bank['spritePage'], 256);
-            }
-            $screenData = $mergedScreens;
-            $bgPack = [
-                'bgChr' => $bgChrBanks[$mapperInfo['defaultBankIndex']],
-                'usedCount' => $bgUsedCount,
-                'overflowCount' => $bgOverflowCount,
-            ];
-        } else {
-            $bgPack = $this->packBackgroundChr($chrRaw, $screenData);
-            $screenData = $bgPack['screens'];
-            $bgChrBanks = [0 => $bgPack['bgChr']];
-            $spriteChrBanks = [0 => $sprite['spriteChr']];
-            $screenBankIndex = [];
+            $spriteChrBanks[$bi] = ($bi === $mapperInfo['defaultBankIndex'])
+                ? $sprite['spriteChr']
+                : $this->packChrBytesForTiles($sprite['usedTiles'] ?? [], $chrRaw, $bank['spritePage'], 256);
         }
+        $screenData = $mergedScreens;
+        $bgPack = [
+            'bgChr' => $bgChrBanks[$mapperInfo['defaultBankIndex']],
+            'usedCount' => $bgUsedCount,
+            'overflowCount' => $bgOverflowCount,
+        ];
 
         // Stage 19: PaletteData (as 8 paletas de 4 cores + a cor de fundo universal,
         // detectada olhando o PIXEL real do tile 0 da 1ª tela) passa a ser calculada
@@ -269,6 +283,9 @@ final class ProjectParser
             'spriteChrBanks' => $spriteChrBanks,
             'screenBankIndex' => $screenBankIndex,
             'usedMetatiles' => $usedMetatiles,
+            'screenCompressed' => $metatileCompression['screenCompressed'],
+            'metatileIndexByScreen' => $metatileCompression['metatileIndexByScreen'],
+            'metatileCompressionBanks' => $metatileCompression['banks'],
             'program' => $program,
             'playIdxs' => $playIdxs,
             'splashIdx' => $this->findRoleIndex($screens, 'splash', 0),
@@ -819,10 +836,136 @@ final class ProjectParser
         ];
     }
 
-    private function packBackgroundChr(array $chr, array $screens, int $chrPageBase = 0, int $chrPageMod = 512): array
+    /**
+     * Camada 8 (compressão por metatile): $seedMapping/$seedUsedTiles deixam
+     * pré-reservar um PREFIXO do espaço compacto de 256 tiles antes de
+     * varrer as telas "sujas" (nametable cru) - é assim que os slots dos
+     * metatiles comprimidos (sempre em posição fixa 4*localId+subpos, sem
+     * tabela de índice) convivem no MESMO banco de CHR que telas antigas
+     * sem quebrar um ao outro. Sem seed, comportamento idêntico a sempre
+     * (só o tile 0 reservado como "tile em branco" no slot 0).
+     */
+    /**
+     * Camada 8 (compressão por metatile): analisa metatileGrid de cada tela
+     * (por banco) e decide quais telas são "limpas" o bastante pra virar
+     * MetatileIndex (240 bytes) em vez de Nametable/Collision crus (960+960).
+     * Os tiles dos metatiles usados por telas limpas reservam um PREFIXO
+     * fixo do espaço compacto de 256 tiles do banco - cada metatile local
+     * ocupa SEMPRE 4*idLocal..4*idLocal+3 (TL,TR,BL,BR), sem tabela de
+     * índice de tile nenhuma (a posição já é a própria conta). Só a COLISÃO
+     * precisa de tabela (MetatileCollision_bank<N>, 1 byte por id local:
+     * 4 bits de máscara de quadrante + 4 bits de tipo - ver
+     * packMetatileCollisionByte()), porque isso não é computável por fórmula.
+     *
+     * Limite: no máx 64 metatiles distintos por banco (64*4=256, o espaço
+     * compacto inteiro) - estoura vira erro claro, igual o limite de 4
+     * bancos do CNROM.
+     */
+    private function buildMetatileCompression(array $project, array $screenData, array $screensByBank): array
     {
-        $mapping = [0 => 0];
-        $usedTiles = [0];
+        $metatilesById = [];
+        foreach ((is_array($project['metatiles'] ?? null) ? $project['metatiles'] : []) as $mt) {
+            if (is_array($mt) && isset($mt['id'])) $metatilesById[(string)$mt['id']] = $mt;
+        }
+
+        $screenCompressed = array_fill(0, count($screenData), 0);
+        $metatileIndexByScreen = [];
+        $banks = [];
+
+        foreach ($screensByBank as $bi => $idxList) {
+            $localIndexByMtId = [];
+            $tileRefs = [];
+            $collisionBytes = [];
+            $dirtyScreenIdx = [];
+
+            foreach ($idxList as $si) {
+                $sc = is_array($screenData[$si] ?? null) ? $screenData[$si] : [];
+                $grid = is_array($sc['metatileGrid'] ?? null) ? $sc['metatileGrid'] : null;
+                $clean = is_array($grid) && count($grid) === 240;
+                if ($clean) {
+                    foreach ($grid as $mtId) {
+                        if ($mtId === null || $mtId === '' || !isset($metatilesById[(string)$mtId])) { $clean = false; break; }
+                    }
+                }
+                if (!$clean) { $dirtyScreenIdx[] = $si; continue; }
+
+                $screenCompressed[$si] = 1;
+                $localIds = [];
+                foreach ($grid as $mtId) {
+                    $key = (string)$mtId;
+                    if (!isset($localIndexByMtId[$key])) {
+                        if (count($localIndexByMtId) >= 64) {
+                            $screenName = (string)($sc['name'] ?? $si);
+                            throw new RuntimeException(
+                                "Compressão de tela: a tela \"{$screenName}\" (e outras que compartilham o mesmo banco de CHR) " .
+                                "usam mais de 64 metatiles de background distintos - é o máximo que cabe comprimido num banco " .
+                                "de 4KB (64 metatiles × 4 tiles = 256, o pattern table inteiro). Reduza a variedade de " .
+                                "metatiles usados nesse conjunto de telas, ou separe em fases com páginas de CHR diferentes."
+                            );
+                        }
+                        $mt = $metatilesById[$key];
+                        $tiles = is_array($mt['tiles'] ?? null) ? $mt['tiles'] : [0, 0, 0, 0];
+                        for ($k = 0; $k < 4; $k++) $tileRefs[] = (int)($tiles[$k] ?? 0);
+                        $collisionBytes[] = $this->packMetatileCollisionByte(is_array($mt['collisions'] ?? null) ? $mt['collisions'] : []);
+                        $localIndexByMtId[$key] = count($localIndexByMtId);
+                    }
+                    $localIds[] = $localIndexByMtId[$key];
+                }
+                $metatileIndexByScreen[$si] = $localIds;
+            }
+
+            $seedMapping = [];
+            $seedUsedTiles = [];
+            foreach ($tileRefs as $slot => $rawIdx) {
+                if ($rawIdx < 0) $rawIdx = 0;
+                if (!isset($seedMapping[$rawIdx])) $seedMapping[$rawIdx] = $slot;
+                $seedUsedTiles[] = $rawIdx;
+            }
+            if (!$seedUsedTiles) { $seedMapping = [0 => 0]; $seedUsedTiles = [0]; }
+
+            $banks[$bi] = [
+                'seedMapping' => $seedMapping,
+                'seedUsedTiles' => $seedUsedTiles,
+                'dirtyScreenIdx' => $dirtyScreenIdx,
+                'collisionBytes' => $collisionBytes,
+                'metatileCount' => count($localIndexByMtId),
+            ];
+        }
+
+        return [
+            'screenCompressed' => $screenCompressed,
+            'metatileIndexByScreen' => $metatileIndexByScreen,
+            'banks' => $banks,
+        ];
+    }
+
+    /**
+     * Camada 8: empacota a colisão de 1 metatile num byte só - 4 bits altos
+     * = máscara de quadrante (bit ligado = esse quadrante TL/TR/BL/BR faz
+     * parte da hitbox), 4 bits baixos = tipo (0 Livre/1 Sólido/2
+     * Plataforma/3 Dano - o mesmo metatile não pode ter 2 tipos diferentes,
+     * já travado no editor - ver backgrounds.js). Tipo 4 (Warp) não
+     * sobrevive à compressão de propósito: warps agora são resolvidas pela
+     * tabela de instância própria (posição), não mais pintadas na colisão.
+     */
+    private function packMetatileCollisionByte(array $collisions): int
+    {
+        $type = 0;
+        foreach ($collisions as $c) {
+            $c = (int)$c;
+            if ($c > 0) { $type = min($c, 3); break; }
+        }
+        $mask = 0;
+        for ($i = 0; $i < 4 && $i < count($collisions); $i++) {
+            if ((int)$collisions[$i] > 0) $mask |= (1 << $i);
+        }
+        return (($mask & 0x0F) << 4) | ($type & 0x0F);
+    }
+
+    private function packBackgroundChr(array $chr, array $screens, int $chrPageBase = 0, int $chrPageMod = 512, ?array $seedMapping = null, ?array $seedUsedTiles = null): array
+    {
+        $mapping = $seedMapping ?? [0 => 0];
+        $usedTiles = $seedUsedTiles ?? [0];
         $overflow = [];
         foreach ($screens as $sc) {
             $nt = is_array($sc['nametable'] ?? null) ? $sc['nametable'] : [];
@@ -916,6 +1059,11 @@ final class ProjectParser
                 'nametable' => is_array($asset['nametable'] ?? null) ? $asset['nametable'] : array_fill(0, 960, 0),
                 'attributes' => is_array($asset['attributes'] ?? null) ? $asset['attributes'] : array_fill(0, 64, 0),
                 'collisionMap' => is_array($asset['collisionMap'] ?? null) ? $asset['collisionMap'] : array_fill(0, 960, 0),
+                // Camada 8 (compressão por metatile): precisa passar adiante
+                // pra buildMetatileCompression() decidir se essa tela é
+                // "limpa" (comprimível) ou não - null preservado tal qual
+                // (não confundir "ausente" com "grade de 240 nulls").
+                'metatileGrid' => is_array($asset['metatileGrid'] ?? null) ? $asset['metatileGrid'] : null,
             ];
         };
 

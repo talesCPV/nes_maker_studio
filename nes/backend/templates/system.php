@@ -89,6 +89,18 @@ ASM;
         $lines[] = 'col_x:      .res 1    ; tile X para consulta';
         $lines[] = 'col_y:      .res 1    ; tile Y para consulta';
         $lines[] = 'col_result: .res 1';
+        // Camada 8 (compressão por metatile): scratch de get_collision/
+        // get_collision2/mtx_collision_lookup (colisão sem RAM extra, lida
+        // direto da ROM) e de mtx_expand_nt (expansão de nametable em
+        // load_screen). Sempre declarados - custo fixo pequeno (7 bytes),
+        // não vale a pena condicionar a "algum projeto usa compressão".
+        $lines[] = 'gc_screen:   .res 1  ; indice de tela (cur_screen ou gcw_screen) pro mtx_collision_lookup compartilhado';
+        $lines[] = 'gc2_scratch: .res 1  ; scratch: id local do metatile, depois byte de colisao (mascara+tipo)';
+        $lines[] = 'gc2_scratch2:.res 1  ; scratch: cellY*16 (metade do calculo de cellIdx)';
+        $lines[] = 'gc2_subpos:  .res 1  ; scratch: 0-3, qual dos 4 quadrantes do metatile (TL/TR/BL/BR)';
+        $lines[] = 'mc_ptr_lo:   .res 1  ; ponteiro (baixo) reaproveitado 2x: 1o MetatileIndex_<tela>, depois MetatileCollision_bank<N>';
+        $lines[] = 'mc_ptr_hi:   .res 1  ; ponteiro (alto)';
+        $lines[] = 'mtx_scratch: .res 1  ; scratch de mtx_expand_nt (load_screen) - guarda 4*idLocal entre as 2 escritas ($2007) de cada subtile';
         $lines[] = 'ls_count:   .res 1    ; contador load_screen (nao reusa pad)';
         $lines[] = 'play_idx:   .res 1    ; indice 0..playCount-1 na sequencia da fase';
         $lines[] = "; pool de {$numInstances} instancia(s) - SoA pra indexar com LDA tabela,X";
@@ -393,6 +405,13 @@ get_collision:
   LDA col_x
   CMP #32
   BCS gc_oob
+  LDX cur_screen
+  STX gc_screen
+  LDA ScreenCompressed,X
+  BEQ gc_raw
+  JSR mtx_collision_lookup
+  RTS
+gc_raw:
   ; offset low = (col_y & 7)*32 + col_x ; page = col_y >> 3
   LDA col_y
   AND #7
@@ -433,6 +452,13 @@ get_collision2:
   LDA col_x
   CMP #32
   BCS gc2_oob
+  LDX gcw_screen
+  STX gc_screen
+  LDA ScreenCompressed,X
+  BEQ gc2_raw
+  JSR mtx_collision_lookup
+  RTS
+gc2_raw:
   LDA col_y
   AND #7
   ASL A
@@ -462,6 +488,67 @@ gc2_oob:
   LDA #0
   STA col_result
   RTS
+
+; ---- Camada 8 (compressão por metatile): resolve colisão de uma tela
+; comprimida sem gastar RAM - lê direto da ROM em 2 passos (qual metatile
+; está nessa célula -> qual colisão esse metatile tem) em vez de expandir
+; 960 bytes numa tabela. Compartilhada por get_collision/get_collision2 -
+; as duas colocam o índice de tela em gc_screen antes de chamar aqui.
+mtx_collision_lookup:
+  LDA col_y
+  LSR A
+  ASL A
+  ASL A
+  ASL A
+  ASL A
+  STA gc2_scratch2
+  LDA col_x
+  LSR A
+  CLC
+  ADC gc2_scratch2
+  TAY
+  LDX gc_screen
+  LDA ScreenNtLo,X
+  STA mc_ptr_lo
+  LDA ScreenNtHi,X
+  STA mc_ptr_hi
+  LDA (mc_ptr_lo),Y
+  STA gc2_scratch
+  LDX gc_screen
+  LDA ScreenBank,X
+  TAX
+  LDA MetatileCollisionLo,X
+  STA mc_ptr_lo
+  LDA MetatileCollisionHi,X
+  STA mc_ptr_hi
+  LDY gc2_scratch
+  LDA (mc_ptr_lo),Y
+  STA gc2_scratch
+  LDA col_x
+  AND #1
+  STA gc2_subpos
+  LDA col_y
+  AND #1
+  BEQ mtx_subpos_done
+  LDA gc2_subpos
+  ORA #2
+  STA gc2_subpos
+mtx_subpos_done:
+  LDX gc2_subpos
+  LDA gc2_scratch
+  AND MtQuadBit,X
+  BEQ mtx_free
+  LDA gc2_scratch
+  AND #$0F
+  STA col_result
+  RTS
+mtx_free:
+  LDA #0
+  STA col_result
+  RTS
+
+MtQuadBit:
+  .byte $10, $20, $40, $80
 
 ; ---- World collision coordinate resolver ----
 world_col_from:

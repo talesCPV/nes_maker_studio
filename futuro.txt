@@ -14,4 +14,5 @@ estruturação de dados:
     Compressão RLE (Run-Length Encoding): Substitui sequências de tiles idênticos por um contador (ex: 
     indicando "12 tiles de céu seguidos"), economizando espaço valioso de memória.
 
-Mesmo dependendo da PRG de 32 KB para armazenar os dados de tela, o uso dessas técnicas aliado à troca de CHR-ROM permitia que jogos como Gradius e DuckTales entregassem mundos extensos e com grande variação visual.
+Mesmo dependendo da PRG de 32 KB para armazenar os dados de tela, o uso dessas técnicas aliado à troca de
+CHR-ROM permitia que jogos como Gradius e DuckTales entregassem mundos extensos e com grande variação visual.

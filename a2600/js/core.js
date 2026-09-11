@@ -34,6 +34,7 @@ const Project = {
       sounds: [],
       variables: [],
       rules: [],
+      gameObjects: [],
       scoreBar: {
         enabled: false,
         lines: 20,

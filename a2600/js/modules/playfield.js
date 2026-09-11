@@ -130,7 +130,28 @@ const PLAYFIELD = (() => {
     sb0.enabled = !!sb0.enabled;
     sb0.showLogo = sb0.showLogo !== false;
     if (sb0.previewValue == null) sb0.previewValue = 0;
+    if (!Array.isArray(Project.data.gameObjects)) Project.data.gameObjects = [];
     return Project.data;
+  }
+
+  function spawnsForScreen(sid) {
+    const d = ensureData();
+    return (d.gameObjects || []).filter(
+      (o) => (o.kind || 'spawn') === 'spawn' && o.screenId === sid
+    );
+  }
+
+  function uidSpawn() {
+    return 'spawn_' + Date.now().toString(36) + '_' + Math.floor(Math.random() * 1e4).toString(36);
+  }
+
+  /** grid x 0..39 → color clocks ~0..160 */
+  function gridToColorX(gx) {
+    return Math.max(0, Math.min(160, Math.round((gx / W) * 160)));
+  }
+
+  function colorXToGrid(cx) {
+    return Math.max(0, Math.min(W - 1, Math.round(((cx | 0) / 160) * W)));
   }
 
   function emptyPixels(h) {
@@ -361,6 +382,7 @@ const PLAYFIELD = (() => {
             <button type="button" class="pf-tool active" data-tool="paint" title="Pincel">🖌</button>
             <button type="button" class="pf-tool" data-tool="erase" title="Borracha">⌫</button>
             <button type="button" class="pf-tool" data-tool="fill" title="Balde (preencher)">🪣</button>
+            <button type="button" class="pf-tool" data-tool="spawn" title="Ponto de spawn">🎯</button>
           </div>
           <div class="pf-tools">
             <button type="button" class="pf-tool" id="pfZoomOut" title="Zoom −">−</button>
@@ -422,6 +444,11 @@ const PLAYFIELD = (() => {
             <div class="pf-card">
               <div class="pf-card-title">Modo</div>
               <p class="pf-note" id="pfModeHelp"></p>
+            </div>
+            <div class="pf-card">
+              <div class="pf-card-title">Spawns nesta tela</div>
+              <p class="pf-note">Ferramenta 🎯: clique no playfield, dê um nome. Em Programação use Spawnar player → ponto + sprite.</p>
+              <div id="pfSpawnList" class="pf-spawn-list"></div>
             </div>
             <div class="pf-card">
               <div class="pf-card-title">Barra de placar</div>
@@ -493,6 +520,10 @@ const PLAYFIELD = (() => {
         align-self:flex-start; line-height:0;
       }
       #pfCanvas { image-rendering: pixelated; cursor: crosshair; display:block; max-width:100%; height:auto; }
+      .pf-spawn-list { display:flex; flex-direction:column; gap:6px; margin-top:8px; max-height:180px; overflow:auto; }
+      .pf-spawn-item { display:flex; align-items:center; gap:6px; font-size:11px; background:#111; border:1px solid #333; border-radius:6px; padding:6px 8px; }
+      .pf-spawn-item button { margin-left:auto; background:#333; border:1px solid #555; color:#ccc; border-radius:4px; cursor:pointer; font-size:10px; padding:2px 6px; }
+      .pf-spawn-item .xy { color:#888; font-family:monospace; }
       .pf-side { width:260px; flex-shrink:0; display:flex; flex-direction:column; gap:10px; }
       .pf-card {
         background:linear-gradient(180deg,#1e222c,#161920); border:1px solid #333;
@@ -792,13 +823,35 @@ const PLAYFIELD = (() => {
     };
 
     canvas.addEventListener('mousedown', (ev) => {
-      painting = true;
-      pushUndo();
       const p = pos(ev);
-      if (p.gap) {
-        painting = false;
+      if (p.gap) return;
+      // ferramenta spawn: não pinta pixels
+      if (tool === 'spawn') {
+        if (p.gutter || p.x < 0) return;
+        const playH = typeof scorePlayableHeight === 'function' ? scorePlayableHeight() : height;
+        if (p.y < 0 || p.y >= playH) {
+          alert('Spawn deve ficar na área jogável (acima da barra de placar).');
+          return;
+        }
+        const name = prompt('Nome do ponto de spawn:', 'Spawn ' + (spawnsForScreen(currentScreenId()).length + 1));
+        if (name === null) return;
+        const d = ensureData();
+        d.gameObjects.push({
+          id: uidSpawn(),
+          name: (name || 'Spawn').trim() || 'Spawn',
+          kind: 'spawn',
+          screenId: currentScreenId(),
+          x: gridToColorX(p.x),
+          y: p.y | 0,
+        });
+        if (typeof Project.status === 'function') Project.status('spawn criado');
+        renderSpawnList();
+        redraw();
+        ev.preventDefault();
         return;
       }
+      painting = true;
+      pushUndo();
       if (p.gutter) {
         paintLineColor(p.y);
       } else if (tool === 'fill') {
@@ -824,6 +877,7 @@ const PLAYFIELD = (() => {
       redraw();
     });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    renderSpawnList();
   }
 
   function resizeCanvas() {
@@ -832,6 +886,52 @@ const PLAYFIELD = (() => {
     const { canvasW, canvasH } = canvasDims(height);
     canvas.width = canvasW;
     canvas.height = canvasH;
+  }
+
+  function renderSpawnList() {
+    const box = document.getElementById('pfSpawnList');
+    if (!box) return;
+    const sid = currentScreenId();
+    const list = spawnsForScreen(sid);
+    if (!list.length) {
+      box.innerHTML = '<div class="muted" style="color:#666;font-size:11px">Nenhum spawn nesta tela</div>';
+      return;
+    }
+    box.innerHTML = list
+      .map(
+        (o) =>
+          '<div class="pf-spawn-item" data-id="' +
+          o.id +
+          '"><span>🎯 <b>' +
+          escapeHtml(o.name || 'Spawn') +
+          '</b></span><span class="xy">(' +
+          (o.x | 0) +
+          ',' +
+          (o.y | 0) +
+          ')</span><button type="button" data-act="ren" title="Renomear">✎</button><button type="button" data-act="del" title="Excluir">🗑</button></div>'
+      )
+      .join('');
+    box.querySelectorAll('.pf-spawn-item').forEach((row) => {
+      const id = row.getAttribute('data-id');
+      row.querySelector('[data-act="ren"]')?.addEventListener('click', () => {
+        const o = ensureData().gameObjects.find((g) => g.id === id);
+        if (!o) return;
+        const n = prompt('Nome do spawn:', o.name || '');
+        if (n === null) return;
+        o.name = (n || o.name).trim() || o.name;
+        if (typeof Project.status === 'function') Project.status('spawn renomeado');
+        renderSpawnList();
+        redraw();
+      });
+      row.querySelector('[data-act="del"]')?.addEventListener('click', () => {
+        if (!confirm('Excluir este spawn?')) return;
+        const d = ensureData();
+        d.gameObjects = d.gameObjects.filter((g) => g.id !== id);
+        if (typeof Project.status === 'function') Project.status('spawn removido');
+        renderSpawnList();
+        redraw();
+      });
+    });
   }
 
   function redraw() {
@@ -978,6 +1078,29 @@ const PLAYFIELD = (() => {
       ctx.setLineDash([3, 3]);
       ctx.strokeRect(0.5, y0 + 0.5, gridW - 1, barPxH - 1);
       ctx.setLineDash([]);
+    }
+
+    // Overlay: pontos de spawn desta tela
+    const spawns = spawnsForScreen(currentScreenId());
+    const { cellW: cw, cellH: ch, gridW: gw } = canvasDims(height);
+    for (const o of spawns) {
+      const gx = colorXToGrid(o.x | 0);
+      const gy = Math.max(0, Math.min(height - 1, o.y | 0));
+      const cx = gx * cw + cw / 2;
+      const cy = gy * ch + ch / 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(4, cw * 0.7), 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(244,162,97,0.85)';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = '#f4a261';
+      ctx.font = 'bold ' + Math.max(9, Math.floor(ch * 1.2)) + 'px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      const label = o.name || 'spawn';
+      ctx.fillText(label, cx + 6, cy - 2);
     }
   }
 

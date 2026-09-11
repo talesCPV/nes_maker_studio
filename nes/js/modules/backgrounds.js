@@ -1260,7 +1260,30 @@ const BG = (() => {
         }
       }
     }
+    markMetatileGridFromTiles(mt);
     render();
+  }
+
+  // Camada 8 (compressão por metatile): "Preencher Vazios"/"Preencher Tela
+  // Inteira" escrevem tile a tile (não célula a célula) - depois de
+  // preencher, confere célula por célula (2x2) se as 4 posições batem
+  // exatamente com o metatile usado; só marca metatileGrid nas que batem
+  // (uma célula que já tinha outra coisa em parte dela, e por isso ficou
+  // "misturada", fica null - fallback cru no build, não quebra nada).
+  function markMetatileGridFromTiles(mt){
+    for(let gy=0; gy<15; gy++){
+      for(let gx=0; gx<16; gx++){
+        let matches = true;
+        for(let dy=0; dy<2 && matches; dy++){
+          for(let dx=0; dx<2; dx++){
+            const x = gx*2+dx, y = gy*2+dy;
+            const subIdx = (y % mt.h) * mt.w + (x % mt.w);
+            if(nametable[y*32+x] !== (mt.tiles[subIdx] || 0)) { matches = false; break; }
+          }
+        }
+        if(matches) metatileGrid[gy*16+gx] = mt.id;
+      }
+    }
   }
 
   function fillEntireScreen(){
@@ -1275,6 +1298,7 @@ const BG = (() => {
         collisionMap[y*32+x] = mt.collisions[subIdx] || 0;
       }
     }
+    markMetatileGridFromTiles(mt);
     applyAttrToAll();
   }
 
@@ -1308,17 +1332,22 @@ const BG = (() => {
 
   function positionsForRow(x, y, len){ const arr=[]; for(let i=0;i<len;i++) arr.push({x:x+i, y}); return arr; }
 
-  // Devolve o nametable/atributos ao estado de antes da camada de texto ter sido escrita ali.
+  // Devolve o nametable/atributos/grade de metatile ao estado de antes da
+  // camada de texto ter sido escrita ali (Camada 8: sem isso, uma célula
+  // que tinha virado "suja" só por causa do texto ficava presa suja pra
+  // sempre, mesmo depois do texto ser apagado/movido dali).
   function restoreUnderText(layer){
     const snap = textUnderCache[layer.id]; if(!snap) return;
     snap.nt.forEach(({idx, tile}) => { nametable[idx] = tile; });
     snap.attr.forEach(({idx, byte}) => { attributes[idx] = byte; });
+    if(snap.mtg) snap.mtg.forEach(({idx, val}) => { metatileGrid[idx] = val; });
     delete textUnderCache[layer.id];
   }
-  // Guarda o que está no nametable/atributos ANTES de escrever o texto nessas posições,
-  // pra dar pra restaurar depois (mover/editar/apagar).
+  // Guarda o que está no nametable/atributos/grade de metatile ANTES de
+  // escrever o texto nessas posições, pra dar pra restaurar depois
+  // (mover/editar/apagar).
   function captureUnderText(layer, positions){
-    const nt = []; const attrBlocks = new Map();
+    const nt = []; const attrBlocks = new Map(); const mtgCells = new Map();
     positions.forEach(({x,y}) => {
       if(x<0||x>=32||y<0||y>=30) return;
       const idx = y*32+x;
@@ -1326,8 +1355,16 @@ const BG = (() => {
       const attrX=Math.floor(x/2), attrY=Math.floor(y/2);
       const attrIdx = Math.floor(attrY/2)*8+Math.floor(attrX/2);
       if(!attrBlocks.has(attrIdx)) attrBlocks.set(attrIdx, attributes[attrIdx]);
+      const gx = Math.floor(x/2), gy = Math.floor(y/2);
+      if(gx>=0 && gx<16 && gy>=0 && gy<15){
+        const gIdx = gy*16+gx;
+        if(!mtgCells.has(gIdx)) mtgCells.set(gIdx, metatileGrid[gIdx]);
+      }
     });
-    textUnderCache[layer.id] = { nt, attr: Array.from(attrBlocks, ([idx,byte]) => ({idx, byte})) };
+    textUnderCache[layer.id] = {
+      nt, attr: Array.from(attrBlocks, ([idx,byte]) => ({idx, byte})),
+      mtg: Array.from(mtgCells, ([idx,val]) => ({idx, val}))
+    };
   }
   function writeTextAt(layer, x, y){
     for(let i=0; i<layer.text.length; i++){
@@ -1338,6 +1375,13 @@ const BG = (() => {
       const attrIdx=Math.floor(attrY/2)*8+Math.floor(attrX/2);
       const shift=((attrY%2)*2+(attrX%2))*2;
       attributes[attrIdx] = (attributes[attrIdx] & ~(0x03<<shift)) | ((layer.pal & 0x03)<<shift);
+      // Camada 8 (compressão por metatile): texto escreve tile a tile,
+      // por fora do carimbo de metatile - a célula de 2x2 que ele cobre
+      // não pode mais ser reconstruída a partir de 1 metatile só, então
+      // invalida (fica "suja" ali, fallback cru no build - ver
+      // restoreUnderText pra reverter isso quando o texto sai dali).
+      const gx = Math.floor(tx/2), gy = Math.floor(ty/2);
+      if(gx>=0 && gx<16 && gy>=0 && gy<15) metatileGrid[gy*16+gx] = null;
     }
     layer.x = x; layer.y = y;
   }
