@@ -15,6 +15,8 @@ const SPRITES = (() => {
   const UNDO_MAX = 40;
 
   let selectedId = null;
+  let session = 'players'; // 'players' | 'shots'
+  let selectedShot = 'm0'; // m0 | m1 | ball
   let pixels = null;
   let height = H_DEFAULT;
   let color = 0x2a;
@@ -92,7 +94,30 @@ const SPRITES = (() => {
   function ensureData() {
     if (!Project.data) Project.data = Project.defaultData();
     if (!Array.isArray(Project.data.sprites)) Project.data.sprites = [];
+    if (!Project.data.projectiles || typeof Project.data.projectiles !== 'object') {
+      Project.data.projectiles = {
+        m0: { name: 'Missile 0', width: 1, height: 4 },
+        m1: { name: 'Missile 1', width: 1, height: 4 },
+        ball: { name: 'Ball', width: 1, height: 4 },
+      };
+    }
+    for (const k of ['m0', 'm1', 'ball']) {
+      if (!Project.data.projectiles[k]) {
+        Project.data.projectiles[k] = {
+          name: k === 'ball' ? 'Ball' : 'Missile ' + (k === 'm0' ? '0' : '1'),
+          width: 1,
+          height: 4,
+        };
+      }
+      const p = Project.data.projectiles[k];
+      p.width = [1, 2, 4, 8].includes(p.width | 0) ? (p.width | 0) : 1;
+      p.height = Math.max(1, Math.min(32, p.height | 0) || 4);
+    }
     return Project.data;
+  }
+
+  function getShot(key) {
+    return ensureData().projectiles[key];
   }
 
   function emptyPixels(h) {
@@ -242,6 +267,99 @@ const SPRITES = (() => {
   function buildHTML() {
     const root = document.getElementById('mod-sprites');
     if (!root) return;
+    ensureData();
+
+    const shotKeys = [
+      { id: 'm0', label: 'Missile 0', sub: 'ENAM0 · cor P0' },
+      { id: 'm1', label: 'Missile 1', sub: 'ENAM1 · cor P1' },
+      { id: 'ball', label: 'Ball', sub: 'ENABL · cor PF' },
+    ];
+
+    const sessionTabs = `
+      <div class="sp-session">
+        <button type="button" class="sp-sess ${session === 'players' ? 'active' : ''}" data-sess="players">Players</button>
+        <button type="button" class="sp-sess ${session === 'shots' ? 'active' : ''}" data-sess="shots">Missiles / Ball</button>
+      </div>`;
+
+    if (session === 'shots') {
+      if (!['m0', 'm1', 'ball'].includes(selectedShot)) selectedShot = 'm0';
+      const shot = getShot(selectedShot);
+      const listHtml = shotKeys
+        .map(
+          (k) => `
+        <div class="sp-item ${k.id === selectedShot ? 'active' : ''}" data-shot="${k.id}">
+          <div class="sp-shot-ico">${k.id === 'ball' ? '○' : '|'}</div>
+          <div class="sp-item-meta">
+            <div class="sp-item-name">${escapeHtml(k.label)}</div>
+            <div class="sp-item-sub">${escapeHtml(k.sub)}</div>
+          </div>
+        </div>`
+        )
+        .join('');
+
+      root.innerHTML = `
+      <div class="sp-wrap">
+        <div class="sp-left">
+          ${sessionTabs}
+          <div class="sp-left-head"><span>Tiros (TIA)</span></div>
+          <div class="sp-list">${listHtml}</div>
+        </div>
+        <div class="sp-main">
+          <div class="sp-toolbar">
+            <label>Nome <input type="text" id="shotName" value="${escapeAttr(shot.name || '')}" /></label>
+            <label>Largura
+              <select id="shotWidth">
+                ${[1, 2, 4, 8]
+                  .map(
+                    (w) =>
+                      `<option value="${w}" ${
+                        (shot.width | 0) === w ? 'selected' : ''
+                      }>${w} clock${w > 1 ? 's' : ''}</option>`
+                  )
+                  .join('')}
+              </select>
+            </label>
+            <label>Altura (scanlines)
+              <input type="number" id="shotHeight" min="1" max="32" value="${
+                shot.height | 0
+              }" style="width:56px" />
+            </label>
+            <span class="sp-hint">Sem bitmap · enable por linha · largura via NUSIZ/CTRLPF</span>
+          </div>
+          <div class="sp-body">
+            <div class="sp-canvas-box">
+              <canvas id="shotPreview" width="160" height="160"></canvas>
+            </div>
+            <div class="sp-side">
+              <div class="sp-card">
+                <div class="sp-card-title">Hardware</div>
+                <p class="sp-note">
+                  <b>${
+                    selectedShot === 'ball' ? 'Ball' : 'Missile'
+                  }</b> não tem GRP: é um traço de
+                  <b>1×N a 8×N</b> color clocks × scanlines com enable.
+                  Cor: ${
+                    selectedShot === 'ball'
+                      ? 'COLUPF (playfield)'
+                      : selectedShot === 'm0'
+                      ? 'COLUP0 (player 0)'
+                      : 'COLUP1 (player 1)'
+                  }.
+                  Posição horizontal no kernel (RES + HMOVE).
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+      injectStyles();
+      bindSessionTabs();
+      bindShots();
+      drawShotPreview();
+      return;
+    }
+
+    // ---- players session (original) ----
     loadSelected();
     const arr = list();
     const s = find(selectedId);
@@ -262,6 +380,7 @@ const SPRITES = (() => {
     root.innerHTML = `
       <div class="sp-wrap">
         <div class="sp-left">
+          ${sessionTabs}
           <div class="sp-left-head">
             <span>Sprites (players)</span>
             <button type="button" class="sp-btn" id="spAdd">+</button>
@@ -323,7 +442,7 @@ const SPRITES = (() => {
                 <p class="sp-note">
                   Largura do bitmap = <b>8 pixels</b> (registrador GRP0/GRP1).
                   Não há seletor de largura em pixels: só <b>NUSIZ</b> (1x / 2x / 4x e cópias na tela).
-                  Altura é livre (um byte por linha).
+                  Altura é livre (um byte por linha). Missiles/Ball na aba ao lado.
                 </p>
               </div>
             </div>
@@ -332,10 +451,97 @@ const SPRITES = (() => {
       </div>
     `;
     injectStyles();
+    bindSessionTabs();
     bind();
     resizeCanvas();
     redraw();
     drawThumbs();
+  }
+
+  function bindSessionTabs() {
+    document.querySelectorAll('.sp-sess').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (session === 'players') {
+          try { flush(); } catch (e) {}
+        }
+        session = btn.getAttribute('data-sess') === 'shots' ? 'shots' : 'players';
+        buildHTML();
+      });
+    });
+  }
+
+  function bindShots() {
+    document.querySelectorAll('.sp-item[data-shot]').forEach((el) => {
+      el.addEventListener('click', () => {
+        selectedShot = el.getAttribute('data-shot');
+        buildHTML();
+      });
+    });
+    const shot = getShot(selectedShot);
+    document.getElementById('shotName')?.addEventListener('input', (e) => {
+      shot.name = e.target.value;
+      const lab = document.querySelector('.sp-item.active .sp-item-name');
+      if (lab) lab.textContent = e.target.value || selectedShot;
+      if (typeof Project.status === 'function') Project.status('tiro alterado — salve o projeto');
+    });
+    document.getElementById('shotWidth')?.addEventListener('change', (e) => {
+      shot.width = parseInt(e.target.value, 10) || 1;
+      drawShotPreview();
+      if (typeof Project.status === 'function') Project.status('tiro alterado — salve o projeto');
+    });
+    document.getElementById('shotHeight')?.addEventListener('change', (e) => {
+      let h = parseInt(e.target.value, 10) || 4;
+      h = Math.max(1, Math.min(32, h));
+      e.target.value = h;
+      shot.height = h;
+      drawShotPreview();
+      if (typeof Project.status === 'function') Project.status('tiro alterado — salve o projeto');
+    });
+  }
+
+  function drawShotPreview() {
+    const canvas = document.getElementById('shotPreview');
+    if (!canvas) return;
+    const shot = getShot(selectedShot);
+    const w = shot.width | 0;
+    const h = shot.height | 0;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width;
+    const H = canvas.height;
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, H);
+    // grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    for (let x = 0; x < W; x += 8) {
+      ctx.beginPath();
+      ctx.moveTo(x + 0.5, 0);
+      ctx.lineTo(x + 0.5, H);
+      ctx.stroke();
+    }
+    for (let y = 0; y < H; y += 8) {
+      ctx.beginPath();
+      ctx.moveTo(0, y + 0.5);
+      ctx.lineTo(W, y + 0.5);
+      ctx.stroke();
+    }
+    // color by type
+    let col = '#f4a261';
+    if (selectedShot === 'm0') col = '#5dade2';
+    else if (selectedShot === 'm1') col = '#58d68d';
+    else col = '#f5b041';
+    const scale = 6;
+    const rw = w * scale;
+    const rh = h * scale;
+    const x0 = Math.floor((W - rw) / 2);
+    const y0 = Math.floor((H - rh) / 2);
+    ctx.fillStyle = col;
+    ctx.fillRect(x0, y0, rw, rh);
+    ctx.strokeStyle = '#fff3';
+    ctx.strokeRect(x0 + 0.5, y0 + 0.5, rw - 1, rh - 1);
+    ctx.fillStyle = '#888';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(w + '×' + h + ' clocks×lines', W / 2, H - 10);
   }
 
   function injectStyles() {
@@ -345,6 +551,17 @@ const SPRITES = (() => {
     s.textContent = `
       .sp-wrap { display:flex; height:100%; background:#1e1e1e; min-height:0; }
       .sp-left { width:200px; border-right:1px solid #333; display:flex; flex-direction:column; background:#181818; flex-shrink:0; }
+      .sp-session { display:flex; border-bottom:1px solid #2a2a2a; }
+      .sp-sess {
+        flex:1; background:#1a1a1a; border:none; border-right:1px solid #2a2a2a;
+        color:#888; padding:8px 4px; font-size:10px; cursor:pointer;
+      }
+      .sp-sess:last-child { border-right:none; }
+      .sp-sess.active { background:#1c1812; color:#f4a261; font-weight:700; }
+      .sp-shot-ico {
+        width:32px; height:32px; border-radius:4px; border:1px solid #333; background:#000;
+        display:flex; align-items:center; justify-content:center; color:#f4a261; font-size:16px; flex-shrink:0;
+      }
       .sp-left-head { display:flex; align-items:center; justify-content:space-between; padding:10px 12px; font-size:12px; color:#f4a261; font-weight:700; border-bottom:1px solid #2a2a2a; }
       .sp-list { flex:1; overflow:auto; padding:8px; display:flex; flex-direction:column; gap:6px; }
       .sp-item { display:flex; gap:8px; align-items:center; padding:8px; border-radius:8px; border:1px solid #2a2e38; background:#14171e; cursor:pointer; }

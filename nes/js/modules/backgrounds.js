@@ -3,6 +3,14 @@ const BG = (() => {
   let nametable = new Array(32 * 30).fill(0);
   let attributes = new Array(64).fill(0);
   let collisionMap = new Array(32 * 30).fill(0);
+  // Camada 8 (compressão por metatile): 1 célula por metatile 2x2 (16 col x 15
+  // lin = 240 células, cobre a tela de 32x30 tiles) - guarda o ID do metatile
+  // carimbado ali, ou null se essa célula não corresponde a UM metatile só
+  // (apagada com o borrador de tile cru, editada fora do fluxo de carimbo,
+  // ou tela salva antes dessa funcionalidade existir). O backend só consegue
+  // comprimir a tela se TODAS as 240 células estiverem preenchidas - ver
+  // hasCleanMetatileGrid().
+  let metatileGrid = new Array(16 * 15).fill(null);
   let currentEntryId = null;
   let currentEntryName = '';
   let currentEntryType = null; // 'bg' | 'splash' | null (tela nova, ainda não classificada)
@@ -347,8 +355,18 @@ const BG = (() => {
     if(subX < 0 || subX >= w || subY < 0 || subY >= h) return;
     const subIdx = subY * w + subX;
     const curr = selectedMetatile.collisions[subIdx] || 0;
-    // Alterna entre 0, 1, 2 e 3 (o valor 4 é reservado à ferramenta dedicada de Warp de tela)
+    // Camada 8 (compressão por metatile): a tabela comprimida guarda só 1
+    // byte de colisão por metatile (máscara de quadrante + 1 ÚNICO tipo) -
+    // misturar 2 tipos diferentes dentro do mesmo metatile não é
+    // representável nesse formato. Uma vez que outro quadrante já
+    // estabeleceu um tipo, os demais só alternam entre livre (0) e ESSE
+    // MESMO tipo - pra usar outro tipo, zera os quadrantes desse metatile
+    // primeiro (Setar Todos com 0, ou apagar quadrante a quadrante).
+    const established = selectedMetatile.collisions.find((c, i) => i !== subIdx && (c || 0) > 0) || 0;
     let nextCol = (curr + 1) % 4;
+    if(established){
+      while(nextCol !== 0 && nextCol !== established) nextCol = (nextCol + 1) % 4;
+    }
     selectedMetatile.collisions[subIdx] = nextCol;
     updateSelectedInfo();
   }
@@ -666,7 +684,15 @@ const BG = (() => {
       render(); return;
     }
     if(!selectedMetatile && !erasing) return;
-    if(erasing){ nametable[ty*32+tx] = 0; collisionMap[ty*32+tx] = 0; clearHitboxInstanceAt(tx, ty); render(); return; }
+    if(erasing){
+      nametable[ty*32+tx] = 0; collisionMap[ty*32+tx] = 0; clearHitboxInstanceAt(tx, ty);
+      // Apagar 1 tile cru pode furar um metatile 2x2 inteiro - invalida a
+      // célula da grade (as 4 vizinhas dessa posição), não dá mais pra
+      // comprimir essa célula (fallback cru no build).
+      const gcx = Math.floor(tx/2), gcy = Math.floor(ty/2);
+      if(gcx >= 0 && gcx < 16 && gcy >= 0 && gcy < 15) metatileGrid[gcy*16+gcx] = null;
+      render(); return;
+    }
     ensureMetatileCollisions(selectedMetatile);
     const mt = selectedMetatile;
     const snapX = Math.floor(tx / mt.w) * mt.w;
@@ -685,6 +711,14 @@ const BG = (() => {
         collisionMap[ny * 32 + nx] = mt.collisions[subIdx] || 0;
         setHitboxInstanceAt(nx, ny, mt.collisions[subIdx] || 0, mt.defaultHitboxObjectId || null);
       }
+    }
+    // Camada 8: só marca a célula da grade se o metatile é 2x2 E o carimbo
+    // caiu certinho alinhado (snapX/snapY == tx/ty) - metatile legado de
+    // outro tamanho, ou carimbo que "vazou" pra fora da tela, não vira 1
+    // célula limpa (fica null = fallback cru pra essa célula no build).
+    if(mt.w === 2 && mt.h === 2 && snapX === Math.floor(tx/2)*2 && snapY === Math.floor(ty/2)*2){
+      const gcx = snapX/2, gcy = snapY/2;
+      if(gcx >= 0 && gcx < 16 && gcy >= 0 && gcy < 15) metatileGrid[gcy*16+gcx] = mt.id;
     }
     render();
   }
@@ -856,7 +890,7 @@ const BG = (() => {
   // quanto automaticamente pelo bgChrPageSelect quando nenhuma tela salva usa a página escolhida.
   function promptNewCanvasForCurrentPage(){
     const name = prompt("Nome da nova tela:", `tela_pg${currentChrPage}`);
-    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0);
+    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0); metatileGrid = new Array(240).fill(null);
     textLayers = []; hitboxInstances = [];
     if(name){ currentEntryId = 'scr_'+Date.now(); currentEntryName = name.trim(); currentEntryType = null; }
     else { currentEntryId = null; currentEntryName = ''; currentEntryType = null; }
@@ -873,7 +907,7 @@ const BG = (() => {
   function switchToChrPage(newPage){
     if(newPage === currentChrPage){ refreshMetatileList(); return; }
     pageDrafts[currentChrPage] = {
-      nametable: [...nametable], attributes: [...attributes], collisionMap: [...collisionMap],
+      nametable: [...nametable], attributes: [...attributes], collisionMap: [...collisionMap], metatileGrid: [...metatileGrid],
       textLayers: JSON.parse(JSON.stringify(textLayers)), hitboxInstances: JSON.parse(JSON.stringify(hitboxInstances))
     };
     currentChrPage = newPage;
@@ -895,6 +929,7 @@ const BG = (() => {
     const draft = pageDrafts[newPage];
     if(draft){
       nametable = [...draft.nametable]; attributes = [...draft.attributes]; collisionMap = [...draft.collisionMap];
+      metatileGrid = draft.metatileGrid ? [...draft.metatileGrid] : new Array(240).fill(null);
       textLayers = JSON.parse(JSON.stringify(draft.textLayers));
       hitboxInstances = JSON.parse(JSON.stringify(draft.hitboxInstances || []));
       currentEntryId = null; currentEntryName = ''; currentEntryType = null;
@@ -1487,7 +1522,7 @@ const BG = (() => {
   }
 
   function clearBackground(){
-    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0); textLayers = []; hitboxInstances = []; selectedTextIdx = null; render();
+    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0); metatileGrid = new Array(240).fill(null); textLayers = []; hitboxInstances = []; selectedTextIdx = null; render();
   }
 
   // Carrega uma tela salva (background ou splash) e sincroniza a página do CHR trabalhada
@@ -1508,6 +1543,9 @@ const BG = (() => {
     nametable = b.nametable ? [...b.nametable] : new Array(960).fill(0);
     attributes = b.attributes ? [...b.attributes] : new Array(64).fill(0);
     collisionMap = b.collisionMap ? [...b.collisionMap] : new Array(960).fill(0);
+    // Camada 8: telas salvas antes dessa funcionalidade não têm grade -
+    // fica null (fallback cru no build, igual telas com edição manual).
+    metatileGrid = b.metatileGrid ? [...b.metatileGrid] : new Array(240).fill(null);
     textLayers = b.textLayers ? [...b.textLayers] : [];
     hitboxInstances = b.hitboxInstances ? JSON.parse(JSON.stringify(b.hitboxInstances)) : [];
     selectedTextIdx = null; textUnderCache = {}; movingTextMode = false; duplicatingTextMode = false;
@@ -1549,7 +1587,7 @@ const BG = (() => {
       const oi = otherArr.findIndex(e => e.id === currentEntryId);
       if(oi >= 0) otherArr.splice(oi, 1);
     }
-    const payload = { id: currentEntryId, name: currentEntryName, nametable:[...nametable], attributes:[...attributes], textLayers:[...textLayers], hitboxInstances: JSON.parse(JSON.stringify(hitboxInstances)), chrPage: currentChrPage, created: Date.now() };
+    const payload = { id: currentEntryId, name: currentEntryName, nametable:[...nametable], attributes:[...attributes], metatileGrid:[...metatileGrid], textLayers:[...textLayers], hitboxInstances: JSON.parse(JSON.stringify(hitboxInstances)), chrPage: currentChrPage, created: Date.now() };
     if(type === 'bg') payload.collisionMap = [...collisionMap];
     const idx = targetArr.findIndex(e => e.id === currentEntryId);
     if(idx >= 0) targetArr[idx] = { ...targetArr[idx], ...payload };
@@ -1604,7 +1642,7 @@ const BG = (() => {
       if(bgs.length > 0){ loadEntry('bg', bgs[0].id); return; }
     }
     currentEntryId = null; currentEntryName = ''; currentEntryType = null;
-    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0);
+    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0); metatileGrid = new Array(240).fill(null);
     textLayers = []; hitboxInstances = []; updateTextLayersUI(); updateBGSelect(); render();
   }
 

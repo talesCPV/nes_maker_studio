@@ -26,9 +26,22 @@ const Project = {
       ],
       playfields: [],
       sprites: [],
+      projectiles: {
+        m0: { name: 'Missile 0', width: 1, height: 4 },
+        m1: { name: 'Missile 1', width: 1, height: 4 },
+        ball: { name: 'Ball', width: 1, height: 4 },
+      },
       sounds: [],
       variables: [],
       rules: [],
+      scoreBar: {
+        enabled: false,
+        lines: 20,
+        digits: 6,
+        variable: 'score',
+        showLogo: true,
+        previewValue: 0,
+      },
     };
   },
 

@@ -133,10 +133,13 @@ const CHR = (() => {
             </div>
             <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:#111;border:1px solid #333;border-radius:6px;padding:8px">
               <span style="font-size:10px;color:#4ec9b0;font-weight:700">METATILE</span>
-              <select id="tileColsSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:3px"></select>
-              <span style="color:#666">×</span>
-              <select id="tileRowsSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:3px"></select>
-              <button class="btn-tool" onclick="CHR.applyGridResize()" style="background:#2980b9;color:#fff;font-size:11px;padding:3px 8px">Redimensionar</button>
+              <span id="metatileFixedSizeLabel" style="font-size:10px;color:#888;background:#181818;border:1px solid #333;border-radius:4px;padding:3px 8px;display:none" title="Camada 8 (compressão): o backend só consegue remontar a tela a partir de metatiles 2×2 - tamanho fixo nessa página, sem opção de redimensionar">2×2 (fixo)</span>
+              <span id="metatileResizeControls" style="display:none;align-items:center;gap:6px">
+                <select id="tileColsSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:3px"></select>
+                <span style="color:#666">×</span>
+                <select id="tileRowsSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:3px"></select>
+                <button class="btn-tool" onclick="CHR.applyGridResize()" style="background:#2980b9;color:#fff;font-size:11px;padding:3px 8px">Redimensionar</button>
+              </span>
               <span style="font-size:11px;color:#888">Slot <b id="lblActiveSlot" style="color:#ffcc00">1/4</b></span>
               <button class="btn-tool" onclick="CHR.autoFill()">Auto</button>
               <span style="color:#444;margin:0 4px">|</span>
@@ -567,6 +570,13 @@ const CHR = (() => {
       roleEl.value = e.role === 'background' ? 'background' : 'sprite';
       roleEl.disabled = currentBank < 2;
     }
+    // Camada 8: a trava de tamanho (2×2) é só pra paginas de BACKGROUND -
+    // paginas de SPRITE mostram os controles de redimensionar normalmente.
+    const fixedLbl = document.getElementById('metatileFixedSizeLabel');
+    const resizeCtrls = document.getElementById('metatileResizeControls');
+    const sprite = isSpriteBank(currentBank);
+    if(fixedLbl) fixedLbl.style.display = sprite ? 'none' : '';
+    if(resizeCtrls) resizeCtrls.style.display = sprite ? 'inline-flex' : 'none';
   }
   function updateBankSelect(){
     const sel = document.getElementById('bankSelect');
@@ -1203,6 +1213,12 @@ const CHR = (() => {
   }
 
   function setGrid(w,h){
+    // Camada 8 (compressão por metatile): a trava em 2×2 vale só pra
+    // metatiles de BACKGROUND - é o backend remontando nametable+colisão
+    // que exige esse tamanho fixo (ver ProjectParser). Metatiles de SPRITE
+    // continuam livres pra qualquer tamanho - a maioria dos personagens
+    // precisa de mais que 2×2 (ex: chefes, sprites grandes).
+    if(!isSpriteBank(currentBank)){ w = 2; h = 2; }
     gridW=w; gridH=h;
     const first=selectedTiles[0]||currentBank*256;
     selectedTiles=[]; selectedFlips=[];

@@ -188,7 +188,7 @@ body {
     <div class="side-item" data-mod="program" title="Programação">
       <span class="side-ico">🧠</span><span class="side-label">Programação</span>
     </div>
-    <div class="side-item disabled" data-mod="build" title="Em breve">
+    <div class="side-item" data-mod="build" title="Build ROM">
       <span class="side-ico">🔨</span><span class="side-label">Build ROM</span>
     </div>
 
@@ -216,6 +216,7 @@ body {
 <script src="js/modules/sprites.js"></script>
 <script src="js/modules/sound.js"></script>
 <script src="js/modules/program.js"></script>
+<script src="js/modules/build.js"></script>
 <script>
 const UI = {
   current: 'config',
@@ -258,6 +259,7 @@ const UI = {
     if (mod === 'sprites' && typeof SPRITES !== 'undefined') SPRITES.init();
     if (mod === 'sound' && typeof SOUND !== 'undefined') SOUND.init();
     if (mod === 'program' && typeof PROGRAM !== 'undefined') PROGRAM.init();
+    if (mod === 'build' && typeof BUILD !== 'undefined') BUILD.init();
     this.refreshFooter();
   },
 

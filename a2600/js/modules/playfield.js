@@ -16,6 +16,20 @@ const PLAYFIELD = (() => {
   const GAP = 8; // espaço entre grid e barra de cores
   const UNDO_MAX = 40;
 
+  /** Glifos 8x8 internos (placar). */
+  const SCORE_DIGITS = [
+    [0x3c, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x3c],
+    [0x18, 0x38, 0x18, 0x18, 0x18, 0x18, 0x18, 0x7e],
+    [0x3c, 0x66, 0x06, 0x0c, 0x18, 0x30, 0x60, 0x7e],
+    [0x3c, 0x66, 0x06, 0x1c, 0x06, 0x06, 0x66, 0x3c],
+    [0x0c, 0x1c, 0x3c, 0x6c, 0x7e, 0x0c, 0x0c, 0x0c],
+    [0x7e, 0x60, 0x60, 0x7c, 0x06, 0x06, 0x66, 0x3c],
+    [0x3c, 0x66, 0x60, 0x7c, 0x66, 0x66, 0x66, 0x3c],
+    [0x7e, 0x06, 0x0c, 0x18, 0x18, 0x30, 0x30, 0x30],
+    [0x3c, 0x66, 0x66, 0x3c, 0x66, 0x66, 0x66, 0x3c],
+    [0x3c, 0x66, 0x66, 0x66, 0x3e, 0x06, 0x66, 0x3c],
+  ];
+
   let screenId = null;
   let height = H_DEFAULT;
   let pixels = null;
@@ -99,6 +113,23 @@ const PLAYFIELD = (() => {
     if (!Array.isArray(Project.data.screens) || !Project.data.screens.length) {
       Project.data.screens = [{ id: 'screen_' + Date.now(), name: 'Tela 1', description: '' }];
     }
+    if (!Project.data.scoreBar || typeof Project.data.scoreBar !== 'object') {
+      Project.data.scoreBar = {
+        enabled: false,
+        lines: 20,
+        digits: 6,
+        variable: 'score',
+        showLogo: true,
+        previewValue: 0,
+      };
+    }
+    const sb0 = Project.data.scoreBar;
+    sb0.lines = Math.max(12, Math.min(32, sb0.lines | 0) || 20);
+    sb0.digits = Math.max(1, Math.min(6, sb0.digits | 0) || 6);
+    if (typeof sb0.variable !== 'string' || !sb0.variable) sb0.variable = 'score';
+    sb0.enabled = !!sb0.enabled;
+    sb0.showLogo = sb0.showLogo !== false;
+    if (sb0.previewValue == null) sb0.previewValue = 0;
     return Project.data;
   }
 
@@ -252,11 +283,53 @@ const PLAYFIELD = (() => {
     if (typeof Project.status === 'function') Project.status('desfeito');
   }
 
+
+  function scoreBarCfg() {
+    return ensureData().scoreBar;
+  }
+
+  function scoreBarLines() {
+    const sb = scoreBarCfg();
+    return sb.enabled ? (sb.lines | 0) : 0;
+  }
+
+  function scorePlayableHeight() {
+    return Math.max(16, height - scoreBarLines());
+  }
+
+  function ensureScoreVariable() {
+    const d = ensureData();
+    if (!Array.isArray(d.variables)) d.variables = [];
+    const name = scoreBarCfg().variable || 'score';
+    if (!d.variables.some((v) => v.name === name)) {
+      d.variables.push({
+        id: 'var_score_' + Date.now().toString(36),
+        name: name,
+        type: 'word',
+        note: 'Placar (barra inferior)',
+      });
+    }
+  }
+
   function buildHTML() {
     const root = document.getElementById('mod-playfield');
     if (!root) return;
     const d = ensureData();
     loadForScreen(currentScreenId());
+    const sb = scoreBarCfg();
+    const varOpts = (d.variables || [])
+      .map(function (v) {
+        return (
+          '<option value="' +
+          escapeAttr(v.name) +
+          '" ' +
+          (v.name === sb.variable ? 'selected' : '') +
+          '>' +
+          escapeHtml(v.name) +
+          '</option>'
+        );
+      })
+      .join('');
 
     const screenOpts = d.screens
       .map(
@@ -296,7 +369,26 @@ const PLAYFIELD = (() => {
             <button type="button" class="pf-tool" id="pfUndo" title="Desfazer (Ctrl+Z)">↩</button>
           </div>
           <button type="button" class="pf-btn" id="pfClear">Limpar</button>
-          <span class="pf-hint">40×${height} · 4:3 · cores na barra à direita</span>
+          <label class="pf-check" title="Reserva a faixa inferior para placar + logo">
+            <input type="checkbox" id="pfScoreBar" ${sb.enabled ? 'checked' : ''}/> Barra de placar
+          </label>
+          <label class="pf-score-opts" style="${sb.enabled ? '' : 'opacity:0.45;pointer-events:none'}">Var
+            <select id="pfScoreVar">
+              <option value="score" ${sb.variable === 'score' ? 'selected' : ''}>score</option>
+              ${varOpts}
+            </select>
+          </label>
+          <label class="pf-score-opts" style="${sb.enabled ? '' : 'opacity:0.45;pointer-events:none'}">Digitos
+            <select id="pfScoreDigits">
+              <option value="4" ${sb.digits === 4 ? 'selected' : ''}>4</option>
+              <option value="5" ${sb.digits === 5 ? 'selected' : ''}>5</option>
+              <option value="6" ${sb.digits === 6 ? 'selected' : ''}>6</option>
+            </select>
+          </label>
+          <label class="pf-check pf-score-opts" style="${sb.enabled ? '' : 'opacity:0.45;pointer-events:none'}">
+            <input type="checkbox" id="pfScoreLogo" ${sb.showLogo ? 'checked' : ''}/> Logo Retrocompiler
+          </label>
+          <span class="pf-hint">40×${height}${sb.enabled ? ' · placar ' + sb.lines + ' linhas' : ''} · 4:3</span>
         </div>
         <div class="pf-body">
           <div class="pf-canvas-box">
@@ -330,6 +422,16 @@ const PLAYFIELD = (() => {
             <div class="pf-card">
               <div class="pf-card-title">Modo</div>
               <p class="pf-note" id="pfModeHelp"></p>
+            </div>
+            <div class="pf-card">
+              <div class="pf-card-title">Barra de placar</div>
+              <label class="pf-check" style="margin-bottom:8px">
+                <input type="checkbox" id="pfScoreBarSide" ${sb.enabled ? 'checked' : ''}/> Ativar faixa inferior
+              </label>
+              <p class="pf-note">
+                Reserva ~20 scanlines em preto para dígitos (variável do jogo) e logo
+                <b>RETROCOMPILER</b> estilo Activision. Glifos são internos.
+              </p>
             </div>
           </div>
         </div>
@@ -383,6 +485,8 @@ const PLAYFIELD = (() => {
       }
       .pf-btn:hover { border-color:#f4a261; }
       .pf-hint { font-size:11px; color:#666; margin-left:auto; }
+      .pf-check { font-size:11px; color:#ccc; display:flex; align-items:center; gap:4px; white-space:nowrap; }
+      .pf-score-opts { font-size:11px; color:#888; display:flex; align-items:center; gap:4px; }
       .pf-body { flex:1; display:flex; min-height:0; gap:12px; padding:12px; overflow:auto; }
       .pf-canvas-box {
         background:#0a0a0a; border:1px solid #333; border-radius:8px; padding:8px;
@@ -419,7 +523,10 @@ const PLAYFIELD = (() => {
   }
 
   function escapeHtml(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function escapeAttr(s) {
+    return escapeHtml(s).replace(/"/g, '&quot;');
   }
 
   function updateSwatches() {
@@ -582,8 +689,58 @@ const PLAYFIELD = (() => {
     document.getElementById('pfClear')?.addEventListener('click', () => {
       if (!confirm('Limpar todo o playfield desta tela?')) return;
       pushUndo();
-      pixels = emptyPixels(height);
+      const playH = scorePlayableHeight();
+      for (let y = 0; y < playH; y++) {
+        for (let x = 0; x < W; x++) pixels[y * W + x] = 0;
+      }
       persist();
+      redraw();
+    });
+
+    function refreshScoreOpts() {
+      const on = scoreBarCfg().enabled;
+      document.querySelectorAll('.pf-score-opts').forEach((el) => {
+        el.style.opacity = on ? '' : '0.45';
+        el.style.pointerEvents = on ? '' : 'none';
+      });
+    }
+
+    document.getElementById('pfScoreBar')?.addEventListener('change', (e) => {
+      const sb = scoreBarCfg();
+      sb.enabled = !!e.target.checked;
+      if (sb.enabled) ensureScoreVariable();
+      refreshScoreOpts();
+      if (typeof Project.status === 'function') {
+        Project.status(sb.enabled ? 'barra de placar ligada — salve o projeto' : 'barra de placar desligada');
+      }
+      redraw();
+    });
+    document.getElementById('pfScoreVar')?.addEventListener('change', (e) => {
+      scoreBarCfg().variable = e.target.value || 'score';
+      ensureScoreVariable();
+      if (typeof Project.status === 'function') Project.status('variavel do placar — salve o projeto');
+    });
+    document.getElementById('pfScoreDigits')?.addEventListener('change', (e) => {
+      scoreBarCfg().digits = parseInt(e.target.value, 10) || 6;
+      redraw();
+      if (typeof Project.status === 'function') Project.status('digitos do placar — salve o projeto');
+    });
+    document.getElementById('pfScoreLogo')?.addEventListener('change', (e) => {
+      scoreBarCfg().showLogo = !!e.target.checked;
+      redraw();
+      if (typeof Project.status === 'function') Project.status('logo placar — salve o projeto');
+    });
+
+    document.getElementById('pfScoreBarSide')?.addEventListener('change', (e) => {
+      const sb = scoreBarCfg();
+      sb.enabled = !!e.target.checked;
+      const main = document.getElementById('pfScoreBar');
+      if (main) main.checked = sb.enabled;
+      if (sb.enabled) ensureScoreVariable();
+      refreshScoreOpts();
+      if (typeof Project.status === 'function') {
+        Project.status(sb.enabled ? 'barra de placar ligada — salve o projeto' : 'barra de placar desligada');
+      }
       redraw();
     });
 
@@ -754,6 +911,74 @@ const PLAYFIELD = (() => {
     }
 
     ctx.putImageData(img, 0, 0);
+
+    // Overlay: barra de placar reservada
+    const sb = scoreBarCfg();
+    if (sb.enabled) {
+      const barH = scoreBarLines();
+      const barPxH = barH * cellH;
+      const y0 = (height - barH) * cellH;
+
+      // fundo sempre preto
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, y0, gridW, barPxH);
+
+      // faixa arco-íris fina no topo (estilo Activision)
+      const rainbow = ['#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6'];
+      const band = Math.max(1, Math.min(2, Math.floor(cellH * 0.25)));
+      for (let i = 0; i < 6; i++) {
+        ctx.fillStyle = rainbow[i];
+        ctx.fillRect(0, y0 + i * band, gridW, band);
+      }
+      const contentTop = y0 + 6 * band + 2;
+      const contentH = barPxH - (contentTop - y0) - 2;
+
+      // Logo à esquerda, um pouco maior
+      if (sb.showLogo) {
+        const logoSize = Math.max(11, Math.floor(contentH * 0.42));
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold ' + logoSize + 'px monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('RETROCOMPILER', 6, contentTop + contentH / 2);
+      }
+
+      // Dígitos bem menores, centralizados na faixa
+      const digitsN = sb.digits | 0;
+      const val = Math.max(0, Math.min(999999, sb.previewValue | 0));
+      let str = String(val);
+      while (str.length < digitsN) str = '0' + str;
+      str = str.slice(-digitsN);
+
+      // dígitos no mesmo “peso visual” do logo (bem pequenos)
+      const px = Math.max(1, Math.floor(cellW * 0.18));
+      const digitW = 8 * px;
+      const gap = Math.max(1, Math.floor(px * 0.6));
+      const totalW = digitsN * digitW + (digitsN - 1) * gap;
+      const dx0 = Math.floor((gridW - totalW) / 2);
+      const dy0 = contentTop + Math.floor((contentH - 8 * px) / 2);
+
+      ctx.fillStyle = '#ffffff';
+      for (let di = 0; di < digitsN; di++) {
+        const g = SCORE_DIGITS[str.charCodeAt(di) - 48] || SCORE_DIGITS[0];
+        const ox = dx0 + di * (digitW + gap);
+        for (let row = 0; row < 8; row++) {
+          const bits = g[row];
+          for (let col = 0; col < 8; col++) {
+            if (bits & (0x80 >> col)) {
+              ctx.fillRect(ox + col * px, dy0 + row * px, px, px);
+            }
+          }
+        }
+      }
+
+      // borda pontilhada da zona reservada (só editor)
+      ctx.strokeStyle = 'rgba(244,162,97,0.35)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.strokeRect(0.5, y0 + 0.5, gridW - 1, barPxH - 1);
+      ctx.setLineDash([]);
+    }
   }
 
   function flush() {

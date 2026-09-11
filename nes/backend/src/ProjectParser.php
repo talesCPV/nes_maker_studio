@@ -39,6 +39,7 @@ final class ProjectParser
         // jogo, em que ordem, com que papel) acontece inteiramente aqui a
         // partir do project.data (.nms) bruto - sem nenhum seletor da UI.
         $screens = $this->collectGameScreens($project);
+        $usedMetatiles = $this->computeUsedMetatiles($project);
 
         // Camada 6 Fase 8: id da tela (background/splash, o mesmo id que a
         // UI já usa pra "Ir para Warp") -> indice fisico usado em tempo de
@@ -267,6 +268,7 @@ final class ProjectParser
             'bgChrBanks' => $bgChrBanks,
             'spriteChrBanks' => $spriteChrBanks,
             'screenBankIndex' => $screenBankIndex,
+            'usedMetatiles' => $usedMetatiles,
             'program' => $program,
             'playIdxs' => $playIdxs,
             'splashIdx' => $this->findRoleIndex($screens, 'splash', 0),
@@ -861,6 +863,41 @@ final class ProjectParser
      * o frontend não precisa mais pré-processar nada: só manda o project.data
      * (.nms) inteiro e o NGC resolve as telas sozinho.
      */
+    /**
+     * Camada 8 (compressão por metatile): varre TODAS as telas (backgrounds
+     * + splashScreens) procurando metatileGrid (a grade de 240 células que o
+     * editor de fundo agora salva - Camada 8, backgrounds.js) e devolve o
+     * conjunto de IDs de metatile realmente carimbados em algum lugar do
+     * jogo. Não confia em nenhuma flag "usado" salva no .nms - recalcula do
+     * zero a cada build, a partir dos dados de verdade, pra nunca gerar uma
+     * ROM incoerente com uma flag desatualizada.
+     *
+     * Telas sem metatileGrid (salvas antes dessa funcionalidade existir, ou
+     * com edição manual que invalidou alguma célula - ver backgrounds.js)
+     * simplesmente não contribuem IDs aqui; suas células nulas são tratadas
+     * à parte, como fallback cru, no empacotamento da tela (ainda não
+     * implementado - ver notas da Camada 8 no restante do arquivo).
+     */
+    private function computeUsedMetatiles(array $project): array
+    {
+        $used = [];
+        $scan = static function ($screens) use (&$used) {
+            if (!is_array($screens)) return;
+            foreach ($screens as $sc) {
+                if (!is_array($sc)) continue;
+                $grid = is_array($sc['metatileGrid'] ?? null) ? $sc['metatileGrid'] : null;
+                if (!$grid) continue;
+                foreach ($grid as $mtId) {
+                    if ($mtId === null || $mtId === '') continue;
+                    $used[(string)$mtId] = true;
+                }
+            }
+        };
+        $scan($project['backgrounds'] ?? null);
+        $scan($project['splashScreens'] ?? null);
+        return $used;
+    }
+
     private function collectGameScreens(array $project): array
     {
         $screens = [];
