@@ -165,20 +165,17 @@ final class AgcBuilder
         $asm[] = '    sta GRP1';
         $asm[] = '';
         $isAsym = ($pfTables['mode'] === 'asymmetric');
-        // Assimétrico calibrado (debug):
-        // COLUBK em 2 zonas (antes do loop / meio) — sem lda COLUBK por linha
-        // COLUPF + PF L + PF R + GRP0 + GRP1 por linha
+        // 0.6.6 — kernel A2 calibrado no Stella (estável, sem flicker):
+        // COLUBK+COLUPF por linha + PF L→R + só GRP0 (GRP1 estoura ciclo)
+        // sem HMOVE
         $asm[] = '    lda #' . ($isAsym ? 0 : $ctrlpf) . '            ; CTRLPF';
         $asm[] = '    sta CTRLPF';
+        $asm[] = '    ldy #0';
+        $asm[] = 'PlayLoop:';
+        $asm[] = '    sta WSYNC';
         if ($isAsym) {
-            $mid = max(1, intdiv($playLines, 2));
-            $bk0 = $pfTables['colubk'][0] ?? 0x00;
-            $bk1 = $pfTables['colubk'][$mid] ?? $bk0;
-            $asm[] = '    lda #$' . sprintf('%02X', $bk0 & 0xfe);
-            $asm[] = '    sta COLUBK            ; zona superior';
-            $asm[] = '    ldy #0';
-            $asm[] = 'PlayLoop:';
-            $asm[] = '    sta WSYNC';
+            $asm[] = '    lda COLUBKData,y';
+            $asm[] = '    sta COLUBK';
             $asm[] = '    lda COLUPFData,y';
             $asm[] = '    sta COLUPF';
             $asm[] = '    lda PF0Data,y';
@@ -195,20 +192,7 @@ final class AgcBuilder
             $asm[] = '    sta PF2';
             $asm[] = '    lda GRP0Data,y';
             $asm[] = '    sta GRP0';
-            $asm[] = '    lda GRP1Data,y';
-            $asm[] = '    sta GRP1';
-            $asm[] = '    iny';
-            $asm[] = '    cpy #' . $mid;
-            $asm[] = '    bne PlayLoopCont';
-            $asm[] = '    lda #$' . sprintf('%02X', $bk1 & 0xfe);
-            $asm[] = '    sta COLUBK            ; zona inferior';
-            $asm[] = 'PlayLoopCont:';
-            $asm[] = '    cpy #' . $playLines;
-            $asm[] = '    bne PlayLoop';
         } else {
-            $asm[] = '    ldy #0';
-            $asm[] = 'PlayLoop:';
-            $asm[] = '    sta WSYNC';
             $asm[] = '    lda COLUBKData,y';
             $asm[] = '    sta COLUBK';
             $asm[] = '    lda COLUPFData,y';
@@ -223,10 +207,10 @@ final class AgcBuilder
             $asm[] = '    sta GRP0';
             $asm[] = '    lda GRP1Data,y';
             $asm[] = '    sta GRP1';
-            $asm[] = '    iny';
-            $asm[] = '    cpy #' . $playLines;
-            $asm[] = '    bne PlayLoop';
         }
+        $asm[] = '    iny';
+        $asm[] = '    cpy #' . $playLines;
+        $asm[] = '    bne PlayLoop';
         $asm[] = '';
         $asm[] = '    lda #0';
         $asm[] = '    sta GRP0';
@@ -371,7 +355,7 @@ final class AgcBuilder
             'scoreVar' => $scoreVar,
             'spawns' => ['p0' => $p0, 'p1' => $p1],
             'meta' => [
-                'generator' => 'AgcBuilder/0.6.2',
+                'generator' => 'AgcBuilder/0.6.6',
                 'org' => sprintf('$%04X', $org),
             ],
         ];

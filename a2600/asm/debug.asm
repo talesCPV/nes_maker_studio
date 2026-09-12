@@ -62,7 +62,7 @@ ClearMem:
     sta P1H
     lda #2
     sta P0XDelay
-    lda #16
+    lda #20
     sta P1XDelay
     lda #1
     sta P0En
@@ -89,18 +89,19 @@ WaitVBlank:
 
     lda #$1C
     sta COLUP0
-    lda #$4E
+    lda #$04
     sta COLUP1
     lda #0
     sta GRP0
     sta GRP1
 
-    lda #0            ; CTRLPF
+    lda #0
     sta CTRLPF
     ldy #0
-
 PlayLoop:
     sta WSYNC
+    lda COLUBKData,y
+    sta COLUBK
     lda COLUPFData,y
     sta COLUPF
     lda PF0Data,y
@@ -117,8 +118,6 @@ PlayLoop:
     sta PF2
     lda GRP0Data,y
     sta GRP0
-    lda GRP1Data,y
-    sta GRP1
     iny
     cpy #172
     bne PlayLoop
@@ -811,10 +810,11 @@ PF2Data:
     .byte $80
     .byte $80
     .byte $80
-    .byte $00
+    .byte $80
     .byte $00
 PF0RData:
     .byte $00
+    .byte $00
     .byte $10
     .byte $10
     .byte $10
@@ -899,9 +899,8 @@ PF0RData:
     .byte $10
     .byte $10
     .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
+    .byte $00
+    .byte $00
     .byte $00
     .byte $00
     .byte $00
@@ -1333,95 +1332,95 @@ PF2RData:
     .byte $00
     .byte $00
 COLUPFData:
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
     .byte $44
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
+    .byte $44
+    .byte $00
+    .byte $28
+    .byte $28
+    .byte $00
+    .byte $28
+    .byte $28
+    .byte $00
+    .byte $28
+    .byte $28
+    .byte $28
+    .byte $28
+    .byte $28
+    .byte $00
+    .byte $44
+    .byte $44
+    .byte $44
+    .byte $44
+    .byte $44
     .byte $46
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
     .byte $46
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $06
-    .byte $2A
-    .byte $2A
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $44
+    .byte $44
+    .byte $44
+    .byte $44
+    .byte $44
+    .byte $44
+    .byte $44
+    .byte $68
+    .byte $68
+    .byte $68
+    .byte $68
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $46
+    .byte $44
+    .byte $44
+    .byte $44
+    .byte $44
+    .byte $44
+    .byte $44
+    .byte $44
+    .byte $86
+    .byte $68
+    .byte $68
+    .byte $68
+    .byte $68
+    .byte $68
+    .byte $68
+    .byte $68
+    .byte $86
+    .byte $86
+    .byte $86
+    .byte $86
+    .byte $86
+    .byte $86
+    .byte $86
+    .byte $86
+    .byte $18
+    .byte $18
+    .byte $18
+    .byte $18
+    .byte $18
     .byte $2A
     .byte $2A
     .byte $2A
@@ -1506,6 +1505,7 @@ COLUPFData:
     .byte $44
     .byte $44
 COLUBKData:
+    .byte $7C
     .byte $2C
     .byte $2C
     .byte $2C
@@ -1520,17 +1520,16 @@ COLUBKData:
     .byte $2C
     .byte $2C
     .byte $2C
+    .byte $2E
+    .byte $2E
     .byte $2C
+    .byte $2E
+    .byte $2E
+    .byte $2E
+    .byte $2E
+    .byte $2E
     .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
+    .byte $2E
     .byte $2C
     .byte $2C
     .byte $2C
@@ -1893,22 +1892,22 @@ GRP1Data:
     .byte $00
     .byte $00
     .byte $00
-    .byte $FF
-    .byte $FF
-    .byte $FF
-    .byte $FF
-    .byte $FF
-    .byte $FF
-    .byte $FF
-    .byte $FF
-    .byte $FF
-    .byte $FF
-    .byte $FF
-    .byte $FF
-    .byte $FF
-    .byte $FF
-    .byte $FF
-    .byte $FF
+    .byte $3C
+    .byte $42
+    .byte $5A
+    .byte $42
+    .byte $3C
+    .byte $18
+    .byte $3C
+    .byte $5A
+    .byte $5A
+    .byte $18
+    .byte $3C
+    .byte $24
+    .byte $24
+    .byte $66
+    .byte $00
+    .byte $00
     .byte $00
     .byte $00
     .byte $00
@@ -2046,22 +2045,22 @@ Sprite0Data:
     .byte %00001000
     .byte %00011000
 Sprite1Data:
-    .byte %11111111
-    .byte %11111111
-    .byte %11111111
-    .byte %11111111
-    .byte %11111111
-    .byte %11111111
-    .byte %11111111
-    .byte %11111111
-    .byte %11111111
-    .byte %11111111
-    .byte %11111111
-    .byte %11111111
-    .byte %11111111
-    .byte %11111111
-    .byte %11111111
-    .byte %11111111
+    .byte %00111100
+    .byte %01000010
+    .byte %01011010
+    .byte %01000010
+    .byte %00111100
+    .byte %00011000
+    .byte %00111100
+    .byte %01011010
+    .byte %01011010
+    .byte %00011000
+    .byte %00111100
+    .byte %00100100
+    .byte %00100100
+    .byte %01100110
+    .byte %00000000
+    .byte %00000000
 
 ; --- RAM ---
 Score0    equ $80
