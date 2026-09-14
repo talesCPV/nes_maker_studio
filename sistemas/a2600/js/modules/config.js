@@ -71,12 +71,19 @@ const CONFIG = (() => {
       enemies: { mode: 'mux_y', maxRows: 0, maxCopiesPerRow: 1, sameGraphicPerRow: false },
       objects: { allowFreeSpawn: true, allowMissile: true, allowBall: true },
       options: [
-        { key: 'maxMuxSlots', label: 'Máx. inimigos multiplex (faixas)', type: 'number', min: 2, max: 12, default: 6 },
-        { key: 'scroll', label: 'Scroll do mapa', type: 'select',
+        { key: 'seedMode', label: 'Seed do mapa', type: 'select',
           choices: [
-            { v: 'none', t: 'Sem scroll' },
-            { v: 'vertical', t: 'Vertical' },
-          ], default: 'vertical' },
+            { v: 'title_entropy', t: 'Aleatória (contador na tela título)' },
+            { v: 'fixed', t: 'Fixa (mesmo rio sempre)' },
+          ], default: 'title_entropy' },
+        { key: 'seedFixed', label: 'Valor da seed fixa (0–255)', type: 'number', min: 0, max: 255, default: 42 },
+        { key: 'riverEdges', label: 'Bordas do rio', type: 'select',
+          choices: [
+            { v: 2, t: '2 (um canal)' },
+            { v: 4, t: '4 (canal + ilha)' },
+          ], default: 2 },
+        { key: 'minRiverWidth', label: 'Largura mínima do rio (células PF)', type: 'number', min: 4, max: 16, default: 6 },
+        { key: 'maxMuxSlots', label: 'Máx. inimigos na tela (multiplex)', type: 'number', min: 2, max: 12, default: 6 },
       ],
     },
     single_screen_adventure: {
@@ -150,6 +157,49 @@ const CONFIG = (() => {
         hide: ['asymmetric_pf', 'free_mux_y', 'ball'],
       },
     },
+    river_scroll: {
+      id: 'river_scroll',
+      kernelProfile: 'hero_p0_mux_y',
+      players: {
+        mode: 'single',
+        maxPlayers: 1,
+        activeChannel: 'p0',
+        move: ['left', 'right'],
+        moveOptional: ['speed'],
+      },
+      channels: {
+        p0: 'hero',
+        p1: 'mux_enemy',
+        m0: 'hero_shot',
+        m1: 'enemy_shot',
+        ball: 'off',
+      },
+      enemies: {
+        mode: 'mux_y',
+        maxRows: 0,
+        maxCopiesPerRow: 1,
+        sameGraphicPerRow: false,
+        movement: 'world_y',
+      },
+      playfield: {
+        // reflect = metade + espelho (rio); none = céu / 1942-like
+        allowedModes: ['none', 'reflect'],
+        defaultMode: 'reflect',
+        allowAsymmetric: false,
+        showBandEditor: false,
+        showRiverMapEditor: true,
+      },
+      mapgen: {
+        drift: [-1, 0, 1], // fixo no engine
+        stepFrames: 12,    // fixo no engine
+        seedMode: 'title_entropy',
+      },
+      editor: {
+        showBands: false,
+        showRiverMap: true,
+        hide: ['asymmetric_pf', 'repeat_pf', 'nusiz_rows', 'spawn_waves'],
+      },
+    },
     // demais estilos: fallback livre até detalharmos
     advanced: {
       id: 'advanced',
@@ -184,7 +234,13 @@ const CONFIG = (() => {
       id: 'river_scroll',
       label: 'Scroll vertical com inimigos (River Raid)',
       profile: 'hero_p0_mux_y',
-      options: { maxMuxSlots: 6, scroll: 'vertical' },
+      options: {
+        seedMode: 'title_entropy',
+        seedFixed: 42,
+        riverEdges: 2,
+        minRiverWidth: 6,
+        maxMuxSlots: 6,
+      },
     },
     {
       id: 'boxing',
@@ -778,22 +834,13 @@ const CONFIG = (() => {
 
   function allowedPfModes() {
     const c = getStyleContract();
-    const modes = (c.playfield && c.playfield.allowedModes) || [
-      'none',
-      'reflect',
-      'repeat',
-      'asymmetric',
-    ];
-    // profileOption playfield: none → só none; minimal → reflect/repeat
-    const opts = getProfileOptions();
-    if (getGameStyle() === 'vertical_shooter') {
-      if (opts.playfield === 'none' || opts.playfield === undefined) {
-        // ainda permite escolher reflect/repeat se quiser minimal depois
-        return ['none', 'reflect', 'repeat'];
-      }
-      return ['none', 'reflect', 'repeat'];
+    if (c.playfield && Array.isArray(c.playfield.allowedModes)) {
+      return c.playfield.allowedModes.slice();
     }
-    return modes;
+    const st = getGameStyle();
+    if (st === 'vertical_shooter') return ['none', 'reflect', 'repeat'];
+    if (st === 'river_scroll') return ['none', 'reflect'];
+    return ['none', 'reflect', 'repeat', 'asymmetric'];
   }
 
   function showBandEditor() {
@@ -801,6 +848,13 @@ const CONFIG = (() => {
     if (c.editor && c.editor.showBands) return true;
     if (c.playfield && c.playfield.showBandEditor) return true;
     return getGameStyle() === 'vertical_shooter';
+  }
+
+  function showRiverMapEditor() {
+    const c = getStyleContract();
+    if (c.playfield && c.playfield.showRiverMapEditor) return true;
+    if (c.editor && c.editor.showRiverMap) return true;
+    return getGameStyle() === 'river_scroll';
   }
 
   return {
@@ -816,6 +870,7 @@ const CONFIG = (() => {
     playfieldMode,
     allowedPfModes,
     showBandEditor,
+    showRiverMapEditor,
     KERNEL_PROFILES,
     GAME_STYLES,
     STYLE_CONTRACTS,

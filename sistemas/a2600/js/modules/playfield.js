@@ -40,6 +40,7 @@ const PLAYFIELD = (() => {
   let colorTarget = 'pf';
   let pfMode = 'reflect'; // none | reflect | repeat | asymmetric
   let selectedBandId = null;
+  let bandDrag = null; // { type, bandId, idx?, startScanY, startColorX, origY, origH, origBaseX, origXs }
   let tool = 'paint';
   let painting = false;
   let zoom = 1;
@@ -153,27 +154,43 @@ const PLAYFIELD = (() => {
   }
 
   function allowsAsymmetric() {
+    return allowedModes().indexOf('asymmetric') >= 0;
+  }
+
+  function allowsRepeat() {
+    return allowedModes().indexOf('repeat') >= 0;
+  }
+
+  function allowedModes() {
     try {
       if (typeof CONFIG !== 'undefined' && typeof CONFIG.allowedPfModes === 'function') {
-        return CONFIG.allowedPfModes().indexOf('asymmetric') >= 0;
+        return CONFIG.allowedPfModes();
       }
     } catch (e) {}
     try {
       const st = (Project.data && Project.data.gameStyle) || '';
-      if (st === 'vertical_shooter') return false;
+      if (st === 'vertical_shooter') return ['none', 'reflect', 'repeat'];
+      if (st === 'river_scroll') return ['none', 'reflect'];
     } catch (e) {}
-    return true;
+    return ['none', 'reflect', 'repeat', 'asymmetric'];
   }
 
-  function allowedModes() {
-    // none/reflect/repeat sempre; asymmetric só quando o estilo permitir
-    const modes = ['none', 'reflect', 'repeat'];
-    if (typeof allowsAsymmetric === 'function' ? allowsAsymmetric() : true) {
-      modes.push('asymmetric');
-    }
-    return modes;
+  function styleUsesRiverMap() {
+    try {
+      if (typeof CONFIG !== 'undefined' && typeof CONFIG.showRiverMapEditor === 'function') {
+        return !!CONFIG.showRiverMapEditor();
+      }
+    } catch (e) {}
+    try {
+      if (typeof CONFIG !== 'undefined' && typeof CONFIG.getGameStyle === 'function') {
+        return CONFIG.getGameStyle() === 'river_scroll';
+      }
+    } catch (e) {}
+    try {
+      return !!(Project.data && Project.data.gameStyle === 'river_scroll');
+    } catch (e) {}
+    return false;
   }
-
 
   function coercePfMode(mode) {
     const ok = allowedModes();
@@ -465,10 +482,25 @@ const PLAYFIELD = (() => {
           </label>
           <label>Modo PF
             <select id="pfMode">
-              <option value="none" ${pfMode === 'none' ? 'selected' : ''}>None (tela preta)</option>
-              <option value="reflect" ${pfMode === 'reflect' ? 'selected' : ''}>Reflect (espelho)</option>
-              <option value="repeat" ${pfMode === 'repeat' ? 'selected' : ''}>Repeat (repete)</option>
-              ${allowsAsymmetric() ? `<option value="asymmetric" ${pfMode === 'asymmetric' ? 'selected' : ''}>Assimétrico (40 bits)</option>` : ''}
+              ${allowedModes()
+                .map((m) => {
+                  const labels = {
+                    none: 'None (céu / tela preta)',
+                    reflect: 'Reflect (rio / metade+espelho)',
+                    repeat: 'Repeat (repete)',
+                    asymmetric: 'Assimétrico (40 bits)',
+                  };
+                  return (
+                    '<option value="' +
+                    m +
+                    '" ' +
+                    (pfMode === m ? 'selected' : '') +
+                    '>' +
+                    (labels[m] || m) +
+                    '</option>'
+                  );
+                })
+                .join('')}
             </select>
           </label>
           <div class="pf-tools" id="pfEditTools">
@@ -538,6 +570,17 @@ const PLAYFIELD = (() => {
               <div class="pf-card-title">Modo</div>
               <p class="pf-note" id="pfModeHelp"></p>
             </div>
+            
+            <div class="pf-card" id="pfRiverCard" style="${styleUsesRiverMap() ? '' : 'display:none'}">
+              <div class="pf-card-title">Mapa procedural (rio / scroll)</div>
+              <p class="pf-note">
+                O motor gera o rio com bordas em X (2 = canal, 4 = canal+ilha).
+                Drift ±1 a cada N frames é <b>fixo no engine</b>.
+                Reflect usa metade da tela espelhada.
+              </p>
+              <div class="pf-band-fields" id="pfRiverFields"></div>
+            </div>
+
             <div class="pf-card" id="pfBandsCard" style="${styleUsesBands() ? '' : 'display:none'}">
               <div class="pf-card-title">Faixas (herói / inimigos)</div>
               <p class="pf-note">
@@ -583,7 +626,7 @@ const PLAYFIELD = (() => {
     if (el) {
       if (pfMode === 'none') {
         el.innerHTML =
-          '<b>None:</b> sem playfield (tela preta). Ferramentas de desenho desligadas — use as <b>faixas</b> para herói e inimigos.';
+          '<b>None:</b> sem playfield (tela preta). Sem pintura/spawn — arraste as <b>faixas</b> na tela (mover, altura, posição X).';
       } else if (pfMode === 'asymmetric') {
         el.innerHTML =
           '<b>Assimétrico:</b> 40 pixels livres por linha. O kernel precisa reescrever PF0–PF2 no meio da scanline.';
@@ -601,21 +644,43 @@ const PLAYFIELD = (() => {
   /** None: desliga pintura PF e esconde cores TIA */
   function updateNoneModeUI() {
     const isNone = pfMode === 'none';
+    const shooter = styleUsesBands(); // shooter vertical: ondas em faixas, sem spawn
     const tools = document.getElementById('pfEditTools');
     if (tools) {
-      tools.style.opacity = isNone ? '0.35' : '';
-      tools.style.pointerEvents = isNone ? 'none' : '';
-      tools.title = isNone ? 'Indisponível no modo None' : '';
-      if (isNone) {
-        // não deixar paint/erase/fill ativos
-        tools.querySelectorAll('.pf-tool[data-tool]').forEach((btn) => {
-          const t = btn.getAttribute('data-tool');
-          if (t === 'paint' || t === 'erase' || t === 'fill') btn.classList.remove('active');
-        });
-        if (tool === 'paint' || tool === 'erase' || tool === 'fill') tool = 'spawn';
-        const spawnBtn = tools.querySelector('.pf-tool[data-tool="spawn"]');
-        if (spawnBtn) spawnBtn.classList.add('active');
+      // Spawn: desligado no shooter (inimigos = faixas), independente do PF mode
+      const spawnBtn = tools.querySelector('.pf-tool[data-tool="spawn"]');
+      if (spawnBtn) {
+        spawnBtn.disabled = !!shooter;
+        spawnBtn.style.opacity = shooter ? '0.35' : '';
+        spawnBtn.style.pointerEvents = shooter ? 'none' : '';
+        spawnBtn.title = shooter
+          ? 'Indisponível no shooter vertical (use faixas)'
+          : 'Ponto de spawn';
+        if (shooter && tool === 'spawn') {
+          spawnBtn.classList.remove('active');
+          tool = isNone ? '' : 'paint';
+          const paintBtn = tools.querySelector('.pf-tool[data-tool="paint"]');
+          if (paintBtn && !isNone) paintBtn.classList.add('active');
+        }
       }
+
+      // Pintura PF: desligada só no mode none
+      tools.querySelectorAll('.pf-tool[data-tool="paint"], .pf-tool[data-tool="erase"], .pf-tool[data-tool="fill"]').forEach((btn) => {
+        btn.disabled = !!isNone;
+        btn.style.opacity = isNone ? '0.35' : '';
+        btn.style.pointerEvents = isNone ? 'none' : '';
+        if (isNone) btn.classList.remove('active');
+      });
+      if (isNone && (tool === 'paint' || tool === 'erase' || tool === 'fill' || tool === 'spawn')) {
+        tool = '';
+      }
+
+      const anyPaint = !isNone;
+      tools.title = shooter
+        ? (isNone
+            ? 'Shooter: faixas na tela (sem pintura/spawn)'
+            : 'Shooter: spawn desligado — inimigos por faixas')
+        : '';
     }
     const clearBtn = document.getElementById('pfClear');
     if (clearBtn) {
@@ -626,7 +691,7 @@ const PLAYFIELD = (() => {
     const colors = document.getElementById('pfColorsCard');
     if (colors) colors.style.display = isNone ? 'none' : '';
     const canvas = document.getElementById('pfCanvas');
-    if (canvas) {
+    if (canvas && !shooter) {
       canvas.style.cursor = isNone ? 'default' : 'crosshair';
     }
   }
@@ -1044,8 +1109,38 @@ const PLAYFIELD = (() => {
     canvas.addEventListener('mousedown', (ev) => {
       const p = pos(ev);
       if (p.gap) return;
-      // ferramenta spawn: não pinta pixels
-      if (pfMode === 'none' && tool !== 'spawn') {
+
+      // --- interação de faixas (shooter): mover / redimensionar / X inimigos ---
+      if (styleUsesBands() && !p.gutter) {
+        const { cellW, cellH, gridW } = canvasDims(height);
+        const hit = hitTestBand(p.x, p.y, cellW, cellH, gridW);
+        if (hit) {
+          selectedBandId = hit.band.id;
+          bandDrag = {
+            type: hit.type,
+            bandId: hit.band.id,
+            idx: hit.idx != null ? hit.idx : 0,
+            startScanY: p.y | 0,
+            startColorX: gridToColorX(p.x),
+            origY: hit.band.y | 0,
+            origH: hit.band.height | 0,
+            origBaseX: hit.band.baseX | 0,
+            origXs: (hit.band.xs || []).slice(),
+          };
+          renderBandsPanel();
+          redraw();
+          ev.preventDefault();
+          return;
+        }
+      }
+
+      // none: sem pintura (spawn já bloqueado no shooter)
+      if (pfMode === 'none') {
+        ev.preventDefault();
+        return;
+      }
+      // shooter vertical: sem spawn — inimigos/herói vêm das faixas
+      if (styleUsesBands() && tool === 'spawn') {
         ev.preventDefault();
         return;
       }
@@ -1089,11 +1184,50 @@ const PLAYFIELD = (() => {
     });
     window.addEventListener('mouseup', () => {
       painting = false;
+      if (bandDrag) {
+        bandDrag = null;
+        if (typeof Project.status === 'function') Project.status('faixa ajustada — salve o projeto');
+        renderBandsPanel();
+        redraw();
+      }
     });
     canvas.addEventListener('mousemove', (ev) => {
+      const p = pos(ev);
+
+      // drag de faixa
+      if (bandDrag && styleUsesBands()) {
+        if (!p.gap && !p.gutter) {
+          applyBandDrag(p.y | 0, gridToColorX(p.x));
+          redraw();
+        }
+        // cursor
+        const c = document.getElementById('pfCanvas');
+        if (c) {
+          c.style.cursor =
+            bandDrag.type === 'resize-top' || bandDrag.type === 'resize-bottom'
+              ? 'ns-resize'
+              : bandDrag.type === 'enemy'
+                ? 'ew-resize'
+                : 'move';
+        }
+        return;
+      }
+
+      // hover cursor sobre faixas
+      if (styleUsesBands() && !painting && !p.gap && !p.gutter) {
+        const { cellW, cellH, gridW } = canvasDims(height);
+        const hit = hitTestBand(p.x, p.y, cellW, cellH, gridW);
+        const c = document.getElementById('pfCanvas');
+        if (c) {
+          if (!hit) c.style.cursor = pfMode === 'none' ? 'default' : 'crosshair';
+          else if (hit.type === 'resize-top' || hit.type === 'resize-bottom') c.style.cursor = 'ns-resize';
+          else if (hit.type === 'enemy') c.style.cursor = 'ew-resize';
+          else c.style.cursor = 'move';
+        }
+      }
+
       if (!painting) return;
       if (pfMode === 'none') return;
-      const p = pos(ev);
       if (p.gap) return;
       if (p.gutter) paintLineColor(p.y);
       else if (tool === 'fill') return;
@@ -1336,6 +1470,104 @@ const PLAYFIELD = (() => {
   }
 
 
+
+  function getMapgenOpts() {
+    const opts =
+      (typeof CONFIG !== 'undefined' && CONFIG.getProfileOptions && CONFIG.getProfileOptions()) ||
+      (Project.data && Project.data.profileOptions) ||
+      {};
+    return {
+      seedMode: opts.seedMode || 'title_entropy',
+      seedFixed: opts.seedFixed != null ? opts.seedFixed | 0 : 42,
+      riverEdges: opts.riverEdges != null ? opts.riverEdges | 0 : 2,
+      minRiverWidth: opts.minRiverWidth != null ? opts.minRiverWidth | 0 : 6,
+      maxMuxSlots: opts.maxMuxSlots != null ? opts.maxMuxSlots | 0 : 6,
+    };
+  }
+
+  function setMapgenOpt(key, val) {
+    if (!Project.data) return;
+    if (!Project.data.profileOptions) Project.data.profileOptions = {};
+    Project.data.profileOptions[key] = val;
+    if (typeof Project.status === 'function') Project.status('mapa/rio alterado — salve o projeto');
+  }
+
+  function renderRiverMapPanel() {
+    const card = document.getElementById('pfRiverCard');
+    const box = document.getElementById('pfRiverFields');
+    const banner = document.getElementById('pfRiverBanner');
+    const show = styleUsesRiverMap();
+    if (card) card.style.display = show ? '' : 'none';
+    if (banner) banner.style.display = show ? '' : 'none';
+    if (!box || !show) {
+      if (box) box.innerHTML = '';
+      return;
+    }
+    const o = getMapgenOpts();
+    box.innerHTML =
+      '<label>Seed do mapa' +
+      '<select id="pfSeedMode">' +
+      '<option value="title_entropy"' +
+      (o.seedMode === 'title_entropy' ? ' selected' : '') +
+      '>Aleatória (contador na tela título)</option>' +
+      '<option value="fixed"' +
+      (o.seedMode === 'fixed' ? ' selected' : '') +
+      '>Fixa (mesmo rio sempre)</option>' +
+      '</select></label>' +
+      '<label id="pfSeedFixedWrap" style="' +
+      (o.seedMode === 'fixed' ? '' : 'opacity:0.4;pointer-events:none') +
+      '">Valor da seed (0–255)' +
+      '<input type="number" id="pfSeedFixed" min="0" max="255" value="' +
+      (o.seedFixed | 0) +
+      '"/></label>' +
+      '<label>Bordas do rio' +
+      '<select id="pfRiverEdges">' +
+      '<option value="2"' +
+      ((o.riverEdges | 0) === 4 ? '' : ' selected') +
+      '>2 — um canal</option>' +
+      '<option value="4"' +
+      ((o.riverEdges | 0) === 4 ? ' selected' : '') +
+      '>4 — canal + ilha</option>' +
+      '</select></label>' +
+      '<label>Largura mínima (células PF)' +
+      '<input type="number" id="pfMinRiverW" min="4" max="16" value="' +
+      (o.minRiverWidth | 6) +
+      '"/></label>' +
+      '<label>Máx. inimigos na tela (multiplex)' +
+      '<input type="number" id="pfMaxMux" min="2" max="12" value="' +
+      (o.maxMuxSlots | 6) +
+      '"/></label>' +
+      '<p class="pf-note">Algoritmo de passo das bordas: −1 / 0 / +1 (fixo). Reflect obrigatório para desenhar o rio com metade+espelho; None = céu / shooter full-screen.</p>';
+
+    document.getElementById('pfSeedMode')?.addEventListener('change', (e) => {
+      setMapgenOpt('seedMode', e.target.value);
+      renderRiverMapPanel();
+    });
+    document.getElementById('pfSeedFixed')?.addEventListener('change', (e) => {
+      let v = parseInt(e.target.value, 10);
+      if (isNaN(v)) v = 0;
+      v = Math.max(0, Math.min(255, v));
+      setMapgenOpt('seedFixed', v);
+      e.target.value = v;
+    });
+    document.getElementById('pfRiverEdges')?.addEventListener('change', (e) => {
+      setMapgenOpt('riverEdges', parseInt(e.target.value, 10) || 2);
+    });
+    document.getElementById('pfMinRiverW')?.addEventListener('change', (e) => {
+      let v = parseInt(e.target.value, 10) || 6;
+      v = Math.max(4, Math.min(16, v));
+      setMapgenOpt('minRiverWidth', v);
+      e.target.value = v;
+    });
+    document.getElementById('pfMaxMux')?.addEventListener('change', (e) => {
+      let v = parseInt(e.target.value, 10) || 6;
+      v = Math.max(2, Math.min(12, v));
+      setMapgenOpt('maxMuxSlots', v);
+      e.target.value = v;
+    });
+  }
+
+
   function renderBandsPanel() {
     const list = document.getElementById('pfBandList');
     const detail = document.getElementById('pfBandDetail');
@@ -1474,6 +1706,147 @@ const PLAYFIELD = (() => {
     });
   }
 
+
+  function findBandById(id) {
+    return (ensureData().bands || []).find((b) => b.id === id) || null;
+  }
+
+  /**
+   * Hit-test sobre faixas no canvas (coords de grid x 0..39, y scanline).
+   * Prioridade: marcador inimigo → borda resize → corpo (mover).
+   */
+  function hitTestBand(gridX, scanY, cellW, cellH, gridW) {
+    if (!styleUsesBands()) return null;
+    const bands = bandsForScreen(currentScreenId());
+    // inimigos (marcadores) primeiro — invertido para pegar o de cima na lista visual
+    for (let bi = bands.length - 1; bi >= 0; bi--) {
+      const b = bands[bi];
+      const y0 = b.y | 0;
+      const h = Math.max(1, b.height | 0);
+      if (scanY < y0 || scanY >= y0 + h) continue;
+      const xs = bandXs(b);
+      for (let i = 0; i < xs.length; i++) {
+        const gx = colorXToGrid(xs[i]);
+        // tolerância ~1 célula
+        if (Math.abs(gridX - gx) <= 1) {
+          return { type: 'enemy', band: b, idx: i };
+        }
+      }
+    }
+    // bordas e corpo (selecionada tem prioridade nas bordas)
+    const ordered = bands.slice().sort((a, b) => {
+      if (a.id === selectedBandId) return -1;
+      if (b.id === selectedBandId) return 1;
+      return 0;
+    });
+    for (const b of ordered) {
+      const y0 = b.y | 0;
+      const h = Math.max(1, b.height | 0);
+      const y1 = y0 + h - 1;
+      // resize top: 1 scanline na borda
+      if (scanY === y0 || scanY === y0 - 1) {
+        return { type: 'resize-top', band: b };
+      }
+      if (scanY === y1 || scanY === y1 + 1) {
+        return { type: 'resize-bottom', band: b };
+      }
+      if (scanY >= y0 && scanY <= y1) {
+        return { type: 'move', band: b };
+      }
+    }
+    return null;
+  }
+
+
+  /** Folga mínima entre faixas (scanlines). Hardware: 1 canal P1 por faixa. */
+  const BAND_GAP = 1;
+
+  function otherBands(bandId) {
+    return bandsForScreen(currentScreenId()).filter((b) => b.id !== bandId);
+  }
+
+  /** Limites verticais para não sobrepor vizinhos (com BAND_GAP de folga). */
+  function bandVerticalLimits(bandId) {
+    const others = otherBands(bandId);
+    let minY = 0;
+    let maxBottom = height; // exclusive end scanline index+1 style: max y+h
+    for (const o of others) {
+      const oy = o.y | 0;
+      const oh = Math.max(1, o.height | 0);
+      const oEnd = oy + oh; // first free line after band (before gap)
+      // se o outro está acima, empurra minY
+      // classificamos por centro relativo ao band atual se existir
+      const cur = findBandById(bandId);
+      const cy = cur ? (cur.y | 0) + ((cur.height | 1) / 2) : oy;
+      const oc = oy + oh / 2;
+      if (oc <= cy) {
+        // other is above (or same): floor is oEnd + GAP
+        minY = Math.max(minY, oEnd + BAND_GAP);
+      } else {
+        // other is below: ceiling is oy - GAP
+        maxBottom = Math.min(maxBottom, oy - BAND_GAP);
+      }
+    }
+    return { minY, maxBottom };
+  }
+
+  function clampBandNoOverlap(b) {
+    if (!b) return;
+    let y = Math.max(0, b.y | 0);
+    let h = Math.max(4, Math.min(48, b.height | 0));
+    const { minY, maxBottom } = bandVerticalLimits(b.id);
+    y = Math.max(y, minY);
+    if (y + h > maxBottom) {
+      // tenta reduzir altura; se não couber, gruda no teto
+      h = Math.max(4, maxBottom - y);
+      if (y + h > maxBottom) {
+        y = Math.max(minY, maxBottom - h);
+        h = Math.max(4, maxBottom - y);
+      }
+    }
+    if (y + h > height) {
+      h = Math.max(4, height - y);
+    }
+    b.y = y;
+    b.height = h;
+  }
+
+
+  function applyBandDrag(scanY, colorX) {
+    if (!bandDrag) return;
+    const b = findBandById(bandDrag.bandId);
+    if (!b) return;
+    if (bandDrag.type === 'move') {
+      let ny = (bandDrag.origY | 0) + (scanY - bandDrag.startScanY);
+      b.y = ny;
+      clampBandNoOverlap(b);
+    } else if (bandDrag.type === 'resize-top') {
+      const bottom = (bandDrag.origY | 0) + (bandDrag.origH | 1);
+      let ny = (bandDrag.origY | 0) + (scanY - bandDrag.startScanY);
+      ny = Math.min(ny, bottom - 4);
+      b.y = ny;
+      b.height = bottom - ny;
+      clampBandNoOverlap(b);
+      // preserva o fundo original se o clamp empurrar
+      const newBottom = (b.y | 0) + (b.height | 0);
+      if (newBottom !== bottom && bottom <= height) {
+        // ok
+      }
+    } else if (bandDrag.type === 'resize-bottom') {
+      let nh = (bandDrag.origH | 1) + (scanY - bandDrag.startScanY);
+      nh = Math.max(4, Math.min(48, nh));
+      b.height = nh;
+      clampBandNoOverlap(b);
+    } else if (bandDrag.type === 'enemy') {
+      const dx = colorX - bandDrag.startColorX;
+      let nb = (bandDrag.origBaseX | 0) + dx;
+      nb = Math.max(0, Math.min(152, nb));
+      b.baseX = nb;
+      b.xs = bandXs(b);
+    }
+  }
+
+
   function drawBandsOverlay(ctx, cellW, cellH, gridW) {
     if (!styleUsesBands()) return;
     const bands = bandsForScreen(currentScreenId());
@@ -1486,21 +1859,31 @@ const PLAYFIELD = (() => {
       ctx.fillRect(0, y0, gridW, h);
       ctx.strokeStyle = sel ? '#f4a261' : b.role === 'hero' ? '#3498db' : '#e74c3c';
       ctx.lineWidth = sel ? 2 : 1;
-      ctx.setLineDash([4, 3]);
+      ctx.setLineDash(sel ? [] : [4, 3]);
       ctx.strokeRect(0.5, y0 + 0.5, gridW - 1, h - 1);
       ctx.setLineDash([]);
-      // markers X
+      // handles de altura (crop vertical) na faixa selecionada
+      if (sel) {
+        const hw = Math.min(48, gridW * 0.25);
+        const hx = (gridW - hw) / 2;
+        const hh = Math.max(4, Math.min(8, cellH));
+        ctx.fillStyle = '#f4a261';
+        ctx.fillRect(hx, y0 - hh / 2, hw, hh);
+        ctx.fillRect(hx, y0 + h - hh / 2, hw, hh);
+      }
+      // markers X (arrastáveis)
       const xs = bandXs(b);
       for (const x of xs) {
         const gx = colorXToGrid(x);
         const cx = gx * cellW + cellW / 2;
         const cy = y0 + h / 2;
+        const r = Math.max(5, cellW * 0.7);
         ctx.beginPath();
-        ctx.arc(cx, cy, Math.max(3, cellW * 0.55), 0, Math.PI * 2);
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.fillStyle = b.role === 'hero' ? '#3498db' : '#e74c3c';
         ctx.fill();
         ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1.5;
         ctx.stroke();
       }
       ctx.fillStyle = '#ddd';
@@ -1508,7 +1891,11 @@ const PLAYFIELD = (() => {
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
       ctx.fillText(
-        (b.role === 'hero' ? 'P0 ' : 'P1×' + (b.copies | 1) + ' ') + 'Y' + (b.y | 0),
+        (b.role === 'hero' ? 'P0 ' : 'P1×' + (b.copies | 1) + ' ') +
+          'Y' +
+          (b.y | 0) +
+          ' h' +
+          (b.height | 0),
         4,
         y0 + 2
       );
