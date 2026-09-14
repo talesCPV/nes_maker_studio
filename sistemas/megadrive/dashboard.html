@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mega Drive / Genesis - Dashboard</title>
+  <style>
+    :root{--bg:#0b0d14;--panel:#151925;--panel2:#10131d;--border:#2b3142;--text:#eef1f7;--muted:#9ba4b5;--accent:#5d8cff;--danger:#d85b6a}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Arial,Helvetica,sans-serif;color:var(--text);background:var(--bg)}
+    body{min-height:100vh;background:radial-gradient(circle at 20% 0%,#18203a 0,#0b0d14 42%,#07090e 100%)}
+    .head{height:72px;padding:12px 24px;display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--border);background:rgba(12,15,23,.88);backdrop-filter:blur(12px);position:sticky;top:0;z-index:10}
+    .logo{width:48px;height:48px;border-radius:8px;background:#1c2231;display:grid;place-items:center;font-weight:800;font-size:11px;letter-spacing:.5px;border:1px solid var(--border)}
+    .head h1{font-size:18px;margin:0}.head p{margin:3px 0 0;color:var(--muted);font-size:12px}.head .spacer{flex:1}
+    button{font:inherit;border:0;border-radius:7px;padding:10px 14px;cursor:pointer}.primary{background:var(--accent);color:white}.secondary{background:#202637;color:var(--text);border:1px solid var(--border)}.danger{background:transparent;color:#ff8b98;border:1px solid #5b2d36}
+    .wrap{width:min(1100px,92vw);margin:28px auto}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}.top h2{margin:0;font-size:20px}.message{color:var(--muted);min-height:20px;font-size:13px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}.project{background:rgba(21,25,37,.92);border:1px solid var(--border);border-radius:10px;padding:18px;min-height:155px;display:flex;flex-direction:column}.project h3{margin:0 0 8px;font-size:17px}.project p{margin:0;color:var(--muted);line-height:1.45;flex:1}.meta{font-size:11px;color:#707a8e;margin-top:12px}.actions{display:flex;gap:8px;margin-top:14px}.empty{padding:40px 20px;text-align:center;border:1px dashed var(--border);border-radius:10px;color:var(--muted);grid-column:1/-1}
+    dialog{border:1px solid var(--border);border-radius:12px;background:var(--panel);color:var(--text);width:min(480px,92vw);padding:0;box-shadow:0 20px 70px #0008}dialog::backdrop{background:#0009}.modal{padding:22px}.modal h2{margin:0 0 18px}.field{margin-bottom:14px}.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}.field input,.field textarea{width:100%;padding:11px;border-radius:7px;border:1px solid var(--border);background:var(--panel2);color:var(--text);outline:none}.field textarea{min-height:100px;resize:vertical}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+    @media(max-width:650px){.head{padding:10px 14px}.wrap{width:94vw}.head p{display:none}.top{align-items:flex-start;flex-direction:column}}
+  </style>
+</head>
+<body>
+  <header class="head">
+    <div class="logo">MD<br>GEN</div>
+    <div><h1>Mega Drive / Genesis</h1><p>Dashboard de usuário</p></div>
+    <div class="spacer"></div>
+    <button id="hubBtn" class="secondary">Hub</button>
+    <button id="logoutBtn" class="secondary">Sair</button>
+  </header>
+
+  <main class="wrap">
+    <div class="top"><div><h2>Meus projetos</h2><div id="message" class="message"></div></div><button id="newBtn" class="primary">+ Novo projeto</button></div>
+    <section id="projects" class="grid"></section>
+  </main>
+
+  <dialog id="newDialog">
+    <form id="newForm" class="modal">
+      <h2>Novo projeto Mega Drive</h2>
+      <div class="field"><label for="name">Nome do projeto</label><input id="name" maxlength="120" required></div>
+      <div class="field"><label for="description">Descrição</label><textarea id="description" maxlength="2000"></textarea></div>
+      <div class="modal-actions"><button type="button" id="cancelBtn" class="secondary">Cancelar</button><button class="primary" type="submit">Criar projeto</button></div>
+    </form>
+  </dialog>
+
+<script>
+const APP_BASE = (() => {
+  const p = location.pathname || '';
+  const i = p.indexOf('/sistemas/megadrive/');
+  return i >= 0 ? p.slice(0,i) : '';
+})();
+const APP = p => APP_BASE + (p.startsWith('/') ? p : '/' + p);
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+
+async function session(){
+  const r=await fetch(APP('/backend/auth/session.php'),{credentials:'same-origin',cache:'no-store'});
+  if(!r.ok) throw new Error('Sessão não autenticada.');
+  return r.json();
+}
+async function loadProjects(){
+  $('message').textContent='Carregando...';
+  try{
+    const r=await fetch(APP('/sistemas/megadrive/backend/projects/list.php'),{credentials:'same-origin',cache:'no-store'});
+    const d=await r.json(); if(!r.ok||!d.success) throw new Error(d.message||'Falha ao listar projetos.');
+    const list=d.projects||[]; const el=$('projects');
+    if(!list.length){el.innerHTML='<div class="empty">Nenhum projeto criado ainda.<br>Use <b>+ Novo projeto</b> para começar.</div>'}
+    else el.innerHTML=list.map(p=>`<article class="project"><h3>${esc(p.name)}</h3><p>${esc(p.description||'Sem descrição.')}</p><div class="meta">Mega Drive / Genesis · ${esc(p.updated_at||p.created_at||'')}</div><div class="actions"><button class="primary" data-open="${esc(p.id)}">Abrir</button><button class="danger" data-delete="${esc(p.id)}">Excluir</button></div></article>`).join('');
+    $('message').textContent=`${list.length} projeto(s)`;
+  }catch(e){$('message').textContent=e.message}
+}
+$('projects').addEventListener('click',async e=>{
+  const open=e.target.closest('[data-open]'); const del=e.target.closest('[data-delete]');
+  if(open){ location.href=APP('/sistemas/megadrive/editor.html')+'?project='+encodeURIComponent(open.dataset.open); return; }
+  if(del && confirm('Excluir este projeto?')){
+    const r=await fetch(APP('/sistemas/megadrive/backend/projects/delete.php'),{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:del.dataset.delete})});
+    const d=await r.json(); if(!r.ok||!d.success) alert(d.message||'Não foi possível excluir.'); else loadProjects();
+  }
+});
+$('newBtn').onclick=()=>{ $('newForm').reset(); $('newDialog').showModal(); $('name').focus(); };
+$('cancelBtn').onclick=()=>$('newDialog').close();
+$('newForm').onsubmit=async e=>{e.preventDefault(); const btn=e.submitter; btn.disabled=true;
+  try{const r=await fetch(APP('/sistemas/megadrive/backend/projects/create.php'),{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('name').value.trim(),description:$('description').value.trim()})}); const d=await r.json(); if(!r.ok||!d.success) throw new Error(d.message||'Falha ao criar projeto.'); $('newDialog').close(); await loadProjects();}
+  catch(err){alert(err.message)} finally{btn.disabled=false}
+};
+$('hubBtn').onclick=()=>location.href=APP('/index.html');
+$('logoutBtn').onclick=async()=>{await fetch(APP('/backend/auth/logout.php'),{credentials:'same-origin'});location.href=APP('/login.html')};
+(async()=>{try{await session();await loadProjects()}catch(e){location.href=APP('/login.html')}})();
+</script>
+</body>
+</html>

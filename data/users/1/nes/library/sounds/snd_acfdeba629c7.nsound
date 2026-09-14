@@ -1,0 +1,4929 @@
+{
+    "format": "nsound",
+    "version": 1,
+    "exportedAt": "2026-08-31T15:00:30.535Z",
+    "app": "NES Maker Studio Sound Editor",
+    "name": "dr-wily-stage-1",
+    "items": [
+        {
+            "id": "song_mt04mdzzcaol",
+            "type": "song",
+            "name": "dr-wily-stage-1",
+            "loop": true,
+            "baseFrames": 21,
+            "typeActivation": [],
+            "channels": [
+                {
+                    "id": "ch_mt04mdzzycg9",
+                    "type": "pulse1",
+                    "name": "Bottom",
+                    "muted": false,
+                    "notes": [
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B2",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#3",
+                            "figure": "quarter"
+                        }
+                    ]
+                },
+                {
+                    "id": "ch_mt04mdzzstjg",
+                    "type": "pulse2",
+                    "name": "Top",
+                    "muted": false,
+                    "notes": [
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E5",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#6",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "G#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A#5",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E5",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#6",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "G#6",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#5",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        }
+                    ]
+                },
+                {
+                    "id": "ch_mt04mdzztggb",
+                    "type": "triangle",
+                    "name": "Countermelody",
+                    "muted": false,
+                    "notes": [
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "A3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E3",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "E3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "B3",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "G#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "F#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "E4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "D#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "C#4",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "eighth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "sixteenth"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        },
+                        {
+                            "note": "REST",
+                            "figure": "quarter"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "library_id": "snd_acfdeba629c7",
+    "savedAt": "2026-08-31T17:00:30+02:00"
+}

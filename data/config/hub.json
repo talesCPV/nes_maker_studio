@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "system": {
+    "NES": {
+      "label": "NES",
+      "disponivel": true,
+      "visivel": true,
+      "sobre": "NGC — CHR, fases, programação, build com ca65 e multicart NROM.",
+      "dashboard": "/sistemas/nes/dashboard.html",
+      "projectExtension": ".nms",
+      "background": "/sistemas/nes/assets/wallpaper.jpg"
+    },
+    "ATARI 2600": {
+      "label": "Atari 2600",
+      "disponivel": true,
+      "visivel": true,
+      "sobre": "AGC — projetos, dashboard e editor base (módulos em construção).",
+      "dashboard": "/sistemas/a2600/dashboard.html",
+      "projectExtension": ".agc",
+      "background": "/sistemas/a2600/assets/wallpaper.webp"
+    },
+    "MEGA DRIVE": {
+      "label": "Mega Drive / Genesis",
+      "disponivel": false,
+      "visivel": true,
+      "sobre": "Sistema de desenvolvimento para Mega Drive / Genesis.",
+      "dashboard": "/sistemas/megadrive/dashboard.html",
+      "projectExtension": ".mdg",
+      "background": ""
+    }
+  }
+}
