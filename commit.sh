@@ -22,6 +22,7 @@ then
     git add intro.md
     git add login.html
     git add register.html
+    git add config_hub.php
     
     git commit -m "by_script"
 

@@ -3,7 +3,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__, 4) . '/backend/auth/auth_check.php';
 header('Content-Type: application/json; charset=utf-8');
 $userId=(int)$_SESSION['user_id'];
-$dir=dirname(__DIR__,3).'/data/users/'.$userId.'/megadrive/projects';
+$dir=dirname(__DIR__,4).'/data/users/'.$userId.'/megadrive/projects';
 $projects=[];
 if(is_dir($dir)) foreach(glob($dir.'/*',GLOB_ONLYDIR) ?: [] as $p){
   $f=$p.'/project.mdg'; if(!is_file($f)) continue;

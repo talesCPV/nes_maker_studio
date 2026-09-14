@@ -1,12 +1,105 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>RetroCompiler — Mega Drive Editor</title>
+<script>
+(function () {
+  function detect() {
+    if (typeof window.APP_BASE === 'string' && window.APP_BASE !== '') return String(window.APP_BASE).replace(/\/$/, '');
+    var p = location.pathname || '';
+    var entries = ['/login.html', '/register.html', '/index.html'];
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (p.length >= e.length && p.slice(-e.length) === e) {
+        var b = p.slice(0, -e.length); return b === '/' ? '' : b;
+      }
+    }
+    var markers = ['/sistemas/megadrive/', '/megadrive/'];
+    for (var j = 0; j < markers.length; j++) {
+      var idx = p.indexOf(markers[j]);
+      if (idx >= 0) return p.slice(0, idx);
+    }
+    if (p === '/' || p === '') return '';
+    return '';
+  }
+  window.APP_BASE = detect();
+  window.APP = function (path) {
+    var b = String(window.APP_BASE || '').replace(/\/$/, '');
+    var x = String(path || '');
+    if (!x) return b || '/';
+    if (/^https?:\/\//i.test(x)) return x;
+    if (x.charAt(0) !== '/') x = '/' + x;
+    return b + x;
+  };
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RetroCompiler — Mega Drive / Genesis</title>
+<link rel="icon" href="../nes/assets/icon.png" type="image/png">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<header class="topbar"><div><strong>Mega Drive / Genesis</strong><span id="projectName">Sem projeto</span></div><nav><button id="btnSave">Salvar</button><button id="btnBack">Dashboard</button><button id="btnLogout">Sair</button></nav></header>
-<main class="workspace"><aside id="moduleMenu"></aside><section class="editor"><div id="moduleContent"><h1>Editor Mega Drive / Genesis</h1><p>Selecione um módulo.</p></div></section></main>
+<div id="topbar">
+  <div class="top-logo"><span>▶</span> MDG — Mega Drive / Genesis</div>
+  <div class="divider"></div>
+  <button type="button" class="icon-btn" id="btnSave" title="Salvar no servidor (Ctrl+S)">💾 Salvar</button>
+  <button type="button" class="icon-btn" id="btnDash" title="Dashboard Mega Drive">🏠 Dashboard</button>
+  <span id="topStatus" style="display:none">—</span>
+  <div class="proj-info">
+    <span id="projNameLabel">Sem projeto</span>
+    <b id="projFileLabel">—</b>
+    <span id="projStatus">● pronto</span>
+  </div>
+</div>
+
+<div id="app">
+  <div id="sidebar">
+    <div class="side-header">
+      <span class="side-title">Módulos</span>
+      <button type="button" class="side-toggle" id="btnSideToggle" title="Recolher menu">«</button>
+    </div>
+
+    <div class="side-item active" data-mod="config" title="Configurações">
+      <span class="side-ico">⚙</span><span class="side-label">Config</span>
+    </div>
+    <div class="side-item" data-mod="graphics" title="Gráficos / Tiles">
+      <span class="side-ico">🎨</span><span class="side-label">Gráficos / Tiles</span>
+    </div>
+    <div class="side-item" data-mod="maps" title="Mapas">
+      <span class="side-ico">🗺</span><span class="side-label">Mapas</span>
+    </div>
+    <div class="side-item" data-mod="sprites" title="Sprites">
+      <span class="side-ico">👾</span><span class="side-label">Sprites</span>
+    </div>
+    <div class="side-item" data-mod="audio" title="Áudio">
+      <span class="side-ico">🎵</span><span class="side-label">Áudio</span>
+    </div>
+    <div class="side-item" data-mod="code" title="Programação">
+      <span class="side-ico">🧠</span><span class="side-label">Programação</span>
+    </div>
+    <div class="side-item" data-mod="build" title="Build ROM">
+      <span class="side-ico">🔨</span><span class="side-label">Build ROM</span>
+    </div>
+
+    <div class="side-footer">
+      <div>CPU: <span id="infoCpu">68000</span></div>
+      <div>Vídeo: <span id="infoVideo">VDP</span></div>
+      <div>ROM: <span id="infoRom">—</span></div>
+      <div style="margin-top:6px">Formato: <b>.mdg</b></div>
+    </div>
+  </div>
+
+  <div id="content">
+    <div class="module active" id="mod-config"></div>
+    <div class="module" id="mod-graphics"></div>
+    <div class="module" id="mod-maps"></div>
+    <div class="module" id="mod-sprites"></div>
+    <div class="module" id="mod-audio"></div>
+    <div class="module" id="mod-code"></div>
+    <div class="module" id="mod-build"></div>
+  </div>
+</div>
+
 <script src="js/core.js"></script>
-</body></html>
+</body>
+</html>

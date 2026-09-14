@@ -21,7 +21,7 @@
     },
     "MEGA DRIVE": {
       "label": "Mega Drive / Genesis",
-      "disponivel": false,
+      "disponivel": true,
       "visivel": true,
       "sobre": "Sistema de desenvolvimento para Mega Drive / Genesis.",
       "dashboard": "/sistemas/megadrive/dashboard.html",

@@ -1,89 +1,504 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mega Drive / Genesis - Dashboard</title>
-  <style>
-    :root{--bg:#0b0d14;--panel:#151925;--panel2:#10131d;--border:#2b3142;--text:#eef1f7;--muted:#9ba4b5;--accent:#5d8cff;--danger:#d85b6a}
-    *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Arial,Helvetica,sans-serif;color:var(--text);background:var(--bg)}
-    body{min-height:100vh;background:radial-gradient(circle at 20% 0%,#18203a 0,#0b0d14 42%,#07090e 100%)}
-    .head{height:72px;padding:12px 24px;display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--border);background:rgba(12,15,23,.88);backdrop-filter:blur(12px);position:sticky;top:0;z-index:10}
-    .logo{width:48px;height:48px;border-radius:8px;background:#1c2231;display:grid;place-items:center;font-weight:800;font-size:11px;letter-spacing:.5px;border:1px solid var(--border)}
-    .head h1{font-size:18px;margin:0}.head p{margin:3px 0 0;color:var(--muted);font-size:12px}.head .spacer{flex:1}
-    button{font:inherit;border:0;border-radius:7px;padding:10px 14px;cursor:pointer}.primary{background:var(--accent);color:white}.secondary{background:#202637;color:var(--text);border:1px solid var(--border)}.danger{background:transparent;color:#ff8b98;border:1px solid #5b2d36}
-    .wrap{width:min(1100px,92vw);margin:28px auto}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}.top h2{margin:0;font-size:20px}.message{color:var(--muted);min-height:20px;font-size:13px}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}.project{background:rgba(21,25,37,.92);border:1px solid var(--border);border-radius:10px;padding:18px;min-height:155px;display:flex;flex-direction:column}.project h3{margin:0 0 8px;font-size:17px}.project p{margin:0;color:var(--muted);line-height:1.45;flex:1}.meta{font-size:11px;color:#707a8e;margin-top:12px}.actions{display:flex;gap:8px;margin-top:14px}.empty{padding:40px 20px;text-align:center;border:1px dashed var(--border);border-radius:10px;color:var(--muted);grid-column:1/-1}
-    dialog{border:1px solid var(--border);border-radius:12px;background:var(--panel);color:var(--text);width:min(480px,92vw);padding:0;box-shadow:0 20px 70px #0008}dialog::backdrop{background:#0009}.modal{padding:22px}.modal h2{margin:0 0 18px}.field{margin-bottom:14px}.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}.field input,.field textarea{width:100%;padding:11px;border-radius:7px;border:1px solid var(--border);background:var(--panel2);color:var(--text);outline:none}.field textarea{min-height:100px;resize:vertical}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
-    @media(max-width:650px){.head{padding:10px 14px}.wrap{width:94vw}.head p{display:none}.top{align-items:flex-start;flex-direction:column}}
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RetroCompiler - Mega Drive / Genesis</title>
+<link rel="stylesheet" href="../nes/css/auth.css">
+<link rel="icon" href="../nes/assets/icon.png" type="image/png">
+<style>
+        /* Layout dashboard: barra superior + conteúdo */
+        body {
+            overflow: hidden;
+        }
+
+        .container {
+            max-width: none;
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            margin: 0;
+            padding: 0;
+            gap: 0;
+            justify-content: flex-start;
+            align-items: stretch;
+            background: url('assets/wallpaper.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .card {
+            background: linear-gradient(180deg, rgba(26, 31, 43, 0.95), rgba(18, 21, 28, 0.5));
+        }
+
+        /* Barra superior (não é mais card) */
+        .dash-head {
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 12px 24px;
+            background: rgba(18, 21, 28, 0.75);
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .dash-head .img-logo {
+            max-height: 48px;
+            max-width: 48px;
+            width: auto;
+            height: auto;
+            border-radius: 8px;
+            flex-shrink: 0;
+        }
+
+        .dash-head #welcome {
+            margin: 0;
+            flex: 1;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .dash-head .actions {
+            flex-shrink: 0;
+        }
+
+        /* Card de projetos */
+        .projects-panel {
+            flex: 1 1 auto;
+            min-height: 0;
+            width: min(80vw, 1100px);
+            margin: 20px auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: stretch;
+            overflow: hidden;
+        }
+
+        .projects-panel h2 {
+            flex: 0 0 auto;
+            margin: 0 0 8px;
+            align-self: flex-start;
+        }
+
+        .projects-panel .message {
+            flex: 0 0 auto;
+        }
+
+        .project-list {
+            display: grid;
+            gap: 12px;
+            margin-top: 12px;
+            width: 100%;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .project {
+            padding: 16px;
+            border: 1px solid #303744;
+            border-radius: 8px;
+            background: #11151ca5;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .project-main {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 14px;
+            width: 100%;
+        }
+
+        .project-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .project-thumb {
+            width: 96px;
+            height: 90px;
+            flex-shrink: 0;
+            border-radius: 6px;
+            border: 1px solid #303744;
+            background: #0a0c10;
+            object-fit: contain;
+            image-rendering: pixelated;
+            display: block;
+        }
+
+        .project h3 {
+            margin: 0 0 6px;
+        }
+
+        .project p {
+            margin: 5px 0;
+            color: #b8c0cc;
+        }
+
+        .project small {
+            color: #7f8998;
+        }
+
+        .project-fork {
+            display: block;
+            margin-top: 4px;
+            font-size: 0.8rem;
+            color: #8b9bb4;
+        }
+
+        .project-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            width: 100%;
+        }
+
+        .project-actions-left,
+        .project-actions-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .project-actions-right {
+            margin-left: auto;
+        }
+
+        .project-actions .icon-btn {
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: linear-gradient(180deg, #4b8fff, var(--accent));
+            color: #fff;
+            font-size: 1.15rem;
+            line-height: 1;
+            cursor: pointer;
+            transition: transform 0.12s ease, filter 0.15s ease, box-shadow 0.15s ease;
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
+        }
+
+        .icon-btn:hover {
+            filter: brightness(1.08);
+            transform: translateY(-1px);
+        }
+
+        .icon-btn:active {
+            transform: translateY(0);
+            filter: brightness(0.96);
+        }
+
+        .icon-btn.secondary {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.12);
+            color: var(--text);
+            box-shadow: none;
+        }
+
+        .icon-btn.secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            filter: none;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 100;
+        }
+
+        .trashCard,
+        .libraryCard,
+        .mergeCard,
+        .newprojCard {
+            display: none;
+        }
+
+        .trashCard,
+        .libraryCard,
+        .mergeCard {
+            width: 80vw !important;
+            max-width: 900px;
+            max-height: 85vh;
+            overflow: hidden;
+            justify-content: flex-start;
+            align-items: stretch;
+        }
+
+        .trashCard h2,
+        .libraryCard h2,
+        .mergeCard h2 {
+            flex: 0 0 auto;
+            margin: 0 0 8px;
+            align-self: flex-start;
+            padding-right: 36px;
+        }
+
+        .trashCard .message,
+        .libraryCard .message,
+        .mergeCard .message {
+            flex: 0 0 auto;
+        }
+
+        .trashCard #trashList,
+        .libraryCard #libraryList,
+        .mergeCard #mergeRomList {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            margin-top: 12px;
+        }
+
+        .merge-tabs {
+            display: flex;
+            gap: 6px;
+            margin: 4px 0 0;
+            flex: 0 0 auto;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .merge-tabs button[data-mapper] {
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #444;
+            background: #1a1a1a;
+            color: #aaa;
+            cursor: pointer;
+        }
+
+        .merge-tabs button[data-mapper].active {
+            background: #8e44ad;
+            border-color: #8e44ad;
+            color: #fff;
+        }
+
+        .merge-rom-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #141414;
+            margin-bottom: 8px;
+        }
+
+        .merge-rom-item .meta { flex: 1; min-width: 0; }
+        .merge-rom-item .meta strong { display: block; color: #eee; font-size: 13px; }
+        .merge-rom-item .meta span { font-size: 11px; color: #777; }
+        .merge-rom-item input.merge-name {
+            width: 100%;
+            max-width: 220px;
+            background: #0a0a0a;
+            border: 1px solid #444;
+            color: #eee;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+        .merge-toolbar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 8px;
+            flex: 0 0 auto;
+        }
+
+        .library-tabs {
+            display: flex;
+            gap: 6px;
+            margin: 4px 0 0;
+            flex: 0 0 auto;
+        }
+
+        .library-tabs button {
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #444;
+            background: #1a1a1a;
+            color: #aaa;
+            cursor: pointer;
+        }
+
+        .library-tabs button.active {
+            background: #007acc;
+            border-color: #007acc;
+            color: #fff;
+        }
+
+        .library-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #141414;
+            margin-bottom: 8px;
+        }
+
+        .library-item .meta {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .library-item .meta strong {
+            display: block;
+            color: #eee;
+            font-size: 13px;
+        }
+
+        .library-item .meta span {
+            font-size: 11px;
+            color: #777;
+        }
+
+        .library-item .actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .open {
+            display: flex;
+        }
+
+        .modal .card {
+            width: min(500px, 100%);
+        }
+
+        .close {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            font-size: 2em;
+            background: unset;
+            color: white;
+            border: unset;
+            cursor: pointer;
+            line-height: 1;
+            z-index: 2;
+        }
+
+        @media (max-width: 640px) {
+            .dash-head {
+                padding: 10px 12px;
+                flex-wrap: wrap;
+            }
+
+            .dash-head .img-logo {
+                max-height: 40px;
+                max-width: 40px;
+            }
+
+            .projects-panel {
+                width: 100%;
+                margin: 12px 0;
+                border-radius: 0;
+            }
+
+            .trashCard {
+                width: 100% !important;
+                max-height: 90vh;
+            }
+        }
+    </style>
 </head>
 <body>
-  <header class="head">
-    <div class="logo">MD<br>GEN</div>
-    <div><h1>Mega Drive / Genesis</h1><p>Dashboard de usuário</p></div>
-    <div class="spacer"></div>
-    <button id="hubBtn" class="secondary">Hub</button>
-    <button id="logoutBtn" class="secondary">Sair</button>
-  </header>
-
-  <main class="wrap">
-    <div class="top"><div><h2>Meus projetos</h2><div id="message" class="message"></div></div><button id="newBtn" class="primary">+ Novo projeto</button></div>
-    <section id="projects" class="grid"></section>
-  </main>
-
-  <dialog id="newDialog">
-    <form id="newForm" class="modal">
-      <h2>Novo projeto Mega Drive</h2>
-      <div class="field"><label for="name">Nome do projeto</label><input id="name" maxlength="120" required></div>
-      <div class="field"><label for="description">Descrição</label><textarea id="description" maxlength="2000"></textarea></div>
-      <div class="modal-actions"><button type="button" id="cancelBtn" class="secondary">Cancelar</button><button class="primary" type="submit">Criar projeto</button></div>
-    </form>
-  </dialog>
-
+<div class="container">
+<header class="dash-head">
+<img class="img-logo" src="../nes/assets/icon.png" alt="RetroCompiler">
+<p id="welcome">Verificando sessão...</p>
+<div class="actions">
+<button id="newProjectButton" class="icon-btn" type="button" title="Novo projeto" aria-label="Novo projeto">+</button>
+<button id="systemsHubButton" class="icon-btn secondary" type="button" title="Menu de sistemas" aria-label="Menu de sistemas">🏠</button>
+<button id="logoutButton" class="icon-btn secondary" type="button" title="Logout" aria-label="Logout">⏻</button>
+</div></header>
+<div class="card dash-card projects-panel">
+<h2>Meus projetos Mega Drive / Genesis</h2>
+<div id="projectMessage" class="message">Carregando projetos...</div>
+<div id="projectList" class="project-list"></div>
+</div></div>
+<div id="newProjectModal" class="modal">
+<div class="card newprojCard">
+<button id="closeModal" class="close" type="button">&times;</button>
+<h2>Novo projeto Mega Drive / Genesis</h2>
+<form id="projectForm">
+<label for="projectName">Nome</label>
+<input id="projectName" type="text" maxlength="150" required autocomplete="off">
+<label for="projectDescription">Descrição</label>
+<input id="projectDescription" type="text" maxlength="1000" autocomplete="off">
+<button type="submit" id="projectFormSubmit">Criar projeto</button>
+</form>
+<div id="createMessage" class="message"></div>
+</div></div>
 <script>
-const APP_BASE = (() => {
-  const p = location.pathname || '';
-  const i = p.indexOf('/sistemas/megadrive/');
-  return i >= 0 ? p.slice(0,i) : '';
+(function(){
+function detect(){if(typeof window.APP_BASE==='string'&&window.APP_BASE!=='')return String(window.APP_BASE).replace(/\/$/,'');var p=location.pathname||'';var entries=['/login.html','/register.html','/index.html'];for(var i=0;i<entries.length;i++){var e=entries[i];if(p.length>=e.length&&p.slice(-e.length)===e){var b=p.slice(0,-e.length);return b==='/'?'':b}}var dirs=['/sistemas/megadrive/','/megadrive/','/sistemas/nes/','/sistemas/a2600/','/nes/','/a2600/'];for(var j=0;j<dirs.length;j++){var k=p.indexOf(dirs[j]);if(k>=0)return p.slice(0,k)}if(p==='/'||p==='')return '';return ''}window.APP_BASE=detect();window.APP=function(path){var b=String(window.APP_BASE||'').replace(/\/$/,'');var x=String(path||'');if(!x)return b||'/';if(/^https?:\/\//i.test(x))return x;if(x.charAt(0)!=='/')x='/'+x;return b+x};
 })();
-const APP = p => APP_BASE + (p.startsWith('/') ? p : '/' + p);
-const $ = id => document.getElementById(id);
-const esc = s => String(s ?? '').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-
-async function session(){
-  const r=await fetch(APP('/backend/auth/session.php'),{credentials:'same-origin',cache:'no-store'});
-  if(!r.ok) throw new Error('Sessão não autenticada.');
-  return r.json();
-}
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
+async function session(){const r=await fetch(APP('/backend/auth/session.php'),{credentials:'same-origin',cache:'no-store'});if(!r.ok)throw new Error('Sessão não autenticada.');return r.json()}
 async function loadProjects(){
-  $('message').textContent='Carregando...';
-  try{
-    const r=await fetch(APP('/sistemas/megadrive/backend/projects/list.php'),{credentials:'same-origin',cache:'no-store'});
-    const d=await r.json(); if(!r.ok||!d.success) throw new Error(d.message||'Falha ao listar projetos.');
-    const list=d.projects||[]; const el=$('projects');
-    if(!list.length){el.innerHTML='<div class="empty">Nenhum projeto criado ainda.<br>Use <b>+ Novo projeto</b> para começar.</div>'}
-    else el.innerHTML=list.map(p=>`<article class="project"><h3>${esc(p.name)}</h3><p>${esc(p.description||'Sem descrição.')}</p><div class="meta">Mega Drive / Genesis · ${esc(p.updated_at||p.created_at||'')}</div><div class="actions"><button class="primary" data-open="${esc(p.id)}">Abrir</button><button class="danger" data-delete="${esc(p.id)}">Excluir</button></div></article>`).join('');
-    $('message').textContent=`${list.length} projeto(s)`;
-  }catch(e){$('message').textContent=e.message}
+ $('projectMessage').textContent='Carregando projetos...';
+ try{const r=await fetch(APP('/sistemas/megadrive/backend/projects/list.php'),{credentials:'same-origin',cache:'no-store'});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Falha ao listar projetos.');const list=d.projects||[];const el=$('projectList');
+ if(!list.length){el.innerHTML='<div class="empty">Nenhum projeto criado ainda.<br>Use <b>+</b> para começar.</div>'}else{el.innerHTML=list.map(p=>`<article class="project"><div class="project-main"><div class="project-info"><h3>${esc(p.name)}</h3><p>${esc(p.description||'Sem descrição.')}</p><small>Mega Drive / Genesis · ${esc(p.updated_at||p.created_at||'')}</small></div></div><div class="project-actions"><div class="project-actions-left"><button class="icon-btn" data-open="${esc(p.id)}" title="Abrir projeto" aria-label="Abrir projeto">▶</button></div><div class="project-actions-right"><button class="icon-btn secondary" data-delete="${esc(p.id)}" title="Excluir projeto" aria-label="Excluir projeto">🗑</button></div></div></article>`).join('')}
+ $('projectMessage').textContent=`${list.length} projeto(s)`;
+ }catch(e){$('projectMessage').textContent=e.message}
 }
-$('projects').addEventListener('click',async e=>{
-  const open=e.target.closest('[data-open]'); const del=e.target.closest('[data-delete]');
-  if(open){ location.href=APP('/sistemas/megadrive/editor.html')+'?project='+encodeURIComponent(open.dataset.open); return; }
-  if(del && confirm('Excluir este projeto?')){
-    const r=await fetch(APP('/sistemas/megadrive/backend/projects/delete.php'),{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:del.dataset.delete})});
-    const d=await r.json(); if(!r.ok||!d.success) alert(d.message||'Não foi possível excluir.'); else loadProjects();
-  }
-});
-$('newBtn').onclick=()=>{ $('newForm').reset(); $('newDialog').showModal(); $('name').focus(); };
-$('cancelBtn').onclick=()=>$('newDialog').close();
-$('newForm').onsubmit=async e=>{e.preventDefault(); const btn=e.submitter; btn.disabled=true;
-  try{const r=await fetch(APP('/sistemas/megadrive/backend/projects/create.php'),{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('name').value.trim(),description:$('description').value.trim()})}); const d=await r.json(); if(!r.ok||!d.success) throw new Error(d.message||'Falha ao criar projeto.'); $('newDialog').close(); await loadProjects();}
-  catch(err){alert(err.message)} finally{btn.disabled=false}
-};
-$('hubBtn').onclick=()=>location.href=APP('/index.html');
-$('logoutBtn').onclick=async()=>{await fetch(APP('/backend/auth/logout.php'),{credentials:'same-origin'});location.href=APP('/login.html')};
-(async()=>{try{await session();await loadProjects()}catch(e){location.href=APP('/login.html')}})();
+$('projectList').addEventListener('click',async e=>{const open=e.target.closest('[data-open]'),del=e.target.closest('[data-delete]');if(open){location.href=APP('/sistemas/megadrive/editor.html')+'?project='+encodeURIComponent(open.dataset.open);return}if(del&&confirm('Excluir este projeto?')){const r=await fetch(APP('/sistemas/megadrive/backend/projects/delete.php'),{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:del.dataset.delete})});const d=await r.json();if(!r.ok||!d.success)alert(d.message||'Não foi possível excluir.');else loadProjects()}});
+$('newProjectButton').onclick=()=>{$('projectForm').reset();$('createMessage').textContent='';$('newProjectModal').classList.add('open');$('projectName').focus()};
+$('closeModal').onclick=()=>$('newProjectModal').classList.remove('open');
+$('newProjectModal').addEventListener('click',e=>{if(e.target===$('newProjectModal'))$('newProjectModal').classList.remove('open')});
+$('projectForm').onsubmit=async e=>{e.preventDefault();const btn=$('projectFormSubmit');btn.disabled=true;$('createMessage').textContent='Criando...';try{const r=await fetch(APP('/sistemas/megadrive/backend/projects/create.php'),{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('projectName').value.trim(),description:$('projectDescription').value.trim()})});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Falha ao criar projeto.');$('newProjectModal').classList.remove('open');await loadProjects()}catch(err){$('createMessage').textContent=err.message}finally{btn.disabled=false}};
+$('systemsHubButton').onclick=()=>location.href=APP('/index.html');
+$('logoutButton').onclick=async()=>{try{await fetch(APP('/backend/auth/logout.php'),{credentials:'same-origin'})}finally{location.href=APP('/login.html')}};
+(async()=>{try{const u=await session();$('welcome').textContent='Olá, '+(u.user?.name||u.name||u.user?.username||u.username||'usuário')+'!';await loadProjects()}catch(e){location.href=APP('/login.html')}})();
 </script>
 </body>
 </html>

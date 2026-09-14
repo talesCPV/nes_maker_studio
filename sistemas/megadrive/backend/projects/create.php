@@ -7,7 +7,7 @@ $d=json_decode((string)file_get_contents('php://input'),true); if(!is_array($d))
 $name=trim((string)($d['name']??'')); $desc=trim((string)($d['description']??''));
 if($name===''){http_response_code(422);echo json_encode(['success'=>false,'message'=>'Informe o nome do projeto.']);exit;}
 if(mb_strlen($name)>120||mb_strlen($desc)>2000){http_response_code(422);echo json_encode(['success'=>false,'message'=>'Dados do projeto excedem o limite.']);exit;}
-$userId=(int)$_SESSION['user_id']; $root=dirname(__DIR__,3); $dir=$root.'/data/users/'.$userId.'/megadrive/projects';
+$userId=(int)$_SESSION['user_id']; $root=dirname(__DIR__,4); $dir=$root.'/data/users/'.$userId.'/megadrive/projects';
 if(!is_dir($dir)&&!mkdir($dir,0775,true)){http_response_code(500);echo json_encode(['success'=>false,'message'=>'Não foi possível criar a pasta de projetos.']);exit;}
 do{$id=bin2hex(random_bytes(8));$projectDir=$dir.'/'.$id;}while(is_dir($projectDir));
 if(!mkdir($projectDir,0775,true)){http_response_code(500);echo json_encode(['success'=>false,'message'=>'Não foi possível criar o projeto.']);exit;}

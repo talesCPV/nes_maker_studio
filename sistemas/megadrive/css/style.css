@@ -1,1 +1,113 @@
-*{box-sizing:border-box}body{margin:0;background:#101216;color:#eee;font-family:Arial,sans-serif}.topbar{height:58px;background:#181b22;border-bottom:1px solid #30343d;display:flex;align-items:center;justify-content:space-between;padding:0 18px}.topbar strong{display:block}.topbar span{font-size:12px;color:#aaa;margin-left:12px}.topbar button{margin-left:8px;padding:8px 13px;background:#242a34;color:#fff;border:1px solid #3b4350;border-radius:5px;cursor:pointer}.workspace{display:flex;height:calc(100vh - 58px)}#moduleMenu{width:220px;background:#171a20;border-right:1px solid #30343d;padding:12px}.module-btn{display:block;width:100%;text-align:left;padding:11px 12px;margin-bottom:6px;background:#20242d;color:#ddd;border:1px solid #303641;border-radius:5px;cursor:pointer}.module-btn.active{background:#303744;color:#fff}.editor{flex:1;padding:24px;overflow:auto}.panel{background:#181c23;border:1px solid #303641;border-radius:7px;padding:18px}.panel h2{margin-top:0}.muted{color:#999}.field{margin:12px 0}.field label{display:block;font-size:13px;color:#aaa;margin-bottom:5px}.field input,.field textarea{width:100%;background:#0f1115;color:#eee;border:1px solid #343a45;border-radius:4px;padding:9px}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', Tahoma, system-ui, sans-serif;
+  background: #121212; color: #d4d4d4;
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+
+/* TOPBAR — mesmo padrão dos editores NES / Atari */
+#topbar {
+  height: 48px; background: #1e1e1e; border-bottom: 1px solid #333;
+  display: flex; align-items: center; padding: 0 10px; gap: 6px; user-select: none; flex-shrink: 0;
+}
+#topbar .top-logo { color: #f4a261; font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+#topbar .divider { width: 1px; height: 22px; background: #333; margin: 0 4px; }
+#topbar .icon-btn, #topbar button.icon-btn {
+  background: #2a2a2a; border: 1px solid #444; color: #ccc; border-radius: 6px;
+  padding: 6px 10px; cursor: pointer; font-size: 13px;
+}
+#topbar .icon-btn:hover { border-color: #f4a261; color: #fff; }
+#topStatus { font-size: 11px; color: #777; margin-left: 6px; display:none; }
+.proj-info {
+  margin-left: auto; display: flex; align-items: center; gap: 10px;
+  font-size: 12px; color: #aaa; padding-right: 8px;
+}
+.proj-info #projNameLabel { color: #eee; font-weight: 600; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-info #projFileLabel { color: #f4a261; font-family: ui-monospace, monospace; font-size: 11px; font-weight: 600; }
+.proj-info #projStatus { font-size: 11px; color: #27ae60; white-space: nowrap; }
+
+/* APP shell */
+#app { flex: 1; display: flex; min-height: 0; overflow: hidden; }
+
+/* SIDEBAR — mesmo padrão NES / Atari, recolhível */
+#sidebar {
+  width: 200px; min-width: 200px; background: #181818; border-right: 1px solid #2d2d2d;
+  padding: 10px 0; display: flex; flex-direction: column;
+  transition: width .2s ease, min-width .2s ease; overflow: hidden;
+}
+#sidebar.collapsed { width: 56px; min-width: 56px; }
+.side-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 12px 12px; gap: 8px;
+}
+.side-title { font-size: 11px; color: #666; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+.side-toggle {
+  width: 28px; height: 28px; flex-shrink: 0; background: #252526; border: 1px solid #333;
+  border-radius: 6px; color: #ccc; cursor: pointer; font-size: 14px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.side-toggle:hover { background: #f4a261; color: #111; border-color: #f4a261; }
+.side-item {
+  padding: 9px 14px; font-size: 13px; color: #888; cursor: pointer;
+  border-left: 3px solid transparent; display: flex; gap: 10px; align-items: center;
+  white-space: nowrap;
+}
+.side-item:hover { background: #222; color: #fff; }
+.side-item.active { background: #2a2218; color: #fff; border-left-color: #f4a261; }
+.side-item.disabled { opacity: 0.38; cursor: not-allowed; }
+.side-item.disabled:hover { background: transparent; color: #888; }
+.side-item .side-ico { width: 22px; text-align: center; flex-shrink: 0; font-size: 16px; }
+.side-item .side-label { overflow: hidden; text-overflow: ellipsis; }
+#sidebar.collapsed .side-title { display: none; }
+#sidebar.collapsed .side-header { justify-content: center; padding: 8px 4px; }
+#sidebar.collapsed .side-item { justify-content: center; padding: 10px 0; gap: 0; border-left-color: transparent; }
+#sidebar.collapsed .side-item.active { background: #2a2218; box-shadow: inset 3px 0 0 #f4a261; }
+#sidebar.collapsed .side-label { display: none; }
+#sidebar.collapsed .side-footer { display: none; }
+.side-footer {
+  margin-top: auto; padding: 12px 14px; font-size: 11px; color: #555; line-height: 1.6;
+  border-top: 1px solid #2a2a2a;
+}
+.side-footer b { color: #f4a261; font-weight: 600; }
+
+/* CONTENT */
+#content { flex: 1; background: #1e1e1e; overflow: auto; position: relative; min-width: 0; }
+.module { display: none; height: 100%; min-height: 100%; }
+.module.active { display: block; }
+
+/* Base comum dos módulos */
+.panel {
+  margin: 12px; padding: 16px; background: #252526;
+  border: 1px solid #333; border-radius: 8px;
+}
+.panel h1, .panel h2, .panel h3 { color: #eee; margin-bottom: 8px; }
+.panel h2 { font-size: 15px; }
+.panel p { line-height: 1.5; }
+.muted { color: #777; font-size: 12px; }
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+
+/* CONFIG — mesma linguagem visual dos editores existentes */
+.cfg-card { background: linear-gradient(180deg,#1e222c,#161920); border: 1px solid #333; border-radius: 10px; padding: 14px 16px; }
+.cfg-card-title { font-size: 12px; color: #f4a261; font-weight: 700; margin-bottom: 10px; letter-spacing: 0.03em; }
+.cfg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cfg-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: #888; }
+.cfg-grid label.full { grid-column: 1 / -1; }
+.cfg-grid input, .cfg-grid select, .cfg-grid textarea {
+  background: #0e1014; border: 1px solid #333; border-radius: 6px; color: #eee; padding: 7px 9px; font-size: 13px;
+}
+.cfg-grid textarea { resize: vertical; min-height: 52px; }
+.cfg-btn { background: #2a3a2a; border: 1px solid #3a5a3a; color: #8dcea0; border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
+.cfg-btn:hover { border-color: #6dcea0; }
+.cfg-btn-sm { background: #2a2e38; border: 1px solid #444; color: #ccc; border-radius: 5px; padding: 4px 8px; cursor: pointer; font-size: 12px; }
+.cfg-btn-sm.danger { background: #3a1a1a; border-color: #5a2a2a; color: #e88; }
+.cfg-btn-sm:disabled { opacity: 0.35; cursor: not-allowed; }
+.cfg-screen-row {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  background: #14171e; border: 1px solid #2a2e38; border-radius: 8px; cursor: pointer;
+}
+.cfg-screen-row:hover { border-color: #444; }
+.cfg-screen-row.active { border-color: #f4a26166; background: #1c1812; }
+@media (max-width: 640px) { .cfg-grid { grid-template-columns: 1fr; } }
