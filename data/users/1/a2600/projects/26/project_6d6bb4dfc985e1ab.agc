@@ -6,16 +6,15 @@
     "description": "",
     "romSize": 4096,
     "tv": "NTSC",
-    "kernel": "single_screen",
-    "gameStyle": "vertical_shooter",
-    "kernelProfile": "hero_p0_nusiz_rows",
+    "kernel": "vertical_scroll",
+    "gameStyle": "river_scroll",
+    "kernelProfile": "hero_p0_mux_y",
     "profileOptions": {
-        "enemyRows": 3,
-        "enemyCopies": "3",
-        "heroVertical": false,
-        "twoPlayerAlternating": false,
-        "playfield": "none",
-        "enemyShots": false
+        "seedMode": "title_entropy",
+        "seedFixed": 42,
+        "riverEdges": "2",
+        "minRiverWidth": 6,
+        "maxMuxSlots": 6
     },
     "created": 1788940284,
     "screens": [
@@ -148,5 +147,5 @@
     "programMeta": {
         "notes": ""
     },
-    "updated": 1789406664644
+    "updated": 1789439857938
 }

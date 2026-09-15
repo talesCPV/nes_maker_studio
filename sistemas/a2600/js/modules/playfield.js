@@ -162,20 +162,74 @@ const PLAYFIELD = (() => {
   }
 
   function allowedModes() {
+    let modes = null;
     try {
       if (typeof CONFIG !== 'undefined' && typeof CONFIG.allowedPfModes === 'function') {
-        return CONFIG.allowedPfModes();
+        modes = CONFIG.allowedPfModes();
+      }
+    } catch (e) {}
+    if (!modes) {
+      try {
+        const st = (Project.data && Project.data.gameStyle) || '';
+        if (st === 'vertical_shooter') modes = ['none', 'reflect', 'repeat'];
+        else if (st === 'river_scroll') modes = ['none', 'reflect'];
+        else if (st === 'boxing') modes = ['none', 'reflect'];
+        else if (st === 'adventure') modes = ['none', 'reflect', 'repeat', 'asymmetric'];
+        else modes = ['none', 'reflect', 'repeat', 'asymmetric'];
+      } catch (e) {
+        modes = ['none', 'reflect', 'repeat', 'asymmetric'];
+      }
+    }
+    // adventure: pode desligar asymmetric nas opções
+    try {
+      if (styleUsesAdventure()) {
+        const o =
+          (Project.data && Project.data.profileOptions) || {};
+        if (o.allowAsymmetricRooms === false || o.allowAsymmetricRooms === 0 || o.allowAsymmetricRooms === '0') {
+          modes = modes.filter((m) => m !== 'asymmetric');
+        }
+      }
+    } catch (e) {}
+    return modes;
+  }
+
+  function styleUsesAdventure() {
+    try {
+      if (typeof CONFIG !== 'undefined' && typeof CONFIG.showAdventureEditor === 'function') {
+        return !!CONFIG.showAdventureEditor();
       }
     } catch (e) {}
     try {
-      const st = (Project.data && Project.data.gameStyle) || '';
-      if (st === 'vertical_shooter') return ['none', 'reflect', 'repeat'];
-      if (st === 'river_scroll') return ['none', 'reflect'];
+      if (typeof CONFIG !== 'undefined' && typeof CONFIG.getGameStyle === 'function') {
+        return CONFIG.getGameStyle() === 'adventure';
+      }
     } catch (e) {}
-    return ['none', 'reflect', 'repeat', 'asymmetric'];
+    try {
+      return !!(Project.data && Project.data.gameStyle === 'adventure');
+    } catch (e) {}
+    return false;
+  }
+
+  function styleUsesFight() {
+
+    try {
+      if (typeof CONFIG !== 'undefined' && typeof CONFIG.showFightEditor === 'function') {
+        return !!CONFIG.showFightEditor();
+      }
+    } catch (e) {}
+    try {
+      if (typeof CONFIG !== 'undefined' && typeof CONFIG.getGameStyle === 'function') {
+        return CONFIG.getGameStyle() === 'boxing';
+      }
+    } catch (e) {}
+    try {
+      return !!(Project.data && Project.data.gameStyle === 'boxing');
+    } catch (e) {}
+    return false;
   }
 
   function styleUsesRiverMap() {
+
     try {
       if (typeof CONFIG !== 'undefined' && typeof CONFIG.showRiverMapEditor === 'function') {
         return !!CONFIG.showRiverMapEditor();
@@ -572,15 +626,31 @@ const PLAYFIELD = (() => {
             </div>
             
             <div class="pf-card" id="pfRiverCard" style="${styleUsesRiverMap() ? '' : 'display:none'}">
-              <div class="pf-card-title">Mapa procedural (rio / scroll)</div>
+              <div class="pf-card-title">Opções do jogo (River / scroll)</div>
               <p class="pf-note">
-                O motor gera o rio com bordas em X (2 = canal, 4 = canal+ilha).
-                Drift ±1 a cada N frames é <b>fixo no engine</b>.
-                Reflect usa metade da tela espelhada.
+                Caminho gerado por algoritmo — sem desenho livre no grid.
+                Use Reflect para o rio (metade+espelho) ou None para céu / full-screen.
               </p>
               <div class="pf-band-fields" id="pfRiverFields"></div>
             </div>
 
+            <div class="pf-card" id="pfAdventureCard" style="${styleUsesAdventure() ? '' : 'display:none'}">
+              <div class="pf-card-title">Opções Adventure / salas</div>
+              <p class="pf-note">
+                Telas fixas com hard cut. <b>Modo PF é por tela</b> (reflect/repeat baratos;
+                none = boss; asymmetric = labirinto, P1 mais limitado).
+                P0 = herói · P1 = item ou inimigo (um por vez) · Ball = 2º item opcional.
+              </p>
+              <div class="pf-band-fields" id="pfAdventureFields"></div>
+            </div>
+            <div class="pf-card" id="pfFightCard" style="${styleUsesFight() ? '' : 'display:none'}">
+              <div class="pf-card-title">Opções de luta (1×1)</div>
+              <p class="pf-note">
+                P0 e P1 sempre na tela (kernel 2 linhas + VDEL).
+                Desenhe o ring no PF em <b>Reflect</b> (cordas/chão simétricos) ou use None.
+              </p>
+              <div class="pf-band-fields" id="pfFightFields"></div>
+            </div>
             <div class="pf-card" id="pfBandsCard" style="${styleUsesBands() ? '' : 'display:none'}">
               <div class="pf-card-title">Faixas (herói / inimigos)</div>
               <p class="pf-note">
@@ -644,54 +714,57 @@ const PLAYFIELD = (() => {
   /** None: desliga pintura PF e esconde cores TIA */
   function updateNoneModeUI() {
     const isNone = pfMode === 'none';
-    const shooter = styleUsesBands(); // shooter vertical: ondas em faixas, sem spawn
+    const shooter = styleUsesBands();
+    const river = styleUsesRiverMap();
+    // river: mapa é procedural — sem desenho livre de PF
+    const noPaint = isNone || river;
+    const noSpawn = shooter || river;
     const tools = document.getElementById('pfEditTools');
     if (tools) {
-      // Spawn: desligado no shooter (inimigos = faixas), independente do PF mode
       const spawnBtn = tools.querySelector('.pf-tool[data-tool="spawn"]');
       if (spawnBtn) {
-        spawnBtn.disabled = !!shooter;
-        spawnBtn.style.opacity = shooter ? '0.35' : '';
-        spawnBtn.style.pointerEvents = shooter ? 'none' : '';
-        spawnBtn.title = shooter
-          ? 'Indisponível no shooter vertical (use faixas)'
-          : 'Ponto de spawn';
-        if (shooter && tool === 'spawn') {
+        spawnBtn.disabled = !!noSpawn;
+        spawnBtn.style.opacity = noSpawn ? '0.35' : '';
+        spawnBtn.style.pointerEvents = noSpawn ? 'none' : '';
+        spawnBtn.title = river
+          ? 'River scroll: objetos vêm do gerador de mapa'
+          : shooter
+            ? 'Shooter vertical: use faixas'
+            : 'Ponto de spawn';
+        if (noSpawn && tool === 'spawn') {
           spawnBtn.classList.remove('active');
-          tool = isNone ? '' : 'paint';
+          tool = noPaint ? '' : 'paint';
           const paintBtn = tools.querySelector('.pf-tool[data-tool="paint"]');
-          if (paintBtn && !isNone) paintBtn.classList.add('active');
+          if (paintBtn && !noPaint) paintBtn.classList.add('active');
         }
       }
 
-      // Pintura PF: desligada só no mode none
       tools.querySelectorAll('.pf-tool[data-tool="paint"], .pf-tool[data-tool="erase"], .pf-tool[data-tool="fill"]').forEach((btn) => {
-        btn.disabled = !!isNone;
-        btn.style.opacity = isNone ? '0.35' : '';
-        btn.style.pointerEvents = isNone ? 'none' : '';
-        if (isNone) btn.classList.remove('active');
+        btn.disabled = !!noPaint;
+        btn.style.opacity = noPaint ? '0.35' : '';
+        btn.style.pointerEvents = noPaint ? 'none' : '';
+        if (noPaint) btn.classList.remove('active');
       });
-      if (isNone && (tool === 'paint' || tool === 'erase' || tool === 'fill' || tool === 'spawn')) {
+      if (noPaint && (tool === 'paint' || tool === 'erase' || tool === 'fill' || tool === 'spawn')) {
         tool = '';
       }
 
-      const anyPaint = !isNone;
-      tools.title = shooter
-        ? (isNone
-            ? 'Shooter: faixas na tela (sem pintura/spawn)'
-            : 'Shooter: spawn desligado — inimigos por faixas')
-        : '';
+      tools.title = river
+        ? 'River scroll: PF gerado por algoritmo — use o painel Mapa'
+        : shooter
+          ? (isNone ? 'Shooter: faixas na tela' : 'Shooter: spawn desligado')
+          : '';
     }
     const clearBtn = document.getElementById('pfClear');
     if (clearBtn) {
-      clearBtn.disabled = isNone;
-      clearBtn.style.opacity = isNone ? '0.35' : '';
-      clearBtn.style.pointerEvents = isNone ? 'none' : '';
+      clearBtn.disabled = !!noPaint;
+      clearBtn.style.opacity = noPaint ? '0.35' : '';
+      clearBtn.style.pointerEvents = noPaint ? 'none' : '';
     }
     const colors = document.getElementById('pfColorsCard');
-    if (colors) colors.style.display = isNone ? 'none' : '';
+    if (colors) colors.style.display = noPaint ? 'none' : '';
     const canvas = document.getElementById('pfCanvas');
-    if (canvas && !shooter) {
+    if (canvas && !shooter && !river) {
       canvas.style.cursor = isNone ? 'default' : 'crosshair';
     }
   }
@@ -773,6 +846,12 @@ const PLAYFIELD = (() => {
         background:#0d0f14; border:1px solid #333; color:#ddd; border-radius:4px; padding:4px 6px;
       }
       .pf-btn.danger { border-color:#5a2a2a; color:#e88; }
+      .pf-river-sec {
+        font-size: 10px; font-weight: 700; color: #f4a261; text-transform: uppercase;
+        letter-spacing: 0.04em; margin: 10px 0 4px; border-top: 1px solid #333; padding-top: 8px;
+      }
+      .pf-river-sec:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+      #pfRiverFields code { color: #8dcea0; font-size: 11px; }
     `;
     document.head.appendChild(s);
   }
@@ -916,6 +995,7 @@ const PLAYFIELD = (() => {
       updateModeHelp();
       persist();
       redraw();
+      if (typeof renderAdventurePanel === 'function') renderAdventurePanel();
     });
 
     document.getElementById('pfAddBand')?.addEventListener('click', () => {
@@ -1134,8 +1214,8 @@ const PLAYFIELD = (() => {
         }
       }
 
-      // none: sem pintura (spawn já bloqueado no shooter)
-      if (pfMode === 'none') {
+      // none ou river procedural: sem pintura livre
+      if (pfMode === 'none' || styleUsesRiverMap()) {
         ev.preventDefault();
         return;
       }
@@ -1471,17 +1551,332 @@ const PLAYFIELD = (() => {
 
 
 
+
+
+  function getAdventureOpts() {
+    const opts =
+      (typeof CONFIG !== 'undefined' && CONFIG.getProfileOptions && CONFIG.getProfileOptions()) ||
+      (Project.data && Project.data.profileOptions) ||
+      {};
+    const num = (k, d) => (opts[k] != null && opts[k] !== '' ? Number(opts[k]) : d);
+    return {
+      players: Math.max(1, Math.min(2, num('players', 1) || 1)),
+      rooms: opts.rooms !== false && opts.rooms !== 0 && opts.rooms !== '0',
+      useBall: opts.useBall !== false && opts.useBall !== 0 && opts.useBall !== '0',
+      p1Role: ['auto', 'enemy', 'item'].includes(opts.p1Role) ? opts.p1Role : 'auto',
+      allowAsymmetricRooms: opts.allowAsymmetricRooms !== false && opts.allowAsymmetricRooms !== 0 && opts.allowAsymmetricRooms !== '0',
+      scoreModePf: !!opts.scoreModePf && opts.scoreModePf !== '0',
+    };
+  }
+
+  function setAdventureOpt(key, val) {
+    if (!Project.data) return;
+    if (!Project.data.profileOptions) Project.data.profileOptions = {};
+    Project.data.profileOptions[key] = val;
+    // se desligar asymmetric rooms e tela atual for asymmetric → coerce
+    if (key === 'allowAsymmetricRooms' && !val && pfMode === 'asymmetric') {
+      pfMode = 'reflect';
+      const mEl = document.getElementById('pfMode');
+      if (mEl) mEl.value = 'reflect';
+    }
+    if (typeof Project.status === 'function') Project.status('adventure alterado — salve o projeto');
+  }
+
+  function renderAdventurePanel() {
+    const card = document.getElementById('pfAdventureCard');
+    const box = document.getElementById('pfAdventureFields');
+    const banner = document.getElementById('pfAdventureBanner');
+    const show = styleUsesAdventure();
+    if (card) card.style.display = show ? '' : 'none';
+    if (banner) banner.style.display = show ? '' : 'none';
+    if (!box || !show) {
+      if (box) box.innerHTML = '';
+      return;
+    }
+    const o = getAdventureOpts();
+    // aviso se sala atual asymmetric
+    const asymNote =
+      pfMode === 'asymmetric'
+        ? '<p class="pf-note" style="color:#f4a261">Esta sala está em <b>asymmetric</b>: labirinto livre, mas P1 (item/inimigo) pode falhar na mesma faixa do herói.</p>'
+        : pfMode === 'none'
+          ? '<p class="pf-note">Sala <b>none</b>: boa para boss / arena aberta.</p>'
+          : '<p class="pf-note">Sala <b>' +
+            pfMode +
+            '</b>: barata no TIA — ideal com inimigo/item estável.</p>';
+
+    box.innerHTML =
+      '<div class="pf-river-sec">Jogadores</div>' +
+      '<label>Humanos (alternados no P0)' +
+      '<input type="number" id="pfAdvPlayers" min="1" max="2" value="' +
+      o.players +
+      '"/></label>' +
+      '<div class="pf-river-sec">Mundo</div>' +
+      '<label class="pf-check"><input type="checkbox" id="pfAdvRooms" ' +
+      (o.rooms ? 'checked' : '') +
+      '/> Várias salas (hard cut entre telas)</label>' +
+      '<label>Papel padrão do P1' +
+      '<select id="pfAdvP1Role">' +
+      '<option value="auto"' +
+      (o.p1Role === 'auto' ? ' selected' : '') +
+      '>Auto (inimigo ou item)</option>' +
+      '<option value="enemy"' +
+      (o.p1Role === 'enemy' ? ' selected' : '') +
+      '>Inimigo / NPC</option>' +
+      '<option value="item"' +
+      (o.p1Role === 'item' ? ' selected' : '') +
+      '>Item carregável</option>' +
+      '</select></label>' +
+      '<label class="pf-check"><input type="checkbox" id="pfAdvBall" ' +
+      (o.useBall ? 'checked' : '') +
+      '/> Ball como segundo item</label>' +
+      '<div class="pf-river-sec">Playfield por sala</div>' +
+      '<label class="pf-check"><input type="checkbox" id="pfAdvAsym" ' +
+      (o.allowAsymmetricRooms ? 'checked' : '') +
+      '/> Permitir asymmetric (labirinto)</label>' +
+      '<label class="pf-check"><input type="checkbox" id="pfAdvScore" ' +
+      (o.scoreModePf ? 'checked' : '') +
+      '/> Score mode (cores L/R baratas, geometria ainda simétrica)</label>' +
+      asymNote +
+      '<p class="pf-note">Troque o <b>Modo PF</b> desta tela no select acima. Reflect/repeat = barato · None = boss · Asymmetric = labirinto (pago).</p>';
+
+    document.getElementById('pfAdvPlayers')?.addEventListener('change', (e) => {
+      let v = parseInt(e.target.value, 10) || 1;
+      v = Math.max(1, Math.min(2, v));
+      e.target.value = v;
+      setAdventureOpt('players', v);
+    });
+    document.getElementById('pfAdvRooms')?.addEventListener('change', (e) => {
+      setAdventureOpt('rooms', !!e.target.checked);
+    });
+    document.getElementById('pfAdvP1Role')?.addEventListener('change', (e) => {
+      setAdventureOpt('p1Role', e.target.value);
+    });
+    document.getElementById('pfAdvBall')?.addEventListener('change', (e) => {
+      setAdventureOpt('useBall', !!e.target.checked);
+    });
+    document.getElementById('pfAdvAsym')?.addEventListener('change', (e) => {
+      setAdventureOpt('allowAsymmetricRooms', !!e.target.checked);
+      // rebuild mode select if asymmetric toggled off
+      const mEl = document.getElementById('pfMode');
+      if (mEl && !e.target.checked) {
+        // remove asymmetric option visually by rebuild
+        applyStyleFromConfig();
+      } else {
+        renderAdventurePanel();
+      }
+    });
+    document.getElementById('pfAdvScore')?.addEventListener('change', (e) => {
+      setAdventureOpt('scoreModePf', !!e.target.checked);
+    });
+  }
+
+
+  function getFightOpts() {
+    const opts =
+      (typeof CONFIG !== 'undefined' && CONFIG.getProfileOptions && CONFIG.getProfileOptions()) ||
+      (Project.data && Project.data.profileOptions) ||
+      {};
+    const num = (k, d) => (opts[k] != null && opts[k] !== '' ? Number(opts[k]) : d);
+    return {
+      camera: opts.camera === 'side' ? 'side' : 'top',
+      players: Math.max(1, Math.min(2, num('players', 2) || 2)),
+      mirrorArena: opts.mirrorArena !== false && opts.mirrorArena !== 0 && opts.mirrorArena !== '0',
+      allowJump: !!opts.allowJump && opts.allowJump !== '0',
+      allowCrouch: !!opts.allowCrouch && opts.allowCrouch !== '0',
+      rounds: Math.max(1, Math.min(5, num('rounds', 3) || 3)),
+      energyStyle: opts.energyStyle === 'street_fighter' ? 'street_fighter' : 'final_fight',
+      energyMax: Math.max(8, Math.min(99, num('energyMax', 32) || 32)),
+      hudLines: Math.max(4, Math.min(12, num('hudLines', 6) || 6)),
+      timerDigits: opts.timerDigits !== false && opts.timerDigits !== 0 && opts.timerDigits !== '0',
+      timerStart: Math.max(10, Math.min(99, num('timerStart', 99) || 99)),
+    };
+  }
+
+  function setFightOpt(key, val) {
+    if (!Project.data) return;
+    if (!Project.data.profileOptions) Project.data.profileOptions = {};
+    Project.data.profileOptions[key] = val;
+    if (key === 'mirrorArena' && val && pfMode === 'none') {
+      // sugere reflect
+    }
+    if (key === 'mirrorArena' && val) {
+      pfMode = 'reflect';
+      const mEl = document.getElementById('pfMode');
+      if (mEl) mEl.value = 'reflect';
+    }
+    // variáveis úteis para programação
+    if (!Array.isArray(Project.data.variables)) Project.data.variables = [];
+    const ensureVar = (name, value, note) => {
+      let v = Project.data.variables.find((x) => x.name === name);
+      if (!v) Project.data.variables.push({ id: 'var_' + name, name, value, note });
+      else v.value = value;
+    };
+    if (key === 'energyMax') {
+      ensureVar('energyMax', val | 0, 'Energia máxima por lutador');
+      ensureVar('energyP0', val | 0, 'Energia atual P0');
+      ensureVar('energyP1', val | 0, 'Energia atual P1');
+    }
+    if (key === 'rounds') ensureVar('rounds', val | 0, 'Rounds da partida');
+    if (key === 'timerStart') ensureVar('timer', val | 0, 'Timer do round (HUD)');
+    if (key === 'energyStyle') {
+      ensureVar('energyStyle', val === 'street_fighter' ? 1 : 0, '0=Final Fight · 1=Street Fighter');
+    }
+    if (typeof Project.status === 'function') Project.status('luta alterada — salve o projeto');
+  }
+
+  function renderFightPanel() {
+    const card = document.getElementById('pfFightCard');
+    const box = document.getElementById('pfFightFields');
+    const banner = document.getElementById('pfFightBanner');
+    const show = styleUsesFight();
+    if (card) card.style.display = show ? '' : 'none';
+    if (banner) banner.style.display = show ? '' : 'none';
+    if (!box || !show) {
+      if (box) box.innerHTML = '';
+      return;
+    }
+    const o = getFightOpts();
+    const sideOnly = o.camera === 'side' ? '' : 'opacity:0.4;pointer-events:none';
+    box.innerHTML =
+      '<div class="pf-river-sec">Câmera</div>' +
+      '<label>Visão' +
+      '<select id="pfFightCamera">' +
+      '<option value="top"' +
+      (o.camera === 'top' ? ' selected' : '') +
+      '>Superior (Boxing)</option>' +
+      '<option value="side"' +
+      (o.camera === 'side' ? ' selected' : '') +
+      '>Lateral (Kung-Fu)</option>' +
+      '</select></label>' +
+      '<div class="pf-river-sec">Jogadores</div>' +
+      '<label>Humanos (1 = vs CPU depois)' +
+      '<input type="number" id="pfFightPlayers" min="1" max="2" value="' +
+      o.players +
+      '"/></label>' +
+      '<div class="pf-river-sec">Arena</div>' +
+      '<label class="pf-check"><input type="checkbox" id="pfFightMirror" ' +
+      (o.mirrorArena ? 'checked' : '') +
+      '/> Arena espelhada (força Reflect)</label>' +
+      '<p class="pf-note">Desenhe cordas/chão na metade esquerda; Reflect completa o ring.</p>' +
+      '<div class="pf-river-sec">Movimento (lateral)</div>' +
+      '<div style="' +
+      sideOnly +
+      '">' +
+      '<label class="pf-check"><input type="checkbox" id="pfFightJump" ' +
+      (o.allowJump ? 'checked' : '') +
+      '/> Permitir pulo</label>' +
+      '<label class="pf-check"><input type="checkbox" id="pfFightCrouch" ' +
+      (o.allowCrouch ? 'checked' : '') +
+      '/> Permitir agachar</label>' +
+      '</div>' +
+      '<div class="pf-river-sec">Partida / HUD</div>' +
+      '<label>Rounds' +
+      '<input type="number" id="pfFightRounds" min="1" max="5" value="' +
+      o.rounds +
+      '"/></label>' +
+      '<label>Energia (visual no topo)' +
+      '<select id="pfEnergyStyle">' +
+      '<option value="street_fighter"' +
+      (o.energyStyle === 'street_fighter' ? ' selected' : '') +
+      '>Street Fighter — barras L e R + timer no centro</option>' +
+      '<option value="final_fight"' +
+      (o.energyStyle === 'final_fight' ? ' selected' : '') +
+      '>Final Fight — barras empilhadas à esquerda</option>' +
+      '</select></label>' +
+      '<label>Energia máxima' +
+      '<input type="number" id="pfFightEnergy" min="8" max="99" value="' +
+      o.energyMax +
+      '"/></label>' +
+      '<label>Linhas do HUD (topo)' +
+      '<input type="number" id="pfHudLines" min="4" max="12" value="' +
+      o.hudLines +
+      '"/></label>' +
+      '<label class="pf-check"><input type="checkbox" id="pfTimerDigits" ' +
+      (o.timerDigits ? 'checked' : '') +
+      '/> Timer 2 dígitos no HUD</label>' +
+      '<label>Timer inicial' +
+      '<input type="number" id="pfTimerStart" min="10" max="99" value="' +
+      o.timerStart +
+      '"/></label>' +
+      '<p class="pf-note"><b>Street Fighter:</b> PF assimétrico só no topo (barra P0 | timer sprite | barra P1). <b>Final Fight:</b> duas barras uma sobre a outra à esquerda — mais leve no TIA. Ring embaixo continua Reflect. Build do HUD fica para a etapa de kernel.</p>' +
+      '<p class="pf-note">Variáveis: <code>energyP0</code>, <code>energyP1</code>, <code>energyMax</code>, <code>rounds</code>, <code>timer</code>.</p>';
+
+    document.getElementById('pfFightCamera')?.addEventListener('change', (e) => {
+      setFightOpt('camera', e.target.value);
+      renderFightPanel();
+    });
+    document.getElementById('pfFightPlayers')?.addEventListener('change', (e) => {
+      let v = parseInt(e.target.value, 10) || 2;
+      v = Math.max(1, Math.min(2, v));
+      e.target.value = v;
+      setFightOpt('players', v);
+    });
+    document.getElementById('pfFightMirror')?.addEventListener('change', (e) => {
+      setFightOpt('mirrorArena', !!e.target.checked);
+      updateModeHelp();
+      redraw();
+    });
+    document.getElementById('pfFightJump')?.addEventListener('change', (e) => {
+      setFightOpt('allowJump', !!e.target.checked);
+    });
+    document.getElementById('pfFightCrouch')?.addEventListener('change', (e) => {
+      setFightOpt('allowCrouch', !!e.target.checked);
+    });
+    document.getElementById('pfFightRounds')?.addEventListener('change', (e) => {
+      let v = parseInt(e.target.value, 10) || 3;
+      v = Math.max(1, Math.min(5, v));
+      e.target.value = v;
+      setFightOpt('rounds', v);
+    });
+    document.getElementById('pfFightEnergy')?.addEventListener('change', (e) => {
+      let v = parseInt(e.target.value, 10) || 32;
+      v = Math.max(8, Math.min(99, v));
+      e.target.value = v;
+      setFightOpt('energyMax', v);
+    });
+    document.getElementById('pfEnergyStyle')?.addEventListener('change', (e) => {
+      setFightOpt('energyStyle', e.target.value);
+      renderFightPanel();
+    });
+    document.getElementById('pfHudLines')?.addEventListener('change', (e) => {
+      let v = parseInt(e.target.value, 10) || 6;
+      v = Math.max(4, Math.min(12, v));
+      e.target.value = v;
+      setFightOpt('hudLines', v);
+    });
+    document.getElementById('pfTimerDigits')?.addEventListener('change', (e) => {
+      setFightOpt('timerDigits', !!e.target.checked);
+    });
+    document.getElementById('pfTimerStart')?.addEventListener('change', (e) => {
+      let v = parseInt(e.target.value, 10) || 99;
+      v = Math.max(10, Math.min(99, v));
+      e.target.value = v;
+      setFightOpt('timerStart', v);
+    });
+  }
+
+
   function getMapgenOpts() {
     const opts =
       (typeof CONFIG !== 'undefined' && CONFIG.getProfileOptions && CONFIG.getProfileOptions()) ||
       (Project.data && Project.data.profileOptions) ||
       {};
+    const num = (k, d) => (opts[k] != null && opts[k] !== '' ? Number(opts[k]) : d);
     return {
+      players: Math.max(1, Math.min(2, num('players', 1) || 1)),
       seedMode: opts.seedMode || 'title_entropy',
-      seedFixed: opts.seedFixed != null ? opts.seedFixed | 0 : 42,
-      riverEdges: opts.riverEdges != null ? opts.riverEdges | 0 : 2,
-      minRiverWidth: opts.minRiverWidth != null ? opts.minRiverWidth | 0 : 6,
-      maxMuxSlots: opts.maxMuxSlots != null ? opts.maxMuxSlots | 0 : 6,
+      seedFixed: Math.max(0, Math.min(255, num('seedFixed', 42) | 0)),
+      riverEdges: (num('riverEdges', 2) | 0) === 4 ? 4 : 2,
+      minRiverWidth: Math.max(4, Math.min(16, num('minRiverWidth', 6) || 6)),
+      minEdgeGapY: Math.max(4, Math.min(48, num('minEdgeGapY', 12) || 12)),
+      checkpointEvery: Math.max(0, Math.min(32, num('checkpointEvery', 8) | 0)),
+      checkpointKind: opts.checkpointKind === 'sprite' ? 'sprite' : 'bridge',
+      scrollSpeed: ['slow', 'normal', 'fast'].includes(opts.scrollSpeed) ? opts.scrollSpeed : 'normal',
+      fuelEnabled: opts.fuelEnabled !== false && opts.fuelEnabled !== 0 && opts.fuelEnabled !== '0',
+      fuelMax: Math.max(16, Math.min(255, num('fuelMax', 128) || 128)),
+      fuelDrain: Math.max(1, Math.min(8, num('fuelDrain', 1) || 1)),
+      fuelDrainFrames: Math.max(1, Math.min(60, num('fuelDrainFrames', 8) || 8)),
+      maxMuxSlots: Math.max(2, Math.min(12, num('maxMuxSlots', 6) || 6)),
     };
   }
 
@@ -1489,6 +1884,23 @@ const PLAYFIELD = (() => {
     if (!Project.data) return;
     if (!Project.data.profileOptions) Project.data.profileOptions = {};
     Project.data.profileOptions[key] = val;
+    // variável de programa para velocidade (program.js / build)
+    if (key === 'scrollSpeed') {
+      if (!Array.isArray(Project.data.variables)) Project.data.variables = [];
+      let v = Project.data.variables.find((x) => x.name === 'scrollSpeed');
+      const map = { slow: 1, normal: 2, fast: 3 };
+      const n = map[val] != null ? map[val] : 2;
+      if (!v) {
+        Project.data.variables.push({
+          id: 'var_scrollSpeed',
+          name: 'scrollSpeed',
+          value: n,
+          note: 'Velocidade do scroll PF (1 lento · 2 normal · 3 rápido)',
+        });
+      } else {
+        v.value = n;
+      }
+    }
     if (typeof Project.status === 'function') Project.status('mapa/rio alterado — salve o projeto');
   }
 
@@ -1504,8 +1916,15 @@ const PLAYFIELD = (() => {
       return;
     }
     const o = getMapgenOpts();
+    const fuelDisp = o.fuelEnabled ? '' : 'opacity:0.4;pointer-events:none';
     box.innerHTML =
-      '<label>Seed do mapa' +
+      '<div class="pf-river-sec">Jogadores</div>' +
+      '<label>Número (não simultâneos)' +
+      '<input type="number" id="pfRiverPlayers" min="1" max="2" value="' +
+      o.players +
+      '"/></label>' +
+      '<div class="pf-river-sec">Mapa / seed</div>' +
+      '<label>Seed' +
       '<select id="pfSeedMode">' +
       '<option value="title_entropy"' +
       (o.seedMode === 'title_entropy' ? ' selected' : '') +
@@ -1514,59 +1933,121 @@ const PLAYFIELD = (() => {
       (o.seedMode === 'fixed' ? ' selected' : '') +
       '>Fixa (mesmo rio sempre)</option>' +
       '</select></label>' +
-      '<label id="pfSeedFixedWrap" style="' +
+      '<label style="' +
       (o.seedMode === 'fixed' ? '' : 'opacity:0.4;pointer-events:none') +
-      '">Valor da seed (0–255)' +
+      '">Valor 0–255' +
       '<input type="number" id="pfSeedFixed" min="0" max="255" value="' +
-      (o.seedFixed | 0) +
+      o.seedFixed +
       '"/></label>' +
-      '<label>Bordas do rio' +
+      '<div class="pf-river-sec">Geometria do rio</div>' +
+      '<label>Bordas no eixo X' +
       '<select id="pfRiverEdges">' +
       '<option value="2"' +
-      ((o.riverEdges | 0) === 4 ? '' : ' selected') +
+      (o.riverEdges === 2 ? ' selected' : '') +
       '>2 — um canal</option>' +
       '<option value="4"' +
-      ((o.riverEdges | 0) === 4 ? ' selected' : '') +
+      (o.riverEdges === 4 ? ' selected' : '') +
       '>4 — canal + ilha</option>' +
       '</select></label>' +
-      '<label>Largura mínima (células PF)' +
+      '<label>Largura mínima X (células PF)' +
       '<input type="number" id="pfMinRiverW" min="4" max="16" value="' +
-      (o.minRiverWidth | 6) +
+      o.minRiverWidth +
       '"/></label>' +
-      '<label>Máx. inimigos na tela (multiplex)' +
+      '<label>Distância mínima Y entre curvas' +
+      '<input type="number" id="pfMinEdgeGapY" min="4" max="48" value="' +
+      o.minEdgeGapY +
+      '"/></label>' +
+      '<p class="pf-note">Drift das bordas (−1/0/+1) é fixo no engine. Y mín. evita zigue-zague injusto.</p>' +
+      '<div class="pf-river-sec">Checkpoints</div>' +
+      '<label>A cada N blocos (0 = desliga)' +
+      '<input type="number" id="pfCheckpointEvery" min="0" max="32" value="' +
+      o.checkpointEvery +
+      '"/></label>' +
+      '<label>Tipo' +
+      '<select id="pfCheckpointKind">' +
+      '<option value="bridge"' +
+      (o.checkpointKind === 'bridge' ? ' selected' : '') +
+      '>Ponte (desenhada no PF)</option>' +
+      '<option value="sprite"' +
+      (o.checkpointKind === 'sprite' ? ' selected' : '') +
+      '>Sprite / objeto</option>' +
+      '</select></label>' +
+      '<div class="pf-river-sec">Velocidade do scroll (PF)</div>' +
+      '<label>Preset (variável <code>scrollSpeed</code>)' +
+      '<select id="pfScrollSpeed">' +
+      '<option value="slow"' +
+      (o.scrollSpeed === 'slow' ? ' selected' : '') +
+      '>Lento (1)</option>' +
+      '<option value="normal"' +
+      (o.scrollSpeed === 'normal' ? ' selected' : '') +
+      '>Normal (2)</option>' +
+      '<option value="fast"' +
+      (o.scrollSpeed === 'fast' ? ' selected' : '') +
+      '>Rápido (3)</option>' +
+      '</select></label>' +
+      '<p class="pf-note">Em Programação: altere <b>scrollSpeed</b> por controle ou hitbox (ex.: power-up).</p>' +
+      '<div class="pf-river-sec">Combustível</div>' +
+      '<label class="pf-check"><input type="checkbox" id="pfFuelEnabled" ' +
+      (o.fuelEnabled ? 'checked' : '') +
+      '/> Ativar combustível</label>' +
+      '<div style="' +
+      fuelDisp +
+      '">' +
+      '<label>Máximo' +
+      '<input type="number" id="pfFuelMax" min="16" max="255" value="' +
+      o.fuelMax +
+      '"/></label>' +
+      '<label>Drain (unidades)' +
+      '<input type="number" id="pfFuelDrain" min="1" max="8" value="' +
+      o.fuelDrain +
+      '"/></label>' +
+      '<label>A cada N frames' +
+      '<input type="number" id="pfFuelDrainFrames" min="1" max="60" value="' +
+      o.fuelDrainFrames +
+      '"/></label>' +
+      '</div>' +
+      '<div class="pf-river-sec">Inimigos</div>' +
+      '<label>Máx. na tela (multiplex P1)' +
       '<input type="number" id="pfMaxMux" min="2" max="12" value="' +
-      (o.maxMuxSlots | 6) +
-      '"/></label>' +
-      '<p class="pf-note">Algoritmo de passo das bordas: −1 / 0 / +1 (fixo). Reflect obrigatório para desenhar o rio com metade+espelho; None = céu / shooter full-screen.</p>';
+      o.maxMuxSlots +
+      '"/></label>';
 
+    const bindNum = (id, key, min, max) => {
+      document.getElementById(id)?.addEventListener('change', (e) => {
+        let v = parseInt(e.target.value, 10);
+        if (isNaN(v)) v = min;
+        v = Math.max(min, Math.min(max, v));
+        e.target.value = v;
+        setMapgenOpt(key, v);
+      });
+    };
+    bindNum('pfRiverPlayers', 'players', 1, 2);
     document.getElementById('pfSeedMode')?.addEventListener('change', (e) => {
       setMapgenOpt('seedMode', e.target.value);
       renderRiverMapPanel();
     });
-    document.getElementById('pfSeedFixed')?.addEventListener('change', (e) => {
-      let v = parseInt(e.target.value, 10);
-      if (isNaN(v)) v = 0;
-      v = Math.max(0, Math.min(255, v));
-      setMapgenOpt('seedFixed', v);
-      e.target.value = v;
-    });
+    bindNum('pfSeedFixed', 'seedFixed', 0, 255);
     document.getElementById('pfRiverEdges')?.addEventListener('change', (e) => {
       setMapgenOpt('riverEdges', parseInt(e.target.value, 10) || 2);
     });
-    document.getElementById('pfMinRiverW')?.addEventListener('change', (e) => {
-      let v = parseInt(e.target.value, 10) || 6;
-      v = Math.max(4, Math.min(16, v));
-      setMapgenOpt('minRiverWidth', v);
-      e.target.value = v;
+    bindNum('pfMinRiverW', 'minRiverWidth', 4, 16);
+    bindNum('pfMinEdgeGapY', 'minEdgeGapY', 4, 48);
+    bindNum('pfCheckpointEvery', 'checkpointEvery', 0, 32);
+    document.getElementById('pfCheckpointKind')?.addEventListener('change', (e) => {
+      setMapgenOpt('checkpointKind', e.target.value);
     });
-    document.getElementById('pfMaxMux')?.addEventListener('change', (e) => {
-      let v = parseInt(e.target.value, 10) || 6;
-      v = Math.max(2, Math.min(12, v));
-      setMapgenOpt('maxMuxSlots', v);
-      e.target.value = v;
+    document.getElementById('pfScrollSpeed')?.addEventListener('change', (e) => {
+      setMapgenOpt('scrollSpeed', e.target.value);
     });
+    document.getElementById('pfFuelEnabled')?.addEventListener('change', (e) => {
+      setMapgenOpt('fuelEnabled', !!e.target.checked);
+      renderRiverMapPanel();
+    });
+    bindNum('pfFuelMax', 'fuelMax', 16, 255);
+    bindNum('pfFuelDrain', 'fuelDrain', 1, 8);
+    bindNum('pfFuelDrainFrames', 'fuelDrainFrames', 1, 60);
+    bindNum('pfMaxMux', 'maxMuxSlots', 2, 12);
   }
-
 
   function renderBandsPanel() {
     const list = document.getElementById('pfBandList');

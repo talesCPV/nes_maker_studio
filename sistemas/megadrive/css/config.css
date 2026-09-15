@@ -1,0 +1,17 @@
+/* Estilo específico do módulo Config — baseado no padrão visual NES/Atari. */
+.mdg-config .config-field input.config-readonly,
+.mdg-config .config-field input[readonly] {
+  background:#14171e;
+  border-color:#2a2e38;
+  color:#8f98a8;
+  cursor:default;
+}
+
+.mdg-config .config-field input[readonly]:focus {
+  border-color:#2a2e38;
+  box-shadow:none;
+}
+
+.mdg-config .config-note {
+  color:#737b88;
+}

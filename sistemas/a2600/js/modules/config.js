@@ -23,15 +23,33 @@ const CONFIG = (() => {
     },
     two_fighter: {
       id: 'two_fighter',
-      label: 'Dois lutadores (Boxing)',
-      blurb: 'P0 + P1 sempre na tela, kernel 2 linhas + VDEL. Sem fileiras NUSIZ.',
-      channels: { p0: 'hero', p1: 'hero2', m0: 'off', m1: 'off', ball: 'off' },
+      label: 'Dois lutadores (Boxing / Kung-Fu)',
+      blurb: 'P0 + P1 sempre na tela, kernel 2 linhas + VDEL. Arena PF reflect. Sem fileiras NUSIZ.',
+      channels: { p0: 'fighter1', p1: 'fighter2', m0: 'off', m1: 'off', ball: 'off' },
       heroMove: ['left', 'right', 'up', 'down'],
       playfield: 'static',
       enemies: { mode: 'none', maxRows: 0, maxCopiesPerRow: 1, sameGraphicPerRow: true },
-      objects: { allowFreeSpawn: false, allowMissile: false, allowBall: false },
+      objects: { allowFreeSpawn: true, allowMissile: false, allowBall: false },
       options: [
+        { key: 'camera', label: 'Câmera', type: 'select',
+          choices: [
+            { v: 'top', t: 'Visão superior (Boxing)' },
+            { v: 'side', t: 'Lateral (Kung-Fu)' },
+          ], default: 'top' },
+        { key: 'players', label: 'Jogadores humanos', type: 'number', min: 1, max: 2, default: 2 },
         { key: 'mirrorArena', label: 'Arena espelhada (reflect)', type: 'bool', default: true },
+        { key: 'allowJump', label: 'Pulo (só lateral)', type: 'bool', default: false },
+        { key: 'allowCrouch', label: 'Agaixar (só lateral)', type: 'bool', default: false },
+        { key: 'rounds', label: 'Rounds por partida', type: 'number', min: 1, max: 5, default: 3 },
+        { key: 'energyStyle', label: 'Energia (HUD)', type: 'select',
+          choices: [
+            { v: 'street_fighter', t: 'Street Fighter (barras L/R + timer centro)' },
+            { v: 'final_fight', t: 'Final Fight (barras empilhadas à esquerda)' },
+          ], default: 'final_fight' },
+        { key: 'energyMax', label: 'Energia máxima', type: 'number', min: 8, max: 99, default: 32 },
+        { key: 'hudLines', label: 'Linhas do HUD (topo)', type: 'number', min: 4, max: 12, default: 6 },
+        { key: 'timerDigits', label: 'Timer 2 dígitos no HUD', type: 'bool', default: true },
+        { key: 'timerStart', label: 'Timer inicial', type: 'number', min: 10, max: 99, default: 99 },
       ],
     },
     hero_p0_nusiz_rows: {
@@ -71,32 +89,60 @@ const CONFIG = (() => {
       enemies: { mode: 'mux_y', maxRows: 0, maxCopiesPerRow: 1, sameGraphicPerRow: false },
       objects: { allowFreeSpawn: true, allowMissile: true, allowBall: true },
       options: [
+        { key: 'players', label: 'Jogadores (alternados)', type: 'number', min: 1, max: 2, default: 1 },
         { key: 'seedMode', label: 'Seed do mapa', type: 'select',
           choices: [
-            { v: 'title_entropy', t: 'Aleatória (contador na tela título)' },
-            { v: 'fixed', t: 'Fixa (mesmo rio sempre)' },
+            { v: 'title_entropy', t: 'Aleatória (título)' },
+            { v: 'fixed', t: 'Fixa' },
           ], default: 'title_entropy' },
-        { key: 'seedFixed', label: 'Valor da seed fixa (0–255)', type: 'number', min: 0, max: 255, default: 42 },
-        { key: 'riverEdges', label: 'Bordas do rio', type: 'select',
+        { key: 'seedFixed', label: 'Seed fixa (0–255)', type: 'number', min: 0, max: 255, default: 42 },
+        { key: 'riverEdges', label: 'Bordas X do rio', type: 'select',
           choices: [
-            { v: 2, t: '2 (um canal)' },
-            { v: 4, t: '4 (canal + ilha)' },
+            { v: 2, t: '2 — um canal' },
+            { v: 4, t: '4 — canal + ilha' },
           ], default: 2 },
-        { key: 'minRiverWidth', label: 'Largura mínima do rio (células PF)', type: 'number', min: 4, max: 16, default: 6 },
-        { key: 'maxMuxSlots', label: 'Máx. inimigos na tela (multiplex)', type: 'number', min: 2, max: 12, default: 6 },
+        { key: 'minRiverWidth', label: 'Largura mín. rio (PF)', type: 'number', min: 4, max: 16, default: 6 },
+        { key: 'minEdgeGapY', label: 'Distância mín. entre mudanças Y', type: 'number', min: 4, max: 48, default: 12 },
+        { key: 'checkpointEvery', label: 'Checkpoint a cada N blocos (0=off)', type: 'number', min: 0, max: 32, default: 8 },
+        { key: 'checkpointKind', label: 'Tipo de checkpoint', type: 'select',
+          choices: [
+            { v: 'bridge', t: 'Ponte (PF)' },
+            { v: 'sprite', t: 'Sprite / objeto' },
+          ], default: 'bridge' },
+        { key: 'scrollSpeed', label: 'Velocidade do scroll', type: 'select',
+          choices: [
+            { v: 'slow', t: 'Lento' },
+            { v: 'normal', t: 'Normal' },
+            { v: 'fast', t: 'Rápido' },
+          ], default: 'normal' },
+        { key: 'fuelEnabled', label: 'Sistema de combustível', type: 'bool', default: true },
+        { key: 'fuelMax', label: 'Combustível máximo', type: 'number', min: 16, max: 255, default: 128 },
+        { key: 'fuelDrain', label: 'Drain por frame (unidade)', type: 'number', min: 1, max: 8, default: 1 },
+        { key: 'fuelDrainFrames', label: 'Frames entre cada drain', type: 'number', min: 1, max: 60, default: 8 },
+        { key: 'maxMuxSlots', label: 'Máx. inimigos na tela', type: 'number', min: 2, max: 12, default: 6 },
       ],
     },
     single_screen_adventure: {
       id: 'single_screen_adventure',
       label: 'Adventure / salas',
-      blurb: 'Telas estáticas, poucos objetos, playfield por sala, itens com ball/míssil.',
-      channels: { p0: 'hero', p1: 'npc_or_enemy', m0: 'optional', m1: 'optional', ball: 'item' },
+      blurb: 'Telas fixas (hard cut). P0=herói, P1=item/inimigo (1 por vez). PF por sala.',
+      channels: { p0: 'hero', p1: 'npc_or_item', m0: 'optional', m1: 'optional', ball: 'item' },
       heroMove: ['left', 'right', 'up', 'down'],
-      playfield: 'full',
+      playfield: 'per_screen',
       enemies: { mode: 'free', maxRows: 0, maxCopiesPerRow: 1, sameGraphicPerRow: false },
       objects: { allowFreeSpawn: true, allowMissile: true, allowBall: true },
       options: [
-        { key: 'rooms', label: 'Usar várias salas (telas)', type: 'bool', default: true },
+        { key: 'players', label: 'Jogadores (alternados no P0)', type: 'number', min: 1, max: 2, default: 1 },
+        { key: 'rooms', label: 'Várias salas (telas)', type: 'bool', default: true },
+        { key: 'useBall', label: 'Ball como 2º item', type: 'bool', default: true },
+        { key: 'p1Role', label: 'Papel padrão do P1', type: 'select',
+          choices: [
+            { v: 'auto', t: 'Auto (inimigo ou item)' },
+            { v: 'enemy', t: 'Inimigo / NPC' },
+            { v: 'item', t: 'Item carregável' },
+          ], default: 'auto' },
+        { key: 'allowAsymmetricRooms', label: 'Permitir salas assimétricas (labirinto)', type: 'bool', default: true },
+        { key: 'scoreModePf', label: 'Score mode PF (cores L/R baratas)', type: 'bool', default: false },
       ],
     },
     racing_rail: {
@@ -200,6 +246,102 @@ const CONFIG = (() => {
         hide: ['asymmetric_pf', 'repeat_pf', 'nusiz_rows', 'spawn_waves'],
       },
     },
+    boxing: {
+      id: 'boxing',
+      kernelProfile: 'two_fighter',
+      players: {
+        mode: 'simultaneous',
+        maxPlayers: 2,
+        activeChannel: 'both',
+        move: ['left', 'right', 'up', 'down'],
+      },
+      channels: {
+        p0: 'fighter1',
+        p1: 'fighter2',
+        m0: 'off',
+        m1: 'off',
+        ball: 'off',
+      },
+      enemies: {
+        mode: 'none',
+        maxRows: 0,
+        maxCopiesPerRow: 1,
+        sameGraphicPerRow: true,
+      },
+      playfield: {
+        allowedModes: ['none', 'reflect'],
+        defaultMode: 'reflect',
+        allowAsymmetric: false,
+        showBandEditor: false,
+        showRiverMapEditor: false,
+        showFightEditor: true,
+      },
+      editor: {
+        showBands: false,
+        showRiverMap: false,
+        showFight: true,
+        showPlayfieldPaint: true, // ring / cordas
+        spriteRoles: ['fighter1', 'fighter2'],
+        hide: ['asymmetric_pf', 'nusiz_rows', 'river_map', 'enemy_rows'],
+      },
+      // HUD (build futuro):
+      // street_fighter → topo PF assimétrico: barra P0 esq | timer sprite centro | barra P1 dir
+      // final_fight    → topo PF reflect/half: duas barras empilhadas só à esquerda (mais leve no TIA)
+      // ring abaixo continua reflect + P0/P1 VDEL
+      hud: {
+        modes: ['street_fighter', 'final_fight'],
+        defaultMode: 'final_fight',
+        timerViaSprite: true,
+      },
+    },
+    adventure: {
+      id: 'adventure',
+      kernelProfile: 'single_screen_adventure',
+      players: {
+        mode: 'alternating',
+        maxPlayers: 2,
+        activeChannel: 'p0',
+        move: ['left', 'right', 'up', 'down'],
+      },
+      channels: {
+        p0: 'hero',
+        p1: 'npc_or_item',
+        m0: 'optional',
+        m1: 'optional',
+        ball: 'item',
+      },
+      enemies: {
+        mode: 'free',
+        maxRows: 0,
+        maxCopiesPerRow: 1,
+        note: 'P1 = um objeto por vez (mux por proximidade no build)',
+      },
+      playfield: {
+        // por tela: reflect/repeat (barato), none (boss), asymmetric (labirinto, P1 limitado)
+        // score mode = cores L/R baratas, geometria ainda reflect/repeat
+        allowedModes: ['none', 'reflect', 'repeat', 'asymmetric'],
+        defaultMode: 'reflect',
+        allowAsymmetric: true,
+        perScreenMode: true,
+        showBandEditor: false,
+        showRiverMapEditor: false,
+        showFightEditor: false,
+        showAdventureEditor: true,
+      },
+      editor: {
+        showBands: false,
+        showRiverMap: false,
+        showFight: false,
+        showAdventure: true,
+        showPlayfieldPaint: true,
+        spriteRoles: ['hero', 'npc_or_item', 'item'],
+        hide: ['nusiz_rows', 'river_map', 'fight_hud'],
+      },
+      rooms: {
+        transition: 'hard_cut',
+        pfModePerScreen: true,
+      },
+    },
     // demais estilos: fallback livre até detalharmos
     advanced: {
       id: 'advanced',
@@ -235,24 +377,52 @@ const CONFIG = (() => {
       label: 'Scroll vertical com inimigos (River Raid)',
       profile: 'hero_p0_mux_y',
       options: {
+        players: 1,
         seedMode: 'title_entropy',
         seedFixed: 42,
         riverEdges: 2,
         minRiverWidth: 6,
+        minEdgeGapY: 12,
+        checkpointEvery: 8,
+        checkpointKind: 'bridge',
+        scrollSpeed: 'normal',
+        fuelEnabled: true,
+        fuelMax: 128,
+        fuelDrain: 1,
+        fuelDrainFrames: 8,
         maxMuxSlots: 6,
       },
     },
     {
       id: 'boxing',
-      label: 'Luta 1×1 (Boxing)',
+      label: 'Luta 1×1 (Boxing / Kung-Fu)',
       profile: 'two_fighter',
-      options: { mirrorArena: true },
+      options: {
+        camera: 'top',
+        players: 2,
+        mirrorArena: true,
+        allowJump: false,
+        allowCrouch: false,
+        rounds: 3,
+        energyStyle: 'final_fight',
+        energyMax: 32,
+        hudLines: 6,
+        timerDigits: true,
+        timerStart: 99,
+      },
     },
     {
       id: 'adventure',
       label: 'Adventure / exploração',
       profile: 'single_screen_adventure',
-      options: { rooms: true },
+      options: {
+        players: 1,
+        rooms: true,
+        useBall: true,
+        p1Role: 'auto',
+        allowAsymmetricRooms: true,
+        scoreModePf: false,
+      },
     },
     {
       id: 'racing',
@@ -840,6 +1010,7 @@ const CONFIG = (() => {
     const st = getGameStyle();
     if (st === 'vertical_shooter') return ['none', 'reflect', 'repeat'];
     if (st === 'river_scroll') return ['none', 'reflect'];
+    if (st === 'boxing') return ['none', 'reflect'];
     return ['none', 'reflect', 'repeat', 'asymmetric'];
   }
 
@@ -857,6 +1028,20 @@ const CONFIG = (() => {
     return getGameStyle() === 'river_scroll';
   }
 
+  function showFightEditor() {
+    const c = getStyleContract();
+    if (c.playfield && c.playfield.showFightEditor) return true;
+    if (c.editor && c.editor.showFight) return true;
+    return getGameStyle() === 'boxing';
+  }
+
+  function showAdventureEditor() {
+    const c = getStyleContract();
+    if (c.playfield && c.playfield.showAdventureEditor) return true;
+    if (c.editor && c.editor.showAdventure) return true;
+    return getGameStyle() === 'adventure';
+  }
+
   return {
     init,
     flush,
@@ -871,6 +1056,8 @@ const CONFIG = (() => {
     allowedPfModes,
     showBandEditor,
     showRiverMapEditor,
+    showFightEditor,
+    showAdventureEditor,
     KERNEL_PROFILES,
     GAME_STYLES,
     STYLE_CONTRACTS,
