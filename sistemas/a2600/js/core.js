@@ -40,12 +40,19 @@ const Project = {
       gameObjects: [],
       bands: [],
       scoreBar: {
-        enabled: false,
-        lines: 20,
+        position: 'none', // none | top | bottom
+        align: 'center', // left | center | right | both
+        background: true, // faixa preta sob os dígitos
+        lines: 16, // scanlines da faixa de placar
         digits: 6,
         variable: 'score',
-        showLogo: true,
+        variable2: 'scoreP1', // se align=both
+        logoAlways: true, // rodapé global estilo Activision
+        logoLines: 10,
         previewValue: 0,
+        // legado
+        enabled: false,
+        showLogo: true,
       },
     };
   },

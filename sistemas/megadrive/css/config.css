@@ -1,17 +1,247 @@
-/* Estilo específico do módulo Config — baseado no padrão visual NES/Atari. */
-.mdg-config .config-field input.config-readonly,
-.mdg-config .config-field input[readonly] {
-  background:#14171e;
-  border-color:#2a2e38;
-  color:#8f98a8;
-  cursor:default;
+/* =========================================================
+   RetroCompiler — Mega Drive / Genesis
+   Módulo Config — visual baseado nos módulos NES / Atari
+   ========================================================= */
+
+.mdg-config {
+  min-height:100%;
+  padding:16px;
+  overflow:auto;
+  background:#1e1e1e;
 }
 
-.mdg-config .config-field input[readonly]:focus {
-  border-color:#2a2e38;
-  box-shadow:none;
+.mdg-config .config-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:14px;
+  padding:4px 2px 12px;
+  border-bottom:1px solid #333;
+}
+
+.mdg-config .config-head h2 {
+  margin:0 0 5px;
+  color:#5aa9ff;
+  font-size:14px;
+  font-weight:700;
+}
+
+.mdg-config .config-head .muted {
+  margin:0;
+  font-size:11px;
+  color:#777;
+  line-height:1.45;
+}
+
+.mdg-config .config-badge {
+  flex-shrink:0;
+  padding:6px 10px;
+  background:#151b25;
+  border:1px solid #34445a;
+  border-radius:6px;
+  color:#7fb9ff;
+  font-family:monospace;
+  font-size:10px;
+  letter-spacing:.04em;
+}
+
+.mdg-config .config-warning {
+  margin-bottom:14px;
+  padding:10px 12px;
+  background:#151b25;
+  border:1px solid #30445f;
+  border-left:3px solid #5aa9ff;
+  border-radius:6px;
+  color:#888;
+  font-size:10px;
+  line-height:1.5;
+}
+
+.mdg-config .config-warning strong {
+  color:#9fcaff;
+}
+
+.mdg-config .config-section {
+  margin-bottom:12px;
+  padding:14px 16px;
+  background:linear-gradient(180deg,#1e222c,#161920);
+  border:1px solid #333;
+  border-radius:10px;
+}
+
+.mdg-config .config-section-title {
+  margin-bottom:10px;
+  color:#5aa9ff;
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.03em;
 }
 
 .mdg-config .config-note {
-  color:#737b88;
+  margin:-3px 0 11px;
+  color:#666;
+  font-size:10px;
+  line-height:1.45;
+}
+
+.mdg-config .config-grid {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+
+.mdg-config .config-field {
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+  color:#888;
+  font-size:11px;
+}
+
+.mdg-config .config-field.config-wide {
+  grid-column:1 / -1;
+}
+
+.mdg-config .config-field input,
+.mdg-config .config-field select,
+.mdg-config .config-field textarea {
+  width:100%;
+  box-sizing:border-box;
+  background:#0e1014;
+  border:1px solid #333;
+  border-radius:6px;
+  color:#eee;
+  outline:none;
+  padding:7px 9px;
+  font:inherit;
+  font-size:13px;
+}
+
+.mdg-config .config-field textarea {
+  resize:vertical;
+  min-height:58px;
+  line-height:1.4;
+}
+
+.mdg-config .config-field input:focus,
+.mdg-config .config-field select:focus,
+.mdg-config .config-field textarea:focus {
+  border-color:#4c83bd;
+  box-shadow:0 0 0 2px rgba(90,169,255,.08);
+}
+
+.mdg-config .config-field input[type="number"] {
+  font-family:monospace;
+}
+
+.mdg-config .config-toggle {
+  min-height:34px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:7px 9px;
+  box-sizing:border-box;
+  background:#14171e;
+  border:1px solid #2a2e38;
+  border-radius:6px;
+  color:#aaa;
+  font-size:11px;
+  cursor:pointer;
+}
+
+.mdg-config .config-toggle:hover {
+  border-color:#444;
+  background:#181c24;
+}
+
+.mdg-config .config-toggle input {
+  width:14px;
+  height:14px;
+  accent-color:#5aa9ff;
+  margin:0;
+}
+
+.mdg-config .config-actions {
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  margin-top:14px;
+  padding-top:12px;
+  border-top:1px solid #333;
+}
+
+.mdg-config .config-actions .btn-tool {
+  padding:7px 12px;
+}
+
+.mdg-config #cfg-reset-default {
+  background:#2a2e38;
+  border-color:#444;
+  color:#bbb;
+}
+
+.mdg-config #cfg-reset-default:hover {
+  background:#353a46;
+  border-color:#5a6070;
+  color:#fff;
+}
+
+.mdg-config #cfg-save {
+  background:#2a3a2a;
+  border-color:#3a5a3a;
+  color:#8dcea0;
+}
+
+.mdg-config #cfg-save:hover {
+  background:#315036;
+  border-color:#6dcea0;
+  color:#fff;
+}
+
+.mdg-config .config-summary {
+  margin-top:10px;
+  padding:9px 11px;
+  background:#11151b;
+  border:1px solid #2a2e38;
+  border-radius:6px;
+  color:#777;
+  font-family:monospace;
+  font-size:10px;
+  line-height:1.5;
+}
+
+.mdg-config .config-summary strong {
+  color:#5aa9ff;
+}
+
+@media (max-width:900px) {
+  .mdg-config .config-head {
+    align-items:flex-start;
+    flex-direction:column;
+  }
+
+  .mdg-config .config-badge {
+    align-self:flex-start;
+  }
+}
+
+@media (max-width:640px) {
+  .mdg-config {
+    padding:10px;
+  }
+
+  .mdg-config .config-grid {
+    grid-template-columns:1fr;
+  }
+
+  .mdg-config .config-field.config-wide {
+    grid-column:auto;
+  }
+
+  .mdg-config .config-actions {
+    justify-content:stretch;
+    flex-direction:column;
+  }
 }

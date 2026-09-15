@@ -19,7 +19,7 @@ then
     git add deploy.sh
     git add futuro.txt
     git add index.html
-    git add intro.md
+    git add readme.md
     git add login.html
     git add register.html
     git add config_hub.php

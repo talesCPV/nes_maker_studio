@@ -116,21 +116,21 @@ const PLAYFIELD = (() => {
       Project.data.screens = [{ id: 'screen_' + Date.now(), name: 'Tela 1', description: '' }];
     }
     if (!Project.data.scoreBar || typeof Project.data.scoreBar !== 'object') {
-      Project.data.scoreBar = {
-        enabled: false,
-        lines: 20,
-        digits: 6,
-        variable: 'score',
-        showLogo: true,
-        previewValue: 0,
-      };
+      Project.data.scoreBar = {};
     }
     const sb0 = Project.data.scoreBar;
-    sb0.lines = Math.max(12, Math.min(32, sb0.lines | 0) || 20);
-    sb0.digits = Math.max(1, Math.min(6, sb0.digits | 0) || 6);
+    if (sb0.position == null) sb0.position = sb0.enabled ? 'bottom' : 'none';
+    if (!['none', 'top', 'bottom'].includes(sb0.position)) sb0.position = 'none';
+    if (!['left', 'center', 'right', 'both'].includes(sb0.align)) sb0.align = 'center';
+    if (sb0.background == null) sb0.background = true;
+    sb0.lines = Math.max(8, Math.min(32, sb0.lines | 0) || 16);
+    sb0.digits = Math.max(2, Math.min(6, sb0.digits | 0) || 6);
     if (typeof sb0.variable !== 'string' || !sb0.variable) sb0.variable = 'score';
-    sb0.enabled = !!sb0.enabled;
-    sb0.showLogo = sb0.showLogo !== false;
+    if (typeof sb0.variable2 !== 'string' || !sb0.variable2) sb0.variable2 = 'scoreP1';
+    if (sb0.logoAlways == null) sb0.logoAlways = sb0.showLogo !== false;
+    sb0.logoLines = Math.max(6, Math.min(16, sb0.logoLines | 0) || 10);
+    sb0.enabled = sb0.position !== 'none';
+    sb0.showLogo = sb0.logoAlways !== false;
     if (sb0.previewValue == null) sb0.previewValue = 0;
     if (!Array.isArray(Project.data.gameObjects)) Project.data.gameObjects = [];
     if (!Array.isArray(Project.data.bands)) Project.data.bands = [];
@@ -174,6 +174,7 @@ const PLAYFIELD = (() => {
         if (st === 'vertical_shooter') modes = ['none', 'reflect', 'repeat'];
         else if (st === 'river_scroll') modes = ['none', 'reflect'];
         else if (st === 'boxing') modes = ['none', 'reflect'];
+        else if (st === 'racing') modes = ['none', 'reflect'];
         else if (st === 'adventure') modes = ['none', 'reflect', 'repeat', 'asymmetric'];
         else modes = ['none', 'reflect', 'repeat', 'asymmetric'];
       } catch (e) {
@@ -193,7 +194,25 @@ const PLAYFIELD = (() => {
     return modes;
   }
 
+  function styleUsesRacing() {
+    try {
+      if (typeof CONFIG !== 'undefined' && typeof CONFIG.showRacingEditor === 'function') {
+        return !!CONFIG.showRacingEditor();
+      }
+    } catch (e) {}
+    try {
+      if (typeof CONFIG !== 'undefined' && typeof CONFIG.getGameStyle === 'function') {
+        return CONFIG.getGameStyle() === 'racing';
+      }
+    } catch (e) {}
+    try {
+      return !!(Project.data && Project.data.gameStyle === 'racing');
+    } catch (e) {}
+    return false;
+  }
+
   function styleUsesAdventure() {
+
     try {
       if (typeof CONFIG !== 'undefined' && typeof CONFIG.showAdventureEditor === 'function') {
         return !!CONFIG.showAdventureEditor();
@@ -474,11 +493,19 @@ const PLAYFIELD = (() => {
 
   function scoreBarLines() {
     const sb = scoreBarCfg();
-    return sb.enabled ? (sb.lines | 0) : 0;
+    // faixa de placar (logo é separado no rodapé global)
+    if (!sb || sb.position === 'none') return 0;
+    return sb.lines | 0;
+  }
+
+  function logoLines() {
+    const sb = scoreBarCfg();
+    if (!sb || sb.logoAlways === false) return 0;
+    return sb.logoLines | 0;
   }
 
   function scorePlayableHeight() {
-    return Math.max(16, height - scoreBarLines());
+    return Math.max(16, height - scoreBarLines() - (typeof logoLines === "function" ? logoLines() : 0));
   }
 
   function ensureScoreVariable() {
@@ -570,25 +597,9 @@ const PLAYFIELD = (() => {
             <button type="button" class="pf-tool" id="pfUndo" title="Desfazer (Ctrl+Z)">↩</button>
           </div>
           <button type="button" class="pf-btn" id="pfClear">Limpar</button>
-          <label class="pf-check" title="Reserva a faixa inferior para placar + logo">
-            <input type="checkbox" id="pfScoreBar" ${sb.enabled ? 'checked' : ''}/> Barra de placar
-          </label>
-          <label class="pf-score-opts" style="${sb.enabled ? '' : 'opacity:0.45;pointer-events:none'}">Var
-            <select id="pfScoreVar">
-              <option value="score" ${sb.variable === 'score' ? 'selected' : ''}>score</option>
-              ${varOpts}
-            </select>
-          </label>
-          <label class="pf-score-opts" style="${sb.enabled ? '' : 'opacity:0.45;pointer-events:none'}">Digitos
-            <select id="pfScoreDigits">
-              <option value="4" ${sb.digits === 4 ? 'selected' : ''}>4</option>
-              <option value="5" ${sb.digits === 5 ? 'selected' : ''}>5</option>
-              <option value="6" ${sb.digits === 6 ? 'selected' : ''}>6</option>
-            </select>
-          </label>
-          <label class="pf-check pf-score-opts" style="${sb.enabled ? '' : 'opacity:0.45;pointer-events:none'}">
-            <input type="checkbox" id="pfScoreLogo" ${sb.showLogo ? 'checked' : ''}/> Logo Retrocompiler
-          </label>
+          <span class="pf-hint" title="Configurar em Configurações">Placar: ${
+            sb.position === 'none' ? 'off' : sb.position + '/' + (sb.align || 'center')
+          } · Logo: ${sb.logoAlways !== false ? 'on' : 'off'}</span>
           <span class="pf-hint">40×${height}${sb.enabled ? ' · placar ' + sb.lines + ' linhas' : ''} · 4:3</span>
         </div>
         <div class="pf-body">
@@ -634,6 +645,14 @@ const PLAYFIELD = (() => {
               <div class="pf-band-fields" id="pfRiverFields"></div>
             </div>
 
+            <div class="pf-card" id="pfRacingCard" style="${styleUsesRacing() ? '' : 'display:none'}">
+              <div class="pf-card-title">Opções Corrida</div>
+              <p class="pf-note">
+                <b>Enduro:</b> curvas com bordas em M0/M1/Ball + tabelas HMOVE (não PF assimétrico).
+                <b>Top:</b> pista em PF reflect + faixas. P0=carro · P1=oponente mux.
+              </p>
+              <div class="pf-band-fields" id="pfRacingFields"></div>
+            </div>
             <div class="pf-card" id="pfAdventureCard" style="${styleUsesAdventure() ? '' : 'display:none'}">
               <div class="pf-card-title">Opções Adventure / salas</div>
               <p class="pf-note">
@@ -668,13 +687,12 @@ const PLAYFIELD = (() => {
               <div id="pfSpawnList" class="pf-spawn-list"></div>
             </div>
             <div class="pf-card">
-              <div class="pf-card-title">Barra de placar</div>
-              <label class="pf-check" style="margin-bottom:8px">
-                <input type="checkbox" id="pfScoreBarSide" ${sb.enabled ? 'checked' : ''}/> Ativar faixa inferior
-              </label>
+              <div class="pf-card-title">Placar / logo</div>
               <p class="pf-note">
-                Reserva ~20 scanlines em preto para dígitos (variável do jogo) e logo
-                <b>RETROCOMPILER</b> estilo Activision. Glifos são internos.
+                Configuração <b>global</b> em <b>Configurações</b> (acima do estilo de jogo).<br/>
+                Agora: <b>${sb.position || 'none'}</b>
+                ${sb.position !== 'none' ? ' · ' + (sb.align || 'center') + ' · ' + (sb.digits | 0) + ' dígitos' : ''}<br/>
+                Logo rodapé: <b>${sb.logoAlways !== false ? 'sim (' + (sb.logoLines | 0) + ' linhas)' : 'não'}</b>
               </p>
             </div>
           </div>
@@ -1551,6 +1569,180 @@ const PLAYFIELD = (() => {
 
 
 
+
+
+
+  function getRacingOpts() {
+    const opts =
+      (typeof CONFIG !== 'undefined' && CONFIG.getProfileOptions && CONFIG.getProfileOptions()) ||
+      (Project.data && Project.data.profileOptions) ||
+      {};
+    const num = (k, d) => (opts[k] != null && opts[k] !== '' ? Number(opts[k]) : d);
+    return {
+      camera: opts.camera === 'top' ? 'top' : 'enduro',
+      players: Math.max(1, Math.min(2, num('players', 1) || 1)),
+      lanes: Math.max(2, Math.min(4, num('lanes', 3) || 3)),
+      minRoadWidth: Math.max(4, Math.min(20, num('minRoadWidth', 8) || 8)),
+      scrollSpeed: ['slow', 'normal', 'fast'].includes(opts.scrollSpeed) ? opts.scrollSpeed : 'normal',
+      maxOpponents: Math.max(1, Math.min(6, num('maxOpponents', 3) || 3)),
+      seedMode: opts.seedMode === 'fixed' ? 'fixed' : 'title_entropy',
+      seedFixed: Math.max(0, Math.min(255, num('seedFixed', 42) | 0)),
+      hmoveStepLines: Math.max(2, Math.min(8, num('hmoveStepLines', 4) || 4)),
+    };
+  }
+
+  function setRacingOpt(key, val) {
+    if (!Project.data) return;
+    if (!Project.data.profileOptions) Project.data.profileOptions = {};
+    Project.data.profileOptions[key] = val;
+    if (key === 'scrollSpeed') {
+      if (!Array.isArray(Project.data.variables)) Project.data.variables = [];
+      const map = { slow: 1, normal: 2, fast: 3 };
+      const n = map[val] != null ? map[val] : 2;
+      let v = Project.data.variables.find((x) => x.name === 'scrollSpeed');
+      if (!v) {
+        Project.data.variables.push({
+          id: 'var_scrollSpeed',
+          name: 'scrollSpeed',
+          value: n,
+          note: 'Velocidade scroll pista (1 lento · 2 normal · 3 rápido)',
+        });
+      } else v.value = n;
+    }
+    if (typeof Project.status === 'function') Project.status('corrida alterada — salve o projeto');
+  }
+
+  function renderRacingPanel() {
+    const card = document.getElementById('pfRacingCard');
+    const box = document.getElementById('pfRacingFields');
+    const banner = document.getElementById('pfRacingBanner');
+    const show = styleUsesRacing();
+    if (card) card.style.display = show ? '' : 'none';
+    if (banner) banner.style.display = show ? '' : 'none';
+    if (!box || !show) {
+      if (box) box.innerHTML = '';
+      return;
+    }
+    const o = getRacingOpts();
+    const enduroOnly = o.camera === 'enduro' ? '' : 'opacity:0.4;pointer-events:none';
+    const topOnly = o.camera === 'top' ? '' : 'opacity:0.4;pointer-events:none';
+    box.innerHTML =
+      '<div class="pf-river-sec">Motor de pista</div>' +
+      '<label>Câmera' +
+      '<select id="pfRaceCamera">' +
+      '<option value="enduro"' +
+      (o.camera === 'enduro' ? ' selected' : '') +
+      '>Enduro — bordas M/Ball + HMOVE (curvas)</option>' +
+      '<option value="top"' +
+      (o.camera === 'top' ? ' selected' : '') +
+      '>Superior — PF reflect + faixas</option>' +
+      '</select></label>' +
+      '<label>Jogadores (alternados)' +
+      '<input type="number" id="pfRacePlayers" min="1" max="2" value="' +
+      o.players +
+      '"/></label>' +
+      '<div class="pf-river-sec">Pista</div>' +
+      '<div style="' +
+      topOnly +
+      '"><label>Faixas (modo top)' +
+      '<input type="number" id="pfRaceLanes" min="2" max="4" value="' +
+      o.lanes +
+      '"/></label></div>' +
+      '<label>Largura mínima' +
+      '<input type="number" id="pfRaceMinW" min="4" max="20" value="' +
+      o.minRoadWidth +
+      '"/></label>' +
+      '<label>Velocidade scroll (<code>scrollSpeed</code>)' +
+      '<select id="pfRaceSpeed">' +
+      '<option value="slow"' +
+      (o.scrollSpeed === 'slow' ? ' selected' : '') +
+      '>Lento (1)</option>' +
+      '<option value="normal"' +
+      (o.scrollSpeed === 'normal' ? ' selected' : '') +
+      '>Normal (2)</option>' +
+      '<option value="fast"' +
+      (o.scrollSpeed === 'fast' ? ' selected' : '') +
+      '>Rápido (3)</option>' +
+      '</select></label>' +
+      '<div class="pf-river-sec">Enduro / curvas</div>' +
+      '<div style="' +
+      enduroOnly +
+      '">' +
+      '<label>Seed' +
+      '<select id="pfRaceSeedMode">' +
+      '<option value="title_entropy"' +
+      (o.seedMode === 'title_entropy' ? ' selected' : '') +
+      '>Aleatória (título)</option>' +
+      '<option value="fixed"' +
+      (o.seedMode === 'fixed' ? ' selected' : '') +
+      '>Fixa</option>' +
+      '</select></label>' +
+      '<label style="' +
+      (o.seedMode === 'fixed' ? '' : 'opacity:0.4;pointer-events:none') +
+      '">Seed 0–255' +
+      '<input type="number" id="pfRaceSeed" min="0" max="255" value="' +
+      o.seedFixed +
+      '"/></label>' +
+      '<label>HMOVE a cada N linhas' +
+      '<input type="number" id="pfRaceHmove" min="2" max="8" value="' +
+      o.hmoveStepLines +
+      '"/></label>' +
+      '<p class="pf-note">Build: tabelas HMOVE L/R independentes; M0/M1/Ball = margens. PF asymmetric <b>não</b> usado para curvar.</p>' +
+      '</div>' +
+      '<div class="pf-river-sec">Oponentes</div>' +
+      '<label>Máx. na tela (P1 mux)' +
+      '<input type="number" id="pfRaceOpp" min="1" max="6" value="' +
+      o.maxOpponents +
+      '"/></label>';
+
+    document.getElementById('pfRaceCamera')?.addEventListener('change', (e) => {
+      setRacingOpt('camera', e.target.value);
+      renderRacingPanel();
+    });
+    document.getElementById('pfRacePlayers')?.addEventListener('change', (e) => {
+      let v = parseInt(e.target.value, 10) || 1;
+      v = Math.max(1, Math.min(2, v));
+      e.target.value = v;
+      setRacingOpt('players', v);
+    });
+    document.getElementById('pfRaceLanes')?.addEventListener('change', (e) => {
+      let v = parseInt(e.target.value, 10) || 3;
+      v = Math.max(2, Math.min(4, v));
+      e.target.value = v;
+      setRacingOpt('lanes', v);
+    });
+    document.getElementById('pfRaceMinW')?.addEventListener('change', (e) => {
+      let v = parseInt(e.target.value, 10) || 8;
+      v = Math.max(4, Math.min(20, v));
+      e.target.value = v;
+      setRacingOpt('minRoadWidth', v);
+    });
+    document.getElementById('pfRaceSpeed')?.addEventListener('change', (e) => {
+      setRacingOpt('scrollSpeed', e.target.value);
+    });
+    document.getElementById('pfRaceSeedMode')?.addEventListener('change', (e) => {
+      setRacingOpt('seedMode', e.target.value);
+      renderRacingPanel();
+    });
+    document.getElementById('pfRaceSeed')?.addEventListener('change', (e) => {
+      let v = parseInt(e.target.value, 10) || 0;
+      v = Math.max(0, Math.min(255, v));
+      e.target.value = v;
+      setRacingOpt('seedFixed', v);
+    });
+    document.getElementById('pfRaceHmove')?.addEventListener('change', (e) => {
+      let v = parseInt(e.target.value, 10) || 4;
+      v = Math.max(2, Math.min(8, v));
+      e.target.value = v;
+      setRacingOpt('hmoveStepLines', v);
+    });
+    document.getElementById('pfRaceOpp')?.addEventListener('change', (e) => {
+      let v = parseInt(e.target.value, 10) || 3;
+      v = Math.max(1, Math.min(6, v));
+      e.target.value = v;
+      setRacingOpt('maxOpponents', v);
+    });
+  }
 
 
   function getAdventureOpts() {

@@ -147,15 +147,36 @@ const CONFIG = (() => {
     },
     racing_rail: {
       id: 'racing_rail',
-      label: 'Corrida / trilha',
-      blurb: 'Playfield como pista; P0 veículo; obstáculos via multiplex ou PF.',
-      channels: { p0: 'vehicle', p1: 'obstacle', m0: 'optional', m1: 'off', ball: 'off' },
+      label: 'Corrida / trilha / Enduro',
+      blurb: 'P0=veículo. P1=oponente mux. Curvas Enduro via M0/M1/Ball+HMOVE (não PF assimétrico).',
+      channels: { p0: 'vehicle', p1: 'opponent', m0: 'road_edge', m1: 'road_edge', ball: 'road_edge_or_center' },
       heroMove: ['left', 'right'],
       playfield: 'scroll_v',
       enemies: { mode: 'mux_y', maxRows: 0, maxCopiesPerRow: 1, sameGraphicPerRow: false },
-      objects: { allowFreeSpawn: true, allowMissile: false, allowBall: false },
+      objects: { allowFreeSpawn: true, allowMissile: true, allowBall: true },
       options: [
-        { key: 'lanes', label: 'Faixas laterais do herói', type: 'number', min: 2, max: 6, default: 3 },
+        { key: 'camera', label: 'Câmera / motor de pista', type: 'select',
+          choices: [
+            { v: 'top', t: 'Vista superior (faixas / PF reflect)' },
+            { v: 'enduro', t: 'Enduro (margens M/Ball + HMOVE, curvas)' },
+          ], default: 'enduro' },
+        { key: 'players', label: 'Jogadores (alternados)', type: 'number', min: 1, max: 2, default: 1 },
+        { key: 'lanes', label: 'Faixas (modo top)', type: 'number', min: 2, max: 4, default: 3 },
+        { key: 'minRoadWidth', label: 'Largura mín. pista (células)', type: 'number', min: 4, max: 20, default: 8 },
+        { key: 'scrollSpeed', label: 'Velocidade base do scroll', type: 'select',
+          choices: [
+            { v: 'slow', t: 'Lento' },
+            { v: 'normal', t: 'Normal' },
+            { v: 'fast', t: 'Rápido' },
+          ], default: 'normal' },
+        { key: 'maxOpponents', label: 'Máx. oponentes na tela (mux)', type: 'number', min: 1, max: 6, default: 3 },
+        { key: 'seedMode', label: 'Seed das curvas (Enduro)', type: 'select',
+          choices: [
+            { v: 'title_entropy', t: 'Aleatória (título)' },
+            { v: 'fixed', t: 'Fixa' },
+          ], default: 'title_entropy' },
+        { key: 'seedFixed', label: 'Seed fixa 0–255', type: 'number', min: 0, max: 255, default: 42 },
+        { key: 'hmoveStepLines', label: 'HMOVE a cada N linhas (Enduro)', type: 'number', min: 2, max: 8, default: 4 },
       ],
     },
   };
@@ -342,6 +363,57 @@ const CONFIG = (() => {
         pfModePerScreen: true,
       },
     },
+    racing: {
+      id: 'racing',
+      kernelProfile: 'racing_rail',
+      players: {
+        mode: 'alternating',
+        maxPlayers: 2,
+        activeChannel: 'p0',
+        move: ['left', 'right'],
+        moveOptional: ['accelerate'],
+      },
+      channels: {
+        p0: 'vehicle',
+        p1: 'opponent',
+        m0: 'road_edge_left',
+        m1: 'road_edge_right',
+        ball: 'road_center_or_edge',
+      },
+      enemies: {
+        mode: 'mux_y',
+        maxCopiesPerRow: 1,
+        movement: 'world_y_scroll',
+      },
+      playfield: {
+        // top: reflect desenha pista; enduro: PF decorativo, margens = missile/ball + HMOVE
+        allowedModes: ['none', 'reflect'],
+        defaultMode: 'reflect',
+        allowAsymmetric: false,
+        showBandEditor: false,
+        showRiverMapEditor: false,
+        showFightEditor: false,
+        showAdventureEditor: false,
+        showRacingEditor: true,
+      },
+      // Build futuro (guardar):
+      // camera=top    → PF reflect + lanes no editor; P1 oponentes mux
+      // camera=enduro → tabelas HMOVE L/R a cada hmoveStepLines; M0/M1/Ball = bordas;
+      //                 curva = offsets independentes; sem PF asymmetric
+      // scrollSpeed → variável de programa (1/2/3)
+      road: {
+        curveMethod: 'hmove_edges', // não asymmetric PF
+        edgeChannels: ['m0', 'm1', 'ball'],
+        hmoveTableEveryNLines: 4,
+        perspective: true,
+      },
+      editor: {
+        showRacing: true,
+        showPlayfieldPaint: true, // top: pista; enduro: opcional decor
+        spriteRoles: ['vehicle', 'opponent'],
+        hide: ['asymmetric_pf', 'nusiz_rows', 'fight_hud', 'adventure_asym'],
+      },
+    },
     // demais estilos: fallback livre até detalharmos
     advanced: {
       id: 'advanced',
@@ -426,9 +498,19 @@ const CONFIG = (() => {
     },
     {
       id: 'racing',
-      label: 'Corrida',
+      label: 'Corrida (top / Enduro)',
       profile: 'racing_rail',
-      options: { lanes: 3 },
+      options: {
+        camera: 'enduro',
+        players: 1,
+        lanes: 3,
+        minRoadWidth: 8,
+        scrollSpeed: 'normal',
+        maxOpponents: 3,
+        seedMode: 'title_entropy',
+        seedFixed: 42,
+        hmoveStepLines: 4,
+      },
     },
     {
       id: 'advanced',
@@ -449,6 +531,32 @@ const CONFIG = (() => {
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
+  }
+
+
+  function normalizeScoreBar(d) {
+    if (!d.scoreBar || typeof d.scoreBar !== 'object') d.scoreBar = {};
+    const sb = d.scoreBar;
+    // migração checkbox antigo
+    if (sb.position == null) {
+      if (sb.enabled) sb.position = 'bottom';
+      else sb.position = 'none';
+    }
+    if (!['none', 'top', 'bottom'].includes(sb.position)) sb.position = 'none';
+    if (!['left', 'center', 'right', 'both'].includes(sb.align)) sb.align = 'center';
+    if (sb.background == null) sb.background = true;
+    sb.background = !!sb.background;
+    sb.lines = Math.max(8, Math.min(32, sb.lines | 0) || 16);
+    sb.digits = Math.max(2, Math.min(6, sb.digits | 0) || 6);
+    if (sb.align === 'both') sb.digits = Math.min(3, sb.digits | 0) || 3;
+    if (typeof sb.variable !== 'string' || !sb.variable) sb.variable = 'score';
+    if (typeof sb.variable2 !== 'string' || !sb.variable2) sb.variable2 = 'scoreP1';
+    if (sb.logoAlways == null) sb.logoAlways = sb.showLogo !== false;
+    sb.logoAlways = sb.logoAlways !== false;
+    sb.logoLines = Math.max(6, Math.min(16, sb.logoLines | 0) || 10);
+    sb.enabled = sb.position !== 'none';
+    sb.showLogo = sb.logoAlways;
+    return sb;
   }
 
   function ensureData() {
@@ -479,6 +587,7 @@ const CONFIG = (() => {
       }
       Project.data._profileMigrated = true;
     }
+        normalizeScoreBar(Project.data);
     return Project.data;
   }
 
@@ -610,6 +719,7 @@ const CONFIG = (() => {
     const root = document.getElementById('mod-config');
     if (!root) return;
     const d = ensureData();
+    const sb = normalizeScoreBar(d);
     const style = getStyle(d.gameStyle);
     const prof = getProfile(d.kernelProfile || style.profile);
     const opts = d.profileOptions || {};
@@ -633,6 +743,68 @@ const CONFIG = (() => {
             <label class="full">Descrição
               <textarea id="cfgDesc" rows="2">${escapeHtml(d.description || '')}</textarea>
             </label>
+          </div>
+        </div>
+
+        <div class="cfg-card">
+          <div class="cfg-card-title">Placar e logo (global)</div>
+          <p style="margin:0 0 10px;font-size:11px;color:#888;line-height:1.45">
+            Independente do estilo de jogo. O <b style="color:#aaa">build</b> começa reservando
+            faixas de scanline para placar (topo ou base) e, no rodapé,
+            sempre o logo <b style="color:#f4a261">RETROCOMPILER</b> estilo Activision.
+          </p>
+          <div class="cfg-grid">
+            <label>Posição do placar
+              <select id="cfgScorePos">
+                <option value="none" ${sb.position === 'none' ? 'selected' : ''}>None (sem placar)</option>
+                <option value="top" ${sb.position === 'top' ? 'selected' : ''}>Topo da tela</option>
+                <option value="bottom" ${sb.position === 'bottom' ? 'selected' : ''}>Base (acima do logo)</option>
+              </select>
+            </label>
+            <label>Alinhamento
+              <select id="cfgScoreAlign" ${sb.position === 'none' ? 'disabled' : ''}>
+                <option value="left" ${sb.align === 'left' ? 'selected' : ''}>Esquerda</option>
+                <option value="center" ${sb.align === 'center' ? 'selected' : ''}>Centro</option>
+                <option value="right" ${sb.align === 'right' ? 'selected' : ''}>Direita</option>
+                <option value="both" ${sb.align === 'both' ? 'selected' : ''}>Both (2P — 3+3 dígitos)</option>
+              </select>
+            </label>
+            <label>Dígitos ${sb.align === 'both' ? '(por lado)' : ''}
+              <select id="cfgScoreDigits" ${sb.position === 'none' ? 'disabled' : ''}>
+                <option value="2" ${sb.digits === 2 ? 'selected' : ''}>2</option>
+                <option value="3" ${sb.digits === 3 ? 'selected' : ''}>3</option>
+                <option value="4" ${sb.digits === 4 ? 'selected' : ''}>4</option>
+                <option value="5" ${sb.digits === 5 ? 'selected' : ''}>5</option>
+                <option value="6" ${sb.digits === 6 ? 'selected' : ''}>6</option>
+              </select>
+            </label>
+            <label>Variável
+              <input id="cfgScoreVar" type="text" value="${escapeAttr(sb.variable || 'score')}" ${sb.position === 'none' ? 'disabled' : ''} />
+            </label>
+            <label style="${sb.align === 'both' && sb.position !== 'none' ? '' : 'opacity:0.4'}">Variável P2
+              <input id="cfgScoreVar2" type="text" value="${escapeAttr(sb.variable2 || 'scoreP1')}" ${sb.align === 'both' && sb.position !== 'none' ? '' : 'disabled'} />
+            </label>
+            <label>Altura do placar (scanlines)
+              <input id="cfgScoreLines" type="number" min="8" max="32" value="${sb.lines | 0}" ${sb.position === 'none' ? 'disabled' : ''} />
+            </label>
+            <label class="cfg-opt" style="flex-direction:row;align-items:center;gap:8px;margin-top:8px">
+              <input type="checkbox" id="cfgScoreBg" ${sb.background ? 'checked' : ''} ${sb.position === 'none' ? 'disabled' : ''}/>
+              Fundo preto na faixa do placar
+            </label>
+          </div>
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid #333">
+            <div style="font-size:11px;color:#f4a261;font-weight:700;margin-bottom:8px">LOGO (sempre no rodapé)</div>
+            <label class="cfg-opt" style="flex-direction:row;align-items:center;gap:8px">
+              <input type="checkbox" id="cfgLogoAlways" ${sb.logoAlways ? 'checked' : ''}/>
+              Mostrar logo RETROCOMPILER nas últimas scanlines
+            </label>
+            <label style="margin-top:8px;max-width:160px">Linhas do logo
+              <input id="cfgLogoLines" type="number" min="6" max="16" value="${sb.logoLines | 0}" ${sb.logoAlways ? '' : 'disabled'} />
+            </label>
+            <p style="margin:8px 0 0;font-size:11px;color:#666;line-height:1.4">
+              Ordem no frame: [placar top?] → jogo → [placar bottom?] → logo → overscan.
+              O build implementa isso antes dos kernels de estilo.
+            </p>
           </div>
         </div>
 
@@ -767,6 +939,64 @@ const CONFIG = (() => {
       d.tv = e.target.value;
       dirty();
     });
+
+    
+    document.getElementById('cfgScorePos')?.addEventListener('change', (e) => {
+      const d = ensureData();
+      d.scoreBar.position = e.target.value;
+      normalizeScoreBar(d);
+      dirty();
+      buildHTML();
+    });
+    document.getElementById('cfgScoreAlign')?.addEventListener('change', (e) => {
+      const d = ensureData();
+      d.scoreBar.align = e.target.value;
+      if (e.target.value === 'both') d.scoreBar.digits = Math.min(3, d.scoreBar.digits | 0) || 3;
+      normalizeScoreBar(d);
+      dirty();
+      buildHTML();
+    });
+    document.getElementById('cfgScoreDigits')?.addEventListener('change', (e) => {
+      const d = ensureData();
+      d.scoreBar.digits = parseInt(e.target.value, 10) || 6;
+      normalizeScoreBar(d);
+      dirty();
+    });
+    document.getElementById('cfgScoreVar')?.addEventListener('change', (e) => {
+      ensureData().scoreBar.variable = (e.target.value || 'score').trim() || 'score';
+      dirty();
+    });
+    document.getElementById('cfgScoreVar2')?.addEventListener('change', (e) => {
+      ensureData().scoreBar.variable2 = (e.target.value || 'scoreP1').trim() || 'scoreP1';
+      dirty();
+    });
+    document.getElementById('cfgScoreLines')?.addEventListener('change', (e) => {
+      let v = parseInt(e.target.value, 10) || 16;
+      v = Math.max(8, Math.min(32, v));
+      ensureData().scoreBar.lines = v;
+      normalizeScoreBar(ensureData());
+      dirty();
+    });
+    document.getElementById('cfgScoreBg')?.addEventListener('change', (e) => {
+      ensureData().scoreBar.background = !!e.target.checked;
+      dirty();
+    });
+    document.getElementById('cfgLogoAlways')?.addEventListener('change', (e) => {
+      const d = ensureData();
+      d.scoreBar.logoAlways = !!e.target.checked;
+      d.scoreBar.showLogo = d.scoreBar.logoAlways;
+      normalizeScoreBar(d);
+      dirty();
+      buildHTML();
+    });
+    document.getElementById('cfgLogoLines')?.addEventListener('change', (e) => {
+      let v = parseInt(e.target.value, 10) || 10;
+      v = Math.max(6, Math.min(16, v));
+      ensureData().scoreBar.logoLines = v;
+      normalizeScoreBar(ensureData());
+      dirty();
+    });
+
 
     document.getElementById('cfgGameStyle')?.addEventListener('change', (e) => {
       applyStyle(e.target.value);
@@ -1042,6 +1272,13 @@ const CONFIG = (() => {
     return getGameStyle() === 'adventure';
   }
 
+  function showRacingEditor() {
+    const c = getStyleContract();
+    if (c.playfield && c.playfield.showRacingEditor) return true;
+    if (c.editor && c.editor.showRacing) return true;
+    return getGameStyle() === 'racing';
+  }
+
   return {
     init,
     flush,
@@ -1058,6 +1295,7 @@ const CONFIG = (() => {
     showRiverMapEditor,
     showFightEditor,
     showAdventureEditor,
+    showRacingEditor,
     KERNEL_PROFILES,
     GAME_STYLES,
     STYLE_CONTRACTS,
