@@ -6,15 +6,16 @@
     "description": "",
     "romSize": 4096,
     "tv": "NTSC",
-    "kernel": "vertical_scroll",
-    "gameStyle": "river_scroll",
-    "kernelProfile": "hero_p0_mux_y",
+    "kernel": "single_screen",
+    "gameStyle": "vertical_shooter",
+    "kernelProfile": "hero_p0_nusiz_rows",
     "profileOptions": {
-        "seedMode": "title_entropy",
-        "seedFixed": 42,
-        "riverEdges": "2",
-        "minRiverWidth": 6,
-        "maxMuxSlots": 6
+        "enemyRows": 3,
+        "enemyCopies": "3",
+        "heroVertical": false,
+        "twoPlayerAlternating": false,
+        "playfield": "none",
+        "enemyShots": false
     },
     "created": 1788940284,
     "screens": [
@@ -57,17 +58,49 @@
         }
     },
     "sounds": [],
-    "variables": [],
-    "rules": [],
+    "variables": [
+        {
+            "id": "native_scoreP0",
+            "name": "scoreP0",
+            "type": "byte",
+            "note": "Placar (nativa)",
+            "value": 0,
+            "native": true
+        }
+    ],
+    "rules": [
+        {
+            "id": "rule_mu32vv2o_28l",
+            "tabId": "main",
+            "name": "Regra 1",
+            "steps": [
+                {
+                    "type": "if_event",
+                    "eventId": "ev_boot"
+                },
+                {
+                    "type": "set_var",
+                    "varId": "native_scoreP0",
+                    "value": 7
+                }
+            ]
+        }
+    ],
     "gameObjects": [],
     "bands": [],
     "scoreBar": {
-        "enabled": false,
-        "lines": 20,
-        "digits": 6,
-        "variable": "score",
+        "enabled": true,
+        "lines": 10,
+        "digits": 3,
+        "variable": "scoreP0",
         "showLogo": true,
-        "previewValue": 0
+        "previewValue": 0,
+        "position": "top",
+        "align": "left",
+        "background": true,
+        "variable2": "scoreP1",
+        "logoAlways": true,
+        "logoLines": 10
     },
     "_profileMigrated": true,
     "ruleTabs": [
@@ -147,5 +180,5 @@
     "programMeta": {
         "notes": ""
     },
-    "updated": 1789439857938
+    "updated": 1789505047671
 }

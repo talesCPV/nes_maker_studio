@@ -92,6 +92,9 @@ const PROGRAM = (() => {
   function ensureData() {
     if (!Project.data) Project.data = Project.defaultData();
     if (!Array.isArray(Project.data.variables)) Project.data.variables = [];
+    if (typeof Project !== 'undefined' && Project.syncNativeVariables) {
+      try { Project.syncNativeVariables(); } catch (e) {}
+    }
     if (!Array.isArray(Project.data.rules)) Project.data.rules = [];
     Project.data.rules.forEach((r) => migrateRuleToSteps(r));
     sanitizeAllMoveRules();
@@ -309,26 +312,57 @@ const PROGRAM = (() => {
   function renderVarsTab() {
     const d = ensureData();
     const alloc = computeAllocation(d.variables);
-    const rows = alloc.list
-      .map((v, idx) => {
+    // nativas primeiro
+    const ordered = alloc.list.slice().sort((a, b) => {
+      const an = a.native || a.builtin ? 0 : 1;
+      const bn = b.native || b.builtin ? 0 : 1;
+      return an - bn;
+    });
+    const rows = ordered
+      .map((v) => {
+        // computeAllocation clona objetos (...v) — indexOf falha; localizar por id/nome
+        let idx = d.variables.findIndex(
+          (x) => (v.id && x.id === v.id) || (v.name && x.name === v.name)
+        );
+        if (idx < 0) idx = 0;
+        const isNative = !!(v.native || v.builtin);
         const addr =
           v.type === 'bool'
             ? `$${v.address.toString(16).toUpperCase().padStart(2, '0')} bit${v.bitIndex}`
             : `$${v.address.toString(16).toUpperCase().padStart(2, '0')}` +
               (v.sizeBytes === 2 ? ' (word)' : '');
         return `
-        <tr data-idx="${idx}">
-          <td><input class="prog-inp" data-f="name" value="${escapeAttr(v.name || '')}" /></td>
+        <tr data-idx="${idx}" class="${isNative ? 'prog-var-native' : ''}">
           <td>
-            <select class="prog-inp" data-f="type">
+            ${
+              isNative
+                ? `<span class="prog-native-tag">nativa</span> <code>${escapeHtml(v.name || '')}</code>`
+                : `<input class="prog-inp" data-f="name" value="${escapeAttr(v.name || '')}" />`
+            }
+          </td>
+          <td>
+            ${
+              isNative
+                ? `<span class="muted">${escapeHtml(v.type || 'byte')}</span>`
+                : `<select class="prog-inp" data-f="type">
               <option value="byte" ${v.type === 'byte' ? 'selected' : ''}>byte</option>
               <option value="word" ${v.type === 'word' ? 'selected' : ''}>word</option>
               <option value="bool" ${v.type === 'bool' ? 'selected' : ''}>bool</option>
-            </select>
+            </select>`
+            }
+          </td>
+          <td>
+            <input class="prog-inp prog-val" data-f="value" type="number" min="0" max="255"
+              value="${v.value != null ? (v.value | 0) : 0}"
+              title="Valor no boot (0–255)" />
           </td>
           <td class="mono">${addr}</td>
-          <td><input class="prog-inp" data-f="note" value="${escapeAttr(v.note || '')}" placeholder="nota" /></td>
-          <td><button type="button" class="prog-btn danger prog-del-var" data-idx="${idx}">🗑</button></td>
+          <td><input class="prog-inp" data-f="note" value="${escapeAttr(v.note || '')}" placeholder="nota" ${isNative ? 'readonly' : ''} /></td>
+          <td>${
+            isNative
+              ? '<span class="muted" title="Variável nativa do setup">—</span>'
+              : `<button type="button" class="prog-btn danger prog-del-var" data-idx="${idx}">🗑</button>`
+          }</td>
         </tr>`;
       })
       .join('');
@@ -341,14 +375,14 @@ const PROGRAM = (() => {
         <div class="prog-panel-head">
           <div>
             <strong>Variáveis na RAM do RIOT</strong>
-            <div class="muted">$80–$FF · ${alloc.reserved} bytes reservados ao runtime · livre: <b>${alloc.freeBytes}</b> / ${alloc.total}</div>
+            <div class="muted">$80–$FF · nativas vêm do <b>Config</b> (placar, scroll, energia…) e não podem ser apagadas · livre: <b>${alloc.freeBytes}</b> / ${alloc.total}</div>
           </div>
           <button type="button" class="prog-btn" id="progAddVar">+ Variável</button>
         </div>
         <div class="prog-membar"><div style="width:${bar}%;background:${barColor}"></div></div>
         <table class="prog-table">
-          <thead><tr><th>Nome</th><th>Tipo</th><th>Endereço</th><th>Nota</th><th></th></tr></thead>
-          <tbody id="progVarBody">${rows || '<tr><td colspan="5" class="muted">Nenhuma variável</td></tr>'}</tbody>
+          <thead><tr><th>Nome</th><th>Tipo</th><th>Valor init</th><th>Endereço</th><th>Nota</th><th></th></tr></thead>
+          <tbody id="progVarBody">${rows || '<tr><td colspan="6" class="muted">Nenhuma variável</td></tr>'}</tbody>
         </table>
         <p class="muted" style="margin-top:10px">
           No 2600 quase tudo de estado do jogo precisa caber nesses 128 bytes.
@@ -936,21 +970,49 @@ const PROGRAM = (() => {
     });
     document.querySelectorAll('#progVarBody tr[data-idx]').forEach((tr) => {
       const idx = parseInt(tr.getAttribute('data-idx'), 10);
+      const applyField = (el) => {
+        if (idx < 0 || !d.variables[idx]) return;
+        const v = d.variables[idx];
+        const f0 = el.getAttribute('data-f');
+        if (v && (v.native || v.builtin) && f0 !== 'value') {
+          return;
+        }
+        if (f0 === 'value') {
+          let n = parseInt(el.value, 10);
+          if (isNaN(n)) n = 0;
+          n = Math.max(0, Math.min(255, n));
+          el.value = n;
+          d.variables[idx].value = n;
+        } else {
+          d.variables[idx][f0] = el.value;
+        }
+        dirty();
+        if (f0 === 'type') renderTab();
+      };
       tr.querySelectorAll('[data-f]').forEach((el) => {
-        el.addEventListener('change', () => {
-          const f = el.getAttribute('data-f');
-          d.variables[idx][f] = el.value;
-          dirty();
-          if (f === 'type') renderTab();
-        });
+        el.addEventListener('change', () => applyField(el));
+        if (el.getAttribute('data-f') === 'value') {
+          el.addEventListener('input', () => applyField(el));
+        }
       });
     });
     document.querySelectorAll('.prog-del-var').forEach((btn) => {
       btn.addEventListener('click', () => {
         const idx = parseInt(btn.getAttribute('data-idx'), 10);
+        const v = d.variables[idx];
+        if (v && (v.native || v.builtin)) {
+          alert('Variável nativa do setup — não pode ser apagada.');
+          return;
+        }
         d.variables.splice(idx, 1);
         dirty();
         renderTab();
+      });
+    });
+    // bloqueia rename de nativas
+    document.querySelectorAll('#progVarBody tr.prog-var-native [data-f]').forEach((el) => {
+      el.addEventListener('change', (e) => {
+        e.stopPropagation();
       });
     });
 

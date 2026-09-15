@@ -127,10 +127,12 @@ const PLAYFIELD = (() => {
     sb0.digits = Math.max(2, Math.min(6, sb0.digits | 0) || 6);
     if (typeof sb0.variable !== 'string' || !sb0.variable) sb0.variable = 'score';
     if (typeof sb0.variable2 !== 'string' || !sb0.variable2) sb0.variable2 = 'scoreP1';
-    if (sb0.logoAlways == null) sb0.logoAlways = sb0.showLogo !== false;
+    sb0.logoAlways = true;
+    sb0.showLogo = true;
     sb0.logoLines = Math.max(6, Math.min(16, sb0.logoLines | 0) || 10);
     sb0.enabled = sb0.position !== 'none';
-    sb0.showLogo = sb0.logoAlways !== false;
+    sb0.variable = 'scoreP0';
+    sb0.variable2 = 'scoreP1';
     if (sb0.previewValue == null) sb0.previewValue = 0;
     if (!Array.isArray(Project.data.gameObjects)) Project.data.gameObjects = [];
     if (!Array.isArray(Project.data.bands)) Project.data.bands = [];

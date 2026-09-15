@@ -551,11 +551,19 @@ const CONFIG = (() => {
     if (sb.align === 'both') sb.digits = Math.min(3, sb.digits | 0) || 3;
     if (typeof sb.variable !== 'string' || !sb.variable) sb.variable = 'score';
     if (typeof sb.variable2 !== 'string' || !sb.variable2) sb.variable2 = 'scoreP1';
-    if (sb.logoAlways == null) sb.logoAlways = sb.showLogo !== false;
-    sb.logoAlways = sb.logoAlways !== false;
+    // logo inegociável na plataforma
+    sb.logoAlways = true;
+    sb.showLogo = true;
     sb.logoLines = Math.max(6, Math.min(16, sb.logoLines | 0) || 10);
     sb.enabled = sb.position !== 'none';
-    sb.showLogo = sb.logoAlways;
+    // nomes canônicos reservados
+    if (sb.align === 'both') {
+      sb.variable = 'scoreP0';
+      sb.variable2 = 'scoreP1';
+    } else {
+      sb.variable = 'scoreP0';
+      sb.variable2 = 'scoreP1';
+    }
     return sb;
   }
 
@@ -588,6 +596,9 @@ const CONFIG = (() => {
       Project.data._profileMigrated = true;
     }
         normalizeScoreBar(Project.data);
+    if (typeof Project !== 'undefined' && Project.syncNativeVariables) {
+      Project.syncNativeVariables();
+    }
     return Project.data;
   }
 
@@ -778,11 +789,11 @@ const CONFIG = (() => {
                 <option value="6" ${sb.digits === 6 ? 'selected' : ''}>6</option>
               </select>
             </label>
-            <label>Variável
-              <input id="cfgScoreVar" type="text" value="${escapeAttr(sb.variable || 'score')}" ${sb.position === 'none' ? 'disabled' : ''} />
+            <label>Variável placar
+              <input type="text" value="scoreP0" readonly disabled title="Palavra reservada (nativa)" />
             </label>
             <label style="${sb.align === 'both' && sb.position !== 'none' ? '' : 'opacity:0.4'}">Variável P2
-              <input id="cfgScoreVar2" type="text" value="${escapeAttr(sb.variable2 || 'scoreP1')}" ${sb.align === 'both' && sb.position !== 'none' ? '' : 'disabled'} />
+              <input type="text" value="scoreP1" readonly disabled title="Palavra reservada (nativa)" />
             </label>
             <label>Altura do placar (scanlines)
               <input id="cfgScoreLines" type="number" min="8" max="32" value="${sb.lines | 0}" ${sb.position === 'none' ? 'disabled' : ''} />
@@ -793,17 +804,16 @@ const CONFIG = (() => {
             </label>
           </div>
           <div style="margin-top:14px;padding-top:12px;border-top:1px solid #333">
-            <div style="font-size:11px;color:#f4a261;font-weight:700;margin-bottom:8px">LOGO (sempre no rodapé)</div>
-            <label class="cfg-opt" style="flex-direction:row;align-items:center;gap:8px">
-              <input type="checkbox" id="cfgLogoAlways" ${sb.logoAlways ? 'checked' : ''}/>
-              Mostrar logo RETROCOMPILER nas últimas scanlines
-            </label>
-            <label style="margin-top:8px;max-width:160px">Linhas do logo
-              <input id="cfgLogoLines" type="number" min="6" max="16" value="${sb.logoLines | 0}" ${sb.logoAlways ? '' : 'disabled'} />
+            <div style="font-size:11px;color:#f4a261;font-weight:700;margin-bottom:8px">LOGO (obrigatório)</div>
+            <p style="margin:0 0 8px;font-size:12px;color:#8dcea0">
+              RETROCOMPILER nas últimas scanlines — presente em <b>todos</b> os jogos gerados pela plataforma.
+            </p>
+            <label style="max-width:160px">Linhas do logo
+              <input id="cfgLogoLines" type="number" min="6" max="16" value="${sb.logoLines | 0}" />
             </label>
             <p style="margin:8px 0 0;font-size:11px;color:#666;line-height:1.4">
               Ordem no frame: [placar top?] → jogo → [placar bottom?] → logo → overscan.
-              O build implementa isso antes dos kernels de estilo.
+              Variáveis nativas (<code>scoreP0</code>/<code>scoreP1</code>, etc.) são criadas conforme o setup.
             </p>
           </div>
         </div>
@@ -962,14 +972,6 @@ const CONFIG = (() => {
       normalizeScoreBar(d);
       dirty();
     });
-    document.getElementById('cfgScoreVar')?.addEventListener('change', (e) => {
-      ensureData().scoreBar.variable = (e.target.value || 'score').trim() || 'score';
-      dirty();
-    });
-    document.getElementById('cfgScoreVar2')?.addEventListener('change', (e) => {
-      ensureData().scoreBar.variable2 = (e.target.value || 'scoreP1').trim() || 'scoreP1';
-      dirty();
-    });
     document.getElementById('cfgScoreLines')?.addEventListener('change', (e) => {
       let v = parseInt(e.target.value, 10) || 16;
       v = Math.max(8, Math.min(32, v));
@@ -980,14 +982,6 @@ const CONFIG = (() => {
     document.getElementById('cfgScoreBg')?.addEventListener('change', (e) => {
       ensureData().scoreBar.background = !!e.target.checked;
       dirty();
-    });
-    document.getElementById('cfgLogoAlways')?.addEventListener('change', (e) => {
-      const d = ensureData();
-      d.scoreBar.logoAlways = !!e.target.checked;
-      d.scoreBar.showLogo = d.scoreBar.logoAlways;
-      normalizeScoreBar(d);
-      dirty();
-      buildHTML();
     });
     document.getElementById('cfgLogoLines')?.addEventListener('change', (e) => {
       let v = parseInt(e.target.value, 10) || 10;
@@ -1094,6 +1088,10 @@ const CONFIG = (() => {
   }
 
   function dirty() {
+    if (typeof Project !== 'undefined' && Project.syncNativeVariables) {
+      try { Project.syncNativeVariables(); } catch (e) {}
+    }
+
     if (typeof Project.status === 'function') {
       Project.status('config alterada — salve o projeto');
     }
