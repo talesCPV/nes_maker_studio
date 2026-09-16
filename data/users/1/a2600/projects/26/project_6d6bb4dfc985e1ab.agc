@@ -91,7 +91,7 @@
     "scoreBar": {
         "enabled": true,
         "lines": 16,
-        "digits": 2,
+        "digits": 3,
         "variable": "scoreP0",
         "showLogo": true,
         "previewValue": 0,
@@ -101,7 +101,9 @@
         "variable2": "scoreP1",
         "logoAlways": true,
         "logoLines": 10,
-        "delay": 6
+        "delay": 7,
+        "players": 1,
+        "labelPlayers": false
     },
     "_profileMigrated": true,
     "ruleTabs": [
@@ -181,5 +183,5 @@
     "programMeta": {
         "notes": ""
     },
-    "updated": 1789566982339
+    "updated": 1789585163490
 }

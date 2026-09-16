@@ -34,13 +34,20 @@ final class AgcBuilder
             $scorePos = 'none';
         }
         $scoreEnabled = $scorePos !== 'none';
-        $scoreAlign = 'left'; // placar fixo à esquerda
-        $scoreDelay = (int)($scoreBar['delay'] ?? 4);
-        if ($scoreDelay < 4) $scoreDelay = 4;
-        if ($scoreDelay > 6) $scoreDelay = 6;
+        $scoreAlign = 'left';
+        $scorePlayers = max(1, min(2, (int)($scoreBar['players'] ?? 1)));
+        $digits = max(2, min(3, (int)($scoreBar['digits'] ?? 2)));
+        $labelPlayers = !empty($scoreBar['labelPlayers']) && $digits === 3;
+        $scoreDelay = (int)($scoreBar['delay'] ?? ($digits >= 3 ? 7 : 4));
+        if ($digits >= 3) {
+            $scoreDelay = 7;
+        } else {
+            if (!in_array($scoreDelay, [4, 8, 12], true)) {
+                $scoreDelay = 4;
+            }
+        }
         $scoreBg = ($scoreBar['background'] ?? true) !== false;
-        $digits = max(2, min(3, (int)($scoreBar['digits'] ?? 3))); // 2 ou 3 por enquanto
-        $showLogo = true; // plataforma: sempre
+        $showLogo = true;
         $logoLines = max(6, min(16, (int)($scoreBar['logoLines'] ?? 10)));
         $scoreVar = 'scoreP0';
         $scoreVar2 = 'scoreP1';
@@ -48,7 +55,11 @@ final class AgcBuilder
         $scanlines = $tv === 'PAL' ? 242 : 192;
         $vblank = $tv === 'PAL' ? 48 : 40;
         $overscan = $tv === 'PAL' ? 36 : 30;
-        $scoreLines = $scoreEnabled ? max(8, min(32, (int)($scoreBar['lines'] ?? 16))) : 0;
+        $glyphH = self::digitGlyphHeight();
+        $bandH = max($glyphH + 4, (int)($scoreBar['lines'] ?? ($glyphH + 6)));
+        $bandH = max(8, min(20, $bandH));
+        $scoreLines = $scoreEnabled ? ($bandH * $scorePlayers) : 0;
+        $scoreLines = min(40, $scoreLines);
         // playfield útil = total − placar − logo (logo sempre)
         $playLines = max(1, $scanlines - $scoreLines - $logoLines);
 
@@ -284,7 +295,7 @@ final class AgcBuilder
         $asm[] = '    rts';
         $asm[] = '';
         if ($scoreEnabled) {
-            $asm[] = self::scoreBandRoutine($digits, $scoreAlign, $scoreBg, $scoreLines, $scoreDelay);
+            $asm[] = self::scoreBandRoutine($digits, $scoreBg, $scoreLines, $scoreDelay, $scorePlayers, $labelPlayers);
         }
         $asm[] = self::logoRoutine($logoLines);
         $asm[] = self::digitGlyphs();
@@ -668,11 +679,16 @@ ASM;
             if ($id !== '') {
                 $byId[$id] = $g;
             }
-            $ch = strtoupper((string)($g['char'] ?? $g['name'] ?? ''));
+            $ch = strtoupper((string)($g['char'] ?? ''));
             if (strlen($ch) === 1) {
                 $byChar[$ch] = $g;
             } elseif ($id === 'logo_mark') {
                 $byChar['R'] = $g;
+            }
+            $nm = strtoupper(trim((string)($g['name'] ?? '')));
+            if ($nm === '1P' || $nm === '2P') {
+                $byId['label_' . strtolower($nm)] = $g;
+                $byChar[$nm] = $g;
             }
         }
         $cache = ['glyphs' => $glyphs, 'byId' => $byId, 'byChar' => $byChar];
@@ -715,23 +731,34 @@ ASM;
     }
 
 
-    private static function scoreBandRoutine(int $digits, string $align, bool $background, int $scoreLines, int $delay = 4): string
-    {
-        // Placar à esquerda (delay 4–6). 2 dígitos: P0+P1. 3 dígitos: P0 NUSIZ×2 + P1 no meio.
+    private static function scoreBandRoutine(
+        int $digits,
+        bool $background,
+        int $scoreLines,
+        int $delay,
+        int $players = 1,
+        bool $labelPlayers = false
+    ): string {
+        // 2 dig: delay 4/8/12. 3 dig: delay 7 + NUSIZ.
+        // labelPlayers: Dig3 = 1P/2P (idx 10/11), valor 0-99 em Dig4/Dig5.
+        // 2 players: duas faixas empilhadas.
         $digitRows = self::digitGlyphHeight();
         $h = $digitRows;
-        $lines = $h;
-        if ($scoreLines > $h) {
-            $lines = min(32, $scoreLines);
-        }
-        $pad = max(0, (int)(($lines - $h) / 2));
-        $bot = max(0, $lines - $pad - $h);
+        $players = max(1, min(2, $players));
         $digits = max(2, min(3, $digits));
-        $delay = max(4, min(6, $delay));
         $three = ($digits >= 3);
-
+        $labelPlayers = $labelPlayers && $three;
+        if ($three) {
+            $delay = 7;
+        } elseif (!in_array($delay, [4, 8, 12], true)) {
+            $delay = 4;
+        }
+        $bandBudget = max($h + 2, (int)floor($scoreLines / max(1, $players)));
+        $pad = max(0, (int)(($bandBudget - $h) / 2));
+        $bot = max(0, $bandBudget - $pad - $h);
         $out = [];
-        $out[] = '; --- Score band left delay=' . $delay . ' digits=' . $digits . ' ---';
+        $out[] = '; --- Score players=' . $players . ' digits=' . $digits
+            . ' delay=' . $delay . ' label=' . ($labelPlayers ? '1' : '0') . ' ---';
         $out[] = 'DrawScoreBand:';
         $out[] = '    lda #0';
         $out[] = '    sta PF0';
@@ -746,7 +773,7 @@ ASM;
         $out[] = '    sta VDELP0';
         $out[] = '    sta VDELP1';
         if ($three) {
-            $out[] = '    lda #1                  ; P0: 2 cópias close (0 e +16)';
+            $out[] = '    lda #1                  ; P0: 2 copias close';
             $out[] = '    sta NUSIZ0';
             $out[] = '    lda #0';
             $out[] = '    sta NUSIZ1';
@@ -757,17 +784,39 @@ ASM;
         $out[] = '    lda #$0E';
         $out[] = '    sta COLUP0';
         $out[] = '    sta COLUP1';
-
-        $out[] = '    jsr ScoreToDigits0';
-
+        $out[] = '    ; --- faixa scoreP0 ---';
+        if ($labelPlayers) {
+            $out[] = '    lda #10                 ; glifo 1P';
+            $out[] = '    sta Dig3';
+            $out[] = '    jsr ScoreToDigits0Val';
+        } else {
+            $out[] = '    jsr ScoreToDigits0';
+        }
+        $out[] = '    jsr ScoreDrawOne';
+        if ($players >= 2) {
+            $out[] = '    ; --- faixa scoreP1 ---';
+            if ($labelPlayers) {
+                $out[] = '    lda #11                 ; glifo 2P';
+                $out[] = '    sta Dig3';
+                $out[] = '    jsr ScoreToDigits1Val';
+            } else {
+                $out[] = '    jsr ScoreToDigits1';
+            }
+            $out[] = '    jsr ScoreDrawOne';
+        }
+        $out[] = '    lda #0';
+        $out[] = '    sta GRP0';
+        $out[] = '    sta GRP1';
+        $out[] = '    rts';
+        $out[] = '';
+        $out[] = 'ScoreDrawOne:';
         $out[] = '    sta WSYNC';
-        $out[] = '    ldx #' . sprintf('%02d', $delay);
+        $out[] = '    ldx #' . $delay;
         $out[] = 'ScPos0:';
         $out[] = '    dex';
         $out[] = '    bne ScPos0';
         $out[] = '    sta RESP0';
         if ($three) {
-            // 1 nop → P1 entre as duas cópias do P0
             $out[] = '    nop';
             $out[] = '    sta RESP1';
         } else {
@@ -780,7 +829,6 @@ ASM;
         $out[] = '    sta HMOVE';
         $out[] = '    sta WSYNC';
         $out[] = '    sta HMCLR';
-
         if ($pad > 0) {
             $out[] = '    ldx #' . $pad;
             $out[] = 'ScPadT:';
@@ -795,9 +843,6 @@ ASM;
             $out[] = '    dex';
             $out[] = '    bne ScPadT';
         }
-
-        // Strip por linha
-        $stride = $three ? 3 : 2;
         $out[] = '    ldy #0';
         $out[] = 'ScBuild:';
         $out[] = '    sty ScRow';
@@ -806,7 +851,7 @@ ASM;
             $out[] = '    sta TmpA';
             $out[] = '    asl';
             $out[] = '    clc';
-            $out[] = '    adc TmpA                ; *3';
+            $out[] = '    adc TmpA';
             $out[] = '    sta ScIdx';
             $out[] = '    lda Dig3';
             $out[] = '    jsr GlyphRow';
@@ -842,7 +887,6 @@ ASM;
         $out[] = '    iny';
         $out[] = '    cpy #' . $h;
         $out[] = '    bcc ScBuild';
-
         $out[] = '    ldy #0';
         $out[] = 'ScDigRows:';
         $out[] = '    sta WSYNC';
@@ -857,13 +901,13 @@ ASM;
             $out[] = '    clc';
             $out[] = '    adc TmpA';
             $out[] = '    tax';
-            $out[] = '    lda ScStrip,x           ; centena → 1ª cópia P0';
+            $out[] = '    lda ScStrip,x';
             $out[] = '    sta GRP0';
             $out[] = '    inx';
-            $out[] = '    lda ScStrip,x           ; dezena → P1';
+            $out[] = '    lda ScStrip,x';
             $out[] = '    sta GRP1';
             $out[] = '    inx';
-            $out[] = '    lda ScStrip,x           ; unidade → 2ª cópia P0';
+            $out[] = '    lda ScStrip,x';
             $out[] = '    sta GRP0';
         } else {
             $out[] = '    tya';
@@ -881,7 +925,6 @@ ASM;
         $out[] = '    lda #0';
         $out[] = '    sta GRP0';
         $out[] = '    sta GRP1';
-
         if ($bot > 0) {
             $out[] = '    ldx #' . $bot;
             $out[] = 'ScPadB:';
@@ -898,7 +941,6 @@ ASM;
         }
         $out[] = '    rts';
         $out[] = '';
-
         $out[] = 'GlyphRow:';
         $out[] = '    sta Temp';
         $out[] = '    lda #0';
@@ -920,7 +962,6 @@ ASM;
         $out[] = '    lda DigitGfx,x';
         $out[] = '    rts';
         $out[] = '';
-
         $out[] = 'ScoreToDigits0:';
         $out[] = '    lda #0';
         $out[] = '    sta Dig3';
@@ -951,7 +992,86 @@ ASM;
         $out[] = '    sta Dig5';
         $out[] = '    rts';
         $out[] = '';
-
+        $out[] = 'ScoreToDigits0Val:';
+        $out[] = '    lda #0';
+        $out[] = '    sta Dig4';
+        $out[] = '    sta Dig5';
+        $out[] = '    lda ScoreP0';
+        $out[] = '    sta Temp';
+        $out[] = 'S0V_T:';
+        $out[] = '    lda Temp';
+        $out[] = '    cmp #10';
+        $out[] = '    bcc S0V_U';
+        $out[] = '    sec';
+        $out[] = '    sbc #10';
+        $out[] = '    sta Temp';
+        $out[] = '    inc Dig4';
+        $out[] = '    lda Dig4';
+        $out[] = '    cmp #10';
+        $out[] = '    bcc S0V_T';
+        $out[] = '    lda #0';
+        $out[] = '    sta Dig4';
+        $out[] = '    jmp S0V_T';
+        $out[] = 'S0V_U:';
+        $out[] = '    lda Temp';
+        $out[] = '    sta Dig5';
+        $out[] = '    rts';
+        $out[] = '';
+        $out[] = 'ScoreToDigits1:';
+        $out[] = '    lda #0';
+        $out[] = '    sta Dig3';
+        $out[] = '    sta Dig4';
+        $out[] = '    sta Dig5';
+        $out[] = '    lda ScoreP1';
+        $out[] = '    sta Temp';
+        $out[] = 'S1H:';
+        $out[] = '    lda Temp';
+        $out[] = '    cmp #100';
+        $out[] = '    bcc S1T';
+        $out[] = '    sec';
+        $out[] = '    sbc #100';
+        $out[] = '    sta Temp';
+        $out[] = '    inc Dig3';
+        $out[] = '    jmp S1H';
+        $out[] = 'S1T:';
+        $out[] = '    lda Temp';
+        $out[] = '    cmp #10';
+        $out[] = '    bcc S1U';
+        $out[] = '    sec';
+        $out[] = '    sbc #10';
+        $out[] = '    sta Temp';
+        $out[] = '    inc Dig4';
+        $out[] = '    jmp S1T';
+        $out[] = 'S1U:';
+        $out[] = '    lda Temp';
+        $out[] = '    sta Dig5';
+        $out[] = '    rts';
+        $out[] = '';
+        $out[] = 'ScoreToDigits1Val:';
+        $out[] = '    lda #0';
+        $out[] = '    sta Dig4';
+        $out[] = '    sta Dig5';
+        $out[] = '    lda ScoreP1';
+        $out[] = '    sta Temp';
+        $out[] = 'S1V_T:';
+        $out[] = '    lda Temp';
+        $out[] = '    cmp #10';
+        $out[] = '    bcc S1V_U';
+        $out[] = '    sec';
+        $out[] = '    sbc #10';
+        $out[] = '    sta Temp';
+        $out[] = '    inc Dig4';
+        $out[] = '    lda Dig4';
+        $out[] = '    cmp #10';
+        $out[] = '    bcc S1V_T';
+        $out[] = '    lda #0';
+        $out[] = '    sta Dig4';
+        $out[] = '    jmp S1V_T';
+        $out[] = 'S1V_U:';
+        $out[] = '    lda Temp';
+        $out[] = '    sta Dig5';
+        $out[] = '    rts';
+        $out[] = '';
         return implode("\n", $out);
     }
 
@@ -1004,12 +1124,23 @@ ASM;
         for ($d = 0; $d <= 9; $d++) {
             $g = $bank['byId']['digit_' . $d] ?? $bank['byChar'][(string)$d] ?? null;
             $bytes = $g ? self::glyphToBytes($g) : array_fill(0, $h, 0);
-            // normaliza altura
             while (count($bytes) < $h) {
                 $bytes[] = 0;
             }
             $bytes = array_slice($bytes, 0, $h);
             $lines[] = 'Digit' . $d . ':';
+            foreach ($bytes as $b) {
+                $lines[] = '    .byte %' . str_pad(decbin($b & 0xff), 8, '0', STR_PAD_LEFT);
+            }
+        }
+        foreach ([['label_1p', '1P', 'Label1P'], ['label_2p', '2P', 'Label2P']] as $lab) {
+            $g = $bank['byId'][$lab[0]] ?? $bank['byChar'][$lab[1]] ?? null;
+            $bytes = $g ? self::glyphToBytes($g) : array_fill(0, $h, 0);
+            while (count($bytes) < $h) {
+                $bytes[] = 0;
+            }
+            $bytes = array_slice($bytes, 0, $h);
+            $lines[] = $lab[2] . ':';
             foreach ($bytes as $b) {
                 $lines[] = '    .byte %' . str_pad(decbin($b & 0xff), 8, '0', STR_PAD_LEFT);
             }

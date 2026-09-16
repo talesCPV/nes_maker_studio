@@ -247,7 +247,7 @@ SetHXDiv:
     sta RESP0,x             ; RESP0 ou RESP1
     rts
 
-; --- Score players=1 digits=3 delay=7 label=0 ---
+; --- Score band left delay=6 digits=2 ---
 DrawScoreBand:
     lda #0
     sta PF0
@@ -261,28 +261,17 @@ DrawScoreBand:
     sta ENABL
     sta VDELP0
     sta VDELP1
-    lda #1                  ; P0: 2 copias close
     sta NUSIZ0
-    lda #0
     sta NUSIZ1
     lda #$0E
     sta COLUP0
     sta COLUP1
-    ; --- faixa scoreP0 ---
     jsr ScoreToDigits0
-    jsr ScoreDrawOne
-    lda #0
-    sta GRP0
-    sta GRP1
-    rts
-
-ScoreDrawOne:
     sta WSYNC
-    ldx #7
+    ldx #12  ; #4 esq, #8 centro, #12 dir
 ScPos0:
     dex
     bne ScPos0
-    nop
     sta RESP0
     sta RESP1
     lda #0
@@ -306,17 +295,8 @@ ScPadT:
 ScBuild:
     sty ScRow
     tya
-    sta TmpA
     asl
-    clc
-    adc TmpA
     sta ScIdx
-    lda Dig3
-    jsr GlyphRow
-    ldx ScIdx
-    sta ScStrip,x
-    inx
-    stx ScIdx
     lda Dig4
     jsr GlyphRow
     ldx ScIdx
@@ -336,19 +316,13 @@ ScDigRows:
     lda #0
     sta COLUBK
     tya
-    sta TmpA
     asl
-    clc
-    adc TmpA
     tax
     lda ScStrip,x
     sta GRP0
     inx
     lda ScStrip,x
     sta GRP1
-    inx
-    lda ScStrip,x
-    sta GRP0
     iny
     cpy #6
     bcc ScDigRows
@@ -418,86 +392,6 @@ S0U:
     sta Dig5
     rts
 
-ScoreToDigits0Val:
-    lda #0
-    sta Dig4
-    sta Dig5
-    lda ScoreP0
-    sta Temp
-S0V_T:
-    lda Temp
-    cmp #10
-    bcc S0V_U
-    sec
-    sbc #10
-    sta Temp
-    inc Dig4
-    lda Dig4
-    cmp #10
-    bcc S0V_T
-    lda #0
-    sta Dig4
-    jmp S0V_T
-S0V_U:
-    lda Temp
-    sta Dig5
-    rts
-
-ScoreToDigits1:
-    lda #0
-    sta Dig3
-    sta Dig4
-    sta Dig5
-    lda ScoreP1
-    sta Temp
-S1H:
-    lda Temp
-    cmp #100
-    bcc S1T
-    sec
-    sbc #100
-    sta Temp
-    inc Dig3
-    jmp S1H
-S1T:
-    lda Temp
-    cmp #10
-    bcc S1U
-    sec
-    sbc #10
-    sta Temp
-    inc Dig4
-    jmp S1T
-S1U:
-    lda Temp
-    sta Dig5
-    rts
-
-ScoreToDigits1Val:
-    lda #0
-    sta Dig4
-    sta Dig5
-    lda ScoreP1
-    sta Temp
-S1V_T:
-    lda Temp
-    cmp #10
-    bcc S1V_U
-    sec
-    sbc #10
-    sta Temp
-    inc Dig4
-    lda Dig4
-    cmp #10
-    bcc S1V_T
-    lda #0
-    sta Dig4
-    jmp S1V_T
-S1V_U:
-    lda Temp
-    sta Dig5
-    rts
-
 ; --- Logo RETROCOMPILER (glifos.json → PF) ---
 DrawLogo:
     lda #0
@@ -546,10 +440,10 @@ Digit1:
     .byte %11100000
     .byte %00000000
 Digit2:
+    .byte %11100000
+    .byte %00010000
     .byte %01100000
-    .byte %10010000
-    .byte %00100000
-    .byte %01000000
+    .byte %10000000
     .byte %11110000
     .byte %00000000
 Digit3:
@@ -601,20 +495,6 @@ Digit9:
     .byte %00010000
     .byte %01100000
     .byte %00000000
-Label1P:
-    .byte %01001100
-    .byte %11001010
-    .byte %01001100
-    .byte %01001000
-    .byte %11101000
-    .byte %00000000
-Label2P:
-    .byte %01100110
-    .byte %10010101
-    .byte %00100110
-    .byte %01000100
-    .byte %11110100
-    .byte %00000000
 
 LogoPF0:
     .byte %11100000
@@ -623,32 +503,32 @@ LogoPF0:
     .byte %10100000
     .byte %00100000
     .byte %00000000
-    .byte %11100000
+    .byte %11000000
     .byte %00100000
-    .byte %11100000
-    .byte %10100000
+    .byte %00100000
+    .byte %00100000
 LogoPF1:
-    .byte %00111000
-    .byte %10100100
-    .byte %00111000
-    .byte %00101000
-    .byte %10100100
+    .byte %00111011
+    .byte %10100001
+    .byte %00110001
+    .byte %00100001
+    .byte %10111001
     .byte %00000000
-    .byte %00000000
-    .byte %10000000
-    .byte %00000000
-    .byte %00000000
+    .byte %00110110
+    .byte %11001101
+    .byte %01001101
+    .byte %11001100
 LogoPF2:
+    .byte %00011101
+    .byte %10100100
+    .byte %10011100
+    .byte %10010100
+    .byte %00100100
     .byte %00000000
-    .byte %00000000
-    .byte %00000000
-    .byte %00000000
-    .byte %00000000
-    .byte %00000000
-    .byte %00000000
-    .byte %00000000
-    .byte %00000000
-    .byte %00000000
+    .byte %11011111
+    .byte %11100110
+    .byte %11011110
+    .byte %11000110
 
 ; Playfield tables (por scanline)
 PF0Data:

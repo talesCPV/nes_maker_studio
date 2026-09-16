@@ -544,13 +544,16 @@ const CONFIG = (() => {
     }
     if (!['none', 'top', 'bottom'].includes(sb.position)) sb.position = 'none';
     sb.align = 'left';
+    sb.players = Math.max(1, Math.min(2, sb.players | 0) || 1);
+    sb.digits = Math.max(2, Math.min(3, sb.digits | 0) || 2);
+    sb.labelPlayers = !!sb.labelPlayers && sb.digits === 3;
     let del = sb.delay | 0;
-    if (del < 4 || del > 6) del = 4;
+    if (sb.digits >= 3) del = 7;
+    else if (![4, 8, 12].includes(del)) del = 4;
     sb.delay = del;
     if (sb.background == null) sb.background = true;
     sb.background = !!sb.background;
-    sb.lines = Math.max(8, Math.min(32, sb.lines | 0) || 16);
-    sb.digits = Math.max(2, Math.min(3, sb.digits | 0) || 3);
+    sb.lines = Math.max(8, Math.min(20, sb.lines | 0) || 12);
     if (typeof sb.variable !== 'string' || !sb.variable) sb.variable = 'score';
     if (typeof sb.variable2 !== 'string' || !sb.variable2) sb.variable2 = 'scoreP1';
     // logo inegociável na plataforma
@@ -775,24 +778,35 @@ const CONFIG = (() => {
                 <option value="bottom" ${sb.position === 'bottom' ? 'selected' : ''}>Base (acima do logo)</option>
               </select>
             </label>
-            <label>Posição X (atraso 4–6)
-              <select id="cfgScoreDelay" ${sb.position === 'none' ? 'disabled' : ''}>
-                <option value="4" ${(sb.delay|0) === 4 ? 'selected' : ''}>4 — mais à esquerda</option>
-                <option value="5" ${(sb.delay|0) === 5 ? 'selected' : ''}>5</option>
-                <option value="6" ${(sb.delay|0) === 6 ? 'selected' : ''}>6 — um pouco à direita</option>
+                        <label>Jogadores
+              <select id="cfgScorePlayers" ${sb.position === 'none' ? 'disabled' : ''}>
+                <option value="1" ${(sb.players|0) !== 2 ? 'selected' : ''}>1</option>
+                <option value="2" ${(sb.players|0) === 2 ? 'selected' : ''}>2 (faixas empilhadas)</option>
               </select>
             </label>
             <label>Dígitos
               <select id="cfgScoreDigits" ${sb.position === 'none' ? 'disabled' : ''}>
-                <option value="2" ${sb.digits === 2 ? 'selected' : ''}>2</option>
+                <option value="2" ${sb.digits === 2 ? 'selected' : ''}>2 (valor 0–99)</option>
                 <option value="3" ${sb.digits === 3 ? 'selected' : ''}>3</option>
               </select>
             </label>
-            <label>Altura (scanlines)
-              <input id="cfgScoreLines" type="number" min="8" max="32" value="${sb.lines | 0}" ${sb.position === 'none' ? 'disabled' : ''} />
+            <label>Posição X ${sb.digits === 3 ? '(fixo #7)' : ''}
+              <select id="cfgScoreDelay" ${sb.position === 'none' || sb.digits === 3 ? 'disabled' : ''}>
+                <option value="4" ${(sb.delay|0) === 4 ? 'selected' : ''}>4 — esquerda</option>
+                <option value="8" ${(sb.delay|0) === 8 ? 'selected' : ''}>8 — centro</option>
+                <option value="12" ${(sb.delay|0) === 12 ? 'selected' : ''}>12 — direita</option>
+                <option value="7" ${(sb.delay|0) === 7 ? 'selected' : ''}>7 — 3 dígitos</option>
+              </select>
             </label>
-            <label>Variável placar
-              <input type="text" value="scoreP0" readonly disabled title="Palavra reservada (nativa)" />
+            <label class="cfg-opt" style="flex-direction:row;align-items:center;gap:8px;${sb.digits === 3 ? '' : 'opacity:.45'}">
+              <input type="checkbox" id="cfgScoreLabel" ${sb.labelPlayers ? 'checked' : ''} ${sb.position === 'none' || sb.digits !== 3 ? 'disabled' : ''}/>
+              Nomear player (1P/2P na centena, valor 0–99)
+            </label>
+            <label>Altura por faixa (scanlines)
+              <input id="cfgScoreLines" type="number" min="8" max="20" value="${sb.lines | 0}" ${sb.position === 'none' ? 'disabled' : ''} />
+            </label>
+            <label>Variáveis
+              <input type="text" value="${(sb.players|0) === 2 ? 'scoreP0 + scoreP1' : 'scoreP0'}" readonly disabled />
             </label>
             <label class="cfg-opt" style="flex-direction:row;align-items:center;gap:8px;margin-top:8px">
               <input type="checkbox" id="cfgScoreBg" ${sb.background ? 'checked' : ''} ${sb.position === 'none' ? 'disabled' : ''}/>
@@ -960,11 +974,28 @@ const CONFIG = (() => {
       normalizeScoreBar(d2);
       dirty();
     });
-    document.getElementById('cfgScoreDigits')?.addEventListener('change', (e) => {
+
+    document.getElementById('cfgScorePlayers')?.addEventListener('change', (e) => {
       const d2 = ensureData();
-      d2.scoreBar.digits = parseInt(e.target.value, 10) || 3;
+      d2.scoreBar.players = parseInt(e.target.value, 10) || 1;
       normalizeScoreBar(d2);
       dirty();
+      buildHTML();
+    });
+    document.getElementById('cfgScoreLabel')?.addEventListener('change', (e) => {
+      const d2 = ensureData();
+      d2.scoreBar.labelPlayers = !!e.target.checked;
+      normalizeScoreBar(d2);
+      dirty();
+    });
+    document.getElementById('cfgScoreDigits')?.addEventListener('change', (e) => {
+      const d2 = ensureData();
+      d2.scoreBar.digits = parseInt(e.target.value, 10) || 2;
+      if (d2.scoreBar.digits !== 3) d2.scoreBar.labelPlayers = false;
+      if (d2.scoreBar.digits === 3) d2.scoreBar.delay = 7;
+      normalizeScoreBar(d2);
+      dirty();
+      buildHTML();
     });
     document.getElementById('cfgScoreLines')?.addEventListener('change', (e) => {
       let v = parseInt(e.target.value, 10) || 16;
