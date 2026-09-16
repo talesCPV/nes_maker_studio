@@ -7,6 +7,15 @@ echo
 if [[ $REPLY =~ ^[Yy]$ ]]
 then
 
+    # Nome do seu arquivo PHP (ajuste o caminho se necessário)
+    ARQUIVO_PHP="backend/config/database.php"
+    SENHA_REAL="TESTE_123"
+
+    # Substitui o valor da constante por *******
+    sed -i -E "s/(const DB_PASSWORD = ')[^']*(')/\1*******\2/g" "$ARQUIVO_PHP"
+    sed -i -E 's/(const DB_PASSWORD = ")[^"]*(")/\1*******\2/g' "$ARQUIVO_PHP"
+
+
     cp ~/Documentos/SQL/nes_maker_studio/*.sql sql/
 
     git init
@@ -31,5 +40,15 @@ then
     git remote set-url origin git@github.com:talesCPV/nes_maker_studio.git
 
     git push -u -f origin main
+
+
+    awk -v senha="$SENHA_REAL" '{
+        if ($0 ~ /const DB_PASSWORD =/) {
+            sub(/=.*/, "= \x27" senha "\x27;", $0)
+        }
+        print
+    }' "$ARQUIVO_PHP" > temp.php && mv temp.php "$ARQUIVO_PHP"
+
+
 
 fi

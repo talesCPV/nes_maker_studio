@@ -5,7 +5,7 @@ const DB_HOST = '143.95.166.26';
 const DB_PORT = '3306';
 const DB_NAME = 'NGC';
 const DB_USER = 'master';
-const DB_PASSWORD = '****';
+const DB_PASSWORD = '*******';
 
 
 function db(): PDO
