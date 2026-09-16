@@ -64,7 +64,7 @@
             "name": "scoreP0",
             "type": "byte",
             "note": "Placar (nativa)",
-            "value": 0,
+            "value": 12,
             "native": true
         }
     ],
@@ -90,13 +90,13 @@
     "bands": [],
     "scoreBar": {
         "enabled": true,
-        "lines": 10,
+        "lines": 15,
         "digits": 3,
         "variable": "scoreP0",
         "showLogo": true,
         "previewValue": 0,
         "position": "top",
-        "align": "left",
+        "align": "center",
         "background": true,
         "variable2": "scoreP1",
         "logoAlways": true,
@@ -180,5 +180,5 @@
     "programMeta": {
         "notes": ""
     },
-    "updated": 1789505047671
+    "updated": 1789509077885
 }

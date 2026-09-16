@@ -543,17 +543,18 @@ const CONFIG = (() => {
       else sb.position = 'none';
     }
     if (!['none', 'top', 'bottom'].includes(sb.position)) sb.position = 'none';
-    if (!['left', 'center', 'right', 'both'].includes(sb.align)) sb.align = 'center';
+    sb.align = 'center'; // fixo — UI não oferece mais left/right/both
     if (sb.background == null) sb.background = true;
     sb.background = !!sb.background;
     sb.lines = Math.max(8, Math.min(32, sb.lines | 0) || 16);
-    sb.digits = Math.max(2, Math.min(6, sb.digits | 0) || 6);
+    sb.digits = 3; // fixo 3 dígitos centrados
     if (sb.align === 'both') sb.digits = Math.min(3, sb.digits | 0) || 3;
     if (typeof sb.variable !== 'string' || !sb.variable) sb.variable = 'score';
     if (typeof sb.variable2 !== 'string' || !sb.variable2) sb.variable2 = 'scoreP1';
     // logo inegociável na plataforma
     sb.logoAlways = true;
     sb.showLogo = true;
+    sb.lines = Math.max(5, Math.min(16, sb.lines | 0) || 5); // mínimo ≈ altura glifo
     sb.logoLines = Math.max(6, Math.min(16, sb.logoLines | 0) || 10);
     sb.enabled = sb.position !== 'none';
     // nomes canônicos reservados
@@ -772,31 +773,8 @@ const CONFIG = (() => {
                 <option value="bottom" ${sb.position === 'bottom' ? 'selected' : ''}>Base (acima do logo)</option>
               </select>
             </label>
-            <label>Alinhamento
-              <select id="cfgScoreAlign" ${sb.position === 'none' ? 'disabled' : ''}>
-                <option value="left" ${sb.align === 'left' ? 'selected' : ''}>Esquerda</option>
-                <option value="center" ${sb.align === 'center' ? 'selected' : ''}>Centro</option>
-                <option value="right" ${sb.align === 'right' ? 'selected' : ''}>Direita</option>
-                <option value="both" ${sb.align === 'both' ? 'selected' : ''}>Both (2P — 3+3 dígitos)</option>
-              </select>
-            </label>
-            <label>Dígitos ${sb.align === 'both' ? '(por lado)' : ''}
-              <select id="cfgScoreDigits" ${sb.position === 'none' ? 'disabled' : ''}>
-                <option value="2" ${sb.digits === 2 ? 'selected' : ''}>2</option>
-                <option value="3" ${sb.digits === 3 ? 'selected' : ''}>3</option>
-                <option value="4" ${sb.digits === 4 ? 'selected' : ''}>4</option>
-                <option value="5" ${sb.digits === 5 ? 'selected' : ''}>5</option>
-                <option value="6" ${sb.digits === 6 ? 'selected' : ''}>6</option>
-              </select>
-            </label>
             <label>Variável placar
               <input type="text" value="scoreP0" readonly disabled title="Palavra reservada (nativa)" />
-            </label>
-            <label style="${sb.align === 'both' && sb.position !== 'none' ? '' : 'opacity:0.4'}">Variável P2
-              <input type="text" value="scoreP1" readonly disabled title="Palavra reservada (nativa)" />
-            </label>
-            <label>Altura do placar (scanlines)
-              <input id="cfgScoreLines" type="number" min="8" max="32" value="${sb.lines | 0}" ${sb.position === 'none' ? 'disabled' : ''} />
             </label>
             <label class="cfg-opt" style="flex-direction:row;align-items:center;gap:8px;margin-top:8px">
               <input type="checkbox" id="cfgScoreBg" ${sb.background ? 'checked' : ''} ${sb.position === 'none' ? 'disabled' : ''}/>
@@ -952,32 +930,13 @@ const CONFIG = (() => {
 
     
     document.getElementById('cfgScorePos')?.addEventListener('change', (e) => {
-      const d = ensureData();
-      d.scoreBar.position = e.target.value;
-      normalizeScoreBar(d);
+      const d2 = ensureData();
+      d2.scoreBar.position = e.target.value;
+      d2.scoreBar.align = 'center';
+      d2.scoreBar.digits = 3;
+      normalizeScoreBar(d2);
       dirty();
       buildHTML();
-    });
-    document.getElementById('cfgScoreAlign')?.addEventListener('change', (e) => {
-      const d = ensureData();
-      d.scoreBar.align = e.target.value;
-      if (e.target.value === 'both') d.scoreBar.digits = Math.min(3, d.scoreBar.digits | 0) || 3;
-      normalizeScoreBar(d);
-      dirty();
-      buildHTML();
-    });
-    document.getElementById('cfgScoreDigits')?.addEventListener('change', (e) => {
-      const d = ensureData();
-      d.scoreBar.digits = parseInt(e.target.value, 10) || 6;
-      normalizeScoreBar(d);
-      dirty();
-    });
-    document.getElementById('cfgScoreLines')?.addEventListener('change', (e) => {
-      let v = parseInt(e.target.value, 10) || 16;
-      v = Math.max(8, Math.min(32, v));
-      ensureData().scoreBar.lines = v;
-      normalizeScoreBar(ensureData());
-      dirty();
     });
     document.getElementById('cfgScoreBg')?.addEventListener('change', (e) => {
       ensureData().scoreBar.background = !!e.target.checked;
