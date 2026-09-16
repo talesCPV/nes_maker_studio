@@ -1,14 +1,16 @@
 ; ============================================================
 ; AGC generated — teste_1
-; TV=NTSC ROM=32768 scoreBar=on
-; P0 spawn=yes P1 spawn=default
+; TV=NTSC ROM=4096 scoreBar=on
+; P0 spawn=default P1 spawn=default
 ; Assembler: DASM (-f3 raw binary)
 ; ============================================================
     processor 6502
 
+; --- TIA (write) ---
 VSYNC   equ $00
 VBLANK  equ $01
 WSYNC   equ $02
+RSYNC   equ $03
 NUSIZ0  equ $04
 NUSIZ1  equ $05
 COLUP0  equ $06
@@ -16,21 +18,64 @@ COLUP1  equ $07
 COLUPF  equ $08
 COLUBK  equ $09
 CTRLPF  equ $0A
-CTRLPF  equ $0A
+REFP0   equ $0B
+REFP1   equ $0C
 PF0     equ $0D
 PF1     equ $0E
 PF2     equ $0F
 RESP0   equ $10
 RESP1   equ $11
+RESM0   equ $12
+RESM1   equ $13
+RESBL   equ $14
+AUDC0   equ $15
+AUDC1   equ $16
+AUDF0   equ $17
+AUDF1   equ $18
+AUDV0   equ $19
+AUDV1   equ $1A
 GRP0    equ $1B
 GRP1    equ $1C
+ENAM0   equ $1D
+ENAM1   equ $1E
+ENABL   equ $1F
+HMP0    equ $20
+HMP1    equ $21
+HMM0    equ $22
+HMM1    equ $23
+HMBL    equ $24
+VDELP0  equ $25
+VDELP1  equ $26
+VDELBL  equ $27
 HMOVE   equ $2A
 HMCLR   equ $2B
 CXCLR   equ $2C
-INTIM   equ $0284
-TIM64T  equ $0296
+; --- TIA (read) ---
+CXM0P   equ $00
+CXM1P   equ $01
+CXP0FB  equ $02
+CXP1FB  equ $03
+CXM0FB  equ $04
+CXM1FB  equ $05
+CXBLPF  equ $06
+CXPPMM  equ $07
+INPT0   equ $08
+INPT1   equ $09
+INPT2   equ $0A
+INPT3   equ $0B
+INPT4   equ $0C
+INPT5   equ $0D
+; --- RIOT ---
 SWCHA   equ $0280
+SWACNT  equ $0281
 SWCHB   equ $0282
+SWBCNT  equ $0283
+INTIM   equ $0284
+TIMINT  equ $0285
+TIM1T   equ $0294
+TIM8T   equ $0295
+TIM64T  equ $0296
+T1024T  equ $0297
 
     ORG $F000
 
@@ -50,38 +95,37 @@ ClearMem:
     sta Score0
     sta Score1
     sta Score2
+    lda #12              ; scoreP0 init (Program → valor)
+    sta ScoreP0
+    lda #0              ; scoreP1 init
+    sta ScoreP1
     sta PrevSWCHA
     sta PrevINPT4
+    sta WalkTick
 
-    lda #0
-    sta U_vidas
-    lda #0
-    sta U_energia
-    lda #0
-    sta U_score
-    lda #0
-    sta U_score+1
-    lda #1
-    sta Tmr_evtimer
-    lda #0
-    sta TFire_evtimer
+    lda #12
+    sta U_scoreP0
     lda #0
     sta FrameDiv
     ; --- regras Boot ---
+    ; rule Regra_1
+    lda #7
+    sta U_scoreP0
+R1_end:
 
     ; Boot spawn positions / heights
-    lda #102
+    lda #40
     sta P0Y
-    lda #16
+    lda #8
     sta P0H
     lda #40
     sta P1Y
-    lda #16
+    lda #8
     sta P1H
-    lda #2
-    sta P0XDelay
-    lda #20
-    sta P1XDelay
+    lda #60
+    sta P0X                 ; color clocks 0-160
+    lda #100
+    sta P1X
     lda #1
     sta P0En
     sta P1En
@@ -105,182 +149,39 @@ WaitVBlank:
     sta WSYNC
     sta VBLANK
 
-    lda #$1C
+    lda #$0E
     sta COLUP0
-    lda #$04
     sta COLUP1
     lda #0
     sta GRP0
     sta GRP1
+    sta PF0
+    sta PF1
+    sta PF2
+    sta NUSIZ0
+    sta NUSIZ1
 
-    lda #0            ; CTRLPF
-    sta CTRLPF
-    lda #$7C
-    sta COLUBK
-    lda #$44
-    sta COLUPF
-    ldy #0
-ASeg0:
-    sta WSYNC
-    lda PF0Data,y
-    sta PF0
-    lda PF1Data,y
-    sta PF1
-    lda PF2Data,y
-    sta PF2
-    lda PF0RData,y
-    sta PF0
-    lda PF1RData,y
-    sta PF1
-    lda PF2RData,y
-    sta PF2
-    lda GRP0Data,y
-    sta GRP0
-    lda GRP1Data,y
-    sta GRP1
-    iny
-    cpy #15
-    bne ASeg0
-ASeg1:
-    sta WSYNC
-    lda COLUBKData,y
-    sta COLUBK
-    lda COLUPFData,y
-    sta COLUPF
-    lda PF0Data,y
-    sta PF0
-    lda PF1Data,y
-    sta PF1
-    lda PF2Data,y
-    sta PF2
-    lda PF0RData,y
-    sta PF0
-    lda PF1RData,y
-    sta PF1
-    lda PF2RData,y
-    sta PF2
-    lda GRP0Data,y
-    sta GRP0
-    lda #0
-    sta GRP1              ; heavy/serviço: sem P1
-    iny
-    cpy #16
-    bne ASeg1
-ASeg2:
-    sta WSYNC
-    lda PF0Data,y
-    sta PF0
-    lda PF1Data,y
-    sta PF1
-    lda PF2Data,y
-    sta PF2
-    lda PF0RData,y
-    sta PF0
-    lda PF1RData,y
-    sta PF1
-    lda PF2RData,y
-    sta PF2
-    lda GRP0Data,y
-    sta GRP0
-    lda #0
-    sta GRP1              ; heavy/serviço: sem P1
-    iny
-    cpy #17
-    bne ASeg2
-ASeg3:
-    sta WSYNC
-    lda PF0Data,y
-    sta PF0
-    lda PF1Data,y
-    sta PF1
-    lda PF2Data,y
-    sta PF2
-    lda PF0RData,y
-    sta PF0
-    lda PF1RData,y
-    sta PF1
-    lda PF2RData,y
-    sta PF2
-    lda GRP0Data,y
-    sta GRP0
-    lda GRP1Data,y
-    sta GRP1
-    iny
-    cpy #40
-    bne ASeg3
-ASeg4:
-    sta WSYNC
-    lda COLUBKData,y
-    sta COLUBK
-    lda COLUPFData,y
-    sta COLUPF
-    lda PF0Data,y
-    sta PF0
-    lda PF1Data,y
-    sta PF1
-    lda PF2Data,y
-    sta PF2
-    lda PF0RData,y
-    sta PF0
-    lda PF1RData,y
-    sta PF1
-    lda PF2RData,y
-    sta PF2
-    lda GRP0Data,y
-    sta GRP0
-    lda #0
-    sta GRP1              ; heavy/serviço: sem P1
-    iny
-    cpy #42
-    bne ASeg4
-ASeg5:
-    sta WSYNC
-    lda PF0Data,y
-    sta PF0
-    lda PF1Data,y
-    sta PF1
-    lda PF2Data,y
-    sta PF2
-    lda PF0RData,y
-    sta PF0
-    lda PF1RData,y
-    sta PF1
-    lda PF2RData,y
-    sta PF2
-    lda GRP0Data,y
-    sta GRP0
-    lda #0
-    sta GRP1              ; heavy/serviço: sem P1
-    iny
-    cpy #43
-    bne ASeg5
-ASeg6:
-    sta WSYNC
-    lda PF0Data,y
-    sta PF0
-    lda PF1Data,y
-    sta PF1
-    lda PF2Data,y
-    sta PF2
-    lda PF0RData,y
-    sta PF0
-    lda PF1RData,y
-    sta PF1
-    lda PF2RData,y
-    sta PF2
-    lda GRP0Data,y
-    sta GRP0
-    lda GRP1Data,y
-    sta GRP1
-    iny
-    cpy #172
-    bne ASeg6
+    ; ===== HUD v1: placar (opcional) + play vazio + logo (sempre) =====
+    ; playLines=166 scoreLines=16 logoLines=10
 
+    jsr DrawScoreBand
+    ; --- área útil (sem PF por enquanto) ---
+    ldx #166
+BlankPlay:
+    sta WSYNC
     lda #0
+    sta COLUBK
+    sta COLUPF
+    sta PF0
+    sta PF1
+    sta PF2
     sta GRP0
     sta GRP1
+    dex
+    bne BlankPlay
 
-    jsr DrawScoreBar
+    jsr DrawLogo              ; sempre (plataforma)
+
     lda #2
     sta VBLANK
     lda #30
@@ -293,6 +194,7 @@ WaitOverscan:
 
 GameLogic:
     ; --- sample input ---
+    inc WalkTick
     lda SWCHA
     sta TmpA
     lda INPT4
@@ -306,77 +208,7 @@ GameLogic:
     bne NoSecTick
     lda #0
     sta FrameDiv
-    ; timer ev_timer (1s)
-    lda #0
-    sta TFire_evtimer
-    dec Tmr_evtimer
-    bne TmrOk0
-    lda #1
-    sta Tmr_evtimer
-    lda #1
-    sta TFire_evtimer
-TmrOk0:
 NoSecTick:
-    lda FrameDiv
-    beq SecTickDone      ; FrameDiv==0 significa que acabamos de tickar
-    lda #0
-    sta TFire_evtimer
-SecTickDone:
-    ; rule esquerda
-    lda SWCHA
-    and #$40
-    bne R1_f1
-    jmp R1_c1
-R1_f1:
-    jmp R1_end
-R1_c1:
-R1_end:
-    ; rule direito
-    lda SWCHA
-    and #$80
-    bne R2_f1
-    jmp R2_c1
-R2_f1:
-    jmp R2_end
-R2_c1:
-    lda P0XDelay
-    clc
-    adc #1
-    cmp #49
-    bcc MvR2Xok
-    lda #48
-MvR2Xok:
-    sta P0XDelay
-R2_end:
-    ; rule cima
-    lda SWCHA
-    and #$10
-    bne R3_f1
-    jmp R3_c1
-R3_f1:
-    jmp R3_end
-R3_c1:
-    lda P0Y
-    sec
-    sbc #1
-    bcs MvR3Yok
-    lda #0
-MvR3Yok:
-    sta P0Y
-R3_end:
-    ; rule baixo
-    lda SWCHA
-    and #$20
-    bne R4_f1
-    jmp R4_c1
-R4_f1:
-    jmp R4_end
-R4_c1:
-    lda P0Y
-    clc
-    adc #1
-    sta P0Y
-R4_end:
     lda TmpA
     sta PrevSWCHA
     lda INPT4
@@ -384,166 +216,322 @@ R4_end:
     sta CXCLR              ; limpa latches de colisão
     rts
 
-; Posiciona P0/P1 no início da scanline (método grosso por delay)
+; Posiciona P0/P1 com precisão de 1 color clock (RESP + HMxx + HMOVE)
+; Rotina clássica: divide X por 15, resto vira HMP fine offset.
 PositionPlayers:
+    lda P0X
+    ldx #0                  ; objeto 0 = P0
+    jsr SetHX
+    lda P1X
+    ldx #1                  ; objeto 1 = P1
+    jsr SetHX
     sta WSYNC
-    ldx P0XDelay
-P0Pos: dex
-    bne P0Pos
-    sta RESP0
+    sta HMOVE               ; aplica HMP0/HMP1
     sta WSYNC
-    ldx P1XDelay
-P1Pos: dex
-    bne P1Pos
-    sta RESP1
+    sta HMCLR               ; evita comb no playfield
     rts
 
-DrawScoreBar:
-    ldx #20
-ScoreBarLoop:
+; A = X (0-159), X = índice do objeto (0=P0,1=P1)
+SetHX:
     sta WSYNC
+    sec
+SetHXDiv:
+    sbc #15
+    bcs SetHXDiv
+    eor #7
+    asl
+    asl
+    asl
+    asl
+    sta HMP0,x              ; HMP0 ou HMP1
+    sta RESP0,x             ; RESP0 ou RESP1
+    rts
+
+; --- Score band left delay=6 digits=2 ---
+DrawScoreBand:
     lda #0
-    sta COLUBK
     sta PF0
     sta PF1
     sta PF2
-    cpx #19
-    bne NoRainbow
-    lda #$44
+    sta CTRLPF
+    sta GRP0
+    sta GRP1
+    sta ENAM0
+    sta ENAM1
+    sta ENABL
+    sta VDELP0
+    sta VDELP1
+    sta NUSIZ0
+    sta NUSIZ1
+    lda #$0E
+    sta COLUP0
+    sta COLUP1
+    jsr ScoreToDigits0
+    sta WSYNC
+    ldx #12  ; #4 esq, #8 centro, #12 dir
+ScPos0:
+    dex
+    bne ScPos0
+    sta RESP0
+    sta RESP1
+    lda #0
+    sta HMP0
+    sta HMP1
+    sta WSYNC
+    sta HMOVE
+    sta WSYNC
+    sta HMCLR
+    ldx #5
+ScPadT:
+    sta WSYNC
+    lda #0
     sta COLUBK
-NoRainbow:
-    cpx #18
-    bne NoRainbow2
-    lda #$28
+    lda #0
+    sta GRP0
+    sta GRP1
+    dex
+    bne ScPadT
+    ldy #0
+ScBuild:
+    sty ScRow
+    tya
+    asl
+    sta ScIdx
+    lda Dig4
+    jsr GlyphRow
+    ldx ScIdx
+    sta ScStrip,x
+    inx
+    stx ScIdx
+    lda Dig5
+    jsr GlyphRow
+    ldx ScIdx
+    sta ScStrip,x
+    iny
+    cpy #6
+    bcc ScBuild
+    ldy #0
+ScDigRows:
+    sta WSYNC
+    lda #0
     sta COLUBK
-NoRainbow2:
+    tya
+    asl
+    tax
+    lda ScStrip,x
+    sta GRP0
+    inx
+    lda ScStrip,x
+    sta GRP1
+    iny
+    cpy #6
+    bcc ScDigRows
+    lda #0
+    sta GRP0
+    sta GRP1
+    ldx #5
+ScPadB:
+    sta WSYNC
+    lda #0
+    sta COLUBK
+    lda #0
+    sta GRP0
+    sta GRP1
+    dex
+    bne ScPadB
+    rts
+
+GlyphRow:
+    sta Temp
+    lda #0
+    sta TmpB
+    ldx Temp
+    beq GR_Done
+GR_Mul:
+    lda TmpB
+    clc
+    adc #6
+    sta TmpB
+    dex
+    bne GR_Mul
+GR_Done:
+    lda TmpB
+    clc
+    adc ScRow
+    tax
+    lda DigitGfx,x
+    rts
+
+ScoreToDigits0:
+    lda #0
+    sta Dig3
+    sta Dig4
+    sta Dig5
+    lda ScoreP0
+    sta Temp
+S0H:
+    lda Temp
+    cmp #100
+    bcc S0T
+    sec
+    sbc #100
+    sta Temp
+    inc Dig3
+    jmp S0H
+S0T:
+    lda Temp
+    cmp #10
+    bcc S0U
+    sec
+    sbc #10
+    sta Temp
+    inc Dig4
+    jmp S0T
+S0U:
+    lda Temp
+    sta Dig5
+    rts
+
+; --- Logo RETROCOMPILER (glifos.json → PF) ---
+DrawLogo:
+    lda #0
+    sta GRP0
+    sta GRP1
+    lda #1
+    sta CTRLPF              ; reflect
     lda #$0E
     sta COLUPF
+    ldx #0
+LogoLoop:
+    sta WSYNC
+    lda #0
+    sta COLUBK
     cpx #10
-    bne NoLogo
-    lda #%11110000
+    bcs LogoDone
+    lda LogoPF0,x
+    sta PF0
+    lda LogoPF1,x
     sta PF1
-    lda #%01101101
+    lda LogoPF2,x
     sta PF2
-NoLogo:
-    dex
-    bne ScoreBarLoop
+    inx
+    jmp LogoLoop
+LogoDone:
     lda #0
     sta PF0
     sta PF1
     sta PF2
-    sta COLUBK
+    sta CTRLPF
     rts
-
-; digits cfg: 6
 
 DigitGfx:
 Digit0:
-    .byte %00111100
-    .byte %01100110
-    .byte %01100110
-    .byte %01100110
-    .byte %01100110
-    .byte %01100110
-    .byte %01100110
-    .byte %00111100
+    .byte %01100000
+    .byte %11010000
+    .byte %10010000
+    .byte %10110000
+    .byte %01100000
+    .byte %00000000
 Digit1:
-    .byte %00011000
-    .byte %00111000
-    .byte %00011000
-    .byte %00011000
-    .byte %00011000
-    .byte %00011000
-    .byte %00011000
-    .byte %01111110
+    .byte %01000000
+    .byte %11000000
+    .byte %01000000
+    .byte %01000000
+    .byte %11100000
+    .byte %00000000
 Digit2:
-    .byte %00111100
-    .byte %01100110
-    .byte %00000110
-    .byte %00001100
-    .byte %00011000
-    .byte %00110000
+    .byte %11100000
+    .byte %00010000
     .byte %01100000
-    .byte %01111110
+    .byte %10000000
+    .byte %11110000
+    .byte %00000000
 Digit3:
-    .byte %00111100
-    .byte %01100110
-    .byte %00000110
-    .byte %00011100
-    .byte %00000110
-    .byte %00000110
-    .byte %01100110
-    .byte %00111100
+    .byte %11100000
+    .byte %00010000
+    .byte %01100000
+    .byte %00010000
+    .byte %11100000
+    .byte %00000000
 Digit4:
-    .byte %00001100
-    .byte %00011100
-    .byte %00111100
-    .byte %01101100
-    .byte %01111110
-    .byte %00001100
-    .byte %00001100
-    .byte %00001100
+    .byte %00010000
+    .byte %00110000
+    .byte %01010000
+    .byte %11110000
+    .byte %00010000
+    .byte %00000000
 Digit5:
-    .byte %01111110
-    .byte %01100000
-    .byte %01100000
-    .byte %01111100
-    .byte %00000110
-    .byte %00000110
-    .byte %01100110
-    .byte %00111100
+    .byte %11110000
+    .byte %10000000
+    .byte %11100000
+    .byte %00010000
+    .byte %11100000
+    .byte %00000000
 Digit6:
-    .byte %00111100
-    .byte %01100110
     .byte %01100000
-    .byte %01111100
-    .byte %01100110
-    .byte %01100110
-    .byte %01100110
-    .byte %00111100
+    .byte %10000000
+    .byte %11100000
+    .byte %10010000
+    .byte %01100000
+    .byte %00000000
 Digit7:
-    .byte %01111110
-    .byte %00000110
-    .byte %00001100
-    .byte %00011000
-    .byte %00011000
-    .byte %00110000
-    .byte %00110000
-    .byte %00110000
+    .byte %11110000
+    .byte %00010000
+    .byte %00100000
+    .byte %01000000
+    .byte %01000000
+    .byte %00000000
 Digit8:
-    .byte %00111100
-    .byte %01100110
-    .byte %01100110
-    .byte %00111100
-    .byte %01100110
-    .byte %01100110
-    .byte %01100110
-    .byte %00111100
+    .byte %01100000
+    .byte %10010000
+    .byte %01100000
+    .byte %10010000
+    .byte %01100000
+    .byte %00000000
 Digit9:
-    .byte %00111100
-    .byte %01100110
-    .byte %01100110
-    .byte %01100110
-    .byte %00111110
-    .byte %00000110
-    .byte %01100110
-    .byte %00111100
-
-LogoPF:
-    .byte %01111110
-    .byte %11000011
-    .byte %10111101
+    .byte %01100000
+    .byte %10010000
+    .byte %01110000
+    .byte %00010000
+    .byte %01100000
     .byte %00000000
 
+LogoPF0:
+    .byte %11100000
+    .byte %00100000
+    .byte %11100000
+    .byte %10100000
+    .byte %00100000
+    .byte %00000000
+    .byte %11000000
+    .byte %00100000
+    .byte %00100000
+    .byte %00100000
+LogoPF1:
+    .byte %00111011
+    .byte %10100001
+    .byte %00110001
+    .byte %00100001
+    .byte %10111001
+    .byte %00000000
+    .byte %00110110
+    .byte %11001101
+    .byte %01001101
+    .byte %11001100
+LogoPF2:
+    .byte %00011101
+    .byte %10100100
+    .byte %10011100
+    .byte %10010100
+    .byte %00100100
+    .byte %00000000
+    .byte %11011111
+    .byte %11100110
+    .byte %11011110
+    .byte %11000110
 
 ; Playfield tables (por scanline)
 PF0Data:
-    .byte $00
-    .byte $00
-    .byte $00
-    .byte $00
-    .byte $00
-    .byte $00
     .byte $00
     .byte $00
     .byte $00
@@ -738,36 +726,30 @@ PF1Data:
     .byte $00
     .byte $00
     .byte $00
-    .byte $3F
-    .byte $3F
-    .byte $3F
-    .byte $3F
-    .byte $3F
-    .byte $3F
-    .byte $30
-    .byte $30
-    .byte $30
-    .byte $30
-    .byte $30
-    .byte $30
-    .byte $3F
-    .byte $3F
-    .byte $3F
-    .byte $3F
-    .byte $3F
-    .byte $3F
-    .byte $31
-    .byte $30
-    .byte $30
-    .byte $30
-    .byte $30
-    .byte $30
-    .byte $30
-    .byte $30
-    .byte $30
-    .byte $30
-    .byte $30
-    .byte $30
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
     .byte $00
     .byte $00
     .byte $00
@@ -911,35 +893,6 @@ PF2Data:
     .byte $00
     .byte $00
     .byte $00
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
-    .byte $03
     .byte $00
     .byte $00
     .byte $00
@@ -972,177 +925,194 @@ PF2Data:
     .byte $00
     .byte $00
     .byte $00
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
-    .byte $80
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
     .byte $00
 PF0RData:
     .byte $00
     .byte $00
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
-    .byte $10
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
     .byte $00
     .byte $00
     .byte $00
@@ -1342,42 +1312,36 @@ PF1RData:
     .byte $00
     .byte $00
     .byte $00
-    .byte $F0
-    .byte $F0
-    .byte $F0
-    .byte $88
-    .byte $88
-    .byte $88
-    .byte $88
-    .byte $88
-    .byte $88
-    .byte $88
-    .byte $88
-    .byte $80
-    .byte $90
-    .byte $F0
-    .byte $F0
-    .byte $F0
-    .byte $F0
-    .byte $F0
-    .byte $E8
-    .byte $88
-    .byte $88
-    .byte $88
-    .byte $88
-    .byte $88
-    .byte $88
-    .byte $88
-    .byte $88
-    .byte $88
-    .byte $88
-    .byte $88
-    .byte $C8
-    .byte $F8
-    .byte $F0
-    .byte $70
-    .byte $70
-    .byte $70
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
     .byte $00
     .byte $00
     .byte $00
@@ -1569,351 +1533,333 @@ PF2RData:
     .byte $00
     .byte $00
     .byte $00
-    .byte $00
-    .byte $00
-    .byte $00
-    .byte $00
-    .byte $00
-    .byte $00
 COLUPFData:
-    .byte $44
-    .byte $44
-    .byte $00
-    .byte $28
-    .byte $28
-    .byte $00
-    .byte $28
-    .byte $28
-    .byte $00
-    .byte $28
-    .byte $28
-    .byte $28
-    .byte $28
-    .byte $28
-    .byte $00
-    .byte $44
-    .byte $44
-    .byte $44
-    .byte $44
-    .byte $44
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $44
-    .byte $44
-    .byte $44
-    .byte $44
-    .byte $44
-    .byte $44
-    .byte $44
-    .byte $68
-    .byte $26
-    .byte $68
-    .byte $68
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $44
-    .byte $44
-    .byte $44
-    .byte $44
-    .byte $44
-    .byte $44
-    .byte $44
-    .byte $86
-    .byte $68
-    .byte $68
-    .byte $68
-    .byte $68
-    .byte $68
-    .byte $68
-    .byte $68
-    .byte $86
-    .byte $86
-    .byte $86
-    .byte $86
-    .byte $86
-    .byte $86
-    .byte $86
-    .byte $86
-    .byte $18
-    .byte $18
-    .byte $18
-    .byte $18
-    .byte $18
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $2A
-    .byte $44
-    .byte $44
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
+    .byte $0A
 COLUBKData:
-    .byte $7C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2E
-    .byte $2E
-    .byte $2C
-    .byte $2E
-    .byte $2E
-    .byte $2E
-    .byte $2E
-    .byte $2E
-    .byte $2C
-    .byte $2E
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $12
-    .byte $12
-    .byte $2C
-    .byte $12
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $2C
-    .byte $46
-    .byte $2C
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
-    .byte $46
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
+    .byte $00
     .byte $00
     .byte $00
     .byte $00
@@ -1963,6 +1909,14 @@ GRP0Data:
     .byte $00
     .byte $00
     .byte $00
+    .byte $FF
+    .byte $81
+    .byte $81
+    .byte $81
+    .byte $81
+    .byte $81
+    .byte $81
+    .byte $FF
     .byte $00
     .byte $00
     .byte $00
@@ -2025,22 +1979,8 @@ GRP0Data:
     .byte $00
     .byte $00
     .byte $00
-    .byte $18
-    .byte $10
-    .byte $18
-    .byte $08
-    .byte $08
-    .byte $18
-    .byte $10
-    .byte $10
-    .byte $18
-    .byte $08
-    .byte $08
-    .byte $18
-    .byte $10
-    .byte $18
-    .byte $08
-    .byte $18
+    .byte $00
+    .byte $00
     .byte $00
     .byte $00
     .byte $00
@@ -2136,20 +2076,14 @@ GRP1Data:
     .byte $00
     .byte $00
     .byte $00
-    .byte $3C
-    .byte $42
-    .byte $5A
-    .byte $42
-    .byte $3C
-    .byte $18
-    .byte $3C
-    .byte $5A
-    .byte $5A
-    .byte $18
-    .byte $3C
-    .byte $24
-    .byte $24
-    .byte $66
+    .byte $FF
+    .byte $81
+    .byte $81
+    .byte $81
+    .byte $81
+    .byte $81
+    .byte $81
+    .byte $FF
     .byte $00
     .byte $00
     .byte $00
@@ -2271,52 +2205,55 @@ GRP1Data:
 
 ; Sprite graphics (linhas top→bottom, ref)
 ; Sprite graphics (linhas top→bottom)
+    align 256
 Sprite0Data:
-    .byte %00011000
-    .byte %00010000
-    .byte %00011000
-    .byte %00001000
-    .byte %00001000
-    .byte %00011000
-    .byte %00010000
-    .byte %00010000
-    .byte %00011000
-    .byte %00001000
-    .byte %00001000
-    .byte %00011000
-    .byte %00010000
-    .byte %00011000
-    .byte %00001000
-    .byte %00011000
+    .byte %11111111
+    .byte %10000001
+    .byte %10000001
+    .byte %10000001
+    .byte %10000001
+    .byte %10000001
+    .byte %10000001
+    .byte %11111111
+    align 256
 Sprite1Data:
-    .byte %00111100
-    .byte %01000010
-    .byte %01011010
-    .byte %01000010
-    .byte %00111100
-    .byte %00011000
-    .byte %00111100
-    .byte %01011010
-    .byte %01011010
-    .byte %00011000
-    .byte %00111100
-    .byte %00100100
-    .byte %00100100
-    .byte %01100110
-    .byte %00000000
-    .byte %00000000
+    .byte %11111111
+    .byte %10000001
+    .byte %10000001
+    .byte %10000001
+    .byte %10000001
+    .byte %10000001
+    .byte %10000001
+    .byte %11111111
 
 ; --- RAM ---
 Score0    equ $80
 Score1    equ $81
 Score2    equ $82
+ScoreP0   equ $80            ; nativa placar P1 / single
+ScoreP1   equ $81            ; nativa placar P2 (both)
+Dig0      equ $A0            ; buffer dígitos BCD (até 6+6)
+Dig1      equ $A1
+Dig2      equ $A2
+Dig3      equ $A3
+Dig4      equ $A4
+Dig5      equ $A5
+Dig6      equ $A6            ; P2
+Dig7      equ $A7
+Dig8      equ $A8
+Dig9      equ $A9
+Dig10     equ $AA
+Dig11     equ $AB
+ScRow     equ $AC
+ScIdx     equ $AD
+ScStrip   equ $B2            ; H*6 bytes (até 16*6)
 Temp      equ $83
 P0Y       equ $84
 P0H       equ $85
 P1Y       equ $86
 P1H       equ $87
-P0XDelay  equ $88
-P1XDelay  equ $89
+P0X       equ $88
+P1X       equ $89
 P0En      equ $8A
 P1En      equ $8B
 ZPF0L     equ $8C
@@ -2333,12 +2270,9 @@ PrevSWCHA equ $9C
 PrevINPT4 equ $9D
 TmpA      equ $9E
 TmpB      equ $9F
-U_vidas    equ $A0
-U_energia  equ $A1
-U_score    equ $A2
-Tmr_evtimer equ $A4
-TFire_evtimer equ $A5
-FrameDiv   equ $A6
+WalkTick  equ $9B
+U_scoreP0  equ $A0
+FrameDiv   equ $A1
 
     ORG $FFFA
     .word Start

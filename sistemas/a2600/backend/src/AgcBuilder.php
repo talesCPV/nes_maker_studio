@@ -34,15 +34,12 @@ final class AgcBuilder
             $scorePos = 'none';
         }
         $scoreEnabled = $scorePos !== 'none';
-        $scoreAlign = (string)($scoreBar['align'] ?? 'center');
-        if (!in_array($scoreAlign, ['left', 'center', 'right', 'both'], true)) {
-            $scoreAlign = 'center';
-        }
+        $scoreAlign = 'left'; // placar fixo à esquerda
+        $scoreDelay = (int)($scoreBar['delay'] ?? 4);
+        if ($scoreDelay < 4) $scoreDelay = 4;
+        if ($scoreDelay > 6) $scoreDelay = 6;
         $scoreBg = ($scoreBar['background'] ?? true) !== false;
-        $digits = max(2, min(6, (int)($scoreBar['digits'] ?? 6)));
-        if ($scoreAlign === 'both') {
-            $digits = max(2, min(3, $digits));
-        }
+        $digits = max(2, min(3, (int)($scoreBar['digits'] ?? 3))); // 2 ou 3 por enquanto
         $showLogo = true; // plataforma: sempre
         $logoLines = max(6, min(16, (int)($scoreBar['logoLines'] ?? 10)));
         $scoreVar = 'scoreP0';
@@ -287,7 +284,7 @@ final class AgcBuilder
         $asm[] = '    rts';
         $asm[] = '';
         if ($scoreEnabled) {
-            $asm[] = self::scoreBandRoutine($digits, $scoreAlign, $scoreBg, $scoreLines);
+            $asm[] = self::scoreBandRoutine($digits, $scoreAlign, $scoreBg, $scoreLines, $scoreDelay);
         }
         $asm[] = self::logoRoutine($logoLines);
         $asm[] = self::digitGlyphs();
@@ -414,6 +411,7 @@ final class AgcBuilder
             'scoreEnabled' => $scoreEnabled,
             'scorePos' => $scorePos,
             'scoreAlign' => $scoreAlign,
+            'scoreDelay' => $scoreDelay,
             'digits' => $digits,
             'scoreVar' => $scoreVar,
             'logoLines' => $logoLines,
@@ -717,30 +715,23 @@ ASM;
     }
 
 
-    private static function scoreBandRoutine(int $digits, string $align, bool $background, int $scoreLines): string
+    private static function scoreBandRoutine(int $digits, string $align, bool $background, int $scoreLines, int $delay = 4): string
     {
-        // Scanlines do placar = só glifos (sem PF). Cola máxima possível no TIA.
+        // Placar à esquerda (delay 4–6). 2 dígitos: P0+P1. 3 dígitos: P0 NUSIZ×2 + P1 no meio.
         $digitRows = self::digitGlyphHeight();
-        // Altura exata do glifo (+ no máx. 1 linha de folga se scoreLines pedir)
-        $lines = $digitRows; // mínimo = altura do glifo; pad extra só se scoreLines > digitRows
-        if ($scoreLines > $digitRows) {
+        $h = $digitRows;
+        $lines = $h;
+        if ($scoreLines > $h) {
             $lines = min(32, $scoreLines);
         }
-        $pad = max(0, (int)(($lines - $digitRows) / 2));
-        $bot = max(0, $lines - $pad - $digitRows);
-        $digits = max(1, min(6, $digits));
-        $both = false; // alinhamento fixo: sempre centro (UI só top/bottom/none)
-        $align = 'center';
-        $dL = $both ? max(1, min(3, $digits)) : min(3, max(1, $digits));
-        $dR = $both ? max(1, min(3, $digits)) : 0;
-        if (!$both && $digits > 3) {
-            $dL = 3;
-        }
+        $pad = max(0, (int)(($lines - $h) / 2));
+        $bot = max(0, $lines - $pad - $h);
+        $digits = max(2, min(3, $digits));
+        $delay = max(4, min(6, $delay));
+        $three = ($digits >= 3);
 
         $out = [];
-        $out[] = '; --- Score band COLADO digits=' . $digits . ' align=' . $align . ' ---';
-        $out[] = '; Scanlines exclusivas do placar (PF zerado).';
-        $out[] = '; 3 dígitos: P0 @X, P1 @X+~6-9CC, 2ª cópia P0 @X+16 (NUSIZ close).';
+        $out[] = '; --- Score band left delay=' . $delay . ' digits=' . $digits . ' ---';
         $out[] = 'DrawScoreBand:';
         $out[] = '    lda #0';
         $out[] = '    sta PF0';
@@ -752,70 +743,43 @@ ASM;
         $out[] = '    sta ENAM0';
         $out[] = '    sta ENAM1';
         $out[] = '    sta ENABL';
-        $out[] = '    lda #$0E';
-        $out[] = '    sta COLUP0';
-        $out[] = '    sta COLUP1';
-        // NUSIZ: 1 cópia + 2ª close só no P0 quando 3 dígitos single
-        if ($dL >= 3 && !$both) {
+        $out[] = '    sta VDELP0';
+        $out[] = '    sta VDELP1';
+        if ($three) {
             $out[] = '    lda #1                  ; P0: 2 cópias close (0 e +16)';
             $out[] = '    sta NUSIZ0';
             $out[] = '    lda #0';
             $out[] = '    sta NUSIZ1';
-        } elseif ($dL == 2 && !$both) {
-            $out[] = '    lda #0';
-            $out[] = '    sta NUSIZ0';
-            $out[] = '    sta NUSIZ1';
-        } elseif ($both) {
-            $out[] = '    lda #' . ($dL >= 3 ? 3 : ($dL == 2 ? 1 : 0));
-            $out[] = '    sta NUSIZ0';
-            $out[] = '    lda #' . ($dR >= 3 ? 3 : ($dR == 2 ? 1 : 0));
-            $out[] = '    sta NUSIZ1';
         } else {
-            $out[] = '    lda #0';
             $out[] = '    sta NUSIZ0';
             $out[] = '    sta NUSIZ1';
         }
+        $out[] = '    lda #$0E';
+        $out[] = '    sta COLUP0';
+        $out[] = '    sta COLUP1';
 
         $out[] = '    jsr ScoreToDigits0';
-        if ($both) {
-            $out[] = '    jsr ScoreToDigits1';
-        }
 
-        // Posição inicial do grupo (centro / esq / dir)
         $out[] = '    sta WSYNC';
-        if ($align === 'left') {
-            $out[] = '    ldx #8';
-        } elseif ($align === 'right' || $both) {
-            $out[] = '    ldx #25';
-        } else {
-            $out[] = '    ldx #20                  ; centro approx';
-        }
+        $out[] = '    ldx #' . sprintf('%02d', $delay);
         $out[] = 'ScPos0:';
         $out[] = '    dex';
         $out[] = '    bne ScPos0';
-        $out[] = '    sta RESP0                  ; dígito 0';
-        if (!$both && $dL >= 2) {
-            // ~3 ciclos entre RESPs ≈ 9 CC; 1 nop extra ≈ 12 CC — centra visual do meio
+        $out[] = '    sta RESP0';
+        if ($three) {
+            // 1 nop → P1 entre as duas cópias do P0
             $out[] = '    nop';
-            $out[] = '    sta RESP1                  ; dígito 1 (meio)';
-            $out[] = '    lda #$80                  ; HMP1: shift esq 1 clock fino';
-            $out[] = '    sta HMP1';
-        }
-        if ($both) {
-            $out[] = '    ldx #12';
-            $out[] = 'ScPosR1:';
-            $out[] = '    dex';
-            $out[] = '    bne ScPosR1';
-            $out[] = '    sta RESP1                  ; P1 lado direito';
+            $out[] = '    sta RESP1';
+        } else {
+            $out[] = '    sta RESP1';
         }
         $out[] = '    lda #0';
         $out[] = '    sta HMP0';
-        if ($both || $dL < 2) {
-            $out[] = '    sta HMP1';
-        }
-        // se single 2/3 dígitos, HMP1 já foi setado para centrar o meio
+        $out[] = '    sta HMP1';
         $out[] = '    sta WSYNC';
         $out[] = '    sta HMOVE';
+        $out[] = '    sta WSYNC';
+        $out[] = '    sta HMCLR';
 
         if ($pad > 0) {
             $out[] = '    ldx #' . $pad;
@@ -832,51 +796,45 @@ ASM;
             $out[] = '    bne ScPadT';
         }
 
-        $h = self::digitGlyphHeight();
-        // Pré-cálculo strip
+        // Strip por linha
+        $stride = $three ? 3 : 2;
         $out[] = '    ldy #0';
         $out[] = 'ScBuild:';
         $out[] = '    sty ScRow';
-        $out[] = '    tya';
-        $out[] = '    sta TmpA';
-        $out[] = '    asl';
-        $out[] = '    sta TmpB';
-        $out[] = '    asl';
-        $out[] = '    clc';
-        $out[] = '    adc TmpB                ; base = row*6';
-        $out[] = '    sta ScIdx                ; salva índice (GlyphRow cloba X)';
-        $out[] = '    lda Dig3';
-        $out[] = '    jsr GlyphRow';
-        $out[] = '    ldx ScIdx';
-        $out[] = '    sta ScStrip,x';
-        $out[] = '    inx';
-        $out[] = '    stx ScIdx';
-        $out[] = '    lda Dig4';
-        $out[] = '    jsr GlyphRow';
-        $out[] = '    ldx ScIdx';
-        $out[] = '    sta ScStrip,x';
-        $out[] = '    inx';
-        $out[] = '    stx ScIdx';
-        $out[] = '    lda Dig5';
-        $out[] = '    jsr GlyphRow';
-        $out[] = '    ldx ScIdx';
-        $out[] = '    sta ScStrip,x';
-        $out[] = '    inx';
-        $out[] = '    stx ScIdx';
-        if ($both) {
-            $out[] = '    lda Dig6';
+        if ($three) {
+            $out[] = '    tya';
+            $out[] = '    sta TmpA';
+            $out[] = '    asl';
+            $out[] = '    clc';
+            $out[] = '    adc TmpA                ; *3';
+            $out[] = '    sta ScIdx';
+            $out[] = '    lda Dig3';
             $out[] = '    jsr GlyphRow';
             $out[] = '    ldx ScIdx';
             $out[] = '    sta ScStrip,x';
             $out[] = '    inx';
             $out[] = '    stx ScIdx';
-            $out[] = '    lda Dig7';
+            $out[] = '    lda Dig4';
             $out[] = '    jsr GlyphRow';
             $out[] = '    ldx ScIdx';
             $out[] = '    sta ScStrip,x';
             $out[] = '    inx';
             $out[] = '    stx ScIdx';
-            $out[] = '    lda Dig8';
+            $out[] = '    lda Dig5';
+            $out[] = '    jsr GlyphRow';
+            $out[] = '    ldx ScIdx';
+            $out[] = '    sta ScStrip,x';
+        } else {
+            $out[] = '    tya';
+            $out[] = '    asl';
+            $out[] = '    sta ScIdx';
+            $out[] = '    lda Dig4';
+            $out[] = '    jsr GlyphRow';
+            $out[] = '    ldx ScIdx';
+            $out[] = '    sta ScStrip,x';
+            $out[] = '    inx';
+            $out[] = '    stx ScIdx';
+            $out[] = '    lda Dig5';
             $out[] = '    jsr GlyphRow';
             $out[] = '    ldx ScIdx';
             $out[] = '    sta ScStrip,x';
@@ -885,7 +843,6 @@ ASM;
         $out[] = '    cpy #' . $h;
         $out[] = '    bcc ScBuild';
 
-        // Desenho: 1 scanline = 1 linha de glifo. Só placar.
         $out[] = '    ldy #0';
         $out[] = 'ScDigRows:';
         $out[] = '    sta WSYNC';
@@ -893,54 +850,30 @@ ASM;
             $out[] = '    lda #0';
             $out[] = '    sta COLUBK';
         }
-        $out[] = '    tya';
-        $out[] = '    sta TmpA';
-        $out[] = '    asl';
-        $out[] = '    sta TmpB';
-        $out[] = '    asl';
-        $out[] = '    clc';
-        $out[] = '    adc TmpB';
-        $out[] = '    tax';
-        if (!$both && $dL >= 3) {
-            // d0 → GRP0 (1ª), d1 → GRP1 (miolo colado), d2 → GRP0 (2ª @+16)
-            $out[] = '    lda ScStrip,x';
+        if ($three) {
+            $out[] = '    tya';
+            $out[] = '    sta TmpA';
+            $out[] = '    asl';
+            $out[] = '    clc';
+            $out[] = '    adc TmpA';
+            $out[] = '    tax';
+            $out[] = '    lda ScStrip,x           ; centena → 1ª cópia P0';
             $out[] = '    sta GRP0';
             $out[] = '    inx';
-            $out[] = '    lda ScStrip,x';
+            $out[] = '    lda ScStrip,x           ; dezena → P1';
             $out[] = '    sta GRP1';
             $out[] = '    inx';
-            $out[] = '    lda ScStrip,x';
-            $out[] = '    sta GRP0';
-        } elseif (!$both && $dL == 2) {
-            $out[] = '    lda ScStrip,x';
-            $out[] = '    sta GRP0';
-            $out[] = '    inx';
-            $out[] = '    lda ScStrip,x';
-            $out[] = '    sta GRP1';
-        } elseif (!$both) {
-            $out[] = '    lda ScStrip,x';
+            $out[] = '    lda ScStrip,x           ; unidade → 2ª cópia P0';
             $out[] = '    sta GRP0';
         } else {
-            // both: NUSIZ multi no P0 e P1 (mínimo hardware 16)
-            $out[] = '    lda ScStrip,x';
-            $out[] = '    sta GRP0';
-            $out[] = '    inx';
-            $out[] = '    lda ScStrip,x';
-            $out[] = '    sta GRP0';
-            $out[] = '    inx';
+            $out[] = '    tya';
+            $out[] = '    asl';
+            $out[] = '    tax';
             $out[] = '    lda ScStrip,x';
             $out[] = '    sta GRP0';
             $out[] = '    inx';
             $out[] = '    lda ScStrip,x';
             $out[] = '    sta GRP1';
-            $out[] = '    inx';
-            $out[] = '    lda ScStrip,x';
-            $out[] = '    sta GRP1';
-            $out[] = '    inx';
-            $out[] = '    lda ScStrip,x';
-            $out[] = '    sta GRP1';
-            $out[] = '    lda #0';
-            $out[] = '    sta GRP0';
         }
         $out[] = '    iny';
         $out[] = '    cpy #' . $h;
@@ -963,18 +896,14 @@ ASM;
             $out[] = '    dex';
             $out[] = '    bne ScPadB';
         }
-        $out[] = '    lda #0';
-        $out[] = '    sta GRP0';
-        $out[] = '    sta GRP1';
         $out[] = '    rts';
         $out[] = '';
 
-        // GlyphRow: A=digit 0-9, ScRow=row — NÃO destrói Y (ScBuild usa Y como contador)
         $out[] = 'GlyphRow:';
         $out[] = '    sta Temp';
         $out[] = '    lda #0';
         $out[] = '    sta TmpB';
-        $out[] = '    ldx Temp                ; usa X no lugar de Y';
+        $out[] = '    ldx Temp';
         $out[] = '    beq GR_Done';
         $out[] = 'GR_Mul:';
         $out[] = '    lda TmpB';
@@ -987,7 +916,7 @@ ASM;
         $out[] = '    lda TmpB';
         $out[] = '    clc';
         $out[] = '    adc ScRow';
-        $out[] = '    tax                     ; índice em X; Y preservado';
+        $out[] = '    tax';
         $out[] = '    lda DigitGfx,x';
         $out[] = '    rts';
         $out[] = '';
@@ -1023,42 +952,8 @@ ASM;
         $out[] = '    rts';
         $out[] = '';
 
-        if ($both) {
-            $out[] = 'ScoreToDigits1:';
-            $out[] = '    lda #0';
-            $out[] = '    sta Dig6';
-            $out[] = '    sta Dig7';
-            $out[] = '    sta Dig8';
-            $out[] = '    lda ScoreP1';
-            $out[] = '    sta Temp';
-            $out[] = 'S1H:';
-            $out[] = '    lda Temp';
-            $out[] = '    cmp #100';
-            $out[] = '    bcc S1T';
-            $out[] = '    sec';
-            $out[] = '    sbc #100';
-            $out[] = '    sta Temp';
-            $out[] = '    inc Dig6';
-            $out[] = '    jmp S1H';
-            $out[] = 'S1T:';
-            $out[] = '    lda Temp';
-            $out[] = '    cmp #10';
-            $out[] = '    bcc S1U';
-            $out[] = '    sec';
-            $out[] = '    sbc #10';
-            $out[] = '    sta Temp';
-            $out[] = '    inc Dig7';
-            $out[] = '    jmp S1T';
-            $out[] = 'S1U:';
-            $out[] = '    lda Temp';
-            $out[] = '    sta Dig8';
-            $out[] = '    rts';
-            $out[] = '';
-        }
-
         return implode("\n", $out);
     }
-
 
 
     private static function logoRoutine(int $logoLines): string
