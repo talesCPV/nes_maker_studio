@@ -79,7 +79,8 @@ return [
         $anyRam = false;
         foreach ($alloc['vars'] as $v) if (!($v['zeroPage'] ?? false)) { $anyRam = true; break; }
         $paletteSwap = !empty($ctx['paletteSwapEnabled']);
-        if (!$anyRam && !$paletteSwap) return '';
+        $musicEnabled = !empty($ctx['musicEnabled']);
+        if (!$anyRam && !$paletteSwap && !$musicEnabled) return '';
         $lines = ['.segment "RAM"'];
         if ($paletteSwap) {
             // Camada 6 (acao "Trocar Paleta"): 1 bit por slot da PPU (0-3 BG,
@@ -92,6 +93,23 @@ return [
             $lines[] = 'pal_pending_mask: .res 1  ; Camada 6: 1 bit por slot (0-7) - setado pela acao, limpo pela NMI depois de escrever';
             $lines[] = 'pal_pending_lo:   .res 8  ; Camada 6: ponteiro (baixo) por slot pra PaletteBank_N';
             $lines[] = 'pal_pending_hi:   .res 8  ; Camada 6: ponteiro (alto) por slot';
+        }
+        if ($musicEnabled) {
+            // Camada 10 (compressão de áudio): estado do decodificador RLE
+            // compartilhado, 8 slots (0-3 = canais tocando musica, 4-7 = os
+            // mesmos canais quando tomados por um SFX) - ver
+            // rle_decode_scale/rle_decode_time em music.php. So o par
+            // rle_ptr_lo/hi (zeropage, system.php) precisa ser indireto;
+            // esses arrays aqui sao sempre acessados por indice (,X).
+            $lines[] = 'scale_ptr_lo:   .res 8';
+            $lines[] = 'scale_ptr_hi:   .res 8';
+            $lines[] = 'scale_run_val:  .res 8';
+            $lines[] = 'scale_run_left: .res 8';
+            $lines[] = 'time_ptr_lo:    .res 8';
+            $lines[] = 'time_ptr_hi:    .res 8';
+            $lines[] = 'time_run_val:   .res 8';
+            $lines[] = 'time_run_left:  .res 8';
+            $lines[] = 'rle_pitch_scratch: .res 1  ; guarda o pitch decodificado ENQUANTO rle_decode_time roda (ela usa Y internamente - nao dava pra confiar em registrador aqui, achado num teste de execucao real)';
         }
         $seen = [];
         foreach ($alloc['vars'] as $v) {

@@ -165,11 +165,18 @@ ASM;
             // qualquer musica ou SFX embedado pode usar qualquer canal.
             for ($i = 0; $i < 4; $i++) {
                 $lines[] = "ch{$i}_timer:      .res 1";
-                $lines[] = "ch{$i}_pos:        .res 1";
                 $lines[] = "sfx_active_ch{$i}: .res 1  ; !=0 = canal tomado por um SFX (musica pausa nele)";
                 $lines[] = "sfx_timer_ch{$i}:  .res 1";
-                $lines[] = "sfx_pos_ch{$i}:    .res 1";
             }
+            // Camada 10 (compressão de áudio): só o ponteiro de trabalho do
+            // decodificador RLE precisa ser ZP (endereçamento indireto) - os
+            // 8 arrays de estado por slot (scale/time × ponteiro/valor/sobra,
+            // ver rle_decode_scale/rle_decode_time em music.php) ficam na RAM
+            // comum (program_vars_ram), não aqui - ZP é recurso curto demais
+            // pra gastar com o que não precisa ser indireto.
+            $lines[] = 'rle_ptr_lo:  .res 1';
+            $lines[] = 'rle_ptr_hi:  .res 1';
+            $lines[] = 'rle_scratch: .res 1';
         }
         return implode("\n", $lines);
     },

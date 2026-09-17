@@ -396,7 +396,7 @@ final class ProgramCompiler
         $lines[] = "  ; Fase 2.1: so executa os efeitos na transicao falso->verdadeiro";
         $lines[] = "  LDA {$bitGroup}";
         $lines[] = sprintf('  AND #$%02X', $mask);
-        $lines[] = "  BNE {$label}_end   ; ja estava ativa - nao repete";
+        $lines[] = $this->safeBranchToEnd('BNE', $label) . '   ; ja estava ativa - nao repete';
         $lines[] = "  LDA {$bitGroup}";
         $lines[] = sprintf('  ORA #$%02X', $mask);
         $lines[] = "  STA {$bitGroup}";
@@ -420,6 +420,28 @@ final class ProgramCompiler
      * tela especifica (e só ela) acabar de ser colocada na PPU, seja
      * splash, uma tela de fase ou a de game over.
      */
+    /**
+     * Camada 10 (achado colateral - não é sobre música): compileIfScreen e
+     * companhia geravam BEQ/BNE/BCC/BCS direto pra "{ruleEnd}_end", que fica
+     * DEPOIS de todo o corpo de ações da regra - 6502 só alcança ±127 bytes
+     * num branch relativo. Regra com poucas ações nunca estourava isso, mas
+     * bastava o código ANTES da regra crescer (ex: as novas rotinas
+     * compartilhadas de RLE em music.php) pra empurrar tudo pra fora do
+     * alcance e a montagem falhar ("Range error"). Troca sistemática: em vez
+     * do branch curto direto, inverte a condição e pula por cima de um JMP
+     * (alcance ilimitado) - 3 bytes a mais por checagem, mas nunca quebra
+     * não importa o quanto o resto do programa cresça.
+     */
+    private int $safeBranchCounter = 0;
+
+    private function safeBranchToEnd(string $op, string $ruleEnd): string
+    {
+        static $inverse = ['BEQ' => 'BNE', 'BNE' => 'BEQ', 'BCC' => 'BCS', 'BCS' => 'BCC'];
+        $inv = $inverse[$op] ?? $op;
+        $skip = 'sb_skip_' . ($this->safeBranchCounter++);
+        return "  {$inv} {$skip}\n  JMP {$ruleEnd}_end\n{$skip}:";
+    }
+
     private function compileIfScreen(string $tag, string $ruleEnd, array $step, array $hbCtx): array
     {
         $screenId = (string)($step['screenId'] ?? '');
@@ -430,10 +452,10 @@ final class ProgramCompiler
         return [
             "  ; SE Carregar a Tela (indice {$idx})",
             '  LDA pv_ev_enter',
-            "  BEQ {$ruleEnd}_end",
+            $this->safeBranchToEnd('BEQ', $ruleEnd),
             '  LDA cur_screen',
             "  CMP #{$idx}",
-            "  BNE {$ruleEnd}_end",
+            $this->safeBranchToEnd('BNE', $ruleEnd),
         ];
     }
 
@@ -448,7 +470,7 @@ final class ProgramCompiler
             $flag = substr($ref, 7);
             $var = $flag === 'on_ground' ? 'on_ground' : ($flag === 'out_of_bounds' ? 'pv_ev_oob' : ($flag === 'enter_screen' ? 'pv_ev_enter' : ($flag === 'enter_splash' ? 'pv_ev_enter_splash' : null)));
             if ($var === null) return ['lines' => ["  ; SE hitbox nativo desconhecido '{$flag}' - sempre falso", "  JMP {$ruleEnd}_end"], 'instanceTargets' => []];
-            return ['lines' => ["  ; SE hitbox nativo: {$flag}", "  LDA {$var}", "  BEQ {$ruleEnd}_end"], 'instanceTargets' => []];
+            return ['lines' => ["  ; SE hitbox nativo: {$flag}", "  LDA {$var}", $this->safeBranchToEnd('BEQ', $ruleEnd)], 'instanceTargets' => []];
         }
         $ref = str_starts_with($a, 'terrain:') ? $a : (str_starts_with($b, 'terrain:') ? $b : null);
         if ($ref !== null) {
@@ -457,7 +479,7 @@ final class ProgramCompiler
                 "  ; SE hitbox terreno tipo {$terrType} (sob os pes do heroi)",
                 "  LDA #{$terrType}",
                 "  JSR check_terrain_type",
-                "  BEQ {$ruleEnd}_end",
+                $this->safeBranchToEnd('BEQ', $ruleEnd),
             ], 'instanceTargets' => []];
         }
         $ref = str_starts_with($a, 'hbobj:') ? $a : (str_starts_with($b, 'hbobj:') ? $b : null);
@@ -471,7 +493,7 @@ final class ProgramCompiler
                 "  ; SE hitbox objeto (dano/warp) toca o heroi",
                 "  LDA #{$numId}",
                 "  JSR check_hbobj_hit",
-                "  BEQ {$ruleEnd}_end",
+                $this->safeBranchToEnd('BEQ', $ruleEnd),
             ], 'instanceTargets' => []];
         }
         if (str_starts_with($a, 'char:') && str_starts_with($b, 'char:')) {
@@ -532,7 +554,7 @@ final class ProgramCompiler
             "  STA pv_hbB_h",
             "  LDA #{$otherIdx}",
             "  JSR check_char_hero_hit",
-            "  BEQ {$ruleEnd}_end",
+            $this->safeBranchToEnd('BEQ', $ruleEnd),
         ], 'instanceTargets' => [$otherCharId => 'pv_hb_matched_inst']];
     }
 
@@ -574,7 +596,7 @@ final class ProgramCompiler
             "  STA pv_char_target2",
             "  LDA #{$idxA}",
             "  JSR check_char_char_hit",
-            "  BEQ {$ruleEnd}_end",
+            $this->safeBranchToEnd('BEQ', $ruleEnd),
         ], 'instanceTargets' => [$charA => 'pv_hb_matched_inst_a', $charB => 'pv_hb_matched_inst']];
     }
 
@@ -594,11 +616,11 @@ final class ProgramCompiler
                 "  ; SE evento: P1-IDLE >= {$idleTime} frame(s)",
                 "  LDA pv_idle+1",
                 "  CMP #{$hi}",
-                "  BCC {$ruleEnd}_end",
+                $this->safeBranchToEnd('BCC', $ruleEnd),
                 "  BNE {$tag}_idle_ok",
                 "  LDA pv_idle",
                 "  CMP #{$lo}",
-                "  BCC {$ruleEnd}_end",
+                $this->safeBranchToEnd('BCC', $ruleEnd),
                 "{$tag}_idle_ok:",
             ], 'isHold' => false];
         }
@@ -609,7 +631,7 @@ final class ProgramCompiler
                 "  ; SE evento: {$button} " . ($isHold ? 'segurado' : 'pressionado'),
                 "  LDA {$reg}",
                 sprintf('  AND #$%02X', $mask),
-                "  BEQ {$ruleEnd}_end",
+                $this->safeBranchToEnd('BEQ', $ruleEnd),
             ], 'isHold' => $isHold];
         }
         return ['lines' => ["  ; SE evento: {$button} (P2 ainda sem leitura de controle) - sempre falso", "  JMP {$ruleEnd}_end"], 'isHold' => false];
@@ -627,9 +649,9 @@ final class ProgramCompiler
             $lines[] = "  LDA {$v['label']}";
             $lines[] = sprintf('  AND #$%02X', 1 << $v['bit']);
             if (($op === '==' && $target === 1) || ($op === '!=' && $target === 0) || ($op === '>' && $target === 0)) {
-                $lines[] = "  BEQ {$ruleEnd}_end";
+                $lines[] = $this->safeBranchToEnd('BEQ', $ruleEnd);
             } elseif (($op === '==' && $target === 0) || ($op === '!=' && $target === 1) || ($op === '<' && $target === 1)) {
-                $lines[] = "  BNE {$ruleEnd}_end";
+                $lines[] = $this->safeBranchToEnd('BNE', $ruleEnd);
             }
             // demais combinacoes (>=,<=, ou comparar contra valor fora de 0/1) sao sempre
             // verdadeiras/falsas de forma trivial - sem branch extra necessario.
@@ -641,12 +663,12 @@ final class ProgramCompiler
             $lines = ["  ; SE variavel word: {$v['name']} {$op} {$value}"];
             switch ($op) {
                 case '==':
-                    $lines[] = "  LDA {$label}+1"; $lines[] = "  CMP #{$hi}"; $lines[] = "  BNE {$ruleEnd}_end";
-                    $lines[] = "  LDA {$label}"; $lines[] = "  CMP #{$lo}"; $lines[] = "  BNE {$ruleEnd}_end";
+                    $lines[] = "  LDA {$label}+1"; $lines[] = "  CMP #{$hi}"; $lines[] = $this->safeBranchToEnd('BNE', $ruleEnd);
+                    $lines[] = "  LDA {$label}"; $lines[] = "  CMP #{$lo}"; $lines[] = $this->safeBranchToEnd('BNE', $ruleEnd);
                     break;
                 case '!=':
                     $lines[] = "  LDA {$label}+1"; $lines[] = "  CMP #{$hi}"; $lines[] = "  BNE {$tag}_ok";
-                    $lines[] = "  LDA {$label}"; $lines[] = "  CMP #{$lo}"; $lines[] = "  BEQ {$ruleEnd}_end";
+                    $lines[] = "  LDA {$label}"; $lines[] = "  CMP #{$lo}"; $lines[] = $this->safeBranchToEnd('BEQ', $ruleEnd);
                     $lines[] = "{$tag}_ok:";
                     break;
                 case '>': case '<=':
@@ -681,11 +703,11 @@ final class ProgramCompiler
         $label = $v['label']; $value &= 0xFF;
         $lines = ["  ; SE variavel byte: {$v['name']} {$op} {$value}", "  LDA {$label}", "  CMP #{$value}"];
         switch ($op) {
-            case '==': $lines[] = "  BNE {$ruleEnd}_end"; break;
-            case '!=': $lines[] = "  BEQ {$ruleEnd}_end"; break;
-            case '>':  $lines[] = "  BCC {$ruleEnd}_end"; $lines[] = "  BEQ {$ruleEnd}_end"; break;
-            case '<':  $lines[] = "  BCS {$ruleEnd}_end"; break;
-            case '>=': $lines[] = "  BCC {$ruleEnd}_end"; break;
+            case '==': $lines[] = $this->safeBranchToEnd('BNE', $ruleEnd); break;
+            case '!=': $lines[] = $this->safeBranchToEnd('BEQ', $ruleEnd); break;
+            case '>':  $lines[] = $this->safeBranchToEnd('BCC', $ruleEnd); $lines[] = $this->safeBranchToEnd('BEQ', $ruleEnd); break;
+            case '<':  $lines[] = $this->safeBranchToEnd('BCS', $ruleEnd); break;
+            case '>=': $lines[] = $this->safeBranchToEnd('BCC', $ruleEnd); break;
             case '<=': $lines[] = "  BCC {$tag}_ok"; $lines[] = "  BEQ {$tag}_ok"; $lines[] = "  JMP {$ruleEnd}_end"; $lines[] = "{$tag}_ok:"; break;
         }
         return $lines;
@@ -1063,9 +1085,25 @@ final class ProgramCompiler
             $lines[] = '  STA music_dispatch+1';
             foreach ($chIdx as $type => $i) {
                 if (in_array($type, $used, true)) {
+                    // Camada 10: reseta os ponteiros de decodificacao RLE pro
+                    // inicio dos dados desta musica/canal (slot = indice do
+                    // canal fisico, 0-3) - equivalente ao antigo "STA ch{i}_pos"
+                    // zerando a posicao, so que agora sao 2 streams independentes
+                    // (Scale e Time podem comprimir em tamanhos diferentes).
                     $lines[] = '  LDA #0';
                     $lines[] = "  STA ch{$i}_timer";
-                    $lines[] = "  STA ch{$i}_pos";
+                    $lines[] = "  LDA #<Scale_{$lbl}_ch{$i}";
+                    $lines[] = "  STA scale_ptr_lo+{$i}";
+                    $lines[] = "  LDA #>Scale_{$lbl}_ch{$i}";
+                    $lines[] = "  STA scale_ptr_hi+{$i}";
+                    $lines[] = '  LDA #0';
+                    $lines[] = "  STA scale_run_left+{$i}";
+                    $lines[] = "  LDA #<Time_{$lbl}_ch{$i}";
+                    $lines[] = "  STA time_ptr_lo+{$i}";
+                    $lines[] = "  LDA #>Time_{$lbl}_ch{$i}";
+                    $lines[] = "  STA time_ptr_hi+{$i}";
+                    $lines[] = '  LDA #0';
+                    $lines[] = "  STA time_run_left+{$i}";
                 } else {
                     $lines[] = "  LDA {$chSil[$type]}";
                     $lines[] = "  STA {$chVol[$type]}";
@@ -1081,13 +1119,25 @@ final class ProgramCompiler
         foreach ($used as $type) {
             $i = $chIdx[$type];
             $r = "sfx_r_{$lbl}_ch{$i}";
+            $slot = $i + 4; // Camada 10: slots 4-7 = canais tomados por SFX
             $lines[] = "  LDA #<{$r}";
             $lines[] = "  STA sfx_dispatch_ch{$i}";
             $lines[] = "  LDA #>{$r}";
             $lines[] = "  STA sfx_dispatch_ch{$i}+1";
             $lines[] = '  LDA #0';
-            $lines[] = "  STA sfx_pos_ch{$i}";
             $lines[] = "  STA sfx_timer_ch{$i}";
+            $lines[] = "  LDA #<Scale_{$r}";
+            $lines[] = "  STA scale_ptr_lo+{$slot}";
+            $lines[] = "  LDA #>Scale_{$r}";
+            $lines[] = "  STA scale_ptr_hi+{$slot}";
+            $lines[] = '  LDA #0';
+            $lines[] = "  STA scale_run_left+{$slot}";
+            $lines[] = "  LDA #<Time_{$r}";
+            $lines[] = "  STA time_ptr_lo+{$slot}";
+            $lines[] = "  LDA #>Time_{$r}";
+            $lines[] = "  STA time_ptr_hi+{$slot}";
+            $lines[] = '  LDA #0';
+            $lines[] = "  STA time_run_left+{$slot}";
             $lines[] = '  LDA #1';
             $lines[] = "  STA sfx_active_ch{$i}";
         }
