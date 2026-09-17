@@ -49,17 +49,19 @@ const PLAYFIELD = (() => {
   const TIA_NTSC = buildTiaNtsc();
 
   function buildTiaNtsc() {
+    // i = reg>>1 (0..127). Hue = nibble alto; luminância = 0..7.
     const out = new Array(128);
     for (let i = 0; i < 128; i++) {
-      const hue = (i >> 1) & 0x0f;
-      const lum = i & 0x0e;
+      const reg = (i << 1) & 0xfe;
+      const hue = (reg >> 4) & 0x0f;
+      const lum = (reg >> 1) & 0x07;
       if (hue === 0) {
-        const g = Math.min(255, 16 + lum * 16);
+        const g = Math.min(255, 8 + lum * 32);
         out[i] = [g, g, g];
       } else {
         const h = ((hue - 1) / 14) * 360;
-        const l = 0.18 + (lum / 14) * 0.55;
-        out[i] = hslToRgb(h, 0.75, l);
+        const l = 0.16 + (lum / 7) * 0.62;
+        out[i] = hslToRgb(h, 0.78, l);
       }
     }
     return out;
@@ -92,7 +94,7 @@ const PLAYFIELD = (() => {
   }
 
   function cellSize(h) {
-    const z = Math.max(1, Math.min(4, zoom | 0));
+    const z = zoom === 2 ? 2 : 1;
     const cellH = CELL_H * z;
     const cellW = Math.max(2, Math.round(cellH * (4 / 3) * h / W));
     return { cellW, cellH, zoom: z };
@@ -416,9 +418,9 @@ const PLAYFIELD = (() => {
   function loadForScreen(sid) {
     screenId = sid;
     const pf = findPf(sid);
-    height = pf && pf.height ? pf.height | 0 : H_DEFAULT;
-    if (height < 16) height = 16;
-    if (height > 240) height = 240;
+    // Altura sempre = área útil (placar/logo definem no Config)
+    const wantH = targetPlayHeight();
+    height = wantH;
     colubk = pf && pf.colubk != null ? pf.colubk & 0xfe : 0x00;
     colupf = pf && pf.colupf != null ? pf.colupf & 0xfe : 0x0a;
     // migração: reflect boolean antigo → pfMode
@@ -427,9 +429,17 @@ const PLAYFIELD = (() => {
     else pfMode = 'reflect';
     if (pfMode !== 'reflect' && pfMode !== 'repeat' && pfMode !== 'asymmetric' && pfMode !== 'none') pfMode = 'reflect';
     if (typeof coercePfMode === 'function') pfMode = coercePfMode(pfMode);
-    pixels = pf && pf.data ? base64ToPixels(pf.data, height) : emptyPixels(height);
-    lineColupf = colorsFromB64(pf && pf.lineColupf, height, colupf);
-    lineColubk = colorsFromB64(pf && pf.lineColubk, height, colubk);
+    // carrega dados antigos e recorta/expande para wantH
+    const srcH = pf && pf.height ? pf.height | 0 : wantH;
+    const loaded = pf && pf.data ? base64ToPixels(pf.data, srcH) : emptyPixels(wantH);
+    pixels = emptyPixels(wantH);
+    pixels.set(loaded.subarray(0, Math.min(loaded.length, pixels.length)));
+    lineColupf = colorsFromB64(pf && pf.lineColupf, wantH, colupf);
+    lineColubk = colorsFromB64(pf && pf.lineColubk, wantH, colubk);
+    // se o orçamento mudou, persiste a nova altura
+    if (!pf || (pf.height | 0) !== wantH) {
+      // defer persist até ter modo ok
+    }
     if (pfMode !== 'asymmetric') syncAllRight();
   }
 
@@ -478,8 +488,8 @@ const PLAYFIELD = (() => {
     lineColubk = snap.lineColubk ? new Uint8Array(snap.lineColubk) : null;
     if (snap.pfMode) pfMode = snap.pfMode;
     if (!lineColupf || !lineColubk) ensureLineColors(height);
-    const hEl = document.getElementById('pfHeight');
-    if (hEl) hEl.value = height;
+    // altura sempre amarrada ao orçamento (placar/logo)
+    applyPlayHeight(targetPlayHeight());
     const mEl = document.getElementById('pfMode');
     if (mEl) mEl.value = pfMode;
     persist();
@@ -493,21 +503,59 @@ const PLAYFIELD = (() => {
     return ensureData().scoreBar;
   }
 
-  function scoreBarLines() {
+  /** Orçamento de scanlines (mesmo critério do Config / AgcBuilder). */
+  function getScanlineBudget() {
+    if (typeof CONFIG !== 'undefined' && typeof CONFIG.computeScanlineBudget === 'function') {
+      try {
+        return CONFIG.computeScanlineBudget(ensureData());
+      } catch (e) {}
+    }
     const sb = scoreBarCfg();
-    // faixa de placar (logo é separado no rodapé global)
-    if (!sb || sb.position === 'none') return 0;
-    return sb.lines | 0;
+    const tv = ensureData().tv === 'PAL' ? 'PAL' : 'NTSC';
+    const scanlines = tv === 'PAL' ? 242 : 192;
+    const logoL = Math.max(6, Math.min(16, (sb.logoLines | 0) || 10));
+    let scoreL = 0;
+    if (sb && sb.position && sb.position !== 'none') {
+      const players = Math.max(1, Math.min(2, (sb.players | 0) || 1));
+      let bandH = Math.max(7, Math.min(12, (sb.lines | 0) || 8));
+      if (players >= 2) bandH = Math.max(6, Math.min(7, bandH));
+      scoreL = Math.min(24, bandH * players + (players >= 2 ? 2 : 0));
+    }
+    return {
+      tv,
+      scanlines,
+      scoreLines: scoreL,
+      logoLines: logoL,
+      playLines: Math.max(16, scanlines - scoreL - logoL),
+    };
+  }
+
+  function scoreBarLines() {
+    return getScanlineBudget().scoreLines;
   }
 
   function logoLines() {
-    const sb = scoreBarCfg();
-    if (!sb || sb.logoAlways === false) return 0;
-    return sb.logoLines | 0;
+    return getScanlineBudget().logoLines;
+  }
+
+  /** Altura do editor = só área útil (playLines). */
+  function targetPlayHeight() {
+    return getScanlineBudget().playLines;
+  }
+
+  function applyPlayHeight(nextH) {
+    nextH = Math.max(16, Math.min(240, nextH | 0));
+    if (nextH === height && pixels && pixels.length === W * height) return false;
+    const next = emptyPixels(nextH);
+    if (pixels) next.set(pixels.subarray(0, Math.min(pixels.length, next.length)));
+    height = nextH;
+    pixels = next;
+    ensureLineColors(nextH);
+    return true;
   }
 
   function scorePlayableHeight() {
-    return Math.max(16, height - scoreBarLines() - (typeof logoLines === "function" ? logoLines() : 0));
+    return targetPlayHeight();
   }
 
   function ensureScoreVariable() {
@@ -529,6 +577,8 @@ const PLAYFIELD = (() => {
     if (!root) return;
     const d = ensureData();
     loadForScreen(currentScreenId());
+    // garante height = playLines persistido no projeto
+    persist();
     const sb = scoreBarCfg();
     const varOpts = (d.variables || [])
       .map(function (v) {
@@ -560,9 +610,6 @@ const PLAYFIELD = (() => {
             <select id="pfScreen">${screenOpts}</select>
           </label>
           <button type="button" class="pf-btn" id="pfAddScreen" title="Nova tela">+ Tela</button>
-          <label>Altura
-            <input id="pfHeight" type="number" min="16" max="240" value="${height}" style="width:64px" />
-          </label>
           <label>Modo PF
             <select id="pfMode">
               ${allowedModes()
@@ -587,52 +634,72 @@ const PLAYFIELD = (() => {
             </select>
           </label>
           <div class="pf-tools" id="pfEditTools">
-            <button type="button" class="pf-tool active" data-tool="paint" title="Pincel">🖌</button>
+            <button type="button" class="pf-tool active" data-tool="paint" title="Pincel (pixels PF)">🖌</button>
             <button type="button" class="pf-tool" data-tool="erase" title="Borracha">⌫</button>
             <button type="button" class="pf-tool" data-tool="fill" title="Balde (preencher)">🪣</button>
+            <button type="button" class="pf-tool" data-tool="colbk" title="Pintar COLUBK (fundo da scanline)">BG</button>
+            <button type="button" class="pf-tool" data-tool="colpf" title="Pintar COLUPF (cor do PF na scanline)">PF</button>
             <button type="button" class="pf-tool" data-tool="spawn" title="Ponto de spawn">🎯</button>
           </div>
           <div class="pf-tools">
-            <button type="button" class="pf-tool" id="pfZoomOut" title="Zoom −">−</button>
-            <span id="pfZoomLabel" style="font-size:11px;color:#aaa;min-width:28px;text-align:center">${zoom}×</span>
-            <button type="button" class="pf-tool" id="pfZoomIn" title="Zoom +">+</button>
+            <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:6px">Zoom
+              <select id="pfZoom" style="background:#111;color:#eee;border:1px solid #444;border-radius:5px;padding:4px 6px;font-size:12px">
+                <option value="1" ${zoom === 1 ? 'selected' : ''}>1×</option>
+                <option value="2" ${zoom === 2 ? 'selected' : ''}>2×</option>
+              </select>
+            </label>
             <button type="button" class="pf-tool" id="pfUndo" title="Desfazer (Ctrl+Z)">↩</button>
           </div>
           <button type="button" class="pf-btn" id="pfClear">Limpar</button>
-          <span class="pf-hint" title="Configurar em Configurações">Placar: ${
-            sb.position === 'none' ? 'off' : sb.position + '/' + (sb.align || 'center')
-          } · Logo: ${sb.logoAlways !== false ? 'on' : 'off'}</span>
-          <span class="pf-hint">40×${height}${sb.enabled ? ' · placar ' + sb.lines + ' linhas' : ''} · 4:3</span>
+          <span class="pf-hint" title="Definido em Configurações (placar + logo)">${(() => {
+            const b = getScanlineBudget();
+            return `Área útil: <b>40×${b.playLines}</b> · placar ${b.scoreLines} · logo ${b.logoLines} · ${b.tv}`;
+          })()}</span>
         </div>
         <div class="pf-body">
-          <div class="pf-canvas-box">
-            <canvas id="pfCanvas"></canvas>
-          </div>
-          <div class="pf-side">
-            <div class="pf-card" id="pfColorsCard">
-              <div class="pf-card-title">Cores TIA</div>
-              <div class="tia-radios">
-                <label><input type="radio" name="pfColTarget" value="bk" ${
-                  colorTarget === 'bk' ? 'checked' : ''
-                }/> <span style="color:#5dade2">COLUBK</span> <code id="pfBkHex">$${(
+          <div class="pf-main-col">
+            <div class="pf-canvas-box">
+              <canvas id="pfCanvas"></canvas>
+            </div>
+            <div class="pf-card pf-palette-card" id="pfColorsCard">
+              <div class="pf-palette-head">
+                <span class="pf-card-title" style="margin:0">Cores TIA</span>
+                <div class="tia-radios tia-radios-inline">
+                  <label><input type="radio" name="pfColTarget" value="bk" ${
+                    colorTarget === 'bk' ? 'checked' : ''
+                  }/> <span style="color:#5dade2">COLUBK</span> <code id="pfBkHex">$${(
       colubk & 0xff
     )
       .toString(16)
       .padStart(2, '0')}</code></label>
-                <label><input type="radio" name="pfColTarget" value="pf" ${
-                  colorTarget !== 'bk' ? 'checked' : ''
-                }/> <span style="color:#f4a261">COLUPF</span> <code id="pfPfHex">$${(
+                  <label><input type="radio" name="pfColTarget" value="pf" ${
+                    colorTarget !== 'bk' ? 'checked' : ''
+                  }/> <span style="color:#f4a261">COLUPF</span> <code id="pfPfHex">$${(
       colupf & 0xff
     )
       .toString(16)
       .padStart(2, '0')}</code></label>
+                  <button type="button" class="pf-btn" id="pfFillAllBk" title="Pintar todas as scanlines com COLUBK selecionado">BG todas</button>
+                  <button type="button" class="pf-btn" id="pfFillAllPf" title="Pintar todas as scanlines com COLUPF selecionado">PF todas</button>
+                </div>
               </div>
               <div class="tia-palette" id="pfPalette"></div>
-              <div class="tia-legend">
-                Selecione a cor e clique na <b>barra à direita</b> do grid para pintar a scanline.
-                <span class="pf">Laranja</span> = COLUPF · <span class="bk">Azul</span> = COLUBK
-              </div>
             </div>
+          </div>
+          <div class="pf-bands-col" id="pfBandsCol" style="${styleUsesBands() ? '' : 'display:none'}">
+            <div class="pf-card" id="pfBandsCard">
+              <div class="pf-card-title">Faixas (herói / inimigos)</div>
+              <p class="pf-note">
+                Shooter vertical: cada faixa é uma banda horizontal (Y + altura).
+                Inimigos usam P1 + NUSIZ (1–3 cópias). Posições X são color clocks (0–152).
+              </p>
+              <div id="pfBandList" class="pf-band-list"></div>
+              <button type="button" class="pf-btn" id="pfAddBand" style="margin-top:8px">+ Faixa inimigos</button>
+              <button type="button" class="pf-btn" id="pfAddHeroBand" style="margin-top:6px">+ Faixa herói (P0)</button>
+              <div id="pfBandDetail" class="pf-band-detail" style="display:none;margin-top:10px"></div>
+            </div>
+          </div>
+          <div class="pf-side">
             <div class="pf-card">
               <div class="pf-card-title">Modo</div>
               <p class="pf-note" id="pfModeHelp"></p>
@@ -671,17 +738,6 @@ const PLAYFIELD = (() => {
                 Desenhe o ring no PF em <b>Reflect</b> (cordas/chão simétricos) ou use None.
               </p>
               <div class="pf-band-fields" id="pfFightFields"></div>
-            </div>
-            <div class="pf-card" id="pfBandsCard" style="${styleUsesBands() ? '' : 'display:none'}">
-              <div class="pf-card-title">Faixas (herói / inimigos)</div>
-              <p class="pf-note">
-                Shooter vertical: cada faixa é uma banda horizontal (Y + altura).
-                Inimigos usam P1 + NUSIZ (1–3 cópias). Posições X são color clocks (0–152).
-              </p>
-              <div id="pfBandList" class="pf-band-list"></div>
-              <button type="button" class="pf-btn" id="pfAddBand" style="margin-top:8px">+ Faixa inimigos</button>
-              <button type="button" class="pf-btn" id="pfAddHeroBand" style="margin-top:6px">+ Faixa herói (P0)</button>
-              <div id="pfBandDetail" class="pf-band-detail" style="display:none;margin-top:10px"></div>
             </div>
             <div class="pf-card">
               <div class="pf-card-title">Spawns nesta tela</div>
@@ -790,9 +846,12 @@ const PLAYFIELD = (() => {
   }
 
   function injectStyles() {
-    if (document.getElementById('pf-styles')) return;
-    const s = document.createElement('style');
-    s.id = 'pf-styles';
+    let s = document.getElementById('pf-styles');
+    if (!s) {
+      s = document.createElement('style');
+      s.id = 'pf-styles';
+      document.head.appendChild(s);
+    }
     s.textContent = `
       .pf-wrap { display:flex; flex-direction:column; height:100%; background:#1e1e1e; }
       .pf-toolbar {
@@ -817,12 +876,34 @@ const PLAYFIELD = (() => {
       .pf-hint { font-size:11px; color:#666; margin-left:auto; }
       .pf-check { font-size:11px; color:#ccc; display:flex; align-items:center; gap:4px; white-space:nowrap; }
       .pf-score-opts { font-size:11px; color:#888; display:flex; align-items:center; gap:4px; }
-      .pf-body { flex:1; display:flex; min-height:0; gap:12px; padding:12px; overflow:auto; }
+      .pf-body {
+        flex:1; display:flex; flex-wrap:wrap; min-height:0; gap:12px; padding:12px; overflow:auto;
+        align-items:flex-start;
+      }
+      .pf-main-col {
+        display:flex; flex-direction:column; gap:10px; align-items:stretch;
+        width:max-content; max-width:100%; flex:0 1 auto;
+      }
       .pf-canvas-box {
         background:#0a0a0a; border:1px solid #333; border-radius:8px; padding:8px;
-        align-self:flex-start; line-height:0;
+        align-self:stretch; line-height:0; box-sizing:border-box;
       }
       #pfCanvas { image-rendering: pixelated; cursor: crosshair; display:block; max-width:100%; height:auto; }
+      .pf-palette-card {
+        padding:10px 12px !important; width:100%; box-sizing:border-box;
+      }
+      .pf-palette-head {
+        display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; margin-bottom:8px;
+      }
+      .pf-bands-col {
+        min-width:234px; width:234px; flex:0 0 234px;
+        display:flex; flex-direction:column; gap:10px;
+      }
+      .pf-bands-col .pf-card { flex:1; }
+      .pf-tool[data-tool="colbk"] { color:#5dade2; font-size:11px; font-weight:700; }
+      .pf-tool[data-tool="colpf"] { color:#f4a261; font-size:11px; font-weight:700; }
+      .pf-tool[data-tool="colbk"].active { background:#13202a; border-color:#5dade2; }
+      .pf-tool[data-tool="colpf"].active { background:#2a2218; border-color:#f4a261; }
       .pf-spawn-list { display:flex; flex-direction:column; gap:6px; margin-top:8px; max-height:180px; overflow:auto; }
       .pf-spawn-item { display:flex; align-items:center; gap:6px; font-size:11px; background:#111; border:1px solid #333; border-radius:6px; padding:6px 8px; }
       .pf-spawn-item button { margin-left:auto; background:#333; border:1px solid #555; color:#ccc; border-radius:4px; cursor:pointer; font-size:10px; padding:2px 6px; }
@@ -837,11 +918,13 @@ const PLAYFIELD = (() => {
       .pf-note { font-size:11px; color:#777; line-height:1.45; margin:0; }
       .pf-note b { color:#aaa; }
       .tia-palette {
-        display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; margin-top: 6px;
+        /* 16 hues × 8 luminâncias — largura = canvas (pai) */
+        display: grid; grid-template-columns: repeat(16, 1fr); gap: 2px; margin-top: 4px;
+        width: 100%;
       }
       .tia-cell {
-        aspect-ratio: 1; border-radius: 3px; border: 2px solid transparent;
-        cursor: pointer; min-height: 16px; padding: 0;
+        aspect-ratio: 2; border-radius: 2px; border: 2px solid transparent;
+        cursor: pointer; min-height: 0; min-width: 0; width: 100%; padding: 0;
       }
       .tia-cell:hover { outline: 1px solid #fff8; }
       .tia-cell.sel-pf { border-color: #f4a261; box-shadow: 0 0 0 1px #f4a261; }
@@ -851,6 +934,7 @@ const PLAYFIELD = (() => {
       .tia-legend span.pf { color: #f4a261; }
       .tia-legend span.bk { color: #5dade2; }
       .tia-radios { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: #aaa; margin: 6px 0; }
+      .tia-radios-inline { flex-direction: row; flex-wrap: wrap; gap: 12px 16px; margin: 0; }
       .tia-radios label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
       .pf-band-list { display:flex; flex-direction:column; gap:4px; max-height:160px; overflow:auto; }
       .pf-band-item {
@@ -873,7 +957,6 @@ const PLAYFIELD = (() => {
       .pf-river-sec:first-child { border-top: none; margin-top: 0; padding-top: 0; }
       #pfRiverFields code { color: #8dcea0; font-size: 11px; }
     `;
-    document.head.appendChild(s);
   }
 
   function escapeHtml(s) {
@@ -903,22 +986,26 @@ const PLAYFIELD = (() => {
     const root = document.getElementById('pfPalette');
     if (!root) return;
     root.innerHTML = '';
-    for (let i = 0; i < 128; i++) {
-      const reg = (i << 1) & 0xfe;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'tia-cell';
-      btn.setAttribute('data-c', String(reg));
-      btn.title = '$' + reg.toString(16).padStart(2, '0');
-      btn.style.background = tiaCss(reg);
-      btn.addEventListener('click', () => {
-        if (colorTarget === 'bk') colubk = reg;
-        else colupf = reg;
-        updateSwatches();
-        persist();
-        redraw();
-      });
-      root.appendChild(btn);
+    // Layout clássico Stella: linhas = luminância (8), colunas = hue (16)
+    // → 8 fileiras × 16 cores, sem “repetir” visualmente a mesma faixa.
+    for (let lum = 0; lum < 8; lum++) {
+      for (let hue = 0; hue < 16; hue++) {
+        const reg = ((hue << 4) | (lum << 1)) & 0xfe;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tia-cell';
+        btn.setAttribute('data-c', String(reg));
+        btn.title = '$' + reg.toString(16).padStart(2, '0') + '  hue=' + hue + ' lum=' + lum;
+        btn.style.background = tiaCss(reg);
+        btn.addEventListener('click', () => {
+          if (colorTarget === 'bk') colubk = reg;
+          else colupf = reg;
+          updateSwatches();
+          persist();
+          redraw();
+        });
+        root.appendChild(btn);
+      }
     }
     updateSwatches();
   }
@@ -956,7 +1043,6 @@ const PLAYFIELD = (() => {
       loadForScreen(e.target.value);
       const mEl = document.getElementById('pfMode');
       if (mEl) mEl.value = pfMode;
-      document.getElementById('pfHeight').value = height;
       updateModeHelp();
       updateSwatches();
       resizeCanvas();
@@ -993,20 +1079,6 @@ const PLAYFIELD = (() => {
       buildHTML();
     });
 
-    document.getElementById('pfHeight')?.addEventListener('change', (e) => {
-      let h = parseInt(e.target.value, 10) || H_DEFAULT;
-      h = Math.max(16, Math.min(240, h));
-      e.target.value = h;
-      const next = emptyPixels(h);
-      next.set(pixels.subarray(0, Math.min(pixels.length, next.length)));
-      height = h;
-      pixels = next;
-      ensureLineColors(h);
-      resizeCanvas();
-      persist();
-      redraw();
-    });
-
     document.getElementById('pfMode')?.addEventListener('change', (e) => {
       pushUndo();
       pfMode = coercePfMode(e.target.value);
@@ -1034,6 +1106,7 @@ const PLAYFIELD = (() => {
         spriteId: (Project.data.sprites && Project.data.sprites[0] && Project.data.sprites[0].id) || '',
         copies,
         spacing: 'close',
+        wrap: true,
         baseX: 40,
         xs: [],
       };
@@ -1064,6 +1137,7 @@ const PLAYFIELD = (() => {
         spriteId: (Project.data.sprites && Project.data.sprites[0] && Project.data.sprites[0].id) || '',
         copies: 1,
         spacing: 'close',
+        wrap: false,
         baseX: 72,
         xs: [72],
       };
@@ -1075,14 +1149,15 @@ const PLAYFIELD = (() => {
     });
 
     function setZoom(z) {
-      zoom = Math.max(1, Math.min(4, z | 0));
-      const lab = document.getElementById('pfZoomLabel');
-      if (lab) lab.textContent = zoom + '×';
+      zoom = z === 2 ? 2 : 1;
+      const sel = document.getElementById('pfZoom');
+      if (sel) sel.value = String(zoom);
       resizeCanvas();
       redraw();
     }
-    document.getElementById('pfZoomIn')?.addEventListener('click', () => setZoom(zoom + 1));
-    document.getElementById('pfZoomOut')?.addEventListener('click', () => setZoom(zoom - 1));
+    document.getElementById('pfZoom')?.addEventListener('change', (e) => {
+      setZoom(parseInt(e.target.value, 10) === 2 ? 2 : 1);
+    });
     document.getElementById('pfUndo')?.addEventListener('click', () => undo());
     document.getElementById('mod-playfield')?.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -1096,7 +1171,37 @@ const PLAYFIELD = (() => {
         document.querySelectorAll('.pf-tool[data-tool]').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         tool = btn.getAttribute('data-tool');
+        if (tool === 'colbk' || tool === 'colpf') {
+          colorTarget = tool === 'colbk' ? 'bk' : 'pf';
+          const radio = document.querySelector(
+            'input[name="pfColTarget"][value="' + colorTarget + '"]'
+          );
+          if (radio) radio.checked = true;
+        }
       });
+    });
+
+    document.getElementById('pfFillAllBk')?.addEventListener('click', () => {
+      const hex = '$' + (colubk & 0xff).toString(16).padStart(2, '0');
+      if (!confirm('Pintar COLUBK em TODAS as ' + height + ' scanlines com a cor ' + hex + '?')) return;
+      pushUndo();
+      if (!lineColubk || lineColubk.length !== height) ensureLineColors(height);
+      const c = colubk & 0xfe;
+      for (let y = 0; y < height; y++) lineColubk[y] = c;
+      if (typeof Project.status === 'function') Project.status('COLUBK preenchido em todas as linhas — salve');
+      persist();
+      redraw();
+    });
+    document.getElementById('pfFillAllPf')?.addEventListener('click', () => {
+      const hex = '$' + (colupf & 0xff).toString(16).padStart(2, '0');
+      if (!confirm('Pintar COLUPF em TODAS as ' + height + ' scanlines com a cor ' + hex + '?')) return;
+      pushUndo();
+      if (!lineColupf || lineColupf.length !== height) ensureLineColors(height);
+      const c = colupf & 0xfe;
+      for (let y = 0; y < height; y++) lineColupf[y] = c;
+      if (typeof Project.status === 'function') Project.status('COLUPF preenchido em todas as linhas — salve');
+      persist();
+      redraw();
     });
 
     document.getElementById('pfClear')?.addEventListener('click', () => {
@@ -1181,12 +1286,19 @@ const PLAYFIELD = (() => {
       return { x: Math.floor(px / cellW), y, gutter: false };
     };
 
-    const paintLineColor = (y) => {
-      if (pfMode === 'none') return;
+    const paintLineColor = (y, forceTarget) => {
       if (y < 0 || y >= height) return;
       if (!lineColupf || lineColupf.length !== height) ensureLineColors(height);
-      if (colorTarget === 'bk') lineColubk[y] = colubk & 0xfe;
-      else lineColupf[y] = colupf & 0xfe;
+      const tgt = forceTarget || (tool === 'colbk' ? 'bk' : tool === 'colpf' ? 'pf' : colorTarget);
+      if (tgt === 'bk') {
+        lineColubk[y] = colubk & 0xfe;
+        // também atualiza default global se pintar várias linhas
+        colorTarget = 'bk';
+      } else {
+        if (pfMode === 'none') return; // COLUPF irrelevante em none
+        lineColupf[y] = colupf & 0xfe;
+        colorTarget = 'pf';
+      }
     };
 
     const writePixel = (x, y, val) => {
@@ -1234,7 +1346,21 @@ const PLAYFIELD = (() => {
         }
       }
 
-      // none ou river procedural: sem pintura livre
+      // ferramentas de cor de linha: funcionam mesmo em none (COLUBK)
+      if (tool === 'colbk' || tool === 'colpf') {
+        if (p.y < 0 || p.y >= height) return;
+        painting = true;
+        pushUndo();
+        paintLineColor(p.y, tool === 'colbk' ? 'bk' : 'pf');
+        // sincroniza rádio da paleta
+        const radio = document.querySelector('input[name="pfColTarget"][value="' + (tool === 'colbk' ? 'bk' : 'pf') + '"]');
+        if (radio) radio.checked = true;
+        redraw();
+        persist();
+        ev.preventDefault();
+        return;
+      }
+      // none ou river procedural: sem pintura livre de pixels
       if (pfMode === 'none' || styleUsesRiverMap()) {
         ev.preventDefault();
         return;
@@ -1327,6 +1453,13 @@ const PLAYFIELD = (() => {
       }
 
       if (!painting) return;
+      if (tool === 'colbk' || tool === 'colpf') {
+        if (p.y >= 0 && p.y < height) {
+          paintLineColor(p.y, tool === 'colbk' ? 'bk' : 'pf');
+          redraw();
+        }
+        return;
+      }
       if (pfMode === 'none') return;
       if (p.gap) return;
       if (p.gutter) paintLineColor(p.y);
@@ -1475,73 +1608,7 @@ const PLAYFIELD = (() => {
       ctx.fillRect(0, 0, gridW, canvasH);
     }
 
-    // Overlay: barra de placar reservada
-    const sb = scoreBarCfg();
-    if (sb.enabled) {
-      const barH = scoreBarLines();
-      const barPxH = barH * cellH;
-      const y0 = (height - barH) * cellH;
-
-      // fundo sempre preto
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, y0, gridW, barPxH);
-
-      // faixa arco-íris fina no topo (estilo Activision)
-      const rainbow = ['#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6'];
-      const band = Math.max(1, Math.min(2, Math.floor(cellH * 0.25)));
-      for (let i = 0; i < 6; i++) {
-        ctx.fillStyle = rainbow[i];
-        ctx.fillRect(0, y0 + i * band, gridW, band);
-      }
-      const contentTop = y0 + 6 * band + 2;
-      const contentH = barPxH - (contentTop - y0) - 2;
-
-      // Logo à esquerda, um pouco maior
-      if (sb.showLogo) {
-        const logoSize = Math.max(11, Math.floor(contentH * 0.42));
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold ' + logoSize + 'px monospace';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('RETROCOMPILER', 6, contentTop + contentH / 2);
-      }
-
-      // Dígitos bem menores, centralizados na faixa
-      const digitsN = sb.digits | 0;
-      const val = Math.max(0, Math.min(999999, sb.previewValue | 0));
-      let str = String(val);
-      while (str.length < digitsN) str = '0' + str;
-      str = str.slice(-digitsN);
-
-      // dígitos no mesmo “peso visual” do logo (bem pequenos)
-      const px = Math.max(1, Math.floor(cellW * 0.18));
-      const digitW = 8 * px;
-      const gap = Math.max(1, Math.floor(px * 0.6));
-      const totalW = digitsN * digitW + (digitsN - 1) * gap;
-      const dx0 = Math.floor((gridW - totalW) / 2);
-      const dy0 = contentTop + Math.floor((contentH - 8 * px) / 2);
-
-      ctx.fillStyle = '#ffffff';
-      for (let di = 0; di < digitsN; di++) {
-        const g = SCORE_DIGITS[str.charCodeAt(di) - 48] || SCORE_DIGITS[0];
-        const ox = dx0 + di * (digitW + gap);
-        for (let row = 0; row < 8; row++) {
-          const bits = g[row];
-          for (let col = 0; col < 8; col++) {
-            if (bits & (0x80 >> col)) {
-              ctx.fillRect(ox + col * px, dy0 + row * px, px, px);
-            }
-          }
-        }
-      }
-
-      // borda pontilhada da zona reservada (só editor)
-      ctx.strokeStyle = 'rgba(244,162,97,0.35)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 3]);
-      ctx.strokeRect(0.5, y0 + 0.5, gridW - 1, barPxH - 1);
-      ctx.setLineDash([]);
-    }
+    // Placar e logo ficam FORA desta grade (altura = só playLines do Config).
 
     // Overlay: pontos de spawn desta tela
     const spawns = spawnsForScreen(currentScreenId());
@@ -2327,6 +2394,12 @@ const PLAYFIELD = (() => {
         <label>X base (color clocks)
           <input type="number" id="pfBandBaseX" min="0" max="152" value="${band.baseX | 0}" />
         </label>
+        <label class="pf-check" style="flex-direction:row;align-items:center;gap:8px;margin-top:4px">
+          <input type="checkbox" id="pfBandWrap" ${band.wrap !== false ? 'checked' : ''} ${
+            band.role === 'hero' ? 'disabled title="Só inimigos"' : ''
+          }/>
+          Wrap (volta na lateral)
+        </label>
         <div class="pf-note">Xs calculados: ${xs.join(', ')}</div>
         <button type="button" class="pf-btn danger" id="pfBandDel">Excluir faixa</button>
       </div>`;
@@ -2336,6 +2409,7 @@ const PLAYFIELD = (() => {
       band.copies = c;
       band.spacing = document.getElementById('pfBandSpacing').value || 'close';
       band.baseX = Math.max(0, Math.min(152, parseInt(document.getElementById('pfBandBaseX').value, 10) || 0));
+      band.wrap = band.role === 'hero' ? false : !!document.getElementById('pfBandWrap')?.checked;
       band.xs = bandXs(band);
     };
 
@@ -2361,6 +2435,12 @@ const PLAYFIELD = (() => {
     });
     document.getElementById('pfBandSpacing')?.addEventListener('change', () => {
       syncXs();
+      if (typeof Project.status === 'function') Project.status('faixa alterada — salve');
+      renderBandsPanel();
+      redraw();
+    });
+    document.getElementById('pfBandWrap')?.addEventListener('change', (e) => {
+      band.wrap = !!e.target.checked;
       if (typeof Project.status === 'function') Project.status('faixa alterada — salve');
       renderBandsPanel();
       redraw();

@@ -555,8 +555,7 @@ const CONFIG = (() => {
       if (![4, 8, 12].includes(del)) del = 12;
       sb.delay = del;
     }
-    if (sb.background == null) sb.background = true;
-    sb.background = !!sb.background;
+    sb.background = true; // fundo preto do placar sempre (sem UI)
     sb.lines = 8; // fixo (sem UI)
     if (typeof sb.variable !== 'string' || !sb.variable) sb.variable = 'scoreP0';
     if (typeof sb.variable2 !== 'string' || !sb.variable2) sb.variable2 = 'scoreP1';
@@ -570,6 +569,38 @@ const CONFIG = (() => {
     sb.variable2 = 'scoreP1';
 
     return sb;
+  }
+
+  /**
+   * Orçamento de scanlines — mesmo critério do AgcBuilder.
+   * playLines = área útil do PF (editor usa só isso).
+   */
+  function computeScanlineBudget(data) {
+    const d = data || (typeof Project !== 'undefined' ? Project.data : null) || {};
+    const tv = d.tv === 'PAL' ? 'PAL' : 'NTSC';
+    const scanlines = tv === 'PAL' ? 242 : 192;
+    const sb = d.scoreBar || {};
+    const logoL = Math.max(6, Math.min(16, (sb.logoLines | 0) || 10));
+    let scoreL = 0;
+    if (sb.position && sb.position !== 'none') {
+      const players = Math.max(1, Math.min(2, (sb.players | 0) || 1));
+      const glyphH = 6;
+      let bandH = Math.max(glyphH + 1, Math.min(12, (sb.lines | 0) || 8));
+      if (players >= 2) {
+        bandH = Math.max(glyphH, Math.min(glyphH + 1, bandH));
+      }
+      scoreL = bandH * players;
+      if (players >= 2) scoreL += 2; // gap entre faixas
+      scoreL = Math.min(24, scoreL);
+    }
+    const playLines = Math.max(16, scanlines - scoreL - logoL);
+    return {
+      tv,
+      scanlines,
+      scoreLines: scoreL,
+      logoLines: logoL,
+      playLines,
+    };
   }
 
   function ensureData() {
@@ -800,10 +831,6 @@ const CONFIG = (() => {
               <input type="checkbox" id="cfgScoreLabel" ${sb.labelPlayers ? 'checked' : ''} ${sb.position === 'none' || sb.digits !== 3 ? 'disabled' : ''}/>
               Nomear player (1P/2P na centena, valor 0–99)
             </label>
-            <label class="cfg-opt" style="flex-direction:row;align-items:center;gap:8px;margin-top:8px">
-              <input type="checkbox" id="cfgScoreBg" ${sb.background ? 'checked' : ''} ${sb.position === 'none' ? 'disabled' : ''}/>
-              Fundo preto na faixa do placar
-            </label>
           </div>
           <div style="margin-top:14px;padding-top:12px;border-top:1px solid #333">
             <div style="font-size:11px;color:#f4a261;font-weight:700;margin-bottom:8px">LOGO (obrigatório)</div>
@@ -816,6 +843,16 @@ const CONFIG = (() => {
             <p style="margin:8px 0 0;font-size:11px;color:#666;line-height:1.4">
               Ordem no frame: [placar top?] → jogo → [placar bottom?] → logo → overscan.
             </p>
+            ${(() => {
+              const b = computeScanlineBudget(d);
+              return `<div style="margin-top:10px;padding:8px 10px;background:#12151c;border:1px solid #333;border-radius:6px;font-size:11px;color:#aaa;line-height:1.5">
+                <b style="color:#f4a261">Área útil do playfield</b> (auto)<br/>
+                TV ${b.tv}: <code>${b.scanlines}</code> linhas
+                − placar <code>${b.scoreLines}</code>
+                − logo <code>${b.logoLines}</code>
+                = <b style="color:#8dcea0">${b.playLines}</b> scanlines editáveis
+              </div>`;
+            })()}
           </div>
         </div>
 
@@ -952,12 +989,21 @@ const CONFIG = (() => {
     });
 
     
+    function refreshPlayfieldHeight() {
+      if (typeof PLAYFIELD !== 'undefined' && typeof PLAYFIELD.init === 'function') {
+        try {
+          PLAYFIELD.init();
+        } catch (err) {}
+      }
+    }
+
     document.getElementById('cfgScorePos')?.addEventListener('change', (e) => {
       const d2 = ensureData();
       d2.scoreBar.position = e.target.value;
       normalizeScoreBar(d2);
       dirty();
       buildHTML();
+      refreshPlayfieldHeight();
     });
     document.getElementById('cfgScoreDelay')?.addEventListener('change', (e) => {
       const d2 = ensureData();
@@ -980,6 +1026,7 @@ const CONFIG = (() => {
       }
       dirty();
       buildHTML();
+      refreshPlayfieldHeight();
     });
     document.getElementById('cfgScoreLabel')?.addEventListener('change', (e) => {
       const d2 = ensureData();
@@ -998,16 +1045,14 @@ const CONFIG = (() => {
       dirty();
       buildHTML();
     });
-    document.getElementById('cfgScoreBg')?.addEventListener('change', (e) => {
-      ensureData().scoreBar.background = !!e.target.checked;
-      dirty();
-    });
     document.getElementById('cfgLogoLines')?.addEventListener('change', (e) => {
       let v = parseInt(e.target.value, 10) || 10;
       v = Math.max(6, Math.min(16, v));
       ensureData().scoreBar.logoLines = v;
       normalizeScoreBar(ensureData());
       dirty();
+      buildHTML();
+      refreshPlayfieldHeight();
     });
 
 
@@ -1313,6 +1358,7 @@ const CONFIG = (() => {
     showFightEditor,
     showAdventureEditor,
     showRacingEditor,
+    computeScanlineBudget,
     KERNEL_PROFILES,
     GAME_STYLES,
     STYLE_CONTRACTS,

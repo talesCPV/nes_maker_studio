@@ -33,17 +33,19 @@ const SPRITES = (() => {
   const TIA_NTSC = buildTiaNtsc();
 
   function buildTiaNtsc() {
+    // i = reg>>1 (0..127). Hue = nibble alto; luminância = 0..7.
     const out = new Array(128);
     for (let i = 0; i < 128; i++) {
-      const hue = (i >> 1) & 0x0f;
-      const lum = i & 0x0e;
+      const reg = (i << 1) & 0xfe;
+      const hue = (reg >> 4) & 0x0f;
+      const lum = (reg >> 1) & 0x07;
       if (hue === 0) {
-        const g = Math.min(255, 16 + lum * 16);
+        const g = Math.min(255, 8 + lum * 32);
         out[i] = [g, g, g];
       } else {
         const h = ((hue - 1) / 14) * 360;
-        const l = 0.18 + (lum / 14) * 0.55;
-        out[i] = hslToRgb(h, 0.75, l);
+        const l = 0.16 + (lum / 7) * 0.62;
+        out[i] = hslToRgb(h, 0.78, l);
       }
     }
     return out;
@@ -76,7 +78,7 @@ const SPRITES = (() => {
   }
 
   function cellSize(h) {
-    const z = Math.max(1, Math.min(6, zoom | 0));
+    const z = zoom === 2 ? 2 : 1;
     const cellH = CELL_H * z;
     const cellW = Math.max(3, Math.round(cellH * (160 / 192)));
     return { cellW, cellH, zoom: z };
@@ -556,53 +558,60 @@ const SPRITES = (() => {
               </select>
             </label>
             <div class="sp-tools">
-              <button type="button" class="sp-tool active" data-tool="paint" title="Pincel">🖌</button>
+              <button type="button" class="sp-tool active" data-tool="paint" title="Pincel (pixels GRP)">🖌</button>
               <button type="button" class="sp-tool" data-tool="erase" title="Borracha">⌫</button>
               <button type="button" class="sp-tool" data-tool="fill" title="Balde">🪣</button>
+              <button type="button" class="sp-tool" data-tool="col" title="Pintar COLUPx na scanline">COR</button>
             </div>
             <div class="sp-tools">
-              <button type="button" class="sp-tool" id="spZoomOut" title="Zoom −">−</button>
-              <span id="spZoomLabel" style="font-size:11px;color:#aaa;min-width:28px;text-align:center">${zoom}×</span>
-              <button type="button" class="sp-tool" id="spZoomIn" title="Zoom +">+</button>
+              <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:6px">Zoom
+                <select id="spZoom">
+                  <option value="1" ${zoom === 1 ? 'selected' : ''}>1×</option>
+                  <option value="2" ${(zoom | 0) === 2 ? 'selected' : ''}>2×</option>
+                </select>
+              </label>
               <button type="button" class="sp-tool" id="spUndo" title="Desfazer (Ctrl+Z)">↩</button>
             </div>
+            <button type="button" class="sp-btn" id="spFillAllCol" title="Pintar COLUPx em todas as linhas">COR todas</button>
             <button type="button" class="sp-btn danger" id="spDelete">🗑</button>
-            <span class="sp-hint">8×${height} fixo · NUSIZ estica na TV · cores na barra à direita</span>
+            <span class="sp-hint">8×${height} · NUSIZ na TV · COR = cor por scanline</span>
           </div>
           <div class="sp-anim-bar" id="spAnimBar">
-            <div class="sp-anim-head">
-              <strong>Animação</strong>
-              <span class="sp-hint" id="spFrameLabel">Frame 1 / 1</span>
-              <label class="sp-anim-dur">Duração
-                <input type="number" id="spFrameDur" min="1" max="255" value="4" title="Frames de jogo neste quadro" />
+            <div class="sp-anim-toolbar">
+              <span class="sp-anim-title">Animação</span>
+              <span class="sp-hint" id="spFrameLabel" style="margin-left:0">Frame 1 / 1</span>
+              <label>Duração
+                <input type="number" id="spFrameDur" min="1" max="255" value="4" title="Frames de jogo neste quadro" style="width:52px" />
               </label>
-              <button type="button" class="sp-tool" id="spAnimPlay" title="Pré-visualizar">▶</button>
-              <button type="button" class="sp-tool" id="spFrameAdd" title="Novo frame vazio">+ Frame</button>
-              <button type="button" class="sp-tool" id="spFrameDup" title="Duplicar frame atual">⧉</button>
-              <button type="button" class="sp-tool danger" id="spFrameDel" title="Remover frame">🗑 Frame</button>
+              <div class="sp-tools">
+                <button type="button" class="sp-tool" id="spAnimPlay" title="Pré-visualizar">▶</button>
+                <button type="button" class="sp-btn" id="spFrameAdd" title="Novo frame vazio">+ Frame</button>
+                <button type="button" class="sp-btn" id="spFrameDup" title="Duplicar frame atual">⧉ Dup</button>
+                <button type="button" class="sp-btn danger" id="spFrameDel" title="Remover frame">🗑</button>
+              </div>
             </div>
             <div class="sp-frame-strip" id="spFrameStrip"></div>
           </div>
           <div class="sp-body">
-            <div class="sp-canvas-box">
-              <canvas id="spCanvas"></canvas>
+            <div class="sp-draw-row">
+              <div class="sp-canvas-box">
+                <canvas id="spCanvas"></canvas>
+              </div>
+              <div class="sp-palette-col">
+                <div class="sp-palette-head">
+                  <span class="sp-card-title" style="margin:0">COLUP${player}</span>
+                  <code id="spHex" style="color:#8dcea0">$${(color & 0xff).toString(16).padStart(2, '0')}</code>
+                </div>
+                <div class="tia-palette" id="spPalette"></div>
+              </div>
             </div>
             <div class="sp-side">
               <div class="sp-card">
-                <div class="sp-card-title">COLUP${player} <code id="spHex" style="float:right;color:#8dcea0">$${(
-      color & 0xff
-    )
-      .toString(16)
-      .padStart(2, '0')}</code></div>
-                <div class="tia-palette" id="spPalette"></div>
-                <div class="tia-legend">Selecione a cor e clique na <span class="pf">barra à direita</span> do grid para pintar a scanline.</div>
-              </div>
-              <div class="sp-card">
                 <div class="sp-card-title">Hardware</div>
                 <p class="sp-note">
-                  Largura do bitmap = <b>8 pixels</b> (registrador GRP0/GRP1).
-                  Não há seletor de largura em pixels: só <b>NUSIZ</b> (1x / 2x / 4x e cópias na tela).
-                  Altura é livre (um byte por linha). Missiles/Ball na aba ao lado.
+                  Largura do bitmap = <b>8 pixels</b> (GRP0/GRP1).
+                  Só <b>NUSIZ</b> estica/copia na TV. Altura livre (1 byte/linha).
+                  <b>COR</b> / barra à direita = COLUPx por scanline.
                 </p>
               </div>
             </div>
@@ -731,9 +740,12 @@ const SPRITES = (() => {
   }
 
   function injectStyles() {
-    if (document.getElementById('sp-styles')) return;
-    const s = document.createElement('style');
-    s.id = 'sp-styles';
+    let s = document.getElementById('sp-styles');
+    if (!s) {
+      s = document.createElement('style');
+      s.id = 'sp-styles';
+      document.head.appendChild(s);
+    }
     s.textContent = `
       .sp-wrap { display:flex; height:100%; background:#1e1e1e; min-height:0; }
       .sp-left { width:200px; border-right:1px solid #333; display:flex; flex-direction:column; background:#181818; flex-shrink:0; }
@@ -761,28 +773,74 @@ const SPRITES = (() => {
       .sp-toolbar label { font-size:11px; color:#888; display:flex; align-items:center; gap:6px; }
       .sp-toolbar input, .sp-toolbar select { background:#111; color:#eee; border:1px solid #444; border-radius:5px; padding:4px 6px; font-size:12px; }
       .sp-tools { display:flex; gap:4px; align-items:center; }
-      .sp-tool { width:32px; height:32px; border-radius:6px; border:1px solid #444; background:#2a2a2a; color:#ccc; cursor:pointer; }
+      .sp-tool { width:32px; height:32px; border-radius:6px; border:1px solid #444; background:#2a2a2a; color:#ccc; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
       .sp-tool.active { border-color:#f4a261; background:#2a2218; color:#f4a261; }
       .sp-btn { background:#2a2a2a; border:1px solid #444; color:#ccc; border-radius:6px; padding:5px 10px; cursor:pointer; font-size:12px; }
       .sp-btn:hover { border-color:#f4a261; }
       .sp-btn.danger { background:#3a1a1a; border-color:#5a2a2a; color:#e88; }
       .sp-hint { font-size:11px; color:#666; margin-left:auto; }
-      .sp-body { flex:1; display:flex; gap:12px; padding:12px; overflow:auto; min-height:0; }
-      .sp-canvas-box { background:#0a0a0a; border:1px solid #333; border-radius:8px; padding:10px; align-self:flex-start; }
+      /* barra de animação — mesmo padrão da toolbar */
+      .sp-anim-bar {
+        display:flex; flex-direction:column; gap:0;
+        background:#252526; border-bottom:1px solid #333;
+      }
+      .sp-anim-toolbar {
+        display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+        padding:8px 12px;
+      }
+      .sp-anim-toolbar label {
+        font-size:11px; color:#888; display:flex; align-items:center; gap:6px;
+      }
+      .sp-anim-toolbar input {
+        background:#111; color:#eee; border:1px solid #444; border-radius:5px; padding:4px 6px; font-size:12px;
+      }
+      .sp-anim-title {
+        font-size:12px; color:#f4a261; font-weight:700; margin-right:4px;
+      }
+      .sp-frame-strip {
+        display:flex; flex-wrap:wrap; gap:6px; align-items:center;
+        padding:0 12px 8px 12px; min-height:40px;
+      }
+      .sp-frame {
+        display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
+        gap:2px; padding:4px; min-width:40px;
+        background:#1a1a1a; border:1px solid #333; border-radius:6px;
+        color:#aaa; font-size:10px; cursor:pointer;
+      }
+      .sp-frame:hover { border-color:#555; }
+      .sp-frame.active { border-color:#f4a261; background:#2a2218; color:#f4a261; }
+      .sp-frame canvas { image-rendering:pixelated; display:block; border-radius:2px; background:#000; }
+      .sp-body { flex:1; display:flex; gap:12px; padding:12px; overflow:auto; min-height:0; align-items:flex-start; }
+      .sp-draw-row { display:flex; flex-direction:row; align-items:stretch; gap:10px; }
+      .sp-canvas-box { background:#0a0a0a; border:1px solid #333; border-radius:8px; padding:10px; align-self:flex-start; line-height:0; }
       #spCanvas { image-rendering:pixelated; cursor:crosshair; display:block; }
-      .sp-side { width:240px; flex-shrink:0; display:flex; flex-direction:column; gap:10px; }
+      .sp-palette-col {
+        display:flex; flex-direction:column; gap:6px;
+        background:linear-gradient(180deg,#1e222c,#161920);
+        border:1px solid #333; border-radius:10px; padding:8px;
+        box-sizing:border-box;
+      }
+      .sp-palette-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+      .sp-side { width:220px; flex-shrink:0; display:flex; flex-direction:column; gap:10px; }
       .sp-card { background:linear-gradient(180deg,#1e222c,#161920); border:1px solid #333; border-radius:10px; padding:12px; }
       .sp-card-title { font-size:12px; color:#f4a261; font-weight:700; margin-bottom:10px; }
       .sp-note { font-size:11px; color:#777; line-height:1.45; margin:0; }
       .sp-note b { color:#aaa; }
-      .tia-palette { display:grid; grid-template-columns:repeat(8,1fr); gap:2px; margin-top:6px; }
-      .tia-cell { aspect-ratio:1; border-radius:3px; border:2px solid transparent; cursor:pointer; min-height:16px; padding:0; }
+      .sp-tool[data-tool="col"] { color:#f4a261; font-size:10px; font-weight:700; width:auto; padding:0 6px; }
+      .sp-tool[data-tool="col"].active { background:#2a2218; border-color:#f4a261; }
+      /* 4 colunas × 32 linhas — altura acompanha o canvas via JS */
+      .tia-palette {
+        display:grid; grid-template-columns:repeat(4,1fr); grid-template-rows:repeat(32,1fr);
+        gap:2px; flex:1; min-height:0; width:88px;
+      }
+      .tia-cell {
+        border-radius:2px; border:2px solid transparent; cursor:pointer;
+        min-height:0; min-width:0; width:100%; height:100%; padding:0;
+      }
       .tia-cell:hover { outline:1px solid #fff8; }
       .tia-cell.sel-pf { border-color:#f4a261; box-shadow:0 0 0 1px #f4a261; }
-      .tia-legend { font-size:10px; color:#666; margin-top:6px; line-height:1.4; }
-      .tia-legend span.pf { color:#f4a261; }
     `;
-    document.head.appendChild(s);
+    if (!s.parentNode) document.head.appendChild(s);
   }
 
   function escapeHtml(s) {
@@ -805,22 +863,28 @@ const SPRITES = (() => {
     const root = document.getElementById('spPalette');
     if (!root) return;
     root.innerHTML = '';
-    for (let i = 0; i < 128; i++) {
-      const reg = (i << 1) & 0xfe;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'tia-cell';
-      btn.setAttribute('data-c', String(reg));
-      btn.title = '$' + reg.toString(16).padStart(2, '0');
-      btn.style.background = tiaCss(reg);
-      btn.addEventListener('click', () => {
-        color = reg;
-        updateSwatch();
-        persist();
-        redraw();
-        drawThumbs();
-      });
-      root.appendChild(btn);
+    // 4 colunas × 32 linhas (row-major): cada coluna = 4 hues × 8 lum
+    // col 0: hues 0–3, col 1: 4–7, col 2: 8–11, col 3: 12–15
+    for (let row = 0; row < 32; row++) {
+      for (let col = 0; col < 4; col++) {
+        const hue = col * 4 + Math.floor(row / 8);
+        const lum = row % 8;
+        const reg = ((hue << 4) | (lum << 1)) & 0xfe;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tia-cell';
+        btn.setAttribute('data-c', String(reg));
+        btn.title = '$' + reg.toString(16).padStart(2, '0') + ' hue=' + hue + ' lum=' + lum;
+        btn.style.background = tiaCss(reg);
+        btn.addEventListener('click', () => {
+          color = reg;
+          updateSwatch();
+          persist();
+          redraw();
+          drawThumbs();
+        });
+        root.appendChild(btn);
+      }
     }
     updateSwatch();
   }
@@ -968,14 +1032,27 @@ const SPRITES = (() => {
     });
 
     function setZoom(z) {
-      zoom = Math.max(1, Math.min(6, z | 0));
-      const lab = document.getElementById('spZoomLabel');
-      if (lab) lab.textContent = zoom + '×';
+      zoom = z === 2 ? 2 : 1;
+      const sel = document.getElementById('spZoom');
+      if (sel) sel.value = String(zoom);
       resizeCanvas();
       redraw();
     }
-    document.getElementById('spZoomIn')?.addEventListener('click', () => setZoom(zoom + 1));
-    document.getElementById('spZoomOut')?.addEventListener('click', () => setZoom(zoom - 1));
+    document.getElementById('spZoom')?.addEventListener('change', (e) => {
+      setZoom(parseInt(e.target.value, 10) === 2 ? 2 : 1);
+    });
+    document.getElementById('spFillAllCol')?.addEventListener('click', () => {
+      const hex = '$' + (color & 0xff).toString(16).padStart(2, '0');
+      if (!confirm('Pintar COLUP' + player + ' em TODAS as ' + height + ' linhas com ' + hex + '?')) return;
+      pushUndo();
+      if (!lineColors || lineColors.length !== height) ensureLineColors(height, color);
+      const c = color & 0xfe;
+      for (let y = 0; y < height; y++) lineColors[y] = c;
+      if (typeof Project.status === 'function') Project.status('COR preenchida em todas as linhas — salve');
+      persist();
+      redraw();
+      drawThumbs();
+    });
     document.getElementById('spUndo')?.addEventListener('click', () => undo());
     document.getElementById('mod-sprites')?.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -1024,7 +1101,7 @@ const SPRITES = (() => {
         painting = false;
         return;
       }
-      if (p.gutter) {
+      if (tool === 'col' || p.gutter) {
         paintLineColor(p.y);
       } else if (tool === 'fill') {
         floodFill(p.x, p.y, !(ev.button === 2));
@@ -1045,7 +1122,7 @@ const SPRITES = (() => {
       if (!painting) return;
       const p = pos(ev);
       if (p.gap) return;
-      if (p.gutter) paintLineColor(p.y);
+      if (tool === 'col' || p.gutter) paintLineColor(p.y);
       else if (tool === 'fill') return;
       else {
         const val = tool === 'erase' || ev.buttons === 2 ? 0 : 1;
@@ -1062,6 +1139,15 @@ const SPRITES = (() => {
     const { canvasW, canvasH } = canvasDims(height);
     canvas.width = canvasW;
     canvas.height = canvasH;
+    // paleta acompanha altura do canvas
+    const pal = document.getElementById('spPalette');
+    const col = document.querySelector('.sp-palette-col');
+    if (pal) {
+      pal.style.height = canvasH + 'px';
+    }
+    if (col) {
+      col.style.height = canvasH + 28 + 'px'; // + cabeçalho COLUPx
+    }
   }
 
   function redraw() {

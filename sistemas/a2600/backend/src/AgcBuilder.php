@@ -47,7 +47,7 @@ final class AgcBuilder
                 $scoreDelay = 12;
             }
         }
-        $scoreBg = ($scoreBar['background'] ?? true) !== false;
+        $scoreBg = true; // fundo preto do placar sempre
         $showLogo = true;
         $logoLines = max(6, min(16, (int)($scoreBar['logoLines'] ?? 10)));
         $scoreVar = 'scoreP0';
@@ -1184,41 +1184,91 @@ ASM;
 
     private static function logoRoutine(int $logoLines): string
     {
-        $lines = max(6, min(16, $logoLines));
+        // P0+P1: 1 instância cada (NUSIZ=0), colados, à esquerda (delay 5).
+        // Rainbow: COLUP0/COLUP1 por scanline (players usam COLUPx, não COLUPF).
+        $budget = max(6, min(16, $logoLines));
+        $drawH = self::logoGlyphHeight();
+        $pad = max(0, $budget - $drawH - 3);
         $out = [];
-        $out[] = '; --- Logo RETROCOMPILER (glifos.json → PF) ---';
+        $out[] = '; --- Logo (P0+P1 únicos, esq, rainbow) h=' . $drawH . ' budget=' . $budget . ' ---';
         $out[] = 'DrawLogo:';
-        $out[] = '    lda #0';
-        $out[] = '    sta GRP0';
-        $out[] = '    sta GRP1';
-        $out[] = '    lda #1';
-        $out[] = '    sta CTRLPF              ; reflect';
-        $out[] = '    lda #$0E';
-        $out[] = '    sta COLUPF';
-        $out[] = '    ldx #0';
-        $out[] = 'LogoLoop:';
-        $out[] = '    sta WSYNC';
-        $out[] = '    lda #0';
-        $out[] = '    sta COLUBK';
-        $out[] = '    cpx #' . $lines;
-        $out[] = '    bcs LogoDone';
-        $out[] = '    lda LogoPF0,x';
-        $out[] = '    sta PF0';
-        $out[] = '    lda LogoPF1,x';
-        $out[] = '    sta PF1';
-        $out[] = '    lda LogoPF2,x';
-        $out[] = '    sta PF2';
-        $out[] = '    inx';
-        $out[] = '    jmp LogoLoop';
-        $out[] = 'LogoDone:';
         $out[] = '    lda #0';
         $out[] = '    sta PF0';
         $out[] = '    sta PF1';
         $out[] = '    sta PF2';
         $out[] = '    sta CTRLPF';
+        $out[] = '    sta ENAM0';
+        $out[] = '    sta ENAM1';
+        $out[] = '    sta ENABL';
+        $out[] = '    sta NUSIZ0              ; 1 instância P0';
+        $out[] = '    sta NUSIZ1              ; 1 instância P1';
+        $out[] = '    sta WSYNC';
+        $out[] = '    ldx #5                  ; esquerda (~placar delay 4–6)';
+        $out[] = 'LogoPos:';
+        $out[] = '    dex';
+        $out[] = '    bne LogoPos';
+        $out[] = '    sta RESP0';
+        $out[] = '    sta RESP1              ; o mais colados possível';
+        $out[] = '    lda #0';
+        $out[] = '    sta HMP0';
+        $out[] = '    lda #$10                ; P1 logo à direita do P0';
+        $out[] = '    sta HMP1';
+        $out[] = '    sta WSYNC';
+        $out[] = '    sta HMOVE';
+        $out[] = '    sta WSYNC';
+        $out[] = '    sta HMCLR';
+        $out[] = '    ldy #0';
+        $out[] = 'LogoRows:';
+        $out[] = '    sta WSYNC';
+        $out[] = '    lda #0';
+        $out[] = '    sta COLUBK              ; fundo preto';
+        $out[] = '    lda LogoRain,y          ; rainbow por scanline';
+        $out[] = '    sta COLUP0';
+        $out[] = '    sta COLUP1';
+        $out[] = '    lda LogoG0,y            ; LP1';
+        $out[] = '    sta GRP0';
+        $out[] = '    lda LogoG1,y            ; LP2';
+        $out[] = '    sta GRP1';
+        $out[] = '    iny';
+        $out[] = '    cpy #' . $drawH;
+        $out[] = '    bcc LogoRows';
+        $out[] = '    lda #0';
+        $out[] = '    sta GRP0';
+        $out[] = '    sta GRP1';
+        if ($pad > 0) {
+            $out[] = '    ldx #' . $pad;
+            $out[] = 'LogoPad:';
+            $out[] = '    sta WSYNC';
+            $out[] = '    lda #0';
+            $out[] = '    sta COLUBK';
+            $out[] = '    dex';
+            $out[] = '    bne LogoPad';
+        }
         $out[] = '    rts';
         $out[] = '';
         return implode("\n", $out);
+    }
+
+    /** Altura dos glifos do logo (LP1/LP2 ou fallback). */
+    private static function logoGlyphHeight(): int
+    {
+        $bank = self::loadGlyphBank();
+        foreach (['lp1', 'LP1', 'logo_lp1', 'lp2', 'LP2', 'logo_lp2', 'logo_mark'] as $id) {
+            if (isset($bank['byId'][$id])) {
+                return max(1, min(16, (int)($bank['byId'][$id]['height'] ?? 6)));
+            }
+        }
+        // por name
+        foreach ($bank['glyphs'] ?? [] as $g) {
+            if (!is_array($g)) {
+                continue;
+            }
+            $nm = strtoupper(trim((string)($g['name'] ?? '')));
+            if ($nm === 'LP1' || $nm === 'LP2') {
+                return max(1, min(16, (int)($g['height'] ?? 6)));
+            }
+        }
+        return 6;
     }
 
     private static function digitGlyphs(): string
@@ -1256,28 +1306,74 @@ ASM;
     }
 
     /**
-     * Monta tabelas PF do logo a partir das letras em glifos.json (RETROCOMPILER).
-     * Duas faixas de texto se logoLines permitir: RETRO + COMPILER.
+     * Tabelas GRP do logo (P0=LP1, P1=LP2) + rainbow COLUP0/1.
+     * Procura glifos id/name LP1/LP2; senão quadradinho 8xH.
      */
     private static function logoData(): string
     {
         $bank = self::loadGlyphBank();
-        $rows = self::buildLogoPfRows($bank, 10); // até 10 linhas de dados
+        $h = self::logoGlyphHeight();
+        $g0 = self::findLogoGlyph($bank, ['lp1', 'LP1', 'logo_lp1'], 'LP1');
+        $g1 = self::findLogoGlyph($bank, ['lp2', 'LP2', 'logo_lp2'], 'LP2');
+        // fallback: quadradinho sólido (bits altos = esquerda do sprite)
+        $square = array_fill(0, $h, 0xf0);
+        $b0 = $g0 ? self::glyphToBytes($g0) : $square;
+        $b1 = $g1 ? self::glyphToBytes($g1) : $square;
+        while (count($b0) < $h) {
+            $b0[] = 0;
+        }
+        while (count($b1) < $h) {
+            $b1[] = 0;
+        }
+        $b0 = array_slice($b0, 0, $h);
+        $b1 = array_slice($b1, 0, $h);
+
+        // Rainbow estilo Activision (hues NTSC, luminância média)
+        $rain = [];
+        $palette = [0x42, 0x52, 0x62, 0x72, 0x82, 0x92, 0xa2, 0xb2, 0xc2, 0xd2, 0xe2, 0x32];
+        for ($i = 0; $i < $h; $i++) {
+            $rain[] = $palette[$i % count($palette)];
+        }
+
         $out = [];
-        $out[] = 'LogoPF0:';
-        foreach ($rows['pf0'] as $b) {
+        $out[] = 'LogoG0:';
+        foreach ($b0 as $b) {
             $out[] = '    .byte %' . str_pad(decbin($b & 0xff), 8, '0', STR_PAD_LEFT);
         }
-        $out[] = 'LogoPF1:';
-        foreach ($rows['pf1'] as $b) {
+        $out[] = 'LogoG1:';
+        foreach ($b1 as $b) {
             $out[] = '    .byte %' . str_pad(decbin($b & 0xff), 8, '0', STR_PAD_LEFT);
         }
-        $out[] = 'LogoPF2:';
-        foreach ($rows['pf2'] as $b) {
-            $out[] = '    .byte %' . str_pad(decbin($b & 0xff), 8, '0', STR_PAD_LEFT);
+        $out[] = 'LogoRain:';
+        foreach ($rain as $b) {
+            $out[] = '    .byte $' . sprintf('%02X', $b & 0xfe);
         }
         $out[] = '';
         return implode("\n", $out);
+    }
+
+    /**
+     * @param array{byId:array,glyphs?:list} $bank
+     * @param list<string> $ids
+     */
+    private static function findLogoGlyph(array $bank, array $ids, string $name): ?array
+    {
+        foreach ($ids as $id) {
+            if (isset($bank['byId'][$id]) && is_array($bank['byId'][$id])) {
+                return $bank['byId'][$id];
+            }
+        }
+        $want = strtoupper($name);
+        foreach ($bank['glyphs'] ?? [] as $g) {
+            if (!is_array($g)) {
+                continue;
+            }
+            $nm = strtoupper(trim((string)($g['name'] ?? '')));
+            if ($nm === $want) {
+                return $g;
+            }
+        }
+        return null;
     }
 
     /**
