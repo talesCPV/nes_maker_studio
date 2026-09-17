@@ -543,33 +543,32 @@ const CONFIG = (() => {
       else sb.position = 'none';
     }
     if (!['none', 'top', 'bottom'].includes(sb.position)) sb.position = 'none';
-    sb.align = 'left';
+    sb.align = 'left'; // legado
     sb.players = Math.max(1, Math.min(2, sb.players | 0) || 1);
     sb.digits = Math.max(2, Math.min(3, sb.digits | 0) || 2);
     sb.labelPlayers = !!sb.labelPlayers && sb.digits === 3;
-    let del = sb.delay | 0;
-    if (sb.digits >= 3) del = 7;
-    else if (![4, 8, 12].includes(del)) del = 4;
-    sb.delay = del;
+    // 2 dig: 4=esq, 8=centro, 12=dir | 3 dig: só centro (#7)
+    if (sb.digits >= 3) {
+      sb.delay = 7;
+    } else {
+      let del = sb.delay | 0;
+      if (![4, 8, 12].includes(del)) del = 12;
+      sb.delay = del;
+    }
     if (sb.background == null) sb.background = true;
     sb.background = !!sb.background;
-    sb.lines = Math.max(8, Math.min(20, sb.lines | 0) || 12);
-    if (typeof sb.variable !== 'string' || !sb.variable) sb.variable = 'score';
+    sb.lines = 8; // fixo (sem UI)
+    if (typeof sb.variable !== 'string' || !sb.variable) sb.variable = 'scoreP0';
     if (typeof sb.variable2 !== 'string' || !sb.variable2) sb.variable2 = 'scoreP1';
     // logo inegociável na plataforma
     sb.logoAlways = true;
     sb.showLogo = true;
-    sb.lines = Math.max(5, Math.min(16, sb.lines | 0) || 5); // mínimo ≈ altura glifo
     sb.logoLines = Math.max(6, Math.min(16, sb.logoLines | 0) || 10);
     sb.enabled = sb.position !== 'none';
-    // nomes canônicos reservados
-    if (sb.align === 'both') {
-      sb.variable = 'scoreP0';
-      sb.variable2 = 'scoreP1';
-    } else {
-      sb.variable = 'scoreP0';
-      sb.variable2 = 'scoreP1';
-    }
+    // nomes canônicos
+    sb.variable = 'scoreP0';
+    sb.variable2 = 'scoreP1';
+
     return sb;
   }
 
@@ -790,23 +789,16 @@ const CONFIG = (() => {
                 <option value="3" ${sb.digits === 3 ? 'selected' : ''}>3</option>
               </select>
             </label>
-            <label>Posição X ${sb.digits === 3 ? '(fixo #7)' : ''}
+            <label>Posição X
               <select id="cfgScoreDelay" ${sb.position === 'none' || sb.digits === 3 ? 'disabled' : ''}>
-                <option value="4" ${(sb.delay|0) === 4 ? 'selected' : ''}>4 — esquerda</option>
-                <option value="8" ${(sb.delay|0) === 8 ? 'selected' : ''}>8 — centro</option>
-                <option value="12" ${(sb.delay|0) === 12 ? 'selected' : ''}>12 — direita</option>
-                <option value="7" ${(sb.delay|0) === 7 ? 'selected' : ''}>7 — 3 dígitos</option>
+                <option value="4" ${(sb.delay|0) === 4 ? 'selected' : ''}>Esquerda</option>
+                <option value="8" ${(sb.delay|0) === 8 || sb.digits === 3 ? 'selected' : ''}>Centro</option>
+                <option value="12" ${(sb.delay|0) === 12 ? 'selected' : ''}>Direita</option>
               </select>
             </label>
             <label class="cfg-opt" style="flex-direction:row;align-items:center;gap:8px;${sb.digits === 3 ? '' : 'opacity:.45'}">
               <input type="checkbox" id="cfgScoreLabel" ${sb.labelPlayers ? 'checked' : ''} ${sb.position === 'none' || sb.digits !== 3 ? 'disabled' : ''}/>
               Nomear player (1P/2P na centena, valor 0–99)
-            </label>
-            <label>Altura por faixa (scanlines)
-              <input id="cfgScoreLines" type="number" min="8" max="20" value="${sb.lines | 0}" ${sb.position === 'none' ? 'disabled' : ''} />
-            </label>
-            <label>Variáveis
-              <input type="text" value="${(sb.players|0) === 2 ? 'scoreP0 + scoreP1' : 'scoreP0'}" readonly disabled />
             </label>
             <label class="cfg-opt" style="flex-direction:row;align-items:center;gap:8px;margin-top:8px">
               <input type="checkbox" id="cfgScoreBg" ${sb.background ? 'checked' : ''} ${sb.position === 'none' ? 'disabled' : ''}/>
@@ -823,7 +815,6 @@ const CONFIG = (() => {
             </label>
             <p style="margin:8px 0 0;font-size:11px;color:#666;line-height:1.4">
               Ordem no frame: [placar top?] → jogo → [placar bottom?] → logo → overscan.
-              Variáveis nativas (<code>scoreP0</code>/<code>scoreP1</code>, etc.) são criadas conforme o setup.
             </p>
           </div>
         </div>
@@ -970,7 +961,7 @@ const CONFIG = (() => {
     });
     document.getElementById('cfgScoreDelay')?.addEventListener('change', (e) => {
       const d2 = ensureData();
-      d2.scoreBar.delay = parseInt(e.target.value, 10) || 4;
+      d2.scoreBar.delay = parseInt(e.target.value, 10) || 12;
       normalizeScoreBar(d2);
       dirty();
     });
@@ -979,6 +970,14 @@ const CONFIG = (() => {
       const d2 = ensureData();
       d2.scoreBar.players = parseInt(e.target.value, 10) || 1;
       normalizeScoreBar(d2);
+      // Garante scoreP0/scoreP1 nativas conforme players
+      if (typeof Project !== 'undefined' && typeof Project.syncNativeVariables === 'function') {
+        Project.syncNativeVariables();
+      }
+      // Atualiza lista de variáveis no módulo Programação se estiver aberto
+      if (typeof PROGRAM !== 'undefined' && typeof PROGRAM.init === 'function') {
+        try { PROGRAM.init(); } catch (err) {}
+      }
       dirty();
       buildHTML();
     });
@@ -992,17 +991,12 @@ const CONFIG = (() => {
       const d2 = ensureData();
       d2.scoreBar.digits = parseInt(e.target.value, 10) || 2;
       if (d2.scoreBar.digits !== 3) d2.scoreBar.labelPlayers = false;
-      if (d2.scoreBar.digits === 3) d2.scoreBar.delay = 7;
+      // 3 digitos = só centro (#7); 2 digitos mantém 4/8/12
+      if (d2.scoreBar.digits >= 3) d2.scoreBar.delay = 7;
+      else if (![4, 8, 12].includes(d2.scoreBar.delay | 0)) d2.scoreBar.delay = 12;
       normalizeScoreBar(d2);
       dirty();
       buildHTML();
-    });
-    document.getElementById('cfgScoreLines')?.addEventListener('change', (e) => {
-      let v = parseInt(e.target.value, 10) || 16;
-      v = Math.max(8, Math.min(32, v));
-      ensureData().scoreBar.lines = v;
-      normalizeScoreBar(ensureData());
-      dirty();
     });
     document.getElementById('cfgScoreBg')?.addEventListener('change', (e) => {
       ensureData().scoreBar.background = !!e.target.checked;

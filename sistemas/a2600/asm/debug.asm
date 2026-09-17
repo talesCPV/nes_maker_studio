@@ -97,12 +97,14 @@ ClearMem:
     sta Score2
     lda #12              ; scoreP0 init (Program → valor)
     sta ScoreP0
-    lda #0              ; scoreP1 init
+    lda #34              ; scoreP1 init
     sta ScoreP1
     sta PrevSWCHA
     sta PrevINPT4
     sta WalkTick
 
+    lda #34
+    sta U_scoreP1
     lda #12
     sta U_scoreP0
     lda #0
@@ -247,7 +249,7 @@ SetHXDiv:
     sta RESP0,x             ; RESP0 ou RESP1
     rts
 
-; --- Score players=1 digits=3 delay=7 label=0 ---
+; --- Score players=2 digits=3 delay=8 label=0 h=6 (pre-build + tight bands) ---
 DrawScoreBand:
     lda #0
     sta PF0
@@ -268,42 +270,10 @@ DrawScoreBand:
     lda #$0E
     sta COLUP0
     sta COLUP1
-    ; --- faixa scoreP0 ---
+    ; === PRE-CALC scoreP0 (build ScStrip) ===
     jsr ScoreToDigits0
-    jsr ScoreDrawOne
-    lda #0
-    sta GRP0
-    sta GRP1
-    rts
-
-ScoreDrawOne:
-    sta WSYNC
-    ldx #7
-ScPos0:
-    dex
-    bne ScPos0
-    nop
-    sta RESP0
-    sta RESP1
-    lda #0
-    sta HMP0
-    sta HMP1
-    sta WSYNC
-    sta HMOVE
-    sta WSYNC
-    sta HMCLR
-    ldx #5
-ScPadT:
-    sta WSYNC
-    lda #0
-    sta COLUBK
-    lda #0
-    sta GRP0
-    sta GRP1
-    dex
-    bne ScPadT
     ldy #0
-ScBuild:
+ScBuild0:
     sty ScRow
     tya
     sta TmpA
@@ -329,9 +299,56 @@ ScBuild:
     sta ScStrip,x
     iny
     cpy #6
-    bcc ScBuild
+    bcc ScBuild0
+    ; === PRE-CALC scoreP1 (build ScStrip2) ===
+    jsr ScoreToDigits1
     ldy #0
-ScDigRows:
+ScBuild1:
+    sty ScRow
+    tya
+    sta TmpA
+    asl
+    clc
+    adc TmpA
+    sta ScIdx
+    lda Dig3
+    jsr GlyphRow
+    ldx ScIdx
+    sta ScStrip2,x
+    inx
+    stx ScIdx
+    lda Dig4
+    jsr GlyphRow
+    ldx ScIdx
+    sta ScStrip2,x
+    inx
+    stx ScIdx
+    lda Dig5
+    jsr GlyphRow
+    ldx ScIdx
+    sta ScStrip2,x
+    iny
+    cpy #6
+    bcc ScBuild1
+    ; === POSITION (uma vez só) ===
+    sta WSYNC
+    ldx #8
+ScPos0:
+    dex
+    bne ScPos0
+    nop
+    sta RESP0
+    sta RESP1
+    lda #0
+    sta HMP0
+    sta HMP1
+    sta WSYNC
+    sta HMOVE
+    sta WSYNC
+    sta HMCLR
+    ; === DISPLAY faixa P0 ===
+    ldy #0
+ScDigRows0:
     sta WSYNC
     lda #0
     sta COLUBK
@@ -351,20 +368,43 @@ ScDigRows:
     sta GRP0
     iny
     cpy #6
-    bcc ScDigRows
+    bcc ScDigRows0
     lda #0
     sta GRP0
     sta GRP1
-    ldx #5
-ScPadB:
+    ; === GAP 1 scanline entre faixas ===
     sta WSYNC
     lda #0
     sta COLUBK
     lda #0
     sta GRP0
     sta GRP1
-    dex
-    bne ScPadB
+    ; === DISPLAY faixa P1 ===
+    ldy #0
+ScDigRows1:
+    sta WSYNC
+    lda #0
+    sta COLUBK
+    tya
+    sta TmpA
+    asl
+    clc
+    adc TmpA
+    tax
+    lda ScStrip2,x
+    sta GRP0
+    inx
+    lda ScStrip2,x
+    sta GRP1
+    inx
+    lda ScStrip2,x
+    sta GRP0
+    iny
+    cpy #6
+    bcc ScDigRows1
+    lda #0
+    sta GRP0
+    sta GRP1
     rts
 
 GlyphRow:
@@ -2366,7 +2406,8 @@ Dig10     equ $AA
 Dig11     equ $AB
 ScRow     equ $AC
 ScIdx     equ $AD
-ScStrip   equ $B2            ; H*6 bytes (até 16*6)
+ScStrip   equ $B2            ; H*3 bytes (faixa P0)
+ScStrip2  equ $C4            ; H*3 bytes (faixa P1)
 Temp      equ $83
 P0Y       equ $84
 P0H       equ $85
@@ -2391,8 +2432,9 @@ PrevINPT4 equ $9D
 TmpA      equ $9E
 TmpB      equ $9F
 WalkTick  equ $9B
-U_scoreP0  equ $A0
-FrameDiv   equ $A1
+U_scoreP1  equ $A0
+U_scoreP0  equ $A1
+FrameDiv   equ $A2
 
     ORG $FFFA
     .word Start

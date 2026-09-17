@@ -181,7 +181,7 @@
     180  f09c		       ca		      dex
     181  f09d		       d0 eb		      bne	BlankPlay
     182  f09f
-    183  f09f		       20 a2 f2 	      jsr	DrawLogo	; sempre (plataforma)
+    183  f09f		       20 9f f2 	      jsr	DrawLogo	; sempre (plataforma)
     184  f0a2
     185  f0a2		       a9 02		      lda	#2
     186  f0a4		       85 01		      sta	VBLANK
@@ -248,7 +248,7 @@
     247  f101		       95 10		      sta	RESP0,x	; RESP0 ou RESP1
     248  f103		       60		      rts
     249  f104
-    250  f104							; --- Score players=1 digits=3 delay=7 label=0 ---
+    250  f104							; --- Score players=2 digits=3 delay=7 label=0 pad=0 bot=0 budget=8 ---
     251  f104				   DrawScoreBand
     252  f104		       a9 00		      lda	#0
     253  f106		       85 0d		      sta	PF0
@@ -270,2062 +270,2062 @@
     269  f126		       85 06		      sta	COLUP0
     270  f128		       85 07		      sta	COLUP1
     271  f12a							; --- faixa scoreP0 ---
-    272  f12a		       20 ee f1 	      jsr	ScoreToDigits0
-    273  f12d		       20 37 f1 	      jsr	ScoreDrawOne
-    274  f130		       a9 00		      lda	#0
-    275  f132		       85 1b		      sta	GRP0
-    276  f134		       85 1c		      sta	GRP1
-    277  f136		       60		      rts
-    278  f137
-    279  f137				   ScoreDrawOne
-    280  f137		       85 02		      sta	WSYNC
-    281  f139		       a2 07		      ldx	#7
-    282  f13b				   ScPos0
-    283  f13b		       ca		      dex
-    284  f13c		       d0 fd		      bne	ScPos0
-    285  f13e		       ea		      nop
-    286  f13f		       85 10		      sta	RESP0
-    287  f141		       85 11		      sta	RESP1
-    288  f143		       a9 00		      lda	#0
-    289  f145		       85 20		      sta	HMP0
-    290  f147		       85 21		      sta	HMP1
-    291  f149		       85 02		      sta	WSYNC
-    292  f14b		       85 2a		      sta	HMOVE
-    293  f14d		       85 02		      sta	WSYNC
-    294  f14f		       85 2b		      sta	HMCLR
-    295  f151		       a2 05		      ldx	#5
-    296  f153				   ScPadT
-    297  f153		       85 02		      sta	WSYNC
-    298  f155		       a9 00		      lda	#0
-    299  f157		       85 09		      sta	COLUBK
-    300  f159		       a9 00		      lda	#0
-    301  f15b		       85 1b		      sta	GRP0
-    302  f15d		       85 1c		      sta	GRP1
-    303  f15f		       ca		      dex
-    304  f160		       d0 f1		      bne	ScPadT
-    305  f162		       a0 00		      ldy	#0
-    306  f164				   ScBuild
-    307  f164		       84 ac		      sty	ScRow
-    308  f166		       98		      tya
-    309  f167		       85 9e		      sta	TmpA
-    310  f169		       0a		      asl
-    311  f16a		       18		      clc
-    312  f16b		       65 9e		      adc	TmpA
-    313  f16d		       85 ad		      sta	ScIdx
-    314  f16f		       a5 a3		      lda	Dig3
-    315  f171		       20 d0 f1 	      jsr	GlyphRow
-    316  f174		       a6 ad		      ldx	ScIdx
-    317  f176		       95 b2		      sta	ScStrip,x
-    318  f178		       e8		      inx
-    319  f179		       86 ad		      stx	ScIdx
-    320  f17b		       a5 a4		      lda	Dig4
-    321  f17d		       20 d0 f1 	      jsr	GlyphRow
-    322  f180		       a6 ad		      ldx	ScIdx
-    323  f182		       95 b2		      sta	ScStrip,x
-    324  f184		       e8		      inx
-    325  f185		       86 ad		      stx	ScIdx
-    326  f187		       a5 a5		      lda	Dig5
-    327  f189		       20 d0 f1 	      jsr	GlyphRow
-    328  f18c		       a6 ad		      ldx	ScIdx
-    329  f18e		       95 b2		      sta	ScStrip,x
-    330  f190		       c8		      iny
-    331  f191		       c0 06		      cpy	#6
-    332  f193		       90 cf		      bcc	ScBuild
-    333  f195		       a0 00		      ldy	#0
-    334  f197				   ScDigRows
-    335  f197		       85 02		      sta	WSYNC
-    336  f199		       a9 00		      lda	#0
-    337  f19b		       85 09		      sta	COLUBK
-    338  f19d		       98		      tya
-    339  f19e		       85 9e		      sta	TmpA
-    340  f1a0		       0a		      asl
-    341  f1a1		       18		      clc
-    342  f1a2		       65 9e		      adc	TmpA
-    343  f1a4		       aa		      tax
-    344  f1a5		       b5 b2		      lda	ScStrip,x
-    345  f1a7		       85 1b		      sta	GRP0
-    346  f1a9		       e8		      inx
-    347  f1aa		       b5 b2		      lda	ScStrip,x
-    348  f1ac		       85 1c		      sta	GRP1
-    349  f1ae		       e8		      inx
-    350  f1af		       b5 b2		      lda	ScStrip,x
-    351  f1b1		       85 1b		      sta	GRP0
-    352  f1b3		       c8		      iny
-    353  f1b4		       c0 06		      cpy	#6
-    354  f1b6		       90 df		      bcc	ScDigRows
-    355  f1b8		       a9 00		      lda	#0
-    356  f1ba		       85 1b		      sta	GRP0
-    357  f1bc		       85 1c		      sta	GRP1
-    358  f1be		       a2 05		      ldx	#5
-    359  f1c0				   ScPadB
-    360  f1c0		       85 02		      sta	WSYNC
-    361  f1c2		       a9 00		      lda	#0
-    362  f1c4		       85 09		      sta	COLUBK
-    363  f1c6		       a9 00		      lda	#0
-    364  f1c8		       85 1b		      sta	GRP0
-    365  f1ca		       85 1c		      sta	GRP1
-    366  f1cc		       ca		      dex
-    367  f1cd		       d0 f1		      bne	ScPadB
-    368  f1cf		       60		      rts
-    369  f1d0
-    370  f1d0				   GlyphRow
-    371  f1d0		       85 83		      sta	Temp
-    372  f1d2		       a9 00		      lda	#0
-    373  f1d4		       85 9f		      sta	TmpB
-    374  f1d6		       a6 83		      ldx	Temp
-    375  f1d8		       f0 0a		      beq	GR_Done
-    376  f1da				   GR_Mul
-    377  f1da		       a5 9f		      lda	TmpB
-    378  f1dc		       18		      clc
-    379  f1dd		       69 06		      adc	#6
-    380  f1df		       85 9f		      sta	TmpB
-    381  f1e1		       ca		      dex
-    382  f1e2		       d0 f6		      bne	GR_Mul
-    383  f1e4				   GR_Done
-    384  f1e4		       a5 9f		      lda	TmpB
-    385  f1e6		       18		      clc
-    386  f1e7		       65 ac		      adc	ScRow
-    387  f1e9		       aa		      tax
-    388  f1ea		       bd da f2 	      lda	DigitGfx,x
-    389  f1ed		       60		      rts
-    390  f1ee
-    391  f1ee				   ScoreToDigits0
-    392  f1ee		       a9 00		      lda	#0
-    393  f1f0		       85 a3		      sta	Dig3
-    394  f1f2		       85 a4		      sta	Dig4
-    395  f1f4		       85 a5		      sta	Dig5
-    396  f1f6		       a5 80		      lda	ScoreP0
-    397  f1f8		       85 83		      sta	Temp
-    398  f1fa				   S0H
-    399  f1fa		       a5 83		      lda	Temp
-    400  f1fc		       c9 64		      cmp	#100
-    401  f1fe		       90 0a		      bcc	S0T
-    402  f200		       38		      sec
-    403  f201		       e9 64		      sbc	#100
-    404  f203		       85 83		      sta	Temp
-    405  f205		       e6 a3		      inc	Dig3
-    406  f207		       4c fa f1 	      jmp	S0H
-    407  f20a				   S0T
-    408  f20a		       a5 83		      lda	Temp
-    409  f20c		       c9 0a		      cmp	#10
-    410  f20e		       90 0a		      bcc	S0U
-    411  f210		       38		      sec
-    412  f211		       e9 0a		      sbc	#10
-    413  f213		       85 83		      sta	Temp
-    414  f215		       e6 a4		      inc	Dig4
-    415  f217		       4c 0a f2 	      jmp	S0T
-    416  f21a				   S0U
-    417  f21a		       a5 83		      lda	Temp
-    418  f21c		       85 a5		      sta	Dig5
-    419  f21e		       60		      rts
-    420  f21f
-    421  f21f				   ScoreToDigits0Val
-    422  f21f		       a9 00		      lda	#0
-    423  f221		       85 a4		      sta	Dig4
-    424  f223		       85 a5		      sta	Dig5
-    425  f225		       a5 80		      lda	ScoreP0
-    426  f227		       85 83		      sta	Temp
-    427  f229				   S0V_T
-    428  f229		       a5 83		      lda	Temp
-    429  f22b		       c9 0a		      cmp	#10
-    430  f22d		       90 14		      bcc	S0V_U
-    431  f22f		       38		      sec
-    432  f230		       e9 0a		      sbc	#10
-    433  f232		       85 83		      sta	Temp
-    434  f234		       e6 a4		      inc	Dig4
-    435  f236		       a5 a4		      lda	Dig4
-    436  f238		       c9 0a		      cmp	#10
-    437  f23a		       90 ed		      bcc	S0V_T
-    438  f23c		       a9 00		      lda	#0
-    439  f23e		       85 a4		      sta	Dig4
-    440  f240		       4c 29 f2 	      jmp	S0V_T
-    441  f243				   S0V_U
-    442  f243		       a5 83		      lda	Temp
-    443  f245		       85 a5		      sta	Dig5
-    444  f247		       60		      rts
-    445  f248
-    446  f248				   ScoreToDigits1
-    447  f248		       a9 00		      lda	#0
-    448  f24a		       85 a3		      sta	Dig3
-    449  f24c		       85 a4		      sta	Dig4
-    450  f24e		       85 a5		      sta	Dig5
-    451  f250		       a5 81		      lda	ScoreP1
-    452  f252		       85 83		      sta	Temp
-    453  f254				   S1H
-    454  f254		       a5 83		      lda	Temp
-    455  f256		       c9 64		      cmp	#100
-    456  f258		       90 0a		      bcc	S1T
-    457  f25a		       38		      sec
-    458  f25b		       e9 64		      sbc	#100
-    459  f25d		       85 83		      sta	Temp
-    460  f25f		       e6 a3		      inc	Dig3
-    461  f261		       4c 54 f2 	      jmp	S1H
-    462  f264				   S1T
-    463  f264		       a5 83		      lda	Temp
-    464  f266		       c9 0a		      cmp	#10
-    465  f268		       90 0a		      bcc	S1U
-    466  f26a		       38		      sec
-    467  f26b		       e9 0a		      sbc	#10
-    468  f26d		       85 83		      sta	Temp
-    469  f26f		       e6 a4		      inc	Dig4
-    470  f271		       4c 64 f2 	      jmp	S1T
-    471  f274				   S1U
-    472  f274		       a5 83		      lda	Temp
-    473  f276		       85 a5		      sta	Dig5
-    474  f278		       60		      rts
-    475  f279
-    476  f279				   ScoreToDigits1Val
-    477  f279		       a9 00		      lda	#0
-    478  f27b		       85 a4		      sta	Dig4
-    479  f27d		       85 a5		      sta	Dig5
-    480  f27f		       a5 81		      lda	ScoreP1
-    481  f281		       85 83		      sta	Temp
-    482  f283				   S1V_T
-    483  f283		       a5 83		      lda	Temp
-    484  f285		       c9 0a		      cmp	#10
-    485  f287		       90 14		      bcc	S1V_U
-    486  f289		       38		      sec
-    487  f28a		       e9 0a		      sbc	#10
-    488  f28c		       85 83		      sta	Temp
-    489  f28e		       e6 a4		      inc	Dig4
-    490  f290		       a5 a4		      lda	Dig4
-    491  f292		       c9 0a		      cmp	#10
-    492  f294		       90 ed		      bcc	S1V_T
-    493  f296		       a9 00		      lda	#0
-    494  f298		       85 a4		      sta	Dig4
-    495  f29a		       4c 83 f2 	      jmp	S1V_T
-    496  f29d				   S1V_U
-    497  f29d		       a5 83		      lda	Temp
-    498  f29f		       85 a5		      sta	Dig5
-    499  f2a1		       60		      rts
-    500  f2a2
-    501  f2a2							; --- Logo RETROCOMPILER (glifos.json → PF) ---
-    502  f2a2				   DrawLogo
-    503  f2a2		       a9 00		      lda	#0
-    504  f2a4		       85 1b		      sta	GRP0
-    505  f2a6		       85 1c		      sta	GRP1
-    506  f2a8		       a9 01		      lda	#1
-    507  f2aa		       85 0a		      sta	CTRLPF	; reflect
-    508  f2ac		       a9 0e		      lda	#$0E
-    509  f2ae		       85 08		      sta	COLUPF
-    510  f2b0		       a2 00		      ldx	#0
-    511  f2b2				   LogoLoop
-    512  f2b2		       85 02		      sta	WSYNC
-    513  f2b4		       a9 00		      lda	#0
-    514  f2b6		       85 09		      sta	COLUBK
-    515  f2b8		       e0 0a		      cpx	#10
-    516  f2ba		       b0 13		      bcs	LogoDone
-    517  f2bc		       bd 22 f3 	      lda	LogoPF0,x
-    518  f2bf		       85 0d		      sta	PF0
-    519  f2c1		       bd 2c f3 	      lda	LogoPF1,x
-    520  f2c4		       85 0e		      sta	PF1
-    521  f2c6		       bd 36 f3 	      lda	LogoPF2,x
-    522  f2c9		       85 0f		      sta	PF2
-    523  f2cb		       e8		      inx
-    524  f2cc		       4c b2 f2 	      jmp	LogoLoop
-    525  f2cf				   LogoDone
-    526  f2cf		       a9 00		      lda	#0
-    527  f2d1		       85 0d		      sta	PF0
-    528  f2d3		       85 0e		      sta	PF1
-    529  f2d5		       85 0f		      sta	PF2
-    530  f2d7		       85 0a		      sta	CTRLPF
-    531  f2d9		       60		      rts
-    532  f2da
-    533  f2da				   DigitGfx
-    534  f2da				   Digit0
-    535  f2da		       60		      .byte.b	%01100000
-    536  f2db		       d0		      .byte.b	%11010000
-    537  f2dc		       90		      .byte.b	%10010000
-    538  f2dd		       b0		      .byte.b	%10110000
-    539  f2de		       60		      .byte.b	%01100000
-    540  f2df		       00		      .byte.b	%00000000
-    541  f2e0				   Digit1
-    542  f2e0		       40		      .byte.b	%01000000
-    543  f2e1		       c0		      .byte.b	%11000000
-    544  f2e2		       40		      .byte.b	%01000000
-    545  f2e3		       40		      .byte.b	%01000000
-    546  f2e4		       e0		      .byte.b	%11100000
-    547  f2e5		       00		      .byte.b	%00000000
-    548  f2e6				   Digit2
-    549  f2e6		       60		      .byte.b	%01100000
-    550  f2e7		       90		      .byte.b	%10010000
-    551  f2e8		       20		      .byte.b	%00100000
-    552  f2e9		       40		      .byte.b	%01000000
-    553  f2ea		       f0		      .byte.b	%11110000
-    554  f2eb		       00		      .byte.b	%00000000
-    555  f2ec				   Digit3
-    556  f2ec		       e0		      .byte.b	%11100000
-    557  f2ed		       10		      .byte.b	%00010000
-    558  f2ee		       60		      .byte.b	%01100000
-    559  f2ef		       10		      .byte.b	%00010000
-    560  f2f0		       e0		      .byte.b	%11100000
-    561  f2f1		       00		      .byte.b	%00000000
-    562  f2f2				   Digit4
-    563  f2f2		       10		      .byte.b	%00010000
-    564  f2f3		       30		      .byte.b	%00110000
-    565  f2f4		       50		      .byte.b	%01010000
-    566  f2f5		       f0		      .byte.b	%11110000
-    567  f2f6		       10		      .byte.b	%00010000
-    568  f2f7		       00		      .byte.b	%00000000
-    569  f2f8				   Digit5
-    570  f2f8		       f0		      .byte.b	%11110000
-    571  f2f9		       80		      .byte.b	%10000000
-    572  f2fa		       e0		      .byte.b	%11100000
-    573  f2fb		       10		      .byte.b	%00010000
-    574  f2fc		       e0		      .byte.b	%11100000
-    575  f2fd		       00		      .byte.b	%00000000
-    576  f2fe				   Digit6
-    577  f2fe		       60		      .byte.b	%01100000
-    578  f2ff		       80		      .byte.b	%10000000
-    579  f300		       e0		      .byte.b	%11100000
-    580  f301		       90		      .byte.b	%10010000
-    581  f302		       60		      .byte.b	%01100000
-    582  f303		       00		      .byte.b	%00000000
-    583  f304				   Digit7
-    584  f304		       f0		      .byte.b	%11110000
-    585  f305		       10		      .byte.b	%00010000
-    586  f306		       20		      .byte.b	%00100000
-    587  f307		       40		      .byte.b	%01000000
-    588  f308		       40		      .byte.b	%01000000
-    589  f309		       00		      .byte.b	%00000000
-    590  f30a				   Digit8
-    591  f30a		       60		      .byte.b	%01100000
-    592  f30b		       90		      .byte.b	%10010000
-    593  f30c		       60		      .byte.b	%01100000
-    594  f30d		       90		      .byte.b	%10010000
-    595  f30e		       60		      .byte.b	%01100000
-    596  f30f		       00		      .byte.b	%00000000
-    597  f310				   Digit9
-    598  f310		       60		      .byte.b	%01100000
-    599  f311		       90		      .byte.b	%10010000
-    600  f312		       70		      .byte.b	%01110000
-    601  f313		       10		      .byte.b	%00010000
-    602  f314		       60		      .byte.b	%01100000
-    603  f315		       00		      .byte.b	%00000000
-    604  f316				   Label1P
-    605  f316		       4c		      .byte.b	%01001100
-    606  f317		       ca		      .byte.b	%11001010
-    607  f318		       4c		      .byte.b	%01001100
-    608  f319		       48		      .byte.b	%01001000
-    609  f31a		       e8		      .byte.b	%11101000
-    610  f31b		       00		      .byte.b	%00000000
-    611  f31c				   Label2P
-    612  f31c		       66		      .byte.b	%01100110
-    613  f31d		       95		      .byte.b	%10010101
-    614  f31e		       26		      .byte.b	%00100110
-    615  f31f		       44		      .byte.b	%01000100
-    616  f320		       f4		      .byte.b	%11110100
-    617  f321		       00		      .byte.b	%00000000
-    618  f322
-    619  f322				   LogoPF0
-    620  f322		       e0		      .byte.b	%11100000
-    621  f323		       20		      .byte.b	%00100000
-    622  f324		       e0		      .byte.b	%11100000
-    623  f325		       a0		      .byte.b	%10100000
-    624  f326		       20		      .byte.b	%00100000
-    625  f327		       00		      .byte.b	%00000000
-    626  f328		       e0		      .byte.b	%11100000
-    627  f329		       20		      .byte.b	%00100000
-    628  f32a		       e0		      .byte.b	%11100000
-    629  f32b		       a0		      .byte.b	%10100000
-    630  f32c				   LogoPF1
-    631  f32c		       38		      .byte.b	%00111000
-    632  f32d		       a4		      .byte.b	%10100100
-    633  f32e		       38		      .byte.b	%00111000
-    634  f32f		       28		      .byte.b	%00101000
-    635  f330		       a4		      .byte.b	%10100100
-    636  f331		       00		      .byte.b	%00000000
-    637  f332		       00		      .byte.b	%00000000
-    638  f333		       80		      .byte.b	%10000000
-    639  f334		       00		      .byte.b	%00000000
-    640  f335		       00		      .byte.b	%00000000
-    641  f336				   LogoPF2
-    642  f336		       00		      .byte.b	%00000000
-    643  f337		       00		      .byte.b	%00000000
-    644  f338		       00		      .byte.b	%00000000
-    645  f339		       00		      .byte.b	%00000000
-    646  f33a		       00		      .byte.b	%00000000
-    647  f33b		       00		      .byte.b	%00000000
-    648  f33c		       00		      .byte.b	%00000000
-    649  f33d		       00		      .byte.b	%00000000
-    650  f33e		       00		      .byte.b	%00000000
-    651  f33f		       00		      .byte.b	%00000000
-    652  f340
-    653  f340							; Playfield tables (por scanline)
-    654  f340				   PF0Data
-    655  f340		       00		      .byte.b	$00
-    656  f341		       00		      .byte.b	$00
-    657  f342		       00		      .byte.b	$00
-    658  f343		       00		      .byte.b	$00
-    659  f344		       00		      .byte.b	$00
-    660  f345		       00		      .byte.b	$00
-    661  f346		       00		      .byte.b	$00
-    662  f347		       00		      .byte.b	$00
-    663  f348		       00		      .byte.b	$00
-    664  f349		       00		      .byte.b	$00
-    665  f34a		       00		      .byte.b	$00
-    666  f34b		       00		      .byte.b	$00
-    667  f34c		       00		      .byte.b	$00
-    668  f34d		       00		      .byte.b	$00
-    669  f34e		       00		      .byte.b	$00
-    670  f34f		       00		      .byte.b	$00
-    671  f350		       00		      .byte.b	$00
-    672  f351		       00		      .byte.b	$00
-    673  f352		       00		      .byte.b	$00
-    674  f353		       00		      .byte.b	$00
-    675  f354		       00		      .byte.b	$00
-    676  f355		       00		      .byte.b	$00
-    677  f356		       00		      .byte.b	$00
-    678  f357		       00		      .byte.b	$00
-    679  f358		       00		      .byte.b	$00
-    680  f359		       00		      .byte.b	$00
-    681  f35a		       00		      .byte.b	$00
-    682  f35b		       00		      .byte.b	$00
-    683  f35c		       00		      .byte.b	$00
-    684  f35d		       00		      .byte.b	$00
-    685  f35e		       00		      .byte.b	$00
-    686  f35f		       00		      .byte.b	$00
-    687  f360		       00		      .byte.b	$00
-    688  f361		       00		      .byte.b	$00
-    689  f362		       00		      .byte.b	$00
-    690  f363		       00		      .byte.b	$00
-    691  f364		       00		      .byte.b	$00
-    692  f365		       00		      .byte.b	$00
-    693  f366		       00		      .byte.b	$00
-    694  f367		       00		      .byte.b	$00
-    695  f368		       00		      .byte.b	$00
-    696  f369		       00		      .byte.b	$00
-    697  f36a		       00		      .byte.b	$00
-    698  f36b		       00		      .byte.b	$00
-    699  f36c		       00		      .byte.b	$00
-    700  f36d		       00		      .byte.b	$00
-    701  f36e		       00		      .byte.b	$00
-    702  f36f		       00		      .byte.b	$00
-    703  f370		       00		      .byte.b	$00
-    704  f371		       00		      .byte.b	$00
-    705  f372		       00		      .byte.b	$00
-    706  f373		       00		      .byte.b	$00
-    707  f374		       00		      .byte.b	$00
-    708  f375		       00		      .byte.b	$00
-    709  f376		       00		      .byte.b	$00
-    710  f377		       00		      .byte.b	$00
-    711  f378		       00		      .byte.b	$00
-    712  f379		       00		      .byte.b	$00
-    713  f37a		       00		      .byte.b	$00
-    714  f37b		       00		      .byte.b	$00
-    715  f37c		       00		      .byte.b	$00
-    716  f37d		       00		      .byte.b	$00
-    717  f37e		       00		      .byte.b	$00
-    718  f37f		       00		      .byte.b	$00
-    719  f380		       00		      .byte.b	$00
-    720  f381		       00		      .byte.b	$00
-    721  f382		       00		      .byte.b	$00
-    722  f383		       00		      .byte.b	$00
-    723  f384		       00		      .byte.b	$00
-    724  f385		       00		      .byte.b	$00
-    725  f386		       00		      .byte.b	$00
-    726  f387		       00		      .byte.b	$00
-    727  f388		       00		      .byte.b	$00
-    728  f389		       00		      .byte.b	$00
-    729  f38a		       00		      .byte.b	$00
-    730  f38b		       00		      .byte.b	$00
-    731  f38c		       00		      .byte.b	$00
-    732  f38d		       00		      .byte.b	$00
-    733  f38e		       00		      .byte.b	$00
-    734  f38f		       00		      .byte.b	$00
-    735  f390		       00		      .byte.b	$00
-    736  f391		       00		      .byte.b	$00
-    737  f392		       00		      .byte.b	$00
-    738  f393		       00		      .byte.b	$00
-    739  f394		       00		      .byte.b	$00
-    740  f395		       00		      .byte.b	$00
-    741  f396		       00		      .byte.b	$00
-    742  f397		       00		      .byte.b	$00
-    743  f398		       00		      .byte.b	$00
-    744  f399		       00		      .byte.b	$00
-    745  f39a		       00		      .byte.b	$00
-    746  f39b		       00		      .byte.b	$00
-    747  f39c		       00		      .byte.b	$00
-    748  f39d		       00		      .byte.b	$00
-    749  f39e		       00		      .byte.b	$00
-    750  f39f		       00		      .byte.b	$00
-    751  f3a0		       00		      .byte.b	$00
-    752  f3a1		       00		      .byte.b	$00
-    753  f3a2		       00		      .byte.b	$00
-    754  f3a3		       00		      .byte.b	$00
-    755  f3a4		       00		      .byte.b	$00
-    756  f3a5		       00		      .byte.b	$00
-    757  f3a6		       00		      .byte.b	$00
-    758  f3a7		       00		      .byte.b	$00
-    759  f3a8		       00		      .byte.b	$00
-    760  f3a9		       00		      .byte.b	$00
-    761  f3aa		       00		      .byte.b	$00
-    762  f3ab		       00		      .byte.b	$00
-    763  f3ac		       00		      .byte.b	$00
-    764  f3ad		       00		      .byte.b	$00
-    765  f3ae		       00		      .byte.b	$00
-    766  f3af		       00		      .byte.b	$00
-    767  f3b0		       00		      .byte.b	$00
-    768  f3b1		       00		      .byte.b	$00
-    769  f3b2		       00		      .byte.b	$00
-    770  f3b3		       00		      .byte.b	$00
-    771  f3b4		       00		      .byte.b	$00
-    772  f3b5		       00		      .byte.b	$00
-    773  f3b6		       00		      .byte.b	$00
-    774  f3b7		       00		      .byte.b	$00
-    775  f3b8		       00		      .byte.b	$00
-    776  f3b9		       00		      .byte.b	$00
-    777  f3ba		       00		      .byte.b	$00
-    778  f3bb		       00		      .byte.b	$00
-    779  f3bc		       00		      .byte.b	$00
-    780  f3bd		       00		      .byte.b	$00
-    781  f3be		       00		      .byte.b	$00
-    782  f3bf		       00		      .byte.b	$00
-    783  f3c0		       00		      .byte.b	$00
-    784  f3c1		       00		      .byte.b	$00
-    785  f3c2		       00		      .byte.b	$00
-    786  f3c3		       00		      .byte.b	$00
-    787  f3c4		       00		      .byte.b	$00
-    788  f3c5		       00		      .byte.b	$00
-    789  f3c6		       00		      .byte.b	$00
-    790  f3c7		       00		      .byte.b	$00
-    791  f3c8		       00		      .byte.b	$00
-    792  f3c9		       00		      .byte.b	$00
-    793  f3ca		       00		      .byte.b	$00
-    794  f3cb		       00		      .byte.b	$00
-    795  f3cc		       00		      .byte.b	$00
-    796  f3cd		       00		      .byte.b	$00
-    797  f3ce		       00		      .byte.b	$00
-    798  f3cf		       00		      .byte.b	$00
-    799  f3d0		       00		      .byte.b	$00
-    800  f3d1		       00		      .byte.b	$00
-    801  f3d2		       00		      .byte.b	$00
-    802  f3d3		       00		      .byte.b	$00
-    803  f3d4		       00		      .byte.b	$00
-    804  f3d5		       00		      .byte.b	$00
-    805  f3d6		       00		      .byte.b	$00
-    806  f3d7		       00		      .byte.b	$00
-    807  f3d8		       00		      .byte.b	$00
-    808  f3d9		       00		      .byte.b	$00
-    809  f3da		       00		      .byte.b	$00
-    810  f3db		       00		      .byte.b	$00
-    811  f3dc		       00		      .byte.b	$00
-    812  f3dd		       00		      .byte.b	$00
-    813  f3de		       00		      .byte.b	$00
-    814  f3df		       00		      .byte.b	$00
-    815  f3e0		       00		      .byte.b	$00
-    816  f3e1		       00		      .byte.b	$00
-    817  f3e2		       00		      .byte.b	$00
-    818  f3e3		       00		      .byte.b	$00
-    819  f3e4		       00		      .byte.b	$00
-    820  f3e5		       00		      .byte.b	$00
-    821  f3e6				   PF1Data
-    822  f3e6		       00		      .byte.b	$00
-    823  f3e7		       00		      .byte.b	$00
-    824  f3e8		       00		      .byte.b	$00
-    825  f3e9		       00		      .byte.b	$00
-    826  f3ea		       00		      .byte.b	$00
-    827  f3eb		       00		      .byte.b	$00
-    828  f3ec		       00		      .byte.b	$00
-    829  f3ed		       00		      .byte.b	$00
-    830  f3ee		       00		      .byte.b	$00
-    831  f3ef		       00		      .byte.b	$00
-    832  f3f0		       00		      .byte.b	$00
-    833  f3f1		       00		      .byte.b	$00
-    834  f3f2		       00		      .byte.b	$00
-    835  f3f3		       00		      .byte.b	$00
-    836  f3f4		       00		      .byte.b	$00
-    837  f3f5		       00		      .byte.b	$00
-    838  f3f6		       00		      .byte.b	$00
-    839  f3f7		       00		      .byte.b	$00
-    840  f3f8		       00		      .byte.b	$00
-    841  f3f9		       00		      .byte.b	$00
-    842  f3fa		       00		      .byte.b	$00
-    843  f3fb		       00		      .byte.b	$00
-    844  f3fc		       00		      .byte.b	$00
-    845  f3fd		       00		      .byte.b	$00
-    846  f3fe		       00		      .byte.b	$00
-    847  f3ff		       00		      .byte.b	$00
-    848  f400		       00		      .byte.b	$00
-    849  f401		       00		      .byte.b	$00
-    850  f402		       00		      .byte.b	$00
-    851  f403		       00		      .byte.b	$00
-    852  f404		       00		      .byte.b	$00
-    853  f405		       00		      .byte.b	$00
-    854  f406		       00		      .byte.b	$00
-    855  f407		       00		      .byte.b	$00
-    856  f408		       00		      .byte.b	$00
-    857  f409		       00		      .byte.b	$00
-    858  f40a		       00		      .byte.b	$00
-    859  f40b		       00		      .byte.b	$00
-    860  f40c		       00		      .byte.b	$00
-    861  f40d		       00		      .byte.b	$00
-    862  f40e		       00		      .byte.b	$00
-    863  f40f		       00		      .byte.b	$00
-    864  f410		       00		      .byte.b	$00
-    865  f411		       00		      .byte.b	$00
-    866  f412		       00		      .byte.b	$00
-    867  f413		       00		      .byte.b	$00
-    868  f414		       00		      .byte.b	$00
-    869  f415		       00		      .byte.b	$00
-    870  f416		       00		      .byte.b	$00
-    871  f417		       00		      .byte.b	$00
-    872  f418		       00		      .byte.b	$00
-    873  f419		       00		      .byte.b	$00
-    874  f41a		       00		      .byte.b	$00
-    875  f41b		       00		      .byte.b	$00
-    876  f41c		       00		      .byte.b	$00
-    877  f41d		       00		      .byte.b	$00
-    878  f41e		       00		      .byte.b	$00
-    879  f41f		       00		      .byte.b	$00
-    880  f420		       00		      .byte.b	$00
-    881  f421		       00		      .byte.b	$00
-    882  f422		       00		      .byte.b	$00
-    883  f423		       00		      .byte.b	$00
-    884  f424		       00		      .byte.b	$00
-    885  f425		       00		      .byte.b	$00
-    886  f426		       00		      .byte.b	$00
-    887  f427		       00		      .byte.b	$00
-    888  f428		       00		      .byte.b	$00
-    889  f429		       00		      .byte.b	$00
-    890  f42a		       00		      .byte.b	$00
-    891  f42b		       00		      .byte.b	$00
-    892  f42c		       00		      .byte.b	$00
-    893  f42d		       00		      .byte.b	$00
-    894  f42e		       00		      .byte.b	$00
-    895  f42f		       00		      .byte.b	$00
-    896  f430		       00		      .byte.b	$00
-    897  f431		       00		      .byte.b	$00
-    898  f432		       00		      .byte.b	$00
-    899  f433		       00		      .byte.b	$00
-    900  f434		       00		      .byte.b	$00
-    901  f435		       00		      .byte.b	$00
-    902  f436		       00		      .byte.b	$00
-    903  f437		       00		      .byte.b	$00
-    904  f438		       00		      .byte.b	$00
-    905  f439		       00		      .byte.b	$00
-    906  f43a		       00		      .byte.b	$00
-    907  f43b		       00		      .byte.b	$00
-    908  f43c		       00		      .byte.b	$00
-    909  f43d		       00		      .byte.b	$00
-    910  f43e		       00		      .byte.b	$00
-    911  f43f		       00		      .byte.b	$00
-    912  f440		       00		      .byte.b	$00
-    913  f441		       00		      .byte.b	$00
-    914  f442		       00		      .byte.b	$00
-    915  f443		       00		      .byte.b	$00
-    916  f444		       00		      .byte.b	$00
-    917  f445		       00		      .byte.b	$00
-    918  f446		       00		      .byte.b	$00
-    919  f447		       00		      .byte.b	$00
-    920  f448		       00		      .byte.b	$00
-    921  f449		       00		      .byte.b	$00
-    922  f44a		       00		      .byte.b	$00
-    923  f44b		       00		      .byte.b	$00
-    924  f44c		       00		      .byte.b	$00
-    925  f44d		       00		      .byte.b	$00
-    926  f44e		       00		      .byte.b	$00
-    927  f44f		       00		      .byte.b	$00
-    928  f450		       00		      .byte.b	$00
-    929  f451		       00		      .byte.b	$00
-    930  f452		       00		      .byte.b	$00
-    931  f453		       00		      .byte.b	$00
-    932  f454		       00		      .byte.b	$00
-    933  f455		       00		      .byte.b	$00
-    934  f456		       00		      .byte.b	$00
-    935  f457		       00		      .byte.b	$00
-    936  f458		       00		      .byte.b	$00
-    937  f459		       00		      .byte.b	$00
-    938  f45a		       00		      .byte.b	$00
-    939  f45b		       00		      .byte.b	$00
-    940  f45c		       00		      .byte.b	$00
-    941  f45d		       00		      .byte.b	$00
-    942  f45e		       00		      .byte.b	$00
-    943  f45f		       00		      .byte.b	$00
-    944  f460		       00		      .byte.b	$00
-    945  f461		       00		      .byte.b	$00
-    946  f462		       00		      .byte.b	$00
-    947  f463		       00		      .byte.b	$00
-    948  f464		       00		      .byte.b	$00
-    949  f465		       00		      .byte.b	$00
-    950  f466		       00		      .byte.b	$00
-    951  f467		       00		      .byte.b	$00
-    952  f468		       00		      .byte.b	$00
-    953  f469		       00		      .byte.b	$00
-    954  f46a		       00		      .byte.b	$00
-    955  f46b		       00		      .byte.b	$00
-    956  f46c		       00		      .byte.b	$00
-    957  f46d		       00		      .byte.b	$00
-    958  f46e		       00		      .byte.b	$00
-    959  f46f		       00		      .byte.b	$00
-    960  f470		       00		      .byte.b	$00
-    961  f471		       00		      .byte.b	$00
-    962  f472		       00		      .byte.b	$00
-    963  f473		       00		      .byte.b	$00
-    964  f474		       00		      .byte.b	$00
-    965  f475		       00		      .byte.b	$00
-    966  f476		       00		      .byte.b	$00
-    967  f477		       00		      .byte.b	$00
-    968  f478		       00		      .byte.b	$00
-    969  f479		       00		      .byte.b	$00
-    970  f47a		       00		      .byte.b	$00
-    971  f47b		       00		      .byte.b	$00
-    972  f47c		       00		      .byte.b	$00
-    973  f47d		       00		      .byte.b	$00
-    974  f47e		       00		      .byte.b	$00
-    975  f47f		       00		      .byte.b	$00
-    976  f480		       00		      .byte.b	$00
-    977  f481		       00		      .byte.b	$00
-    978  f482		       00		      .byte.b	$00
-    979  f483		       00		      .byte.b	$00
-    980  f484		       00		      .byte.b	$00
-    981  f485		       00		      .byte.b	$00
-    982  f486		       00		      .byte.b	$00
-    983  f487		       00		      .byte.b	$00
-    984  f488		       00		      .byte.b	$00
-    985  f489		       00		      .byte.b	$00
-    986  f48a		       00		      .byte.b	$00
-    987  f48b		       00		      .byte.b	$00
-    988  f48c				   PF2Data
-    989  f48c		       00		      .byte.b	$00
-    990  f48d		       00		      .byte.b	$00
-    991  f48e		       00		      .byte.b	$00
-    992  f48f		       00		      .byte.b	$00
-    993  f490		       00		      .byte.b	$00
-    994  f491		       00		      .byte.b	$00
-    995  f492		       00		      .byte.b	$00
-    996  f493		       00		      .byte.b	$00
-    997  f494		       00		      .byte.b	$00
-    998  f495		       00		      .byte.b	$00
-    999  f496		       00		      .byte.b	$00
-   1000  f497		       00		      .byte.b	$00
-   1001  f498		       00		      .byte.b	$00
-   1002  f499		       00		      .byte.b	$00
-   1003  f49a		       00		      .byte.b	$00
-   1004  f49b		       00		      .byte.b	$00
-   1005  f49c		       00		      .byte.b	$00
-   1006  f49d		       00		      .byte.b	$00
-   1007  f49e		       00		      .byte.b	$00
-   1008  f49f		       00		      .byte.b	$00
-   1009  f4a0		       00		      .byte.b	$00
-   1010  f4a1		       00		      .byte.b	$00
-   1011  f4a2		       00		      .byte.b	$00
-   1012  f4a3		       00		      .byte.b	$00
-   1013  f4a4		       00		      .byte.b	$00
-   1014  f4a5		       00		      .byte.b	$00
-   1015  f4a6		       00		      .byte.b	$00
-   1016  f4a7		       00		      .byte.b	$00
-   1017  f4a8		       00		      .byte.b	$00
-   1018  f4a9		       00		      .byte.b	$00
-   1019  f4aa		       00		      .byte.b	$00
-   1020  f4ab		       00		      .byte.b	$00
-   1021  f4ac		       00		      .byte.b	$00
-   1022  f4ad		       00		      .byte.b	$00
-   1023  f4ae		       00		      .byte.b	$00
-   1024  f4af		       00		      .byte.b	$00
-   1025  f4b0		       00		      .byte.b	$00
-   1026  f4b1		       00		      .byte.b	$00
-   1027  f4b2		       00		      .byte.b	$00
-   1028  f4b3		       00		      .byte.b	$00
-   1029  f4b4		       00		      .byte.b	$00
-   1030  f4b5		       00		      .byte.b	$00
-   1031  f4b6		       00		      .byte.b	$00
-   1032  f4b7		       00		      .byte.b	$00
-   1033  f4b8		       00		      .byte.b	$00
-   1034  f4b9		       00		      .byte.b	$00
-   1035  f4ba		       00		      .byte.b	$00
-   1036  f4bb		       00		      .byte.b	$00
-   1037  f4bc		       00		      .byte.b	$00
-   1038  f4bd		       00		      .byte.b	$00
-   1039  f4be		       00		      .byte.b	$00
-   1040  f4bf		       00		      .byte.b	$00
-   1041  f4c0		       00		      .byte.b	$00
-   1042  f4c1		       00		      .byte.b	$00
-   1043  f4c2		       00		      .byte.b	$00
-   1044  f4c3		       00		      .byte.b	$00
-   1045  f4c4		       00		      .byte.b	$00
-   1046  f4c5		       00		      .byte.b	$00
-   1047  f4c6		       00		      .byte.b	$00
-   1048  f4c7		       00		      .byte.b	$00
-   1049  f4c8		       00		      .byte.b	$00
-   1050  f4c9		       00		      .byte.b	$00
-   1051  f4ca		       00		      .byte.b	$00
-   1052  f4cb		       00		      .byte.b	$00
-   1053  f4cc		       00		      .byte.b	$00
-   1054  f4cd		       00		      .byte.b	$00
-   1055  f4ce		       00		      .byte.b	$00
-   1056  f4cf		       00		      .byte.b	$00
-   1057  f4d0		       00		      .byte.b	$00
-   1058  f4d1		       00		      .byte.b	$00
-   1059  f4d2		       00		      .byte.b	$00
-   1060  f4d3		       00		      .byte.b	$00
-   1061  f4d4		       00		      .byte.b	$00
-   1062  f4d5		       00		      .byte.b	$00
-   1063  f4d6		       00		      .byte.b	$00
-   1064  f4d7		       00		      .byte.b	$00
-   1065  f4d8		       00		      .byte.b	$00
-   1066  f4d9		       00		      .byte.b	$00
-   1067  f4da		       00		      .byte.b	$00
-   1068  f4db		       00		      .byte.b	$00
-   1069  f4dc		       00		      .byte.b	$00
-   1070  f4dd		       00		      .byte.b	$00
-   1071  f4de		       00		      .byte.b	$00
-   1072  f4df		       00		      .byte.b	$00
-   1073  f4e0		       00		      .byte.b	$00
-   1074  f4e1		       00		      .byte.b	$00
-   1075  f4e2		       00		      .byte.b	$00
-   1076  f4e3		       00		      .byte.b	$00
-   1077  f4e4		       00		      .byte.b	$00
-   1078  f4e5		       00		      .byte.b	$00
-   1079  f4e6		       00		      .byte.b	$00
-   1080  f4e7		       00		      .byte.b	$00
-   1081  f4e8		       00		      .byte.b	$00
-   1082  f4e9		       00		      .byte.b	$00
-   1083  f4ea		       00		      .byte.b	$00
-   1084  f4eb		       00		      .byte.b	$00
-   1085  f4ec		       00		      .byte.b	$00
-   1086  f4ed		       00		      .byte.b	$00
-   1087  f4ee		       00		      .byte.b	$00
-   1088  f4ef		       00		      .byte.b	$00
-   1089  f4f0		       00		      .byte.b	$00
-   1090  f4f1		       00		      .byte.b	$00
-   1091  f4f2		       00		      .byte.b	$00
-   1092  f4f3		       00		      .byte.b	$00
-   1093  f4f4		       00		      .byte.b	$00
-   1094  f4f5		       00		      .byte.b	$00
-   1095  f4f6		       00		      .byte.b	$00
-   1096  f4f7		       00		      .byte.b	$00
-   1097  f4f8		       00		      .byte.b	$00
-   1098  f4f9		       00		      .byte.b	$00
-   1099  f4fa		       00		      .byte.b	$00
-   1100  f4fb		       00		      .byte.b	$00
-   1101  f4fc		       00		      .byte.b	$00
-   1102  f4fd		       00		      .byte.b	$00
-   1103  f4fe		       00		      .byte.b	$00
-   1104  f4ff		       00		      .byte.b	$00
-   1105  f500		       00		      .byte.b	$00
-   1106  f501		       00		      .byte.b	$00
-   1107  f502		       00		      .byte.b	$00
-   1108  f503		       00		      .byte.b	$00
-   1109  f504		       00		      .byte.b	$00
-   1110  f505		       00		      .byte.b	$00
-   1111  f506		       00		      .byte.b	$00
-   1112  f507		       00		      .byte.b	$00
-   1113  f508		       00		      .byte.b	$00
-   1114  f509		       00		      .byte.b	$00
-   1115  f50a		       00		      .byte.b	$00
-   1116  f50b		       00		      .byte.b	$00
-   1117  f50c		       00		      .byte.b	$00
-   1118  f50d		       00		      .byte.b	$00
-   1119  f50e		       00		      .byte.b	$00
-   1120  f50f		       00		      .byte.b	$00
-   1121  f510		       00		      .byte.b	$00
-   1122  f511		       00		      .byte.b	$00
-   1123  f512		       00		      .byte.b	$00
-   1124  f513		       00		      .byte.b	$00
-   1125  f514		       00		      .byte.b	$00
-   1126  f515		       00		      .byte.b	$00
-   1127  f516		       00		      .byte.b	$00
-   1128  f517		       00		      .byte.b	$00
-   1129  f518		       00		      .byte.b	$00
-   1130  f519		       00		      .byte.b	$00
-   1131  f51a		       00		      .byte.b	$00
-   1132  f51b		       00		      .byte.b	$00
-   1133  f51c		       00		      .byte.b	$00
-   1134  f51d		       00		      .byte.b	$00
-   1135  f51e		       00		      .byte.b	$00
-   1136  f51f		       00		      .byte.b	$00
-   1137  f520		       00		      .byte.b	$00
-   1138  f521		       00		      .byte.b	$00
-   1139  f522		       00		      .byte.b	$00
-   1140  f523		       00		      .byte.b	$00
-   1141  f524		       00		      .byte.b	$00
-   1142  f525		       00		      .byte.b	$00
-   1143  f526		       00		      .byte.b	$00
-   1144  f527		       00		      .byte.b	$00
-   1145  f528		       00		      .byte.b	$00
-   1146  f529		       00		      .byte.b	$00
-   1147  f52a		       00		      .byte.b	$00
-   1148  f52b		       00		      .byte.b	$00
-   1149  f52c		       00		      .byte.b	$00
-   1150  f52d		       00		      .byte.b	$00
-   1151  f52e		       00		      .byte.b	$00
-   1152  f52f		       00		      .byte.b	$00
-   1153  f530		       00		      .byte.b	$00
-   1154  f531		       00		      .byte.b	$00
-   1155  f532				   PF0RData
-   1156  f532		       00		      .byte.b	$00
-   1157  f533		       00		      .byte.b	$00
-   1158  f534		       00		      .byte.b	$00
-   1159  f535		       00		      .byte.b	$00
-   1160  f536		       00		      .byte.b	$00
-   1161  f537		       00		      .byte.b	$00
-   1162  f538		       00		      .byte.b	$00
-   1163  f539		       00		      .byte.b	$00
-   1164  f53a		       00		      .byte.b	$00
-   1165  f53b		       00		      .byte.b	$00
-   1166  f53c		       00		      .byte.b	$00
-   1167  f53d		       00		      .byte.b	$00
-   1168  f53e		       00		      .byte.b	$00
-   1169  f53f		       00		      .byte.b	$00
-   1170  f540		       00		      .byte.b	$00
-   1171  f541		       00		      .byte.b	$00
-   1172  f542		       00		      .byte.b	$00
-   1173  f543		       00		      .byte.b	$00
-   1174  f544		       00		      .byte.b	$00
-   1175  f545		       00		      .byte.b	$00
-   1176  f546		       00		      .byte.b	$00
-   1177  f547		       00		      .byte.b	$00
-   1178  f548		       00		      .byte.b	$00
-   1179  f549		       00		      .byte.b	$00
-   1180  f54a		       00		      .byte.b	$00
-   1181  f54b		       00		      .byte.b	$00
-   1182  f54c		       00		      .byte.b	$00
-   1183  f54d		       00		      .byte.b	$00
-   1184  f54e		       00		      .byte.b	$00
-   1185  f54f		       00		      .byte.b	$00
-   1186  f550		       00		      .byte.b	$00
-   1187  f551		       00		      .byte.b	$00
-   1188  f552		       00		      .byte.b	$00
-   1189  f553		       00		      .byte.b	$00
-   1190  f554		       00		      .byte.b	$00
-   1191  f555		       00		      .byte.b	$00
-   1192  f556		       00		      .byte.b	$00
-   1193  f557		       00		      .byte.b	$00
-   1194  f558		       00		      .byte.b	$00
-   1195  f559		       00		      .byte.b	$00
-   1196  f55a		       00		      .byte.b	$00
-   1197  f55b		       00		      .byte.b	$00
-   1198  f55c		       00		      .byte.b	$00
-   1199  f55d		       00		      .byte.b	$00
-   1200  f55e		       00		      .byte.b	$00
-   1201  f55f		       00		      .byte.b	$00
-   1202  f560		       00		      .byte.b	$00
-   1203  f561		       00		      .byte.b	$00
-   1204  f562		       00		      .byte.b	$00
-   1205  f563		       00		      .byte.b	$00
-   1206  f564		       00		      .byte.b	$00
-   1207  f565		       00		      .byte.b	$00
-   1208  f566		       00		      .byte.b	$00
-   1209  f567		       00		      .byte.b	$00
-   1210  f568		       00		      .byte.b	$00
-   1211  f569		       00		      .byte.b	$00
-   1212  f56a		       00		      .byte.b	$00
-   1213  f56b		       00		      .byte.b	$00
-   1214  f56c		       00		      .byte.b	$00
-   1215  f56d		       00		      .byte.b	$00
-   1216  f56e		       00		      .byte.b	$00
-   1217  f56f		       00		      .byte.b	$00
-   1218  f570		       00		      .byte.b	$00
-   1219  f571		       00		      .byte.b	$00
-   1220  f572		       00		      .byte.b	$00
-   1221  f573		       00		      .byte.b	$00
-   1222  f574		       00		      .byte.b	$00
-   1223  f575		       00		      .byte.b	$00
-   1224  f576		       00		      .byte.b	$00
-   1225  f577		       00		      .byte.b	$00
-   1226  f578		       00		      .byte.b	$00
-   1227  f579		       00		      .byte.b	$00
-   1228  f57a		       00		      .byte.b	$00
-   1229  f57b		       00		      .byte.b	$00
-   1230  f57c		       00		      .byte.b	$00
-   1231  f57d		       00		      .byte.b	$00
-   1232  f57e		       00		      .byte.b	$00
-   1233  f57f		       00		      .byte.b	$00
-   1234  f580		       00		      .byte.b	$00
-   1235  f581		       00		      .byte.b	$00
-   1236  f582		       00		      .byte.b	$00
-   1237  f583		       00		      .byte.b	$00
-   1238  f584		       00		      .byte.b	$00
-   1239  f585		       00		      .byte.b	$00
-   1240  f586		       00		      .byte.b	$00
-   1241  f587		       00		      .byte.b	$00
-   1242  f588		       00		      .byte.b	$00
-   1243  f589		       00		      .byte.b	$00
-   1244  f58a		       00		      .byte.b	$00
-   1245  f58b		       00		      .byte.b	$00
-   1246  f58c		       00		      .byte.b	$00
-   1247  f58d		       00		      .byte.b	$00
-   1248  f58e		       00		      .byte.b	$00
-   1249  f58f		       00		      .byte.b	$00
-   1250  f590		       00		      .byte.b	$00
-   1251  f591		       00		      .byte.b	$00
-   1252  f592		       00		      .byte.b	$00
-   1253  f593		       00		      .byte.b	$00
-   1254  f594		       00		      .byte.b	$00
-   1255  f595		       00		      .byte.b	$00
-   1256  f596		       00		      .byte.b	$00
-   1257  f597		       00		      .byte.b	$00
-   1258  f598		       00		      .byte.b	$00
-   1259  f599		       00		      .byte.b	$00
-   1260  f59a		       00		      .byte.b	$00
-   1261  f59b		       00		      .byte.b	$00
-   1262  f59c		       00		      .byte.b	$00
-   1263  f59d		       00		      .byte.b	$00
-   1264  f59e		       00		      .byte.b	$00
-   1265  f59f		       00		      .byte.b	$00
-   1266  f5a0		       00		      .byte.b	$00
-   1267  f5a1		       00		      .byte.b	$00
-   1268  f5a2		       00		      .byte.b	$00
-   1269  f5a3		       00		      .byte.b	$00
-   1270  f5a4		       00		      .byte.b	$00
-   1271  f5a5		       00		      .byte.b	$00
-   1272  f5a6		       00		      .byte.b	$00
-   1273  f5a7		       00		      .byte.b	$00
-   1274  f5a8		       00		      .byte.b	$00
-   1275  f5a9		       00		      .byte.b	$00
-   1276  f5aa		       00		      .byte.b	$00
-   1277  f5ab		       00		      .byte.b	$00
-   1278  f5ac		       00		      .byte.b	$00
-   1279  f5ad		       00		      .byte.b	$00
-   1280  f5ae		       00		      .byte.b	$00
-   1281  f5af		       00		      .byte.b	$00
-   1282  f5b0		       00		      .byte.b	$00
-   1283  f5b1		       00		      .byte.b	$00
-   1284  f5b2		       00		      .byte.b	$00
-   1285  f5b3		       00		      .byte.b	$00
-   1286  f5b4		       00		      .byte.b	$00
-   1287  f5b5		       00		      .byte.b	$00
-   1288  f5b6		       00		      .byte.b	$00
-   1289  f5b7		       00		      .byte.b	$00
-   1290  f5b8		       00		      .byte.b	$00
-   1291  f5b9		       00		      .byte.b	$00
-   1292  f5ba		       00		      .byte.b	$00
-   1293  f5bb		       00		      .byte.b	$00
-   1294  f5bc		       00		      .byte.b	$00
-   1295  f5bd		       00		      .byte.b	$00
-   1296  f5be		       00		      .byte.b	$00
-   1297  f5bf		       00		      .byte.b	$00
-   1298  f5c0		       00		      .byte.b	$00
-   1299  f5c1		       00		      .byte.b	$00
-   1300  f5c2		       00		      .byte.b	$00
-   1301  f5c3		       00		      .byte.b	$00
-   1302  f5c4		       00		      .byte.b	$00
-   1303  f5c5		       00		      .byte.b	$00
-   1304  f5c6		       00		      .byte.b	$00
-   1305  f5c7		       00		      .byte.b	$00
-   1306  f5c8		       00		      .byte.b	$00
-   1307  f5c9		       00		      .byte.b	$00
-   1308  f5ca		       00		      .byte.b	$00
-   1309  f5cb		       00		      .byte.b	$00
-   1310  f5cc		       00		      .byte.b	$00
-   1311  f5cd		       00		      .byte.b	$00
-   1312  f5ce		       00		      .byte.b	$00
-   1313  f5cf		       00		      .byte.b	$00
-   1314  f5d0		       00		      .byte.b	$00
-   1315  f5d1		       00		      .byte.b	$00
-   1316  f5d2		       00		      .byte.b	$00
-   1317  f5d3		       00		      .byte.b	$00
-   1318  f5d4		       00		      .byte.b	$00
-   1319  f5d5		       00		      .byte.b	$00
-   1320  f5d6		       00		      .byte.b	$00
-   1321  f5d7		       00		      .byte.b	$00
-   1322  f5d8				   PF1RData
-   1323  f5d8		       00		      .byte.b	$00
-   1324  f5d9		       00		      .byte.b	$00
-   1325  f5da		       00		      .byte.b	$00
-   1326  f5db		       00		      .byte.b	$00
-   1327  f5dc		       00		      .byte.b	$00
-   1328  f5dd		       00		      .byte.b	$00
-   1329  f5de		       00		      .byte.b	$00
-   1330  f5df		       00		      .byte.b	$00
-   1331  f5e0		       00		      .byte.b	$00
-   1332  f5e1		       00		      .byte.b	$00
-   1333  f5e2		       00		      .byte.b	$00
-   1334  f5e3		       00		      .byte.b	$00
-   1335  f5e4		       00		      .byte.b	$00
-   1336  f5e5		       00		      .byte.b	$00
-   1337  f5e6		       00		      .byte.b	$00
-   1338  f5e7		       00		      .byte.b	$00
-   1339  f5e8		       00		      .byte.b	$00
-   1340  f5e9		       00		      .byte.b	$00
-   1341  f5ea		       00		      .byte.b	$00
-   1342  f5eb		       00		      .byte.b	$00
-   1343  f5ec		       00		      .byte.b	$00
-   1344  f5ed		       00		      .byte.b	$00
-   1345  f5ee		       00		      .byte.b	$00
-   1346  f5ef		       00		      .byte.b	$00
-   1347  f5f0		       00		      .byte.b	$00
-   1348  f5f1		       00		      .byte.b	$00
-   1349  f5f2		       00		      .byte.b	$00
-   1350  f5f3		       00		      .byte.b	$00
-   1351  f5f4		       00		      .byte.b	$00
-   1352  f5f5		       00		      .byte.b	$00
-   1353  f5f6		       00		      .byte.b	$00
-   1354  f5f7		       00		      .byte.b	$00
-   1355  f5f8		       00		      .byte.b	$00
-   1356  f5f9		       00		      .byte.b	$00
-   1357  f5fa		       00		      .byte.b	$00
-   1358  f5fb		       00		      .byte.b	$00
-   1359  f5fc		       00		      .byte.b	$00
-   1360  f5fd		       00		      .byte.b	$00
-   1361  f5fe		       00		      .byte.b	$00
-   1362  f5ff		       00		      .byte.b	$00
-   1363  f600		       00		      .byte.b	$00
-   1364  f601		       00		      .byte.b	$00
-   1365  f602		       00		      .byte.b	$00
-   1366  f603		       00		      .byte.b	$00
-   1367  f604		       00		      .byte.b	$00
-   1368  f605		       00		      .byte.b	$00
-   1369  f606		       00		      .byte.b	$00
-   1370  f607		       00		      .byte.b	$00
-   1371  f608		       00		      .byte.b	$00
-   1372  f609		       00		      .byte.b	$00
-   1373  f60a		       00		      .byte.b	$00
-   1374  f60b		       00		      .byte.b	$00
-   1375  f60c		       00		      .byte.b	$00
-   1376  f60d		       00		      .byte.b	$00
-   1377  f60e		       00		      .byte.b	$00
-   1378  f60f		       00		      .byte.b	$00
-   1379  f610		       00		      .byte.b	$00
-   1380  f611		       00		      .byte.b	$00
-   1381  f612		       00		      .byte.b	$00
-   1382  f613		       00		      .byte.b	$00
-   1383  f614		       00		      .byte.b	$00
-   1384  f615		       00		      .byte.b	$00
-   1385  f616		       00		      .byte.b	$00
-   1386  f617		       00		      .byte.b	$00
-   1387  f618		       00		      .byte.b	$00
-   1388  f619		       00		      .byte.b	$00
-   1389  f61a		       00		      .byte.b	$00
-   1390  f61b		       00		      .byte.b	$00
-   1391  f61c		       00		      .byte.b	$00
-   1392  f61d		       00		      .byte.b	$00
-   1393  f61e		       00		      .byte.b	$00
-   1394  f61f		       00		      .byte.b	$00
-   1395  f620		       00		      .byte.b	$00
-   1396  f621		       00		      .byte.b	$00
-   1397  f622		       00		      .byte.b	$00
-   1398  f623		       00		      .byte.b	$00
-   1399  f624		       00		      .byte.b	$00
-   1400  f625		       00		      .byte.b	$00
-   1401  f626		       00		      .byte.b	$00
-   1402  f627		       00		      .byte.b	$00
-   1403  f628		       00		      .byte.b	$00
-   1404  f629		       00		      .byte.b	$00
-   1405  f62a		       00		      .byte.b	$00
-   1406  f62b		       00		      .byte.b	$00
-   1407  f62c		       00		      .byte.b	$00
-   1408  f62d		       00		      .byte.b	$00
-   1409  f62e		       00		      .byte.b	$00
-   1410  f62f		       00		      .byte.b	$00
-   1411  f630		       00		      .byte.b	$00
-   1412  f631		       00		      .byte.b	$00
-   1413  f632		       00		      .byte.b	$00
-   1414  f633		       00		      .byte.b	$00
-   1415  f634		       00		      .byte.b	$00
-   1416  f635		       00		      .byte.b	$00
-   1417  f636		       00		      .byte.b	$00
-   1418  f637		       00		      .byte.b	$00
-   1419  f638		       00		      .byte.b	$00
-   1420  f639		       00		      .byte.b	$00
-   1421  f63a		       00		      .byte.b	$00
-   1422  f63b		       00		      .byte.b	$00
-   1423  f63c		       00		      .byte.b	$00
-   1424  f63d		       00		      .byte.b	$00
-   1425  f63e		       00		      .byte.b	$00
-   1426  f63f		       00		      .byte.b	$00
-   1427  f640		       00		      .byte.b	$00
-   1428  f641		       00		      .byte.b	$00
-   1429  f642		       00		      .byte.b	$00
-   1430  f643		       00		      .byte.b	$00
-   1431  f644		       00		      .byte.b	$00
-   1432  f645		       00		      .byte.b	$00
-   1433  f646		       00		      .byte.b	$00
-   1434  f647		       00		      .byte.b	$00
-   1435  f648		       00		      .byte.b	$00
-   1436  f649		       00		      .byte.b	$00
-   1437  f64a		       00		      .byte.b	$00
-   1438  f64b		       00		      .byte.b	$00
-   1439  f64c		       00		      .byte.b	$00
-   1440  f64d		       00		      .byte.b	$00
-   1441  f64e		       00		      .byte.b	$00
-   1442  f64f		       00		      .byte.b	$00
-   1443  f650		       00		      .byte.b	$00
-   1444  f651		       00		      .byte.b	$00
-   1445  f652		       00		      .byte.b	$00
-   1446  f653		       00		      .byte.b	$00
-   1447  f654		       00		      .byte.b	$00
-   1448  f655		       00		      .byte.b	$00
-   1449  f656		       00		      .byte.b	$00
-   1450  f657		       00		      .byte.b	$00
-   1451  f658		       00		      .byte.b	$00
-   1452  f659		       00		      .byte.b	$00
-   1453  f65a		       00		      .byte.b	$00
-   1454  f65b		       00		      .byte.b	$00
-   1455  f65c		       00		      .byte.b	$00
-   1456  f65d		       00		      .byte.b	$00
-   1457  f65e		       00		      .byte.b	$00
-   1458  f65f		       00		      .byte.b	$00
-   1459  f660		       00		      .byte.b	$00
-   1460  f661		       00		      .byte.b	$00
-   1461  f662		       00		      .byte.b	$00
-   1462  f663		       00		      .byte.b	$00
-   1463  f664		       00		      .byte.b	$00
-   1464  f665		       00		      .byte.b	$00
-   1465  f666		       00		      .byte.b	$00
-   1466  f667		       00		      .byte.b	$00
-   1467  f668		       00		      .byte.b	$00
-   1468  f669		       00		      .byte.b	$00
-   1469  f66a		       00		      .byte.b	$00
-   1470  f66b		       00		      .byte.b	$00
-   1471  f66c		       00		      .byte.b	$00
-   1472  f66d		       00		      .byte.b	$00
-   1473  f66e		       00		      .byte.b	$00
-   1474  f66f		       00		      .byte.b	$00
-   1475  f670		       00		      .byte.b	$00
-   1476  f671		       00		      .byte.b	$00
-   1477  f672		       00		      .byte.b	$00
-   1478  f673		       00		      .byte.b	$00
-   1479  f674		       00		      .byte.b	$00
-   1480  f675		       00		      .byte.b	$00
-   1481  f676		       00		      .byte.b	$00
-   1482  f677		       00		      .byte.b	$00
-   1483  f678		       00		      .byte.b	$00
-   1484  f679		       00		      .byte.b	$00
-   1485  f67a		       00		      .byte.b	$00
-   1486  f67b		       00		      .byte.b	$00
-   1487  f67c		       00		      .byte.b	$00
-   1488  f67d		       00		      .byte.b	$00
-   1489  f67e				   PF2RData
-   1490  f67e		       00		      .byte.b	$00
-   1491  f67f		       00		      .byte.b	$00
-   1492  f680		       00		      .byte.b	$00
-   1493  f681		       00		      .byte.b	$00
-   1494  f682		       00		      .byte.b	$00
-   1495  f683		       00		      .byte.b	$00
-   1496  f684		       00		      .byte.b	$00
-   1497  f685		       00		      .byte.b	$00
-   1498  f686		       00		      .byte.b	$00
-   1499  f687		       00		      .byte.b	$00
-   1500  f688		       00		      .byte.b	$00
-   1501  f689		       00		      .byte.b	$00
-   1502  f68a		       00		      .byte.b	$00
-   1503  f68b		       00		      .byte.b	$00
-   1504  f68c		       00		      .byte.b	$00
-   1505  f68d		       00		      .byte.b	$00
-   1506  f68e		       00		      .byte.b	$00
-   1507  f68f		       00		      .byte.b	$00
-   1508  f690		       00		      .byte.b	$00
-   1509  f691		       00		      .byte.b	$00
-   1510  f692		       00		      .byte.b	$00
-   1511  f693		       00		      .byte.b	$00
-   1512  f694		       00		      .byte.b	$00
-   1513  f695		       00		      .byte.b	$00
-   1514  f696		       00		      .byte.b	$00
-   1515  f697		       00		      .byte.b	$00
-   1516  f698		       00		      .byte.b	$00
-   1517  f699		       00		      .byte.b	$00
-   1518  f69a		       00		      .byte.b	$00
-   1519  f69b		       00		      .byte.b	$00
-   1520  f69c		       00		      .byte.b	$00
-   1521  f69d		       00		      .byte.b	$00
-   1522  f69e		       00		      .byte.b	$00
-   1523  f69f		       00		      .byte.b	$00
-   1524  f6a0		       00		      .byte.b	$00
-   1525  f6a1		       00		      .byte.b	$00
-   1526  f6a2		       00		      .byte.b	$00
-   1527  f6a3		       00		      .byte.b	$00
-   1528  f6a4		       00		      .byte.b	$00
-   1529  f6a5		       00		      .byte.b	$00
-   1530  f6a6		       00		      .byte.b	$00
-   1531  f6a7		       00		      .byte.b	$00
-   1532  f6a8		       00		      .byte.b	$00
-   1533  f6a9		       00		      .byte.b	$00
-   1534  f6aa		       00		      .byte.b	$00
-   1535  f6ab		       00		      .byte.b	$00
-   1536  f6ac		       00		      .byte.b	$00
-   1537  f6ad		       00		      .byte.b	$00
-   1538  f6ae		       00		      .byte.b	$00
-   1539  f6af		       00		      .byte.b	$00
-   1540  f6b0		       00		      .byte.b	$00
-   1541  f6b1		       00		      .byte.b	$00
-   1542  f6b2		       00		      .byte.b	$00
-   1543  f6b3		       00		      .byte.b	$00
-   1544  f6b4		       00		      .byte.b	$00
-   1545  f6b5		       00		      .byte.b	$00
-   1546  f6b6		       00		      .byte.b	$00
-   1547  f6b7		       00		      .byte.b	$00
-   1548  f6b8		       00		      .byte.b	$00
-   1549  f6b9		       00		      .byte.b	$00
-   1550  f6ba		       00		      .byte.b	$00
-   1551  f6bb		       00		      .byte.b	$00
-   1552  f6bc		       00		      .byte.b	$00
-   1553  f6bd		       00		      .byte.b	$00
-   1554  f6be		       00		      .byte.b	$00
-   1555  f6bf		       00		      .byte.b	$00
-   1556  f6c0		       00		      .byte.b	$00
-   1557  f6c1		       00		      .byte.b	$00
-   1558  f6c2		       00		      .byte.b	$00
-   1559  f6c3		       00		      .byte.b	$00
-   1560  f6c4		       00		      .byte.b	$00
-   1561  f6c5		       00		      .byte.b	$00
-   1562  f6c6		       00		      .byte.b	$00
-   1563  f6c7		       00		      .byte.b	$00
-   1564  f6c8		       00		      .byte.b	$00
-   1565  f6c9		       00		      .byte.b	$00
-   1566  f6ca		       00		      .byte.b	$00
-   1567  f6cb		       00		      .byte.b	$00
-   1568  f6cc		       00		      .byte.b	$00
-   1569  f6cd		       00		      .byte.b	$00
-   1570  f6ce		       00		      .byte.b	$00
-   1571  f6cf		       00		      .byte.b	$00
-   1572  f6d0		       00		      .byte.b	$00
-   1573  f6d1		       00		      .byte.b	$00
-   1574  f6d2		       00		      .byte.b	$00
-   1575  f6d3		       00		      .byte.b	$00
-   1576  f6d4		       00		      .byte.b	$00
-   1577  f6d5		       00		      .byte.b	$00
-   1578  f6d6		       00		      .byte.b	$00
-   1579  f6d7		       00		      .byte.b	$00
-   1580  f6d8		       00		      .byte.b	$00
-   1581  f6d9		       00		      .byte.b	$00
-   1582  f6da		       00		      .byte.b	$00
-   1583  f6db		       00		      .byte.b	$00
-   1584  f6dc		       00		      .byte.b	$00
-   1585  f6dd		       00		      .byte.b	$00
-   1586  f6de		       00		      .byte.b	$00
-   1587  f6df		       00		      .byte.b	$00
-   1588  f6e0		       00		      .byte.b	$00
-   1589  f6e1		       00		      .byte.b	$00
-   1590  f6e2		       00		      .byte.b	$00
-   1591  f6e3		       00		      .byte.b	$00
-   1592  f6e4		       00		      .byte.b	$00
-   1593  f6e5		       00		      .byte.b	$00
-   1594  f6e6		       00		      .byte.b	$00
-   1595  f6e7		       00		      .byte.b	$00
-   1596  f6e8		       00		      .byte.b	$00
-   1597  f6e9		       00		      .byte.b	$00
-   1598  f6ea		       00		      .byte.b	$00
-   1599  f6eb		       00		      .byte.b	$00
-   1600  f6ec		       00		      .byte.b	$00
-   1601  f6ed		       00		      .byte.b	$00
-   1602  f6ee		       00		      .byte.b	$00
-   1603  f6ef		       00		      .byte.b	$00
-   1604  f6f0		       00		      .byte.b	$00
-   1605  f6f1		       00		      .byte.b	$00
-   1606  f6f2		       00		      .byte.b	$00
-   1607  f6f3		       00		      .byte.b	$00
-   1608  f6f4		       00		      .byte.b	$00
-   1609  f6f5		       00		      .byte.b	$00
-   1610  f6f6		       00		      .byte.b	$00
-   1611  f6f7		       00		      .byte.b	$00
-   1612  f6f8		       00		      .byte.b	$00
-   1613  f6f9		       00		      .byte.b	$00
-   1614  f6fa		       00		      .byte.b	$00
-   1615  f6fb		       00		      .byte.b	$00
-   1616  f6fc		       00		      .byte.b	$00
-   1617  f6fd		       00		      .byte.b	$00
-   1618  f6fe		       00		      .byte.b	$00
-   1619  f6ff		       00		      .byte.b	$00
-   1620  f700		       00		      .byte.b	$00
-   1621  f701		       00		      .byte.b	$00
-   1622  f702		       00		      .byte.b	$00
-   1623  f703		       00		      .byte.b	$00
-   1624  f704		       00		      .byte.b	$00
-   1625  f705		       00		      .byte.b	$00
-   1626  f706		       00		      .byte.b	$00
-   1627  f707		       00		      .byte.b	$00
-   1628  f708		       00		      .byte.b	$00
-   1629  f709		       00		      .byte.b	$00
-   1630  f70a		       00		      .byte.b	$00
-   1631  f70b		       00		      .byte.b	$00
-   1632  f70c		       00		      .byte.b	$00
-   1633  f70d		       00		      .byte.b	$00
-   1634  f70e		       00		      .byte.b	$00
-   1635  f70f		       00		      .byte.b	$00
-   1636  f710		       00		      .byte.b	$00
-   1637  f711		       00		      .byte.b	$00
-   1638  f712		       00		      .byte.b	$00
-   1639  f713		       00		      .byte.b	$00
-   1640  f714		       00		      .byte.b	$00
-   1641  f715		       00		      .byte.b	$00
-   1642  f716		       00		      .byte.b	$00
-   1643  f717		       00		      .byte.b	$00
-   1644  f718		       00		      .byte.b	$00
-   1645  f719		       00		      .byte.b	$00
-   1646  f71a		       00		      .byte.b	$00
-   1647  f71b		       00		      .byte.b	$00
-   1648  f71c		       00		      .byte.b	$00
-   1649  f71d		       00		      .byte.b	$00
-   1650  f71e		       00		      .byte.b	$00
-   1651  f71f		       00		      .byte.b	$00
-   1652  f720		       00		      .byte.b	$00
-   1653  f721		       00		      .byte.b	$00
-   1654  f722		       00		      .byte.b	$00
-   1655  f723		       00		      .byte.b	$00
-   1656  f724				   COLUPFData
-   1657  f724		       0a		      .byte.b	$0A
-   1658  f725		       0a		      .byte.b	$0A
-   1659  f726		       0a		      .byte.b	$0A
-   1660  f727		       0a		      .byte.b	$0A
-   1661  f728		       0a		      .byte.b	$0A
-   1662  f729		       0a		      .byte.b	$0A
-   1663  f72a		       0a		      .byte.b	$0A
-   1664  f72b		       0a		      .byte.b	$0A
-   1665  f72c		       0a		      .byte.b	$0A
-   1666  f72d		       0a		      .byte.b	$0A
-   1667  f72e		       0a		      .byte.b	$0A
-   1668  f72f		       0a		      .byte.b	$0A
-   1669  f730		       0a		      .byte.b	$0A
-   1670  f731		       0a		      .byte.b	$0A
-   1671  f732		       0a		      .byte.b	$0A
-   1672  f733		       0a		      .byte.b	$0A
-   1673  f734		       0a		      .byte.b	$0A
-   1674  f735		       0a		      .byte.b	$0A
-   1675  f736		       0a		      .byte.b	$0A
-   1676  f737		       0a		      .byte.b	$0A
-   1677  f738		       0a		      .byte.b	$0A
-   1678  f739		       0a		      .byte.b	$0A
-   1679  f73a		       0a		      .byte.b	$0A
-   1680  f73b		       0a		      .byte.b	$0A
-   1681  f73c		       0a		      .byte.b	$0A
-   1682  f73d		       0a		      .byte.b	$0A
-   1683  f73e		       0a		      .byte.b	$0A
-   1684  f73f		       0a		      .byte.b	$0A
-   1685  f740		       0a		      .byte.b	$0A
-   1686  f741		       0a		      .byte.b	$0A
-   1687  f742		       0a		      .byte.b	$0A
-   1688  f743		       0a		      .byte.b	$0A
-   1689  f744		       0a		      .byte.b	$0A
-   1690  f745		       0a		      .byte.b	$0A
-   1691  f746		       0a		      .byte.b	$0A
-   1692  f747		       0a		      .byte.b	$0A
-   1693  f748		       0a		      .byte.b	$0A
-   1694  f749		       0a		      .byte.b	$0A
-   1695  f74a		       0a		      .byte.b	$0A
-   1696  f74b		       0a		      .byte.b	$0A
-   1697  f74c		       0a		      .byte.b	$0A
-   1698  f74d		       0a		      .byte.b	$0A
-   1699  f74e		       0a		      .byte.b	$0A
-   1700  f74f		       0a		      .byte.b	$0A
-   1701  f750		       0a		      .byte.b	$0A
-   1702  f751		       0a		      .byte.b	$0A
-   1703  f752		       0a		      .byte.b	$0A
-   1704  f753		       0a		      .byte.b	$0A
-   1705  f754		       0a		      .byte.b	$0A
-   1706  f755		       0a		      .byte.b	$0A
-   1707  f756		       0a		      .byte.b	$0A
-   1708  f757		       0a		      .byte.b	$0A
-   1709  f758		       0a		      .byte.b	$0A
-   1710  f759		       0a		      .byte.b	$0A
-   1711  f75a		       0a		      .byte.b	$0A
-   1712  f75b		       0a		      .byte.b	$0A
-   1713  f75c		       0a		      .byte.b	$0A
-   1714  f75d		       0a		      .byte.b	$0A
-   1715  f75e		       0a		      .byte.b	$0A
-   1716  f75f		       0a		      .byte.b	$0A
-   1717  f760		       0a		      .byte.b	$0A
-   1718  f761		       0a		      .byte.b	$0A
-   1719  f762		       0a		      .byte.b	$0A
-   1720  f763		       0a		      .byte.b	$0A
-   1721  f764		       0a		      .byte.b	$0A
-   1722  f765		       0a		      .byte.b	$0A
-   1723  f766		       0a		      .byte.b	$0A
-   1724  f767		       0a		      .byte.b	$0A
-   1725  f768		       0a		      .byte.b	$0A
-   1726  f769		       0a		      .byte.b	$0A
-   1727  f76a		       0a		      .byte.b	$0A
-   1728  f76b		       0a		      .byte.b	$0A
-   1729  f76c		       0a		      .byte.b	$0A
-   1730  f76d		       0a		      .byte.b	$0A
-   1731  f76e		       0a		      .byte.b	$0A
-   1732  f76f		       0a		      .byte.b	$0A
-   1733  f770		       0a		      .byte.b	$0A
-   1734  f771		       0a		      .byte.b	$0A
-   1735  f772		       0a		      .byte.b	$0A
-   1736  f773		       0a		      .byte.b	$0A
-   1737  f774		       0a		      .byte.b	$0A
-   1738  f775		       0a		      .byte.b	$0A
-   1739  f776		       0a		      .byte.b	$0A
-   1740  f777		       0a		      .byte.b	$0A
-   1741  f778		       0a		      .byte.b	$0A
-   1742  f779		       0a		      .byte.b	$0A
-   1743  f77a		       0a		      .byte.b	$0A
-   1744  f77b		       0a		      .byte.b	$0A
-   1745  f77c		       0a		      .byte.b	$0A
-   1746  f77d		       0a		      .byte.b	$0A
-   1747  f77e		       0a		      .byte.b	$0A
-   1748  f77f		       0a		      .byte.b	$0A
-   1749  f780		       0a		      .byte.b	$0A
-   1750  f781		       0a		      .byte.b	$0A
-   1751  f782		       0a		      .byte.b	$0A
-   1752  f783		       0a		      .byte.b	$0A
-   1753  f784		       0a		      .byte.b	$0A
-   1754  f785		       0a		      .byte.b	$0A
-   1755  f786		       0a		      .byte.b	$0A
-   1756  f787		       0a		      .byte.b	$0A
-   1757  f788		       0a		      .byte.b	$0A
-   1758  f789		       0a		      .byte.b	$0A
-   1759  f78a		       0a		      .byte.b	$0A
-   1760  f78b		       0a		      .byte.b	$0A
-   1761  f78c		       0a		      .byte.b	$0A
-   1762  f78d		       0a		      .byte.b	$0A
-   1763  f78e		       0a		      .byte.b	$0A
-   1764  f78f		       0a		      .byte.b	$0A
-   1765  f790		       0a		      .byte.b	$0A
-   1766  f791		       0a		      .byte.b	$0A
-   1767  f792		       0a		      .byte.b	$0A
-   1768  f793		       0a		      .byte.b	$0A
-   1769  f794		       0a		      .byte.b	$0A
-   1770  f795		       0a		      .byte.b	$0A
-   1771  f796		       0a		      .byte.b	$0A
-   1772  f797		       0a		      .byte.b	$0A
-   1773  f798		       0a		      .byte.b	$0A
-   1774  f799		       0a		      .byte.b	$0A
-   1775  f79a		       0a		      .byte.b	$0A
-   1776  f79b		       0a		      .byte.b	$0A
-   1777  f79c		       0a		      .byte.b	$0A
-   1778  f79d		       0a		      .byte.b	$0A
-   1779  f79e		       0a		      .byte.b	$0A
-   1780  f79f		       0a		      .byte.b	$0A
-   1781  f7a0		       0a		      .byte.b	$0A
-   1782  f7a1		       0a		      .byte.b	$0A
-   1783  f7a2		       0a		      .byte.b	$0A
-   1784  f7a3		       0a		      .byte.b	$0A
-   1785  f7a4		       0a		      .byte.b	$0A
-   1786  f7a5		       0a		      .byte.b	$0A
-   1787  f7a6		       0a		      .byte.b	$0A
-   1788  f7a7		       0a		      .byte.b	$0A
-   1789  f7a8		       0a		      .byte.b	$0A
-   1790  f7a9		       0a		      .byte.b	$0A
-   1791  f7aa		       0a		      .byte.b	$0A
-   1792  f7ab		       0a		      .byte.b	$0A
-   1793  f7ac		       0a		      .byte.b	$0A
-   1794  f7ad		       0a		      .byte.b	$0A
-   1795  f7ae		       0a		      .byte.b	$0A
-   1796  f7af		       0a		      .byte.b	$0A
-   1797  f7b0		       0a		      .byte.b	$0A
-   1798  f7b1		       0a		      .byte.b	$0A
-   1799  f7b2		       0a		      .byte.b	$0A
-   1800  f7b3		       0a		      .byte.b	$0A
-   1801  f7b4		       0a		      .byte.b	$0A
-   1802  f7b5		       0a		      .byte.b	$0A
-   1803  f7b6		       0a		      .byte.b	$0A
-   1804  f7b7		       0a		      .byte.b	$0A
-   1805  f7b8		       0a		      .byte.b	$0A
-   1806  f7b9		       0a		      .byte.b	$0A
-   1807  f7ba		       0a		      .byte.b	$0A
-   1808  f7bb		       0a		      .byte.b	$0A
-   1809  f7bc		       0a		      .byte.b	$0A
-   1810  f7bd		       0a		      .byte.b	$0A
-   1811  f7be		       0a		      .byte.b	$0A
-   1812  f7bf		       0a		      .byte.b	$0A
-   1813  f7c0		       0a		      .byte.b	$0A
-   1814  f7c1		       0a		      .byte.b	$0A
-   1815  f7c2		       0a		      .byte.b	$0A
-   1816  f7c3		       0a		      .byte.b	$0A
-   1817  f7c4		       0a		      .byte.b	$0A
-   1818  f7c5		       0a		      .byte.b	$0A
-   1819  f7c6		       0a		      .byte.b	$0A
-   1820  f7c7		       0a		      .byte.b	$0A
-   1821  f7c8		       0a		      .byte.b	$0A
-   1822  f7c9		       0a		      .byte.b	$0A
-   1823  f7ca				   COLUBKData
-   1824  f7ca		       00		      .byte.b	$00
-   1825  f7cb		       00		      .byte.b	$00
-   1826  f7cc		       00		      .byte.b	$00
-   1827  f7cd		       00		      .byte.b	$00
-   1828  f7ce		       00		      .byte.b	$00
-   1829  f7cf		       00		      .byte.b	$00
-   1830  f7d0		       00		      .byte.b	$00
-   1831  f7d1		       00		      .byte.b	$00
-   1832  f7d2		       00		      .byte.b	$00
-   1833  f7d3		       00		      .byte.b	$00
-   1834  f7d4		       00		      .byte.b	$00
-   1835  f7d5		       00		      .byte.b	$00
-   1836  f7d6		       00		      .byte.b	$00
-   1837  f7d7		       00		      .byte.b	$00
-   1838  f7d8		       00		      .byte.b	$00
-   1839  f7d9		       00		      .byte.b	$00
-   1840  f7da		       00		      .byte.b	$00
-   1841  f7db		       00		      .byte.b	$00
-   1842  f7dc		       00		      .byte.b	$00
-   1843  f7dd		       00		      .byte.b	$00
-   1844  f7de		       00		      .byte.b	$00
-   1845  f7df		       00		      .byte.b	$00
-   1846  f7e0		       00		      .byte.b	$00
-   1847  f7e1		       00		      .byte.b	$00
-   1848  f7e2		       00		      .byte.b	$00
-   1849  f7e3		       00		      .byte.b	$00
-   1850  f7e4		       00		      .byte.b	$00
-   1851  f7e5		       00		      .byte.b	$00
-   1852  f7e6		       00		      .byte.b	$00
-   1853  f7e7		       00		      .byte.b	$00
-   1854  f7e8		       00		      .byte.b	$00
-   1855  f7e9		       00		      .byte.b	$00
-   1856  f7ea		       00		      .byte.b	$00
-   1857  f7eb		       00		      .byte.b	$00
-   1858  f7ec		       00		      .byte.b	$00
-   1859  f7ed		       00		      .byte.b	$00
-   1860  f7ee		       00		      .byte.b	$00
-   1861  f7ef		       00		      .byte.b	$00
-   1862  f7f0		       00		      .byte.b	$00
-   1863  f7f1		       00		      .byte.b	$00
-   1864  f7f2		       00		      .byte.b	$00
-   1865  f7f3		       00		      .byte.b	$00
-   1866  f7f4		       00		      .byte.b	$00
-   1867  f7f5		       00		      .byte.b	$00
-   1868  f7f6		       00		      .byte.b	$00
-   1869  f7f7		       00		      .byte.b	$00
-   1870  f7f8		       00		      .byte.b	$00
-   1871  f7f9		       00		      .byte.b	$00
-   1872  f7fa		       00		      .byte.b	$00
-   1873  f7fb		       00		      .byte.b	$00
-   1874  f7fc		       00		      .byte.b	$00
-   1875  f7fd		       00		      .byte.b	$00
-   1876  f7fe		       00		      .byte.b	$00
-   1877  f7ff		       00		      .byte.b	$00
-   1878  f800		       00		      .byte.b	$00
-   1879  f801		       00		      .byte.b	$00
-   1880  f802		       00		      .byte.b	$00
-   1881  f803		       00		      .byte.b	$00
-   1882  f804		       00		      .byte.b	$00
-   1883  f805		       00		      .byte.b	$00
-   1884  f806		       00		      .byte.b	$00
-   1885  f807		       00		      .byte.b	$00
-   1886  f808		       00		      .byte.b	$00
-   1887  f809		       00		      .byte.b	$00
-   1888  f80a		       00		      .byte.b	$00
-   1889  f80b		       00		      .byte.b	$00
-   1890  f80c		       00		      .byte.b	$00
-   1891  f80d		       00		      .byte.b	$00
-   1892  f80e		       00		      .byte.b	$00
-   1893  f80f		       00		      .byte.b	$00
-   1894  f810		       00		      .byte.b	$00
-   1895  f811		       00		      .byte.b	$00
-   1896  f812		       00		      .byte.b	$00
-   1897  f813		       00		      .byte.b	$00
-   1898  f814		       00		      .byte.b	$00
-   1899  f815		       00		      .byte.b	$00
-   1900  f816		       00		      .byte.b	$00
-   1901  f817		       00		      .byte.b	$00
-   1902  f818		       00		      .byte.b	$00
-   1903  f819		       00		      .byte.b	$00
-   1904  f81a		       00		      .byte.b	$00
-   1905  f81b		       00		      .byte.b	$00
-   1906  f81c		       00		      .byte.b	$00
-   1907  f81d		       00		      .byte.b	$00
-   1908  f81e		       00		      .byte.b	$00
-   1909  f81f		       00		      .byte.b	$00
-   1910  f820		       00		      .byte.b	$00
-   1911  f821		       00		      .byte.b	$00
-   1912  f822		       00		      .byte.b	$00
-   1913  f823		       00		      .byte.b	$00
-   1914  f824		       00		      .byte.b	$00
-   1915  f825		       00		      .byte.b	$00
-   1916  f826		       00		      .byte.b	$00
-   1917  f827		       00		      .byte.b	$00
-   1918  f828		       00		      .byte.b	$00
-   1919  f829		       00		      .byte.b	$00
-   1920  f82a		       00		      .byte.b	$00
-   1921  f82b		       00		      .byte.b	$00
-   1922  f82c		       00		      .byte.b	$00
-   1923  f82d		       00		      .byte.b	$00
-   1924  f82e		       00		      .byte.b	$00
-   1925  f82f		       00		      .byte.b	$00
-   1926  f830		       00		      .byte.b	$00
-   1927  f831		       00		      .byte.b	$00
-   1928  f832		       00		      .byte.b	$00
-   1929  f833		       00		      .byte.b	$00
-   1930  f834		       00		      .byte.b	$00
-   1931  f835		       00		      .byte.b	$00
-   1932  f836		       00		      .byte.b	$00
-   1933  f837		       00		      .byte.b	$00
-   1934  f838		       00		      .byte.b	$00
-   1935  f839		       00		      .byte.b	$00
-   1936  f83a		       00		      .byte.b	$00
-   1937  f83b		       00		      .byte.b	$00
-   1938  f83c		       00		      .byte.b	$00
-   1939  f83d		       00		      .byte.b	$00
-   1940  f83e		       00		      .byte.b	$00
-   1941  f83f		       00		      .byte.b	$00
-   1942  f840		       00		      .byte.b	$00
-   1943  f841		       00		      .byte.b	$00
-   1944  f842		       00		      .byte.b	$00
-   1945  f843		       00		      .byte.b	$00
-   1946  f844		       00		      .byte.b	$00
-   1947  f845		       00		      .byte.b	$00
-   1948  f846		       00		      .byte.b	$00
-   1949  f847		       00		      .byte.b	$00
-   1950  f848		       00		      .byte.b	$00
-   1951  f849		       00		      .byte.b	$00
-   1952  f84a		       00		      .byte.b	$00
-   1953  f84b		       00		      .byte.b	$00
-   1954  f84c		       00		      .byte.b	$00
-   1955  f84d		       00		      .byte.b	$00
-   1956  f84e		       00		      .byte.b	$00
-   1957  f84f		       00		      .byte.b	$00
-   1958  f850		       00		      .byte.b	$00
-   1959  f851		       00		      .byte.b	$00
-   1960  f852		       00		      .byte.b	$00
-   1961  f853		       00		      .byte.b	$00
-   1962  f854		       00		      .byte.b	$00
-   1963  f855		       00		      .byte.b	$00
-   1964  f856		       00		      .byte.b	$00
-   1965  f857		       00		      .byte.b	$00
-   1966  f858		       00		      .byte.b	$00
-   1967  f859		       00		      .byte.b	$00
-   1968  f85a		       00		      .byte.b	$00
-   1969  f85b		       00		      .byte.b	$00
-   1970  f85c		       00		      .byte.b	$00
-   1971  f85d		       00		      .byte.b	$00
-   1972  f85e		       00		      .byte.b	$00
-   1973  f85f		       00		      .byte.b	$00
-   1974  f860		       00		      .byte.b	$00
-   1975  f861		       00		      .byte.b	$00
-   1976  f862		       00		      .byte.b	$00
-   1977  f863		       00		      .byte.b	$00
-   1978  f864		       00		      .byte.b	$00
-   1979  f865		       00		      .byte.b	$00
-   1980  f866		       00		      .byte.b	$00
-   1981  f867		       00		      .byte.b	$00
-   1982  f868		       00		      .byte.b	$00
-   1983  f869		       00		      .byte.b	$00
-   1984  f86a		       00		      .byte.b	$00
-   1985  f86b		       00		      .byte.b	$00
-   1986  f86c		       00		      .byte.b	$00
-   1987  f86d		       00		      .byte.b	$00
-   1988  f86e		       00		      .byte.b	$00
-   1989  f86f		       00		      .byte.b	$00
-   1990  f870
-   1991  f870				   GRP0Data
-   1992  f870		       00		      .byte.b	$00
-   1993  f871		       00		      .byte.b	$00
-   1994  f872		       00		      .byte.b	$00
-   1995  f873		       00		      .byte.b	$00
-   1996  f874		       00		      .byte.b	$00
-   1997  f875		       00		      .byte.b	$00
-   1998  f876		       00		      .byte.b	$00
-   1999  f877		       00		      .byte.b	$00
-   2000  f878		       00		      .byte.b	$00
-   2001  f879		       00		      .byte.b	$00
-   2002  f87a		       00		      .byte.b	$00
-   2003  f87b		       00		      .byte.b	$00
-   2004  f87c		       00		      .byte.b	$00
-   2005  f87d		       00		      .byte.b	$00
-   2006  f87e		       00		      .byte.b	$00
-   2007  f87f		       00		      .byte.b	$00
-   2008  f880		       00		      .byte.b	$00
-   2009  f881		       00		      .byte.b	$00
-   2010  f882		       00		      .byte.b	$00
-   2011  f883		       00		      .byte.b	$00
-   2012  f884		       00		      .byte.b	$00
-   2013  f885		       00		      .byte.b	$00
-   2014  f886		       00		      .byte.b	$00
-   2015  f887		       00		      .byte.b	$00
-   2016  f888		       00		      .byte.b	$00
-   2017  f889		       00		      .byte.b	$00
-   2018  f88a		       00		      .byte.b	$00
-   2019  f88b		       00		      .byte.b	$00
-   2020  f88c		       00		      .byte.b	$00
-   2021  f88d		       00		      .byte.b	$00
-   2022  f88e		       00		      .byte.b	$00
-   2023  f88f		       00		      .byte.b	$00
-   2024  f890		       00		      .byte.b	$00
-   2025  f891		       00		      .byte.b	$00
-   2026  f892		       00		      .byte.b	$00
-   2027  f893		       00		      .byte.b	$00
-   2028  f894		       00		      .byte.b	$00
-   2029  f895		       00		      .byte.b	$00
-   2030  f896		       00		      .byte.b	$00
-   2031  f897		       00		      .byte.b	$00
-   2032  f898		       ff		      .byte.b	$FF
-   2033  f899		       81		      .byte.b	$81
-   2034  f89a		       81		      .byte.b	$81
-   2035  f89b		       81		      .byte.b	$81
-   2036  f89c		       81		      .byte.b	$81
-   2037  f89d		       81		      .byte.b	$81
-   2038  f89e		       81		      .byte.b	$81
-   2039  f89f		       ff		      .byte.b	$FF
-   2040  f8a0		       00		      .byte.b	$00
-   2041  f8a1		       00		      .byte.b	$00
-   2042  f8a2		       00		      .byte.b	$00
-   2043  f8a3		       00		      .byte.b	$00
-   2044  f8a4		       00		      .byte.b	$00
-   2045  f8a5		       00		      .byte.b	$00
-   2046  f8a6		       00		      .byte.b	$00
-   2047  f8a7		       00		      .byte.b	$00
-   2048  f8a8		       00		      .byte.b	$00
-   2049  f8a9		       00		      .byte.b	$00
-   2050  f8aa		       00		      .byte.b	$00
-   2051  f8ab		       00		      .byte.b	$00
-   2052  f8ac		       00		      .byte.b	$00
-   2053  f8ad		       00		      .byte.b	$00
-   2054  f8ae		       00		      .byte.b	$00
-   2055  f8af		       00		      .byte.b	$00
-   2056  f8b0		       00		      .byte.b	$00
-   2057  f8b1		       00		      .byte.b	$00
-   2058  f8b2		       00		      .byte.b	$00
-   2059  f8b3		       00		      .byte.b	$00
-   2060  f8b4		       00		      .byte.b	$00
-   2061  f8b5		       00		      .byte.b	$00
-   2062  f8b6		       00		      .byte.b	$00
-   2063  f8b7		       00		      .byte.b	$00
-   2064  f8b8		       00		      .byte.b	$00
-   2065  f8b9		       00		      .byte.b	$00
-   2066  f8ba		       00		      .byte.b	$00
-   2067  f8bb		       00		      .byte.b	$00
-   2068  f8bc		       00		      .byte.b	$00
-   2069  f8bd		       00		      .byte.b	$00
-   2070  f8be		       00		      .byte.b	$00
-   2071  f8bf		       00		      .byte.b	$00
-   2072  f8c0		       00		      .byte.b	$00
-   2073  f8c1		       00		      .byte.b	$00
-   2074  f8c2		       00		      .byte.b	$00
-   2075  f8c3		       00		      .byte.b	$00
-   2076  f8c4		       00		      .byte.b	$00
-   2077  f8c5		       00		      .byte.b	$00
-   2078  f8c6		       00		      .byte.b	$00
-   2079  f8c7		       00		      .byte.b	$00
-   2080  f8c8		       00		      .byte.b	$00
-   2081  f8c9		       00		      .byte.b	$00
-   2082  f8ca		       00		      .byte.b	$00
-   2083  f8cb		       00		      .byte.b	$00
-   2084  f8cc		       00		      .byte.b	$00
-   2085  f8cd		       00		      .byte.b	$00
-   2086  f8ce		       00		      .byte.b	$00
-   2087  f8cf		       00		      .byte.b	$00
-   2088  f8d0		       00		      .byte.b	$00
-   2089  f8d1		       00		      .byte.b	$00
-   2090  f8d2		       00		      .byte.b	$00
-   2091  f8d3		       00		      .byte.b	$00
-   2092  f8d4		       00		      .byte.b	$00
-   2093  f8d5		       00		      .byte.b	$00
-   2094  f8d6		       00		      .byte.b	$00
-   2095  f8d7		       00		      .byte.b	$00
-   2096  f8d8		       00		      .byte.b	$00
-   2097  f8d9		       00		      .byte.b	$00
-   2098  f8da		       00		      .byte.b	$00
-   2099  f8db		       00		      .byte.b	$00
-   2100  f8dc		       00		      .byte.b	$00
-   2101  f8dd		       00		      .byte.b	$00
-   2102  f8de		       00		      .byte.b	$00
-   2103  f8df		       00		      .byte.b	$00
-   2104  f8e0		       00		      .byte.b	$00
-   2105  f8e1		       00		      .byte.b	$00
-   2106  f8e2		       00		      .byte.b	$00
-   2107  f8e3		       00		      .byte.b	$00
-   2108  f8e4		       00		      .byte.b	$00
-   2109  f8e5		       00		      .byte.b	$00
-   2110  f8e6		       00		      .byte.b	$00
-   2111  f8e7		       00		      .byte.b	$00
-   2112  f8e8		       00		      .byte.b	$00
-   2113  f8e9		       00		      .byte.b	$00
-   2114  f8ea		       00		      .byte.b	$00
-   2115  f8eb		       00		      .byte.b	$00
-   2116  f8ec		       00		      .byte.b	$00
-   2117  f8ed		       00		      .byte.b	$00
-   2118  f8ee		       00		      .byte.b	$00
-   2119  f8ef		       00		      .byte.b	$00
-   2120  f8f0		       00		      .byte.b	$00
-   2121  f8f1		       00		      .byte.b	$00
-   2122  f8f2		       00		      .byte.b	$00
-   2123  f8f3		       00		      .byte.b	$00
-   2124  f8f4		       00		      .byte.b	$00
-   2125  f8f5		       00		      .byte.b	$00
-   2126  f8f6		       00		      .byte.b	$00
-   2127  f8f7		       00		      .byte.b	$00
-   2128  f8f8		       00		      .byte.b	$00
-   2129  f8f9		       00		      .byte.b	$00
-   2130  f8fa		       00		      .byte.b	$00
-   2131  f8fb		       00		      .byte.b	$00
-   2132  f8fc		       00		      .byte.b	$00
-   2133  f8fd		       00		      .byte.b	$00
-   2134  f8fe		       00		      .byte.b	$00
-   2135  f8ff		       00		      .byte.b	$00
-   2136  f900		       00		      .byte.b	$00
-   2137  f901		       00		      .byte.b	$00
-   2138  f902		       00		      .byte.b	$00
-   2139  f903		       00		      .byte.b	$00
-   2140  f904		       00		      .byte.b	$00
-   2141  f905		       00		      .byte.b	$00
-   2142  f906		       00		      .byte.b	$00
-   2143  f907		       00		      .byte.b	$00
-   2144  f908		       00		      .byte.b	$00
-   2145  f909		       00		      .byte.b	$00
-   2146  f90a		       00		      .byte.b	$00
-   2147  f90b		       00		      .byte.b	$00
-   2148  f90c		       00		      .byte.b	$00
-   2149  f90d		       00		      .byte.b	$00
-   2150  f90e		       00		      .byte.b	$00
-   2151  f90f		       00		      .byte.b	$00
-   2152  f910		       00		      .byte.b	$00
-   2153  f911		       00		      .byte.b	$00
-   2154  f912		       00		      .byte.b	$00
-   2155  f913		       00		      .byte.b	$00
-   2156  f914		       00		      .byte.b	$00
-   2157  f915		       00		      .byte.b	$00
-   2158  f916				   GRP1Data
-   2159  f916		       00		      .byte.b	$00
-   2160  f917		       00		      .byte.b	$00
-   2161  f918		       00		      .byte.b	$00
-   2162  f919		       00		      .byte.b	$00
-   2163  f91a		       00		      .byte.b	$00
-   2164  f91b		       00		      .byte.b	$00
-   2165  f91c		       00		      .byte.b	$00
-   2166  f91d		       00		      .byte.b	$00
-   2167  f91e		       00		      .byte.b	$00
-   2168  f91f		       00		      .byte.b	$00
-   2169  f920		       00		      .byte.b	$00
-   2170  f921		       00		      .byte.b	$00
-   2171  f922		       00		      .byte.b	$00
-   2172  f923		       00		      .byte.b	$00
-   2173  f924		       00		      .byte.b	$00
-   2174  f925		       00		      .byte.b	$00
-   2175  f926		       00		      .byte.b	$00
-   2176  f927		       00		      .byte.b	$00
-   2177  f928		       00		      .byte.b	$00
-   2178  f929		       00		      .byte.b	$00
-   2179  f92a		       00		      .byte.b	$00
-   2180  f92b		       00		      .byte.b	$00
-   2181  f92c		       00		      .byte.b	$00
-   2182  f92d		       00		      .byte.b	$00
-   2183  f92e		       00		      .byte.b	$00
-   2184  f92f		       00		      .byte.b	$00
-   2185  f930		       00		      .byte.b	$00
-   2186  f931		       00		      .byte.b	$00
-   2187  f932		       00		      .byte.b	$00
-   2188  f933		       00		      .byte.b	$00
-   2189  f934		       00		      .byte.b	$00
-   2190  f935		       00		      .byte.b	$00
-   2191  f936		       00		      .byte.b	$00
-   2192  f937		       00		      .byte.b	$00
-   2193  f938		       00		      .byte.b	$00
-   2194  f939		       00		      .byte.b	$00
-   2195  f93a		       00		      .byte.b	$00
-   2196  f93b		       00		      .byte.b	$00
-   2197  f93c		       00		      .byte.b	$00
-   2198  f93d		       00		      .byte.b	$00
-   2199  f93e		       ff		      .byte.b	$FF
-   2200  f93f		       81		      .byte.b	$81
-   2201  f940		       81		      .byte.b	$81
-   2202  f941		       81		      .byte.b	$81
-   2203  f942		       81		      .byte.b	$81
-   2204  f943		       81		      .byte.b	$81
-   2205  f944		       81		      .byte.b	$81
-   2206  f945		       ff		      .byte.b	$FF
-   2207  f946		       00		      .byte.b	$00
-   2208  f947		       00		      .byte.b	$00
-   2209  f948		       00		      .byte.b	$00
-   2210  f949		       00		      .byte.b	$00
-   2211  f94a		       00		      .byte.b	$00
-   2212  f94b		       00		      .byte.b	$00
-   2213  f94c		       00		      .byte.b	$00
-   2214  f94d		       00		      .byte.b	$00
-   2215  f94e		       00		      .byte.b	$00
-   2216  f94f		       00		      .byte.b	$00
-   2217  f950		       00		      .byte.b	$00
-   2218  f951		       00		      .byte.b	$00
-   2219  f952		       00		      .byte.b	$00
-   2220  f953		       00		      .byte.b	$00
-   2221  f954		       00		      .byte.b	$00
-   2222  f955		       00		      .byte.b	$00
-   2223  f956		       00		      .byte.b	$00
-   2224  f957		       00		      .byte.b	$00
-   2225  f958		       00		      .byte.b	$00
-   2226  f959		       00		      .byte.b	$00
-   2227  f95a		       00		      .byte.b	$00
-   2228  f95b		       00		      .byte.b	$00
-   2229  f95c		       00		      .byte.b	$00
-   2230  f95d		       00		      .byte.b	$00
-   2231  f95e		       00		      .byte.b	$00
-   2232  f95f		       00		      .byte.b	$00
-   2233  f960		       00		      .byte.b	$00
-   2234  f961		       00		      .byte.b	$00
-   2235  f962		       00		      .byte.b	$00
-   2236  f963		       00		      .byte.b	$00
-   2237  f964		       00		      .byte.b	$00
-   2238  f965		       00		      .byte.b	$00
-   2239  f966		       00		      .byte.b	$00
-   2240  f967		       00		      .byte.b	$00
-   2241  f968		       00		      .byte.b	$00
-   2242  f969		       00		      .byte.b	$00
-   2243  f96a		       00		      .byte.b	$00
-   2244  f96b		       00		      .byte.b	$00
-   2245  f96c		       00		      .byte.b	$00
-   2246  f96d		       00		      .byte.b	$00
-   2247  f96e		       00		      .byte.b	$00
-   2248  f96f		       00		      .byte.b	$00
-   2249  f970		       00		      .byte.b	$00
-   2250  f971		       00		      .byte.b	$00
-   2251  f972		       00		      .byte.b	$00
-   2252  f973		       00		      .byte.b	$00
-   2253  f974		       00		      .byte.b	$00
-   2254  f975		       00		      .byte.b	$00
-   2255  f976		       00		      .byte.b	$00
-   2256  f977		       00		      .byte.b	$00
-   2257  f978		       00		      .byte.b	$00
-   2258  f979		       00		      .byte.b	$00
-   2259  f97a		       00		      .byte.b	$00
-   2260  f97b		       00		      .byte.b	$00
-   2261  f97c		       00		      .byte.b	$00
-   2262  f97d		       00		      .byte.b	$00
-   2263  f97e		       00		      .byte.b	$00
-   2264  f97f		       00		      .byte.b	$00
-   2265  f980		       00		      .byte.b	$00
-   2266  f981		       00		      .byte.b	$00
-   2267  f982		       00		      .byte.b	$00
-   2268  f983		       00		      .byte.b	$00
-   2269  f984		       00		      .byte.b	$00
-   2270  f985		       00		      .byte.b	$00
-   2271  f986		       00		      .byte.b	$00
-   2272  f987		       00		      .byte.b	$00
-   2273  f988		       00		      .byte.b	$00
-   2274  f989		       00		      .byte.b	$00
-   2275  f98a		       00		      .byte.b	$00
-   2276  f98b		       00		      .byte.b	$00
-   2277  f98c		       00		      .byte.b	$00
-   2278  f98d		       00		      .byte.b	$00
-   2279  f98e		       00		      .byte.b	$00
-   2280  f98f		       00		      .byte.b	$00
-   2281  f990		       00		      .byte.b	$00
-   2282  f991		       00		      .byte.b	$00
-   2283  f992		       00		      .byte.b	$00
-   2284  f993		       00		      .byte.b	$00
-   2285  f994		       00		      .byte.b	$00
-   2286  f995		       00		      .byte.b	$00
-   2287  f996		       00		      .byte.b	$00
-   2288  f997		       00		      .byte.b	$00
-   2289  f998		       00		      .byte.b	$00
-   2290  f999		       00		      .byte.b	$00
-   2291  f99a		       00		      .byte.b	$00
-   2292  f99b		       00		      .byte.b	$00
-   2293  f99c		       00		      .byte.b	$00
-   2294  f99d		       00		      .byte.b	$00
-   2295  f99e		       00		      .byte.b	$00
-   2296  f99f		       00		      .byte.b	$00
-   2297  f9a0		       00		      .byte.b	$00
-   2298  f9a1		       00		      .byte.b	$00
-   2299  f9a2		       00		      .byte.b	$00
-   2300  f9a3		       00		      .byte.b	$00
-   2301  f9a4		       00		      .byte.b	$00
-   2302  f9a5		       00		      .byte.b	$00
-   2303  f9a6		       00		      .byte.b	$00
-   2304  f9a7		       00		      .byte.b	$00
-   2305  f9a8		       00		      .byte.b	$00
-   2306  f9a9		       00		      .byte.b	$00
-   2307  f9aa		       00		      .byte.b	$00
-   2308  f9ab		       00		      .byte.b	$00
-   2309  f9ac		       00		      .byte.b	$00
-   2310  f9ad		       00		      .byte.b	$00
-   2311  f9ae		       00		      .byte.b	$00
-   2312  f9af		       00		      .byte.b	$00
-   2313  f9b0		       00		      .byte.b	$00
-   2314  f9b1		       00		      .byte.b	$00
-   2315  f9b2		       00		      .byte.b	$00
-   2316  f9b3		       00		      .byte.b	$00
-   2317  f9b4		       00		      .byte.b	$00
-   2318  f9b5		       00		      .byte.b	$00
-   2319  f9b6		       00		      .byte.b	$00
-   2320  f9b7		       00		      .byte.b	$00
-   2321  f9b8		       00		      .byte.b	$00
-   2322  f9b9		       00		      .byte.b	$00
-   2323  f9ba		       00		      .byte.b	$00
-   2324  f9bb		       00		      .byte.b	$00
-   2325  f9bc
-   2326  f9bc							; Sprite graphics (linhas top→bottom, ref)
-   2327  f9bc							; Sprite graphics (linhas top→bottom)
+    272  f12a		       20 eb f1 	      jsr	ScoreToDigits0
+    273  f12d		       20 3d f1 	      jsr	ScoreDrawOne
+    274  f130							; --- faixa scoreP1 (gap mínimo 1–2 scanlines, sem re-posicionar) ---
+    275  f130		       20 45 f2 	      jsr	ScoreToDigits1
+    276  f133		       20 5a f1 	      jsr	ScoreDrawOneTight
+    277  f136		       a9 00		      lda	#0
+    278  f138		       85 1b		      sta	GRP0
+    279  f13a		       85 1c		      sta	GRP1
+    280  f13c		       60		      rts
+    281  f13d
+    282  f13d				   ScoreDrawOne
+    283  f13d		       85 02		      sta	WSYNC
+    284  f13f		       a2 07		      ldx	#7
+    285  f141				   ScPos0
+    286  f141		       ca		      dex
+    287  f142		       d0 fd		      bne	ScPos0
+    288  f144		       ea		      nop
+    289  f145		       85 10		      sta	RESP0
+    290  f147		       85 11		      sta	RESP1
+    291  f149		       a9 00		      lda	#0
+    292  f14b		       85 20		      sta	HMP0
+    293  f14d		       85 21		      sta	HMP1
+    294  f14f		       85 02		      sta	WSYNC
+    295  f151		       85 2a		      sta	HMOVE
+    296  f153		       85 02		      sta	WSYNC
+    297  f155		       85 2b		      sta	HMCLR
+    298  f157		       4c 70 f1 	      jmp	ScoreDrawDigits
+    299  f15a
+    300  f15a				   ScoreDrawOneTight
+    301  f15a		       85 02		      sta	WSYNC
+    302  f15c		       a9 00		      lda	#0
+    303  f15e		       85 09		      sta	COLUBK
+    304  f160		       a9 00		      lda	#0
+    305  f162		       85 1b		      sta	GRP0
+    306  f164		       85 1c		      sta	GRP1
+    307  f166							;    sta WSYNC 		; 2a linha de gap (total ~2 scanlines)
+    308  f166		       a9 00		      lda	#0
+    309  f168		       85 09		      sta	COLUBK
+    310  f16a		       a9 00		      lda	#0
+    311  f16c		       85 1b		      sta	GRP0
+    312  f16e		       85 1c		      sta	GRP1
+    313  f170							; cai direto nos dígitos
+    314  f170				   ScoreDrawDigits
+    315  f170		       a0 00		      ldy	#0
+    316  f172				   ScBuild
+    317  f172		       84 ac		      sty	ScRow
+    318  f174		       98		      tya
+    319  f175		       85 9e		      sta	TmpA
+    320  f177		       0a		      asl
+    321  f178		       18		      clc
+    322  f179		       65 9e		      adc	TmpA
+    323  f17b		       85 ad		      sta	ScIdx
+    324  f17d		       a5 a3		      lda	Dig3
+    325  f17f		       20 cd f1 	      jsr	GlyphRow
+    326  f182		       a6 ad		      ldx	ScIdx
+    327  f184		       95 b2		      sta	ScStrip,x
+    328  f186		       e8		      inx
+    329  f187		       86 ad		      stx	ScIdx
+    330  f189		       a5 a4		      lda	Dig4
+    331  f18b		       20 cd f1 	      jsr	GlyphRow
+    332  f18e		       a6 ad		      ldx	ScIdx
+    333  f190		       95 b2		      sta	ScStrip,x
+    334  f192		       e8		      inx
+    335  f193		       86 ad		      stx	ScIdx
+    336  f195		       a5 a5		      lda	Dig5
+    337  f197		       20 cd f1 	      jsr	GlyphRow
+    338  f19a		       a6 ad		      ldx	ScIdx
+    339  f19c		       95 b2		      sta	ScStrip,x
+    340  f19e		       c8		      iny
+    341  f19f		       c0 06		      cpy	#6
+    342  f1a1		       90 cf		      bcc	ScBuild
+    343  f1a3		       a0 00		      ldy	#0
+    344  f1a5				   ScDigRows
+    345  f1a5		       85 02		      sta	WSYNC
+    346  f1a7		       a9 00		      lda	#0
+    347  f1a9		       85 09		      sta	COLUBK
+    348  f1ab		       98		      tya
+    349  f1ac		       85 9e		      sta	TmpA
+    350  f1ae		       0a		      asl
+    351  f1af		       18		      clc
+    352  f1b0		       65 9e		      adc	TmpA
+    353  f1b2		       aa		      tax
+    354  f1b3		       b5 b2		      lda	ScStrip,x
+    355  f1b5		       85 1b		      sta	GRP0
+    356  f1b7		       e8		      inx
+    357  f1b8		       b5 b2		      lda	ScStrip,x
+    358  f1ba		       85 1c		      sta	GRP1
+    359  f1bc		       e8		      inx
+    360  f1bd		       b5 b2		      lda	ScStrip,x
+    361  f1bf		       85 1b		      sta	GRP0
+    362  f1c1		       c8		      iny
+    363  f1c2		       c0 06		      cpy	#6
+    364  f1c4		       90 df		      bcc	ScDigRows
+    365  f1c6		       a9 00		      lda	#0
+    366  f1c8		       85 1b		      sta	GRP0
+    367  f1ca		       85 1c		      sta	GRP1
+    368  f1cc		       60		      rts
+    369  f1cd
+    370  f1cd				   GlyphRow
+    371  f1cd		       85 83		      sta	Temp
+    372  f1cf		       a9 00		      lda	#0
+    373  f1d1		       85 9f		      sta	TmpB
+    374  f1d3		       a6 83		      ldx	Temp
+    375  f1d5		       f0 0a		      beq	GR_Done
+    376  f1d7				   GR_Mul
+    377  f1d7		       a5 9f		      lda	TmpB
+    378  f1d9		       18		      clc
+    379  f1da		       69 06		      adc	#6
+    380  f1dc		       85 9f		      sta	TmpB
+    381  f1de		       ca		      dex
+    382  f1df		       d0 f6		      bne	GR_Mul
+    383  f1e1				   GR_Done
+    384  f1e1		       a5 9f		      lda	TmpB
+    385  f1e3		       18		      clc
+    386  f1e4		       65 ac		      adc	ScRow
+    387  f1e6		       aa		      tax
+    388  f1e7		       bd d7 f2 	      lda	DigitGfx,x
+    389  f1ea		       60		      rts
+    390  f1eb
+    391  f1eb				   ScoreToDigits0
+    392  f1eb		       a9 00		      lda	#0
+    393  f1ed		       85 a3		      sta	Dig3
+    394  f1ef		       85 a4		      sta	Dig4
+    395  f1f1		       85 a5		      sta	Dig5
+    396  f1f3		       a5 80		      lda	ScoreP0
+    397  f1f5		       85 83		      sta	Temp
+    398  f1f7				   S0H
+    399  f1f7		       a5 83		      lda	Temp
+    400  f1f9		       c9 64		      cmp	#100
+    401  f1fb		       90 0a		      bcc	S0T
+    402  f1fd		       38		      sec
+    403  f1fe		       e9 64		      sbc	#100
+    404  f200		       85 83		      sta	Temp
+    405  f202		       e6 a3		      inc	Dig3
+    406  f204		       4c f7 f1 	      jmp	S0H
+    407  f207				   S0T
+    408  f207		       a5 83		      lda	Temp
+    409  f209		       c9 0a		      cmp	#10
+    410  f20b		       90 0a		      bcc	S0U
+    411  f20d		       38		      sec
+    412  f20e		       e9 0a		      sbc	#10
+    413  f210		       85 83		      sta	Temp
+    414  f212		       e6 a4		      inc	Dig4
+    415  f214		       4c 07 f2 	      jmp	S0T
+    416  f217				   S0U
+    417  f217		       a5 83		      lda	Temp
+    418  f219		       85 a5		      sta	Dig5
+    419  f21b		       60		      rts
+    420  f21c
+    421  f21c				   ScoreToDigits0Val
+    422  f21c		       a9 00		      lda	#0
+    423  f21e		       85 a4		      sta	Dig4
+    424  f220		       85 a5		      sta	Dig5
+    425  f222		       a5 80		      lda	ScoreP0
+    426  f224		       85 83		      sta	Temp
+    427  f226				   S0V_T
+    428  f226		       a5 83		      lda	Temp
+    429  f228		       c9 0a		      cmp	#10
+    430  f22a		       90 14		      bcc	S0V_U
+    431  f22c		       38		      sec
+    432  f22d		       e9 0a		      sbc	#10
+    433  f22f		       85 83		      sta	Temp
+    434  f231		       e6 a4		      inc	Dig4
+    435  f233		       a5 a4		      lda	Dig4
+    436  f235		       c9 0a		      cmp	#10
+    437  f237		       90 ed		      bcc	S0V_T
+    438  f239		       a9 00		      lda	#0
+    439  f23b		       85 a4		      sta	Dig4
+    440  f23d		       4c 26 f2 	      jmp	S0V_T
+    441  f240				   S0V_U
+    442  f240		       a5 83		      lda	Temp
+    443  f242		       85 a5		      sta	Dig5
+    444  f244		       60		      rts
+    445  f245
+    446  f245				   ScoreToDigits1
+    447  f245		       a9 00		      lda	#0
+    448  f247		       85 a3		      sta	Dig3
+    449  f249		       85 a4		      sta	Dig4
+    450  f24b		       85 a5		      sta	Dig5
+    451  f24d		       a5 81		      lda	ScoreP1
+    452  f24f		       85 83		      sta	Temp
+    453  f251				   S1H
+    454  f251		       a5 83		      lda	Temp
+    455  f253		       c9 64		      cmp	#100
+    456  f255		       90 0a		      bcc	S1T
+    457  f257		       38		      sec
+    458  f258		       e9 64		      sbc	#100
+    459  f25a		       85 83		      sta	Temp
+    460  f25c		       e6 a3		      inc	Dig3
+    461  f25e		       4c 51 f2 	      jmp	S1H
+    462  f261				   S1T
+    463  f261		       a5 83		      lda	Temp
+    464  f263		       c9 0a		      cmp	#10
+    465  f265		       90 0a		      bcc	S1U
+    466  f267		       38		      sec
+    467  f268		       e9 0a		      sbc	#10
+    468  f26a		       85 83		      sta	Temp
+    469  f26c		       e6 a4		      inc	Dig4
+    470  f26e		       4c 61 f2 	      jmp	S1T
+    471  f271				   S1U
+    472  f271		       a5 83		      lda	Temp
+    473  f273		       85 a5		      sta	Dig5
+    474  f275		       60		      rts
+    475  f276
+    476  f276				   ScoreToDigits1Val
+    477  f276		       a9 00		      lda	#0
+    478  f278		       85 a4		      sta	Dig4
+    479  f27a		       85 a5		      sta	Dig5
+    480  f27c		       a5 81		      lda	ScoreP1
+    481  f27e		       85 83		      sta	Temp
+    482  f280				   S1V_T
+    483  f280		       a5 83		      lda	Temp
+    484  f282		       c9 0a		      cmp	#10
+    485  f284		       90 14		      bcc	S1V_U
+    486  f286		       38		      sec
+    487  f287		       e9 0a		      sbc	#10
+    488  f289		       85 83		      sta	Temp
+    489  f28b		       e6 a4		      inc	Dig4
+    490  f28d		       a5 a4		      lda	Dig4
+    491  f28f		       c9 0a		      cmp	#10
+    492  f291		       90 ed		      bcc	S1V_T
+    493  f293		       a9 00		      lda	#0
+    494  f295		       85 a4		      sta	Dig4
+    495  f297		       4c 80 f2 	      jmp	S1V_T
+    496  f29a				   S1V_U
+    497  f29a		       a5 83		      lda	Temp
+    498  f29c		       85 a5		      sta	Dig5
+    499  f29e		       60		      rts
+    500  f29f
+    501  f29f							; --- Logo RETROCOMPILER (glifos.json → PF) ---
+    502  f29f				   DrawLogo
+    503  f29f		       a9 00		      lda	#0
+    504  f2a1		       85 1b		      sta	GRP0
+    505  f2a3		       85 1c		      sta	GRP1
+    506  f2a5		       a9 01		      lda	#1
+    507  f2a7		       85 0a		      sta	CTRLPF	; reflect
+    508  f2a9		       a9 0e		      lda	#$0E
+    509  f2ab		       85 08		      sta	COLUPF
+    510  f2ad		       a2 00		      ldx	#0
+    511  f2af				   LogoLoop
+    512  f2af		       85 02		      sta	WSYNC
+    513  f2b1		       a9 00		      lda	#0
+    514  f2b3		       85 09		      sta	COLUBK
+    515  f2b5		       e0 0a		      cpx	#10
+    516  f2b7		       b0 13		      bcs	LogoDone
+    517  f2b9		       bd 1f f3 	      lda	LogoPF0,x
+    518  f2bc		       85 0d		      sta	PF0
+    519  f2be		       bd 29 f3 	      lda	LogoPF1,x
+    520  f2c1		       85 0e		      sta	PF1
+    521  f2c3		       bd 33 f3 	      lda	LogoPF2,x
+    522  f2c6		       85 0f		      sta	PF2
+    523  f2c8		       e8		      inx
+    524  f2c9		       4c af f2 	      jmp	LogoLoop
+    525  f2cc				   LogoDone
+    526  f2cc		       a9 00		      lda	#0
+    527  f2ce		       85 0d		      sta	PF0
+    528  f2d0		       85 0e		      sta	PF1
+    529  f2d2		       85 0f		      sta	PF2
+    530  f2d4		       85 0a		      sta	CTRLPF
+    531  f2d6		       60		      rts
+    532  f2d7
+    533  f2d7				   DigitGfx
+    534  f2d7				   Digit0
+    535  f2d7		       60		      .byte.b	%01100000
+    536  f2d8		       d0		      .byte.b	%11010000
+    537  f2d9		       90		      .byte.b	%10010000
+    538  f2da		       b0		      .byte.b	%10110000
+    539  f2db		       60		      .byte.b	%01100000
+    540  f2dc		       00		      .byte.b	%00000000
+    541  f2dd				   Digit1
+    542  f2dd		       40		      .byte.b	%01000000
+    543  f2de		       c0		      .byte.b	%11000000
+    544  f2df		       40		      .byte.b	%01000000
+    545  f2e0		       40		      .byte.b	%01000000
+    546  f2e1		       e0		      .byte.b	%11100000
+    547  f2e2		       00		      .byte.b	%00000000
+    548  f2e3				   Digit2
+    549  f2e3		       60		      .byte.b	%01100000
+    550  f2e4		       90		      .byte.b	%10010000
+    551  f2e5		       20		      .byte.b	%00100000
+    552  f2e6		       40		      .byte.b	%01000000
+    553  f2e7		       f0		      .byte.b	%11110000
+    554  f2e8		       00		      .byte.b	%00000000
+    555  f2e9				   Digit3
+    556  f2e9		       e0		      .byte.b	%11100000
+    557  f2ea		       10		      .byte.b	%00010000
+    558  f2eb		       60		      .byte.b	%01100000
+    559  f2ec		       10		      .byte.b	%00010000
+    560  f2ed		       e0		      .byte.b	%11100000
+    561  f2ee		       00		      .byte.b	%00000000
+    562  f2ef				   Digit4
+    563  f2ef		       10		      .byte.b	%00010000
+    564  f2f0		       30		      .byte.b	%00110000
+    565  f2f1		       50		      .byte.b	%01010000
+    566  f2f2		       f0		      .byte.b	%11110000
+    567  f2f3		       10		      .byte.b	%00010000
+    568  f2f4		       00		      .byte.b	%00000000
+    569  f2f5				   Digit5
+    570  f2f5		       f0		      .byte.b	%11110000
+    571  f2f6		       80		      .byte.b	%10000000
+    572  f2f7		       e0		      .byte.b	%11100000
+    573  f2f8		       10		      .byte.b	%00010000
+    574  f2f9		       e0		      .byte.b	%11100000
+    575  f2fa		       00		      .byte.b	%00000000
+    576  f2fb				   Digit6
+    577  f2fb		       60		      .byte.b	%01100000
+    578  f2fc		       80		      .byte.b	%10000000
+    579  f2fd		       e0		      .byte.b	%11100000
+    580  f2fe		       90		      .byte.b	%10010000
+    581  f2ff		       60		      .byte.b	%01100000
+    582  f300		       00		      .byte.b	%00000000
+    583  f301				   Digit7
+    584  f301		       f0		      .byte.b	%11110000
+    585  f302		       10		      .byte.b	%00010000
+    586  f303		       20		      .byte.b	%00100000
+    587  f304		       40		      .byte.b	%01000000
+    588  f305		       40		      .byte.b	%01000000
+    589  f306		       00		      .byte.b	%00000000
+    590  f307				   Digit8
+    591  f307		       60		      .byte.b	%01100000
+    592  f308		       90		      .byte.b	%10010000
+    593  f309		       60		      .byte.b	%01100000
+    594  f30a		       90		      .byte.b	%10010000
+    595  f30b		       60		      .byte.b	%01100000
+    596  f30c		       00		      .byte.b	%00000000
+    597  f30d				   Digit9
+    598  f30d		       60		      .byte.b	%01100000
+    599  f30e		       90		      .byte.b	%10010000
+    600  f30f		       70		      .byte.b	%01110000
+    601  f310		       10		      .byte.b	%00010000
+    602  f311		       60		      .byte.b	%01100000
+    603  f312		       00		      .byte.b	%00000000
+    604  f313				   Label1P
+    605  f313		       4c		      .byte.b	%01001100
+    606  f314		       ca		      .byte.b	%11001010
+    607  f315		       4c		      .byte.b	%01001100
+    608  f316		       48		      .byte.b	%01001000
+    609  f317		       e8		      .byte.b	%11101000
+    610  f318		       00		      .byte.b	%00000000
+    611  f319				   Label2P
+    612  f319		       66		      .byte.b	%01100110
+    613  f31a		       95		      .byte.b	%10010101
+    614  f31b		       26		      .byte.b	%00100110
+    615  f31c		       44		      .byte.b	%01000100
+    616  f31d		       f4		      .byte.b	%11110100
+    617  f31e		       00		      .byte.b	%00000000
+    618  f31f
+    619  f31f				   LogoPF0
+    620  f31f		       e0		      .byte.b	%11100000
+    621  f320		       20		      .byte.b	%00100000
+    622  f321		       e0		      .byte.b	%11100000
+    623  f322		       a0		      .byte.b	%10100000
+    624  f323		       20		      .byte.b	%00100000
+    625  f324		       00		      .byte.b	%00000000
+    626  f325		       e0		      .byte.b	%11100000
+    627  f326		       20		      .byte.b	%00100000
+    628  f327		       e0		      .byte.b	%11100000
+    629  f328		       a0		      .byte.b	%10100000
+    630  f329				   LogoPF1
+    631  f329		       38		      .byte.b	%00111000
+    632  f32a		       a4		      .byte.b	%10100100
+    633  f32b		       38		      .byte.b	%00111000
+    634  f32c		       28		      .byte.b	%00101000
+    635  f32d		       a4		      .byte.b	%10100100
+    636  f32e		       00		      .byte.b	%00000000
+    637  f32f		       00		      .byte.b	%00000000
+    638  f330		       80		      .byte.b	%10000000
+    639  f331		       00		      .byte.b	%00000000
+    640  f332		       00		      .byte.b	%00000000
+    641  f333				   LogoPF2
+    642  f333		       00		      .byte.b	%00000000
+    643  f334		       00		      .byte.b	%00000000
+    644  f335		       00		      .byte.b	%00000000
+    645  f336		       00		      .byte.b	%00000000
+    646  f337		       00		      .byte.b	%00000000
+    647  f338		       00		      .byte.b	%00000000
+    648  f339		       00		      .byte.b	%00000000
+    649  f33a		       00		      .byte.b	%00000000
+    650  f33b		       00		      .byte.b	%00000000
+    651  f33c		       00		      .byte.b	%00000000
+    652  f33d
+    653  f33d							; Playfield tables (por scanline)
+    654  f33d				   PF0Data
+    655  f33d		       00		      .byte.b	$00
+    656  f33e		       00		      .byte.b	$00
+    657  f33f		       00		      .byte.b	$00
+    658  f340		       00		      .byte.b	$00
+    659  f341		       00		      .byte.b	$00
+    660  f342		       00		      .byte.b	$00
+    661  f343		       00		      .byte.b	$00
+    662  f344		       00		      .byte.b	$00
+    663  f345		       00		      .byte.b	$00
+    664  f346		       00		      .byte.b	$00
+    665  f347		       00		      .byte.b	$00
+    666  f348		       00		      .byte.b	$00
+    667  f349		       00		      .byte.b	$00
+    668  f34a		       00		      .byte.b	$00
+    669  f34b		       00		      .byte.b	$00
+    670  f34c		       00		      .byte.b	$00
+    671  f34d		       00		      .byte.b	$00
+    672  f34e		       00		      .byte.b	$00
+    673  f34f		       00		      .byte.b	$00
+    674  f350		       00		      .byte.b	$00
+    675  f351		       00		      .byte.b	$00
+    676  f352		       00		      .byte.b	$00
+    677  f353		       00		      .byte.b	$00
+    678  f354		       00		      .byte.b	$00
+    679  f355		       00		      .byte.b	$00
+    680  f356		       00		      .byte.b	$00
+    681  f357		       00		      .byte.b	$00
+    682  f358		       00		      .byte.b	$00
+    683  f359		       00		      .byte.b	$00
+    684  f35a		       00		      .byte.b	$00
+    685  f35b		       00		      .byte.b	$00
+    686  f35c		       00		      .byte.b	$00
+    687  f35d		       00		      .byte.b	$00
+    688  f35e		       00		      .byte.b	$00
+    689  f35f		       00		      .byte.b	$00
+    690  f360		       00		      .byte.b	$00
+    691  f361		       00		      .byte.b	$00
+    692  f362		       00		      .byte.b	$00
+    693  f363		       00		      .byte.b	$00
+    694  f364		       00		      .byte.b	$00
+    695  f365		       00		      .byte.b	$00
+    696  f366		       00		      .byte.b	$00
+    697  f367		       00		      .byte.b	$00
+    698  f368		       00		      .byte.b	$00
+    699  f369		       00		      .byte.b	$00
+    700  f36a		       00		      .byte.b	$00
+    701  f36b		       00		      .byte.b	$00
+    702  f36c		       00		      .byte.b	$00
+    703  f36d		       00		      .byte.b	$00
+    704  f36e		       00		      .byte.b	$00
+    705  f36f		       00		      .byte.b	$00
+    706  f370		       00		      .byte.b	$00
+    707  f371		       00		      .byte.b	$00
+    708  f372		       00		      .byte.b	$00
+    709  f373		       00		      .byte.b	$00
+    710  f374		       00		      .byte.b	$00
+    711  f375		       00		      .byte.b	$00
+    712  f376		       00		      .byte.b	$00
+    713  f377		       00		      .byte.b	$00
+    714  f378		       00		      .byte.b	$00
+    715  f379		       00		      .byte.b	$00
+    716  f37a		       00		      .byte.b	$00
+    717  f37b		       00		      .byte.b	$00
+    718  f37c		       00		      .byte.b	$00
+    719  f37d		       00		      .byte.b	$00
+    720  f37e		       00		      .byte.b	$00
+    721  f37f		       00		      .byte.b	$00
+    722  f380		       00		      .byte.b	$00
+    723  f381		       00		      .byte.b	$00
+    724  f382		       00		      .byte.b	$00
+    725  f383		       00		      .byte.b	$00
+    726  f384		       00		      .byte.b	$00
+    727  f385		       00		      .byte.b	$00
+    728  f386		       00		      .byte.b	$00
+    729  f387		       00		      .byte.b	$00
+    730  f388		       00		      .byte.b	$00
+    731  f389		       00		      .byte.b	$00
+    732  f38a		       00		      .byte.b	$00
+    733  f38b		       00		      .byte.b	$00
+    734  f38c		       00		      .byte.b	$00
+    735  f38d		       00		      .byte.b	$00
+    736  f38e		       00		      .byte.b	$00
+    737  f38f		       00		      .byte.b	$00
+    738  f390		       00		      .byte.b	$00
+    739  f391		       00		      .byte.b	$00
+    740  f392		       00		      .byte.b	$00
+    741  f393		       00		      .byte.b	$00
+    742  f394		       00		      .byte.b	$00
+    743  f395		       00		      .byte.b	$00
+    744  f396		       00		      .byte.b	$00
+    745  f397		       00		      .byte.b	$00
+    746  f398		       00		      .byte.b	$00
+    747  f399		       00		      .byte.b	$00
+    748  f39a		       00		      .byte.b	$00
+    749  f39b		       00		      .byte.b	$00
+    750  f39c		       00		      .byte.b	$00
+    751  f39d		       00		      .byte.b	$00
+    752  f39e		       00		      .byte.b	$00
+    753  f39f		       00		      .byte.b	$00
+    754  f3a0		       00		      .byte.b	$00
+    755  f3a1		       00		      .byte.b	$00
+    756  f3a2		       00		      .byte.b	$00
+    757  f3a3		       00		      .byte.b	$00
+    758  f3a4		       00		      .byte.b	$00
+    759  f3a5		       00		      .byte.b	$00
+    760  f3a6		       00		      .byte.b	$00
+    761  f3a7		       00		      .byte.b	$00
+    762  f3a8		       00		      .byte.b	$00
+    763  f3a9		       00		      .byte.b	$00
+    764  f3aa		       00		      .byte.b	$00
+    765  f3ab		       00		      .byte.b	$00
+    766  f3ac		       00		      .byte.b	$00
+    767  f3ad		       00		      .byte.b	$00
+    768  f3ae		       00		      .byte.b	$00
+    769  f3af		       00		      .byte.b	$00
+    770  f3b0		       00		      .byte.b	$00
+    771  f3b1		       00		      .byte.b	$00
+    772  f3b2		       00		      .byte.b	$00
+    773  f3b3		       00		      .byte.b	$00
+    774  f3b4		       00		      .byte.b	$00
+    775  f3b5		       00		      .byte.b	$00
+    776  f3b6		       00		      .byte.b	$00
+    777  f3b7		       00		      .byte.b	$00
+    778  f3b8		       00		      .byte.b	$00
+    779  f3b9		       00		      .byte.b	$00
+    780  f3ba		       00		      .byte.b	$00
+    781  f3bb		       00		      .byte.b	$00
+    782  f3bc		       00		      .byte.b	$00
+    783  f3bd		       00		      .byte.b	$00
+    784  f3be		       00		      .byte.b	$00
+    785  f3bf		       00		      .byte.b	$00
+    786  f3c0		       00		      .byte.b	$00
+    787  f3c1		       00		      .byte.b	$00
+    788  f3c2		       00		      .byte.b	$00
+    789  f3c3		       00		      .byte.b	$00
+    790  f3c4		       00		      .byte.b	$00
+    791  f3c5		       00		      .byte.b	$00
+    792  f3c6		       00		      .byte.b	$00
+    793  f3c7		       00		      .byte.b	$00
+    794  f3c8		       00		      .byte.b	$00
+    795  f3c9		       00		      .byte.b	$00
+    796  f3ca		       00		      .byte.b	$00
+    797  f3cb		       00		      .byte.b	$00
+    798  f3cc		       00		      .byte.b	$00
+    799  f3cd		       00		      .byte.b	$00
+    800  f3ce		       00		      .byte.b	$00
+    801  f3cf		       00		      .byte.b	$00
+    802  f3d0		       00		      .byte.b	$00
+    803  f3d1		       00		      .byte.b	$00
+    804  f3d2		       00		      .byte.b	$00
+    805  f3d3		       00		      .byte.b	$00
+    806  f3d4		       00		      .byte.b	$00
+    807  f3d5		       00		      .byte.b	$00
+    808  f3d6		       00		      .byte.b	$00
+    809  f3d7		       00		      .byte.b	$00
+    810  f3d8		       00		      .byte.b	$00
+    811  f3d9		       00		      .byte.b	$00
+    812  f3da		       00		      .byte.b	$00
+    813  f3db		       00		      .byte.b	$00
+    814  f3dc		       00		      .byte.b	$00
+    815  f3dd		       00		      .byte.b	$00
+    816  f3de		       00		      .byte.b	$00
+    817  f3df		       00		      .byte.b	$00
+    818  f3e0		       00		      .byte.b	$00
+    819  f3e1		       00		      .byte.b	$00
+    820  f3e2		       00		      .byte.b	$00
+    821  f3e3				   PF1Data
+    822  f3e3		       00		      .byte.b	$00
+    823  f3e4		       00		      .byte.b	$00
+    824  f3e5		       00		      .byte.b	$00
+    825  f3e6		       00		      .byte.b	$00
+    826  f3e7		       00		      .byte.b	$00
+    827  f3e8		       00		      .byte.b	$00
+    828  f3e9		       00		      .byte.b	$00
+    829  f3ea		       00		      .byte.b	$00
+    830  f3eb		       00		      .byte.b	$00
+    831  f3ec		       00		      .byte.b	$00
+    832  f3ed		       00		      .byte.b	$00
+    833  f3ee		       00		      .byte.b	$00
+    834  f3ef		       00		      .byte.b	$00
+    835  f3f0		       00		      .byte.b	$00
+    836  f3f1		       00		      .byte.b	$00
+    837  f3f2		       00		      .byte.b	$00
+    838  f3f3		       00		      .byte.b	$00
+    839  f3f4		       00		      .byte.b	$00
+    840  f3f5		       00		      .byte.b	$00
+    841  f3f6		       00		      .byte.b	$00
+    842  f3f7		       00		      .byte.b	$00
+    843  f3f8		       00		      .byte.b	$00
+    844  f3f9		       00		      .byte.b	$00
+    845  f3fa		       00		      .byte.b	$00
+    846  f3fb		       00		      .byte.b	$00
+    847  f3fc		       00		      .byte.b	$00
+    848  f3fd		       00		      .byte.b	$00
+    849  f3fe		       00		      .byte.b	$00
+    850  f3ff		       00		      .byte.b	$00
+    851  f400		       00		      .byte.b	$00
+    852  f401		       00		      .byte.b	$00
+    853  f402		       00		      .byte.b	$00
+    854  f403		       00		      .byte.b	$00
+    855  f404		       00		      .byte.b	$00
+    856  f405		       00		      .byte.b	$00
+    857  f406		       00		      .byte.b	$00
+    858  f407		       00		      .byte.b	$00
+    859  f408		       00		      .byte.b	$00
+    860  f409		       00		      .byte.b	$00
+    861  f40a		       00		      .byte.b	$00
+    862  f40b		       00		      .byte.b	$00
+    863  f40c		       00		      .byte.b	$00
+    864  f40d		       00		      .byte.b	$00
+    865  f40e		       00		      .byte.b	$00
+    866  f40f		       00		      .byte.b	$00
+    867  f410		       00		      .byte.b	$00
+    868  f411		       00		      .byte.b	$00
+    869  f412		       00		      .byte.b	$00
+    870  f413		       00		      .byte.b	$00
+    871  f414		       00		      .byte.b	$00
+    872  f415		       00		      .byte.b	$00
+    873  f416		       00		      .byte.b	$00
+    874  f417		       00		      .byte.b	$00
+    875  f418		       00		      .byte.b	$00
+    876  f419		       00		      .byte.b	$00
+    877  f41a		       00		      .byte.b	$00
+    878  f41b		       00		      .byte.b	$00
+    879  f41c		       00		      .byte.b	$00
+    880  f41d		       00		      .byte.b	$00
+    881  f41e		       00		      .byte.b	$00
+    882  f41f		       00		      .byte.b	$00
+    883  f420		       00		      .byte.b	$00
+    884  f421		       00		      .byte.b	$00
+    885  f422		       00		      .byte.b	$00
+    886  f423		       00		      .byte.b	$00
+    887  f424		       00		      .byte.b	$00
+    888  f425		       00		      .byte.b	$00
+    889  f426		       00		      .byte.b	$00
+    890  f427		       00		      .byte.b	$00
+    891  f428		       00		      .byte.b	$00
+    892  f429		       00		      .byte.b	$00
+    893  f42a		       00		      .byte.b	$00
+    894  f42b		       00		      .byte.b	$00
+    895  f42c		       00		      .byte.b	$00
+    896  f42d		       00		      .byte.b	$00
+    897  f42e		       00		      .byte.b	$00
+    898  f42f		       00		      .byte.b	$00
+    899  f430		       00		      .byte.b	$00
+    900  f431		       00		      .byte.b	$00
+    901  f432		       00		      .byte.b	$00
+    902  f433		       00		      .byte.b	$00
+    903  f434		       00		      .byte.b	$00
+    904  f435		       00		      .byte.b	$00
+    905  f436		       00		      .byte.b	$00
+    906  f437		       00		      .byte.b	$00
+    907  f438		       00		      .byte.b	$00
+    908  f439		       00		      .byte.b	$00
+    909  f43a		       00		      .byte.b	$00
+    910  f43b		       00		      .byte.b	$00
+    911  f43c		       00		      .byte.b	$00
+    912  f43d		       00		      .byte.b	$00
+    913  f43e		       00		      .byte.b	$00
+    914  f43f		       00		      .byte.b	$00
+    915  f440		       00		      .byte.b	$00
+    916  f441		       00		      .byte.b	$00
+    917  f442		       00		      .byte.b	$00
+    918  f443		       00		      .byte.b	$00
+    919  f444		       00		      .byte.b	$00
+    920  f445		       00		      .byte.b	$00
+    921  f446		       00		      .byte.b	$00
+    922  f447		       00		      .byte.b	$00
+    923  f448		       00		      .byte.b	$00
+    924  f449		       00		      .byte.b	$00
+    925  f44a		       00		      .byte.b	$00
+    926  f44b		       00		      .byte.b	$00
+    927  f44c		       00		      .byte.b	$00
+    928  f44d		       00		      .byte.b	$00
+    929  f44e		       00		      .byte.b	$00
+    930  f44f		       00		      .byte.b	$00
+    931  f450		       00		      .byte.b	$00
+    932  f451		       00		      .byte.b	$00
+    933  f452		       00		      .byte.b	$00
+    934  f453		       00		      .byte.b	$00
+    935  f454		       00		      .byte.b	$00
+    936  f455		       00		      .byte.b	$00
+    937  f456		       00		      .byte.b	$00
+    938  f457		       00		      .byte.b	$00
+    939  f458		       00		      .byte.b	$00
+    940  f459		       00		      .byte.b	$00
+    941  f45a		       00		      .byte.b	$00
+    942  f45b		       00		      .byte.b	$00
+    943  f45c		       00		      .byte.b	$00
+    944  f45d		       00		      .byte.b	$00
+    945  f45e		       00		      .byte.b	$00
+    946  f45f		       00		      .byte.b	$00
+    947  f460		       00		      .byte.b	$00
+    948  f461		       00		      .byte.b	$00
+    949  f462		       00		      .byte.b	$00
+    950  f463		       00		      .byte.b	$00
+    951  f464		       00		      .byte.b	$00
+    952  f465		       00		      .byte.b	$00
+    953  f466		       00		      .byte.b	$00
+    954  f467		       00		      .byte.b	$00
+    955  f468		       00		      .byte.b	$00
+    956  f469		       00		      .byte.b	$00
+    957  f46a		       00		      .byte.b	$00
+    958  f46b		       00		      .byte.b	$00
+    959  f46c		       00		      .byte.b	$00
+    960  f46d		       00		      .byte.b	$00
+    961  f46e		       00		      .byte.b	$00
+    962  f46f		       00		      .byte.b	$00
+    963  f470		       00		      .byte.b	$00
+    964  f471		       00		      .byte.b	$00
+    965  f472		       00		      .byte.b	$00
+    966  f473		       00		      .byte.b	$00
+    967  f474		       00		      .byte.b	$00
+    968  f475		       00		      .byte.b	$00
+    969  f476		       00		      .byte.b	$00
+    970  f477		       00		      .byte.b	$00
+    971  f478		       00		      .byte.b	$00
+    972  f479		       00		      .byte.b	$00
+    973  f47a		       00		      .byte.b	$00
+    974  f47b		       00		      .byte.b	$00
+    975  f47c		       00		      .byte.b	$00
+    976  f47d		       00		      .byte.b	$00
+    977  f47e		       00		      .byte.b	$00
+    978  f47f		       00		      .byte.b	$00
+    979  f480		       00		      .byte.b	$00
+    980  f481		       00		      .byte.b	$00
+    981  f482		       00		      .byte.b	$00
+    982  f483		       00		      .byte.b	$00
+    983  f484		       00		      .byte.b	$00
+    984  f485		       00		      .byte.b	$00
+    985  f486		       00		      .byte.b	$00
+    986  f487		       00		      .byte.b	$00
+    987  f488		       00		      .byte.b	$00
+    988  f489				   PF2Data
+    989  f489		       00		      .byte.b	$00
+    990  f48a		       00		      .byte.b	$00
+    991  f48b		       00		      .byte.b	$00
+    992  f48c		       00		      .byte.b	$00
+    993  f48d		       00		      .byte.b	$00
+    994  f48e		       00		      .byte.b	$00
+    995  f48f		       00		      .byte.b	$00
+    996  f490		       00		      .byte.b	$00
+    997  f491		       00		      .byte.b	$00
+    998  f492		       00		      .byte.b	$00
+    999  f493		       00		      .byte.b	$00
+   1000  f494		       00		      .byte.b	$00
+   1001  f495		       00		      .byte.b	$00
+   1002  f496		       00		      .byte.b	$00
+   1003  f497		       00		      .byte.b	$00
+   1004  f498		       00		      .byte.b	$00
+   1005  f499		       00		      .byte.b	$00
+   1006  f49a		       00		      .byte.b	$00
+   1007  f49b		       00		      .byte.b	$00
+   1008  f49c		       00		      .byte.b	$00
+   1009  f49d		       00		      .byte.b	$00
+   1010  f49e		       00		      .byte.b	$00
+   1011  f49f		       00		      .byte.b	$00
+   1012  f4a0		       00		      .byte.b	$00
+   1013  f4a1		       00		      .byte.b	$00
+   1014  f4a2		       00		      .byte.b	$00
+   1015  f4a3		       00		      .byte.b	$00
+   1016  f4a4		       00		      .byte.b	$00
+   1017  f4a5		       00		      .byte.b	$00
+   1018  f4a6		       00		      .byte.b	$00
+   1019  f4a7		       00		      .byte.b	$00
+   1020  f4a8		       00		      .byte.b	$00
+   1021  f4a9		       00		      .byte.b	$00
+   1022  f4aa		       00		      .byte.b	$00
+   1023  f4ab		       00		      .byte.b	$00
+   1024  f4ac		       00		      .byte.b	$00
+   1025  f4ad		       00		      .byte.b	$00
+   1026  f4ae		       00		      .byte.b	$00
+   1027  f4af		       00		      .byte.b	$00
+   1028  f4b0		       00		      .byte.b	$00
+   1029  f4b1		       00		      .byte.b	$00
+   1030  f4b2		       00		      .byte.b	$00
+   1031  f4b3		       00		      .byte.b	$00
+   1032  f4b4		       00		      .byte.b	$00
+   1033  f4b5		       00		      .byte.b	$00
+   1034  f4b6		       00		      .byte.b	$00
+   1035  f4b7		       00		      .byte.b	$00
+   1036  f4b8		       00		      .byte.b	$00
+   1037  f4b9		       00		      .byte.b	$00
+   1038  f4ba		       00		      .byte.b	$00
+   1039  f4bb		       00		      .byte.b	$00
+   1040  f4bc		       00		      .byte.b	$00
+   1041  f4bd		       00		      .byte.b	$00
+   1042  f4be		       00		      .byte.b	$00
+   1043  f4bf		       00		      .byte.b	$00
+   1044  f4c0		       00		      .byte.b	$00
+   1045  f4c1		       00		      .byte.b	$00
+   1046  f4c2		       00		      .byte.b	$00
+   1047  f4c3		       00		      .byte.b	$00
+   1048  f4c4		       00		      .byte.b	$00
+   1049  f4c5		       00		      .byte.b	$00
+   1050  f4c6		       00		      .byte.b	$00
+   1051  f4c7		       00		      .byte.b	$00
+   1052  f4c8		       00		      .byte.b	$00
+   1053  f4c9		       00		      .byte.b	$00
+   1054  f4ca		       00		      .byte.b	$00
+   1055  f4cb		       00		      .byte.b	$00
+   1056  f4cc		       00		      .byte.b	$00
+   1057  f4cd		       00		      .byte.b	$00
+   1058  f4ce		       00		      .byte.b	$00
+   1059  f4cf		       00		      .byte.b	$00
+   1060  f4d0		       00		      .byte.b	$00
+   1061  f4d1		       00		      .byte.b	$00
+   1062  f4d2		       00		      .byte.b	$00
+   1063  f4d3		       00		      .byte.b	$00
+   1064  f4d4		       00		      .byte.b	$00
+   1065  f4d5		       00		      .byte.b	$00
+   1066  f4d6		       00		      .byte.b	$00
+   1067  f4d7		       00		      .byte.b	$00
+   1068  f4d8		       00		      .byte.b	$00
+   1069  f4d9		       00		      .byte.b	$00
+   1070  f4da		       00		      .byte.b	$00
+   1071  f4db		       00		      .byte.b	$00
+   1072  f4dc		       00		      .byte.b	$00
+   1073  f4dd		       00		      .byte.b	$00
+   1074  f4de		       00		      .byte.b	$00
+   1075  f4df		       00		      .byte.b	$00
+   1076  f4e0		       00		      .byte.b	$00
+   1077  f4e1		       00		      .byte.b	$00
+   1078  f4e2		       00		      .byte.b	$00
+   1079  f4e3		       00		      .byte.b	$00
+   1080  f4e4		       00		      .byte.b	$00
+   1081  f4e5		       00		      .byte.b	$00
+   1082  f4e6		       00		      .byte.b	$00
+   1083  f4e7		       00		      .byte.b	$00
+   1084  f4e8		       00		      .byte.b	$00
+   1085  f4e9		       00		      .byte.b	$00
+   1086  f4ea		       00		      .byte.b	$00
+   1087  f4eb		       00		      .byte.b	$00
+   1088  f4ec		       00		      .byte.b	$00
+   1089  f4ed		       00		      .byte.b	$00
+   1090  f4ee		       00		      .byte.b	$00
+   1091  f4ef		       00		      .byte.b	$00
+   1092  f4f0		       00		      .byte.b	$00
+   1093  f4f1		       00		      .byte.b	$00
+   1094  f4f2		       00		      .byte.b	$00
+   1095  f4f3		       00		      .byte.b	$00
+   1096  f4f4		       00		      .byte.b	$00
+   1097  f4f5		       00		      .byte.b	$00
+   1098  f4f6		       00		      .byte.b	$00
+   1099  f4f7		       00		      .byte.b	$00
+   1100  f4f8		       00		      .byte.b	$00
+   1101  f4f9		       00		      .byte.b	$00
+   1102  f4fa		       00		      .byte.b	$00
+   1103  f4fb		       00		      .byte.b	$00
+   1104  f4fc		       00		      .byte.b	$00
+   1105  f4fd		       00		      .byte.b	$00
+   1106  f4fe		       00		      .byte.b	$00
+   1107  f4ff		       00		      .byte.b	$00
+   1108  f500		       00		      .byte.b	$00
+   1109  f501		       00		      .byte.b	$00
+   1110  f502		       00		      .byte.b	$00
+   1111  f503		       00		      .byte.b	$00
+   1112  f504		       00		      .byte.b	$00
+   1113  f505		       00		      .byte.b	$00
+   1114  f506		       00		      .byte.b	$00
+   1115  f507		       00		      .byte.b	$00
+   1116  f508		       00		      .byte.b	$00
+   1117  f509		       00		      .byte.b	$00
+   1118  f50a		       00		      .byte.b	$00
+   1119  f50b		       00		      .byte.b	$00
+   1120  f50c		       00		      .byte.b	$00
+   1121  f50d		       00		      .byte.b	$00
+   1122  f50e		       00		      .byte.b	$00
+   1123  f50f		       00		      .byte.b	$00
+   1124  f510		       00		      .byte.b	$00
+   1125  f511		       00		      .byte.b	$00
+   1126  f512		       00		      .byte.b	$00
+   1127  f513		       00		      .byte.b	$00
+   1128  f514		       00		      .byte.b	$00
+   1129  f515		       00		      .byte.b	$00
+   1130  f516		       00		      .byte.b	$00
+   1131  f517		       00		      .byte.b	$00
+   1132  f518		       00		      .byte.b	$00
+   1133  f519		       00		      .byte.b	$00
+   1134  f51a		       00		      .byte.b	$00
+   1135  f51b		       00		      .byte.b	$00
+   1136  f51c		       00		      .byte.b	$00
+   1137  f51d		       00		      .byte.b	$00
+   1138  f51e		       00		      .byte.b	$00
+   1139  f51f		       00		      .byte.b	$00
+   1140  f520		       00		      .byte.b	$00
+   1141  f521		       00		      .byte.b	$00
+   1142  f522		       00		      .byte.b	$00
+   1143  f523		       00		      .byte.b	$00
+   1144  f524		       00		      .byte.b	$00
+   1145  f525		       00		      .byte.b	$00
+   1146  f526		       00		      .byte.b	$00
+   1147  f527		       00		      .byte.b	$00
+   1148  f528		       00		      .byte.b	$00
+   1149  f529		       00		      .byte.b	$00
+   1150  f52a		       00		      .byte.b	$00
+   1151  f52b		       00		      .byte.b	$00
+   1152  f52c		       00		      .byte.b	$00
+   1153  f52d		       00		      .byte.b	$00
+   1154  f52e		       00		      .byte.b	$00
+   1155  f52f				   PF0RData
+   1156  f52f		       00		      .byte.b	$00
+   1157  f530		       00		      .byte.b	$00
+   1158  f531		       00		      .byte.b	$00
+   1159  f532		       00		      .byte.b	$00
+   1160  f533		       00		      .byte.b	$00
+   1161  f534		       00		      .byte.b	$00
+   1162  f535		       00		      .byte.b	$00
+   1163  f536		       00		      .byte.b	$00
+   1164  f537		       00		      .byte.b	$00
+   1165  f538		       00		      .byte.b	$00
+   1166  f539		       00		      .byte.b	$00
+   1167  f53a		       00		      .byte.b	$00
+   1168  f53b		       00		      .byte.b	$00
+   1169  f53c		       00		      .byte.b	$00
+   1170  f53d		       00		      .byte.b	$00
+   1171  f53e		       00		      .byte.b	$00
+   1172  f53f		       00		      .byte.b	$00
+   1173  f540		       00		      .byte.b	$00
+   1174  f541		       00		      .byte.b	$00
+   1175  f542		       00		      .byte.b	$00
+   1176  f543		       00		      .byte.b	$00
+   1177  f544		       00		      .byte.b	$00
+   1178  f545		       00		      .byte.b	$00
+   1179  f546		       00		      .byte.b	$00
+   1180  f547		       00		      .byte.b	$00
+   1181  f548		       00		      .byte.b	$00
+   1182  f549		       00		      .byte.b	$00
+   1183  f54a		       00		      .byte.b	$00
+   1184  f54b		       00		      .byte.b	$00
+   1185  f54c		       00		      .byte.b	$00
+   1186  f54d		       00		      .byte.b	$00
+   1187  f54e		       00		      .byte.b	$00
+   1188  f54f		       00		      .byte.b	$00
+   1189  f550		       00		      .byte.b	$00
+   1190  f551		       00		      .byte.b	$00
+   1191  f552		       00		      .byte.b	$00
+   1192  f553		       00		      .byte.b	$00
+   1193  f554		       00		      .byte.b	$00
+   1194  f555		       00		      .byte.b	$00
+   1195  f556		       00		      .byte.b	$00
+   1196  f557		       00		      .byte.b	$00
+   1197  f558		       00		      .byte.b	$00
+   1198  f559		       00		      .byte.b	$00
+   1199  f55a		       00		      .byte.b	$00
+   1200  f55b		       00		      .byte.b	$00
+   1201  f55c		       00		      .byte.b	$00
+   1202  f55d		       00		      .byte.b	$00
+   1203  f55e		       00		      .byte.b	$00
+   1204  f55f		       00		      .byte.b	$00
+   1205  f560		       00		      .byte.b	$00
+   1206  f561		       00		      .byte.b	$00
+   1207  f562		       00		      .byte.b	$00
+   1208  f563		       00		      .byte.b	$00
+   1209  f564		       00		      .byte.b	$00
+   1210  f565		       00		      .byte.b	$00
+   1211  f566		       00		      .byte.b	$00
+   1212  f567		       00		      .byte.b	$00
+   1213  f568		       00		      .byte.b	$00
+   1214  f569		       00		      .byte.b	$00
+   1215  f56a		       00		      .byte.b	$00
+   1216  f56b		       00		      .byte.b	$00
+   1217  f56c		       00		      .byte.b	$00
+   1218  f56d		       00		      .byte.b	$00
+   1219  f56e		       00		      .byte.b	$00
+   1220  f56f		       00		      .byte.b	$00
+   1221  f570		       00		      .byte.b	$00
+   1222  f571		       00		      .byte.b	$00
+   1223  f572		       00		      .byte.b	$00
+   1224  f573		       00		      .byte.b	$00
+   1225  f574		       00		      .byte.b	$00
+   1226  f575		       00		      .byte.b	$00
+   1227  f576		       00		      .byte.b	$00
+   1228  f577		       00		      .byte.b	$00
+   1229  f578		       00		      .byte.b	$00
+   1230  f579		       00		      .byte.b	$00
+   1231  f57a		       00		      .byte.b	$00
+   1232  f57b		       00		      .byte.b	$00
+   1233  f57c		       00		      .byte.b	$00
+   1234  f57d		       00		      .byte.b	$00
+   1235  f57e		       00		      .byte.b	$00
+   1236  f57f		       00		      .byte.b	$00
+   1237  f580		       00		      .byte.b	$00
+   1238  f581		       00		      .byte.b	$00
+   1239  f582		       00		      .byte.b	$00
+   1240  f583		       00		      .byte.b	$00
+   1241  f584		       00		      .byte.b	$00
+   1242  f585		       00		      .byte.b	$00
+   1243  f586		       00		      .byte.b	$00
+   1244  f587		       00		      .byte.b	$00
+   1245  f588		       00		      .byte.b	$00
+   1246  f589		       00		      .byte.b	$00
+   1247  f58a		       00		      .byte.b	$00
+   1248  f58b		       00		      .byte.b	$00
+   1249  f58c		       00		      .byte.b	$00
+   1250  f58d		       00		      .byte.b	$00
+   1251  f58e		       00		      .byte.b	$00
+   1252  f58f		       00		      .byte.b	$00
+   1253  f590		       00		      .byte.b	$00
+   1254  f591		       00		      .byte.b	$00
+   1255  f592		       00		      .byte.b	$00
+   1256  f593		       00		      .byte.b	$00
+   1257  f594		       00		      .byte.b	$00
+   1258  f595		       00		      .byte.b	$00
+   1259  f596		       00		      .byte.b	$00
+   1260  f597		       00		      .byte.b	$00
+   1261  f598		       00		      .byte.b	$00
+   1262  f599		       00		      .byte.b	$00
+   1263  f59a		       00		      .byte.b	$00
+   1264  f59b		       00		      .byte.b	$00
+   1265  f59c		       00		      .byte.b	$00
+   1266  f59d		       00		      .byte.b	$00
+   1267  f59e		       00		      .byte.b	$00
+   1268  f59f		       00		      .byte.b	$00
+   1269  f5a0		       00		      .byte.b	$00
+   1270  f5a1		       00		      .byte.b	$00
+   1271  f5a2		       00		      .byte.b	$00
+   1272  f5a3		       00		      .byte.b	$00
+   1273  f5a4		       00		      .byte.b	$00
+   1274  f5a5		       00		      .byte.b	$00
+   1275  f5a6		       00		      .byte.b	$00
+   1276  f5a7		       00		      .byte.b	$00
+   1277  f5a8		       00		      .byte.b	$00
+   1278  f5a9		       00		      .byte.b	$00
+   1279  f5aa		       00		      .byte.b	$00
+   1280  f5ab		       00		      .byte.b	$00
+   1281  f5ac		       00		      .byte.b	$00
+   1282  f5ad		       00		      .byte.b	$00
+   1283  f5ae		       00		      .byte.b	$00
+   1284  f5af		       00		      .byte.b	$00
+   1285  f5b0		       00		      .byte.b	$00
+   1286  f5b1		       00		      .byte.b	$00
+   1287  f5b2		       00		      .byte.b	$00
+   1288  f5b3		       00		      .byte.b	$00
+   1289  f5b4		       00		      .byte.b	$00
+   1290  f5b5		       00		      .byte.b	$00
+   1291  f5b6		       00		      .byte.b	$00
+   1292  f5b7		       00		      .byte.b	$00
+   1293  f5b8		       00		      .byte.b	$00
+   1294  f5b9		       00		      .byte.b	$00
+   1295  f5ba		       00		      .byte.b	$00
+   1296  f5bb		       00		      .byte.b	$00
+   1297  f5bc		       00		      .byte.b	$00
+   1298  f5bd		       00		      .byte.b	$00
+   1299  f5be		       00		      .byte.b	$00
+   1300  f5bf		       00		      .byte.b	$00
+   1301  f5c0		       00		      .byte.b	$00
+   1302  f5c1		       00		      .byte.b	$00
+   1303  f5c2		       00		      .byte.b	$00
+   1304  f5c3		       00		      .byte.b	$00
+   1305  f5c4		       00		      .byte.b	$00
+   1306  f5c5		       00		      .byte.b	$00
+   1307  f5c6		       00		      .byte.b	$00
+   1308  f5c7		       00		      .byte.b	$00
+   1309  f5c8		       00		      .byte.b	$00
+   1310  f5c9		       00		      .byte.b	$00
+   1311  f5ca		       00		      .byte.b	$00
+   1312  f5cb		       00		      .byte.b	$00
+   1313  f5cc		       00		      .byte.b	$00
+   1314  f5cd		       00		      .byte.b	$00
+   1315  f5ce		       00		      .byte.b	$00
+   1316  f5cf		       00		      .byte.b	$00
+   1317  f5d0		       00		      .byte.b	$00
+   1318  f5d1		       00		      .byte.b	$00
+   1319  f5d2		       00		      .byte.b	$00
+   1320  f5d3		       00		      .byte.b	$00
+   1321  f5d4		       00		      .byte.b	$00
+   1322  f5d5				   PF1RData
+   1323  f5d5		       00		      .byte.b	$00
+   1324  f5d6		       00		      .byte.b	$00
+   1325  f5d7		       00		      .byte.b	$00
+   1326  f5d8		       00		      .byte.b	$00
+   1327  f5d9		       00		      .byte.b	$00
+   1328  f5da		       00		      .byte.b	$00
+   1329  f5db		       00		      .byte.b	$00
+   1330  f5dc		       00		      .byte.b	$00
+   1331  f5dd		       00		      .byte.b	$00
+   1332  f5de		       00		      .byte.b	$00
+   1333  f5df		       00		      .byte.b	$00
+   1334  f5e0		       00		      .byte.b	$00
+   1335  f5e1		       00		      .byte.b	$00
+   1336  f5e2		       00		      .byte.b	$00
+   1337  f5e3		       00		      .byte.b	$00
+   1338  f5e4		       00		      .byte.b	$00
+   1339  f5e5		       00		      .byte.b	$00
+   1340  f5e6		       00		      .byte.b	$00
+   1341  f5e7		       00		      .byte.b	$00
+   1342  f5e8		       00		      .byte.b	$00
+   1343  f5e9		       00		      .byte.b	$00
+   1344  f5ea		       00		      .byte.b	$00
+   1345  f5eb		       00		      .byte.b	$00
+   1346  f5ec		       00		      .byte.b	$00
+   1347  f5ed		       00		      .byte.b	$00
+   1348  f5ee		       00		      .byte.b	$00
+   1349  f5ef		       00		      .byte.b	$00
+   1350  f5f0		       00		      .byte.b	$00
+   1351  f5f1		       00		      .byte.b	$00
+   1352  f5f2		       00		      .byte.b	$00
+   1353  f5f3		       00		      .byte.b	$00
+   1354  f5f4		       00		      .byte.b	$00
+   1355  f5f5		       00		      .byte.b	$00
+   1356  f5f6		       00		      .byte.b	$00
+   1357  f5f7		       00		      .byte.b	$00
+   1358  f5f8		       00		      .byte.b	$00
+   1359  f5f9		       00		      .byte.b	$00
+   1360  f5fa		       00		      .byte.b	$00
+   1361  f5fb		       00		      .byte.b	$00
+   1362  f5fc		       00		      .byte.b	$00
+   1363  f5fd		       00		      .byte.b	$00
+   1364  f5fe		       00		      .byte.b	$00
+   1365  f5ff		       00		      .byte.b	$00
+   1366  f600		       00		      .byte.b	$00
+   1367  f601		       00		      .byte.b	$00
+   1368  f602		       00		      .byte.b	$00
+   1369  f603		       00		      .byte.b	$00
+   1370  f604		       00		      .byte.b	$00
+   1371  f605		       00		      .byte.b	$00
+   1372  f606		       00		      .byte.b	$00
+   1373  f607		       00		      .byte.b	$00
+   1374  f608		       00		      .byte.b	$00
+   1375  f609		       00		      .byte.b	$00
+   1376  f60a		       00		      .byte.b	$00
+   1377  f60b		       00		      .byte.b	$00
+   1378  f60c		       00		      .byte.b	$00
+   1379  f60d		       00		      .byte.b	$00
+   1380  f60e		       00		      .byte.b	$00
+   1381  f60f		       00		      .byte.b	$00
+   1382  f610		       00		      .byte.b	$00
+   1383  f611		       00		      .byte.b	$00
+   1384  f612		       00		      .byte.b	$00
+   1385  f613		       00		      .byte.b	$00
+   1386  f614		       00		      .byte.b	$00
+   1387  f615		       00		      .byte.b	$00
+   1388  f616		       00		      .byte.b	$00
+   1389  f617		       00		      .byte.b	$00
+   1390  f618		       00		      .byte.b	$00
+   1391  f619		       00		      .byte.b	$00
+   1392  f61a		       00		      .byte.b	$00
+   1393  f61b		       00		      .byte.b	$00
+   1394  f61c		       00		      .byte.b	$00
+   1395  f61d		       00		      .byte.b	$00
+   1396  f61e		       00		      .byte.b	$00
+   1397  f61f		       00		      .byte.b	$00
+   1398  f620		       00		      .byte.b	$00
+   1399  f621		       00		      .byte.b	$00
+   1400  f622		       00		      .byte.b	$00
+   1401  f623		       00		      .byte.b	$00
+   1402  f624		       00		      .byte.b	$00
+   1403  f625		       00		      .byte.b	$00
+   1404  f626		       00		      .byte.b	$00
+   1405  f627		       00		      .byte.b	$00
+   1406  f628		       00		      .byte.b	$00
+   1407  f629		       00		      .byte.b	$00
+   1408  f62a		       00		      .byte.b	$00
+   1409  f62b		       00		      .byte.b	$00
+   1410  f62c		       00		      .byte.b	$00
+   1411  f62d		       00		      .byte.b	$00
+   1412  f62e		       00		      .byte.b	$00
+   1413  f62f		       00		      .byte.b	$00
+   1414  f630		       00		      .byte.b	$00
+   1415  f631		       00		      .byte.b	$00
+   1416  f632		       00		      .byte.b	$00
+   1417  f633		       00		      .byte.b	$00
+   1418  f634		       00		      .byte.b	$00
+   1419  f635		       00		      .byte.b	$00
+   1420  f636		       00		      .byte.b	$00
+   1421  f637		       00		      .byte.b	$00
+   1422  f638		       00		      .byte.b	$00
+   1423  f639		       00		      .byte.b	$00
+   1424  f63a		       00		      .byte.b	$00
+   1425  f63b		       00		      .byte.b	$00
+   1426  f63c		       00		      .byte.b	$00
+   1427  f63d		       00		      .byte.b	$00
+   1428  f63e		       00		      .byte.b	$00
+   1429  f63f		       00		      .byte.b	$00
+   1430  f640		       00		      .byte.b	$00
+   1431  f641		       00		      .byte.b	$00
+   1432  f642		       00		      .byte.b	$00
+   1433  f643		       00		      .byte.b	$00
+   1434  f644		       00		      .byte.b	$00
+   1435  f645		       00		      .byte.b	$00
+   1436  f646		       00		      .byte.b	$00
+   1437  f647		       00		      .byte.b	$00
+   1438  f648		       00		      .byte.b	$00
+   1439  f649		       00		      .byte.b	$00
+   1440  f64a		       00		      .byte.b	$00
+   1441  f64b		       00		      .byte.b	$00
+   1442  f64c		       00		      .byte.b	$00
+   1443  f64d		       00		      .byte.b	$00
+   1444  f64e		       00		      .byte.b	$00
+   1445  f64f		       00		      .byte.b	$00
+   1446  f650		       00		      .byte.b	$00
+   1447  f651		       00		      .byte.b	$00
+   1448  f652		       00		      .byte.b	$00
+   1449  f653		       00		      .byte.b	$00
+   1450  f654		       00		      .byte.b	$00
+   1451  f655		       00		      .byte.b	$00
+   1452  f656		       00		      .byte.b	$00
+   1453  f657		       00		      .byte.b	$00
+   1454  f658		       00		      .byte.b	$00
+   1455  f659		       00		      .byte.b	$00
+   1456  f65a		       00		      .byte.b	$00
+   1457  f65b		       00		      .byte.b	$00
+   1458  f65c		       00		      .byte.b	$00
+   1459  f65d		       00		      .byte.b	$00
+   1460  f65e		       00		      .byte.b	$00
+   1461  f65f		       00		      .byte.b	$00
+   1462  f660		       00		      .byte.b	$00
+   1463  f661		       00		      .byte.b	$00
+   1464  f662		       00		      .byte.b	$00
+   1465  f663		       00		      .byte.b	$00
+   1466  f664		       00		      .byte.b	$00
+   1467  f665		       00		      .byte.b	$00
+   1468  f666		       00		      .byte.b	$00
+   1469  f667		       00		      .byte.b	$00
+   1470  f668		       00		      .byte.b	$00
+   1471  f669		       00		      .byte.b	$00
+   1472  f66a		       00		      .byte.b	$00
+   1473  f66b		       00		      .byte.b	$00
+   1474  f66c		       00		      .byte.b	$00
+   1475  f66d		       00		      .byte.b	$00
+   1476  f66e		       00		      .byte.b	$00
+   1477  f66f		       00		      .byte.b	$00
+   1478  f670		       00		      .byte.b	$00
+   1479  f671		       00		      .byte.b	$00
+   1480  f672		       00		      .byte.b	$00
+   1481  f673		       00		      .byte.b	$00
+   1482  f674		       00		      .byte.b	$00
+   1483  f675		       00		      .byte.b	$00
+   1484  f676		       00		      .byte.b	$00
+   1485  f677		       00		      .byte.b	$00
+   1486  f678		       00		      .byte.b	$00
+   1487  f679		       00		      .byte.b	$00
+   1488  f67a		       00		      .byte.b	$00
+   1489  f67b				   PF2RData
+   1490  f67b		       00		      .byte.b	$00
+   1491  f67c		       00		      .byte.b	$00
+   1492  f67d		       00		      .byte.b	$00
+   1493  f67e		       00		      .byte.b	$00
+   1494  f67f		       00		      .byte.b	$00
+   1495  f680		       00		      .byte.b	$00
+   1496  f681		       00		      .byte.b	$00
+   1497  f682		       00		      .byte.b	$00
+   1498  f683		       00		      .byte.b	$00
+   1499  f684		       00		      .byte.b	$00
+   1500  f685		       00		      .byte.b	$00
+   1501  f686		       00		      .byte.b	$00
+   1502  f687		       00		      .byte.b	$00
+   1503  f688		       00		      .byte.b	$00
+   1504  f689		       00		      .byte.b	$00
+   1505  f68a		       00		      .byte.b	$00
+   1506  f68b		       00		      .byte.b	$00
+   1507  f68c		       00		      .byte.b	$00
+   1508  f68d		       00		      .byte.b	$00
+   1509  f68e		       00		      .byte.b	$00
+   1510  f68f		       00		      .byte.b	$00
+   1511  f690		       00		      .byte.b	$00
+   1512  f691		       00		      .byte.b	$00
+   1513  f692		       00		      .byte.b	$00
+   1514  f693		       00		      .byte.b	$00
+   1515  f694		       00		      .byte.b	$00
+   1516  f695		       00		      .byte.b	$00
+   1517  f696		       00		      .byte.b	$00
+   1518  f697		       00		      .byte.b	$00
+   1519  f698		       00		      .byte.b	$00
+   1520  f699		       00		      .byte.b	$00
+   1521  f69a		       00		      .byte.b	$00
+   1522  f69b		       00		      .byte.b	$00
+   1523  f69c		       00		      .byte.b	$00
+   1524  f69d		       00		      .byte.b	$00
+   1525  f69e		       00		      .byte.b	$00
+   1526  f69f		       00		      .byte.b	$00
+   1527  f6a0		       00		      .byte.b	$00
+   1528  f6a1		       00		      .byte.b	$00
+   1529  f6a2		       00		      .byte.b	$00
+   1530  f6a3		       00		      .byte.b	$00
+   1531  f6a4		       00		      .byte.b	$00
+   1532  f6a5		       00		      .byte.b	$00
+   1533  f6a6		       00		      .byte.b	$00
+   1534  f6a7		       00		      .byte.b	$00
+   1535  f6a8		       00		      .byte.b	$00
+   1536  f6a9		       00		      .byte.b	$00
+   1537  f6aa		       00		      .byte.b	$00
+   1538  f6ab		       00		      .byte.b	$00
+   1539  f6ac		       00		      .byte.b	$00
+   1540  f6ad		       00		      .byte.b	$00
+   1541  f6ae		       00		      .byte.b	$00
+   1542  f6af		       00		      .byte.b	$00
+   1543  f6b0		       00		      .byte.b	$00
+   1544  f6b1		       00		      .byte.b	$00
+   1545  f6b2		       00		      .byte.b	$00
+   1546  f6b3		       00		      .byte.b	$00
+   1547  f6b4		       00		      .byte.b	$00
+   1548  f6b5		       00		      .byte.b	$00
+   1549  f6b6		       00		      .byte.b	$00
+   1550  f6b7		       00		      .byte.b	$00
+   1551  f6b8		       00		      .byte.b	$00
+   1552  f6b9		       00		      .byte.b	$00
+   1553  f6ba		       00		      .byte.b	$00
+   1554  f6bb		       00		      .byte.b	$00
+   1555  f6bc		       00		      .byte.b	$00
+   1556  f6bd		       00		      .byte.b	$00
+   1557  f6be		       00		      .byte.b	$00
+   1558  f6bf		       00		      .byte.b	$00
+   1559  f6c0		       00		      .byte.b	$00
+   1560  f6c1		       00		      .byte.b	$00
+   1561  f6c2		       00		      .byte.b	$00
+   1562  f6c3		       00		      .byte.b	$00
+   1563  f6c4		       00		      .byte.b	$00
+   1564  f6c5		       00		      .byte.b	$00
+   1565  f6c6		       00		      .byte.b	$00
+   1566  f6c7		       00		      .byte.b	$00
+   1567  f6c8		       00		      .byte.b	$00
+   1568  f6c9		       00		      .byte.b	$00
+   1569  f6ca		       00		      .byte.b	$00
+   1570  f6cb		       00		      .byte.b	$00
+   1571  f6cc		       00		      .byte.b	$00
+   1572  f6cd		       00		      .byte.b	$00
+   1573  f6ce		       00		      .byte.b	$00
+   1574  f6cf		       00		      .byte.b	$00
+   1575  f6d0		       00		      .byte.b	$00
+   1576  f6d1		       00		      .byte.b	$00
+   1577  f6d2		       00		      .byte.b	$00
+   1578  f6d3		       00		      .byte.b	$00
+   1579  f6d4		       00		      .byte.b	$00
+   1580  f6d5		       00		      .byte.b	$00
+   1581  f6d6		       00		      .byte.b	$00
+   1582  f6d7		       00		      .byte.b	$00
+   1583  f6d8		       00		      .byte.b	$00
+   1584  f6d9		       00		      .byte.b	$00
+   1585  f6da		       00		      .byte.b	$00
+   1586  f6db		       00		      .byte.b	$00
+   1587  f6dc		       00		      .byte.b	$00
+   1588  f6dd		       00		      .byte.b	$00
+   1589  f6de		       00		      .byte.b	$00
+   1590  f6df		       00		      .byte.b	$00
+   1591  f6e0		       00		      .byte.b	$00
+   1592  f6e1		       00		      .byte.b	$00
+   1593  f6e2		       00		      .byte.b	$00
+   1594  f6e3		       00		      .byte.b	$00
+   1595  f6e4		       00		      .byte.b	$00
+   1596  f6e5		       00		      .byte.b	$00
+   1597  f6e6		       00		      .byte.b	$00
+   1598  f6e7		       00		      .byte.b	$00
+   1599  f6e8		       00		      .byte.b	$00
+   1600  f6e9		       00		      .byte.b	$00
+   1601  f6ea		       00		      .byte.b	$00
+   1602  f6eb		       00		      .byte.b	$00
+   1603  f6ec		       00		      .byte.b	$00
+   1604  f6ed		       00		      .byte.b	$00
+   1605  f6ee		       00		      .byte.b	$00
+   1606  f6ef		       00		      .byte.b	$00
+   1607  f6f0		       00		      .byte.b	$00
+   1608  f6f1		       00		      .byte.b	$00
+   1609  f6f2		       00		      .byte.b	$00
+   1610  f6f3		       00		      .byte.b	$00
+   1611  f6f4		       00		      .byte.b	$00
+   1612  f6f5		       00		      .byte.b	$00
+   1613  f6f6		       00		      .byte.b	$00
+   1614  f6f7		       00		      .byte.b	$00
+   1615  f6f8		       00		      .byte.b	$00
+   1616  f6f9		       00		      .byte.b	$00
+   1617  f6fa		       00		      .byte.b	$00
+   1618  f6fb		       00		      .byte.b	$00
+   1619  f6fc		       00		      .byte.b	$00
+   1620  f6fd		       00		      .byte.b	$00
+   1621  f6fe		       00		      .byte.b	$00
+   1622  f6ff		       00		      .byte.b	$00
+   1623  f700		       00		      .byte.b	$00
+   1624  f701		       00		      .byte.b	$00
+   1625  f702		       00		      .byte.b	$00
+   1626  f703		       00		      .byte.b	$00
+   1627  f704		       00		      .byte.b	$00
+   1628  f705		       00		      .byte.b	$00
+   1629  f706		       00		      .byte.b	$00
+   1630  f707		       00		      .byte.b	$00
+   1631  f708		       00		      .byte.b	$00
+   1632  f709		       00		      .byte.b	$00
+   1633  f70a		       00		      .byte.b	$00
+   1634  f70b		       00		      .byte.b	$00
+   1635  f70c		       00		      .byte.b	$00
+   1636  f70d		       00		      .byte.b	$00
+   1637  f70e		       00		      .byte.b	$00
+   1638  f70f		       00		      .byte.b	$00
+   1639  f710		       00		      .byte.b	$00
+   1640  f711		       00		      .byte.b	$00
+   1641  f712		       00		      .byte.b	$00
+   1642  f713		       00		      .byte.b	$00
+   1643  f714		       00		      .byte.b	$00
+   1644  f715		       00		      .byte.b	$00
+   1645  f716		       00		      .byte.b	$00
+   1646  f717		       00		      .byte.b	$00
+   1647  f718		       00		      .byte.b	$00
+   1648  f719		       00		      .byte.b	$00
+   1649  f71a		       00		      .byte.b	$00
+   1650  f71b		       00		      .byte.b	$00
+   1651  f71c		       00		      .byte.b	$00
+   1652  f71d		       00		      .byte.b	$00
+   1653  f71e		       00		      .byte.b	$00
+   1654  f71f		       00		      .byte.b	$00
+   1655  f720		       00		      .byte.b	$00
+   1656  f721				   COLUPFData
+   1657  f721		       0a		      .byte.b	$0A
+   1658  f722		       0a		      .byte.b	$0A
+   1659  f723		       0a		      .byte.b	$0A
+   1660  f724		       0a		      .byte.b	$0A
+   1661  f725		       0a		      .byte.b	$0A
+   1662  f726		       0a		      .byte.b	$0A
+   1663  f727		       0a		      .byte.b	$0A
+   1664  f728		       0a		      .byte.b	$0A
+   1665  f729		       0a		      .byte.b	$0A
+   1666  f72a		       0a		      .byte.b	$0A
+   1667  f72b		       0a		      .byte.b	$0A
+   1668  f72c		       0a		      .byte.b	$0A
+   1669  f72d		       0a		      .byte.b	$0A
+   1670  f72e		       0a		      .byte.b	$0A
+   1671  f72f		       0a		      .byte.b	$0A
+   1672  f730		       0a		      .byte.b	$0A
+   1673  f731		       0a		      .byte.b	$0A
+   1674  f732		       0a		      .byte.b	$0A
+   1675  f733		       0a		      .byte.b	$0A
+   1676  f734		       0a		      .byte.b	$0A
+   1677  f735		       0a		      .byte.b	$0A
+   1678  f736		       0a		      .byte.b	$0A
+   1679  f737		       0a		      .byte.b	$0A
+   1680  f738		       0a		      .byte.b	$0A
+   1681  f739		       0a		      .byte.b	$0A
+   1682  f73a		       0a		      .byte.b	$0A
+   1683  f73b		       0a		      .byte.b	$0A
+   1684  f73c		       0a		      .byte.b	$0A
+   1685  f73d		       0a		      .byte.b	$0A
+   1686  f73e		       0a		      .byte.b	$0A
+   1687  f73f		       0a		      .byte.b	$0A
+   1688  f740		       0a		      .byte.b	$0A
+   1689  f741		       0a		      .byte.b	$0A
+   1690  f742		       0a		      .byte.b	$0A
+   1691  f743		       0a		      .byte.b	$0A
+   1692  f744		       0a		      .byte.b	$0A
+   1693  f745		       0a		      .byte.b	$0A
+   1694  f746		       0a		      .byte.b	$0A
+   1695  f747		       0a		      .byte.b	$0A
+   1696  f748		       0a		      .byte.b	$0A
+   1697  f749		       0a		      .byte.b	$0A
+   1698  f74a		       0a		      .byte.b	$0A
+   1699  f74b		       0a		      .byte.b	$0A
+   1700  f74c		       0a		      .byte.b	$0A
+   1701  f74d		       0a		      .byte.b	$0A
+   1702  f74e		       0a		      .byte.b	$0A
+   1703  f74f		       0a		      .byte.b	$0A
+   1704  f750		       0a		      .byte.b	$0A
+   1705  f751		       0a		      .byte.b	$0A
+   1706  f752		       0a		      .byte.b	$0A
+   1707  f753		       0a		      .byte.b	$0A
+   1708  f754		       0a		      .byte.b	$0A
+   1709  f755		       0a		      .byte.b	$0A
+   1710  f756		       0a		      .byte.b	$0A
+   1711  f757		       0a		      .byte.b	$0A
+   1712  f758		       0a		      .byte.b	$0A
+   1713  f759		       0a		      .byte.b	$0A
+   1714  f75a		       0a		      .byte.b	$0A
+   1715  f75b		       0a		      .byte.b	$0A
+   1716  f75c		       0a		      .byte.b	$0A
+   1717  f75d		       0a		      .byte.b	$0A
+   1718  f75e		       0a		      .byte.b	$0A
+   1719  f75f		       0a		      .byte.b	$0A
+   1720  f760		       0a		      .byte.b	$0A
+   1721  f761		       0a		      .byte.b	$0A
+   1722  f762		       0a		      .byte.b	$0A
+   1723  f763		       0a		      .byte.b	$0A
+   1724  f764		       0a		      .byte.b	$0A
+   1725  f765		       0a		      .byte.b	$0A
+   1726  f766		       0a		      .byte.b	$0A
+   1727  f767		       0a		      .byte.b	$0A
+   1728  f768		       0a		      .byte.b	$0A
+   1729  f769		       0a		      .byte.b	$0A
+   1730  f76a		       0a		      .byte.b	$0A
+   1731  f76b		       0a		      .byte.b	$0A
+   1732  f76c		       0a		      .byte.b	$0A
+   1733  f76d		       0a		      .byte.b	$0A
+   1734  f76e		       0a		      .byte.b	$0A
+   1735  f76f		       0a		      .byte.b	$0A
+   1736  f770		       0a		      .byte.b	$0A
+   1737  f771		       0a		      .byte.b	$0A
+   1738  f772		       0a		      .byte.b	$0A
+   1739  f773		       0a		      .byte.b	$0A
+   1740  f774		       0a		      .byte.b	$0A
+   1741  f775		       0a		      .byte.b	$0A
+   1742  f776		       0a		      .byte.b	$0A
+   1743  f777		       0a		      .byte.b	$0A
+   1744  f778		       0a		      .byte.b	$0A
+   1745  f779		       0a		      .byte.b	$0A
+   1746  f77a		       0a		      .byte.b	$0A
+   1747  f77b		       0a		      .byte.b	$0A
+   1748  f77c		       0a		      .byte.b	$0A
+   1749  f77d		       0a		      .byte.b	$0A
+   1750  f77e		       0a		      .byte.b	$0A
+   1751  f77f		       0a		      .byte.b	$0A
+   1752  f780		       0a		      .byte.b	$0A
+   1753  f781		       0a		      .byte.b	$0A
+   1754  f782		       0a		      .byte.b	$0A
+   1755  f783		       0a		      .byte.b	$0A
+   1756  f784		       0a		      .byte.b	$0A
+   1757  f785		       0a		      .byte.b	$0A
+   1758  f786		       0a		      .byte.b	$0A
+   1759  f787		       0a		      .byte.b	$0A
+   1760  f788		       0a		      .byte.b	$0A
+   1761  f789		       0a		      .byte.b	$0A
+   1762  f78a		       0a		      .byte.b	$0A
+   1763  f78b		       0a		      .byte.b	$0A
+   1764  f78c		       0a		      .byte.b	$0A
+   1765  f78d		       0a		      .byte.b	$0A
+   1766  f78e		       0a		      .byte.b	$0A
+   1767  f78f		       0a		      .byte.b	$0A
+   1768  f790		       0a		      .byte.b	$0A
+   1769  f791		       0a		      .byte.b	$0A
+   1770  f792		       0a		      .byte.b	$0A
+   1771  f793		       0a		      .byte.b	$0A
+   1772  f794		       0a		      .byte.b	$0A
+   1773  f795		       0a		      .byte.b	$0A
+   1774  f796		       0a		      .byte.b	$0A
+   1775  f797		       0a		      .byte.b	$0A
+   1776  f798		       0a		      .byte.b	$0A
+   1777  f799		       0a		      .byte.b	$0A
+   1778  f79a		       0a		      .byte.b	$0A
+   1779  f79b		       0a		      .byte.b	$0A
+   1780  f79c		       0a		      .byte.b	$0A
+   1781  f79d		       0a		      .byte.b	$0A
+   1782  f79e		       0a		      .byte.b	$0A
+   1783  f79f		       0a		      .byte.b	$0A
+   1784  f7a0		       0a		      .byte.b	$0A
+   1785  f7a1		       0a		      .byte.b	$0A
+   1786  f7a2		       0a		      .byte.b	$0A
+   1787  f7a3		       0a		      .byte.b	$0A
+   1788  f7a4		       0a		      .byte.b	$0A
+   1789  f7a5		       0a		      .byte.b	$0A
+   1790  f7a6		       0a		      .byte.b	$0A
+   1791  f7a7		       0a		      .byte.b	$0A
+   1792  f7a8		       0a		      .byte.b	$0A
+   1793  f7a9		       0a		      .byte.b	$0A
+   1794  f7aa		       0a		      .byte.b	$0A
+   1795  f7ab		       0a		      .byte.b	$0A
+   1796  f7ac		       0a		      .byte.b	$0A
+   1797  f7ad		       0a		      .byte.b	$0A
+   1798  f7ae		       0a		      .byte.b	$0A
+   1799  f7af		       0a		      .byte.b	$0A
+   1800  f7b0		       0a		      .byte.b	$0A
+   1801  f7b1		       0a		      .byte.b	$0A
+   1802  f7b2		       0a		      .byte.b	$0A
+   1803  f7b3		       0a		      .byte.b	$0A
+   1804  f7b4		       0a		      .byte.b	$0A
+   1805  f7b5		       0a		      .byte.b	$0A
+   1806  f7b6		       0a		      .byte.b	$0A
+   1807  f7b7		       0a		      .byte.b	$0A
+   1808  f7b8		       0a		      .byte.b	$0A
+   1809  f7b9		       0a		      .byte.b	$0A
+   1810  f7ba		       0a		      .byte.b	$0A
+   1811  f7bb		       0a		      .byte.b	$0A
+   1812  f7bc		       0a		      .byte.b	$0A
+   1813  f7bd		       0a		      .byte.b	$0A
+   1814  f7be		       0a		      .byte.b	$0A
+   1815  f7bf		       0a		      .byte.b	$0A
+   1816  f7c0		       0a		      .byte.b	$0A
+   1817  f7c1		       0a		      .byte.b	$0A
+   1818  f7c2		       0a		      .byte.b	$0A
+   1819  f7c3		       0a		      .byte.b	$0A
+   1820  f7c4		       0a		      .byte.b	$0A
+   1821  f7c5		       0a		      .byte.b	$0A
+   1822  f7c6		       0a		      .byte.b	$0A
+   1823  f7c7				   COLUBKData
+   1824  f7c7		       00		      .byte.b	$00
+   1825  f7c8		       00		      .byte.b	$00
+   1826  f7c9		       00		      .byte.b	$00
+   1827  f7ca		       00		      .byte.b	$00
+   1828  f7cb		       00		      .byte.b	$00
+   1829  f7cc		       00		      .byte.b	$00
+   1830  f7cd		       00		      .byte.b	$00
+   1831  f7ce		       00		      .byte.b	$00
+   1832  f7cf		       00		      .byte.b	$00
+   1833  f7d0		       00		      .byte.b	$00
+   1834  f7d1		       00		      .byte.b	$00
+   1835  f7d2		       00		      .byte.b	$00
+   1836  f7d3		       00		      .byte.b	$00
+   1837  f7d4		       00		      .byte.b	$00
+   1838  f7d5		       00		      .byte.b	$00
+   1839  f7d6		       00		      .byte.b	$00
+   1840  f7d7		       00		      .byte.b	$00
+   1841  f7d8		       00		      .byte.b	$00
+   1842  f7d9		       00		      .byte.b	$00
+   1843  f7da		       00		      .byte.b	$00
+   1844  f7db		       00		      .byte.b	$00
+   1845  f7dc		       00		      .byte.b	$00
+   1846  f7dd		       00		      .byte.b	$00
+   1847  f7de		       00		      .byte.b	$00
+   1848  f7df		       00		      .byte.b	$00
+   1849  f7e0		       00		      .byte.b	$00
+   1850  f7e1		       00		      .byte.b	$00
+   1851  f7e2		       00		      .byte.b	$00
+   1852  f7e3		       00		      .byte.b	$00
+   1853  f7e4		       00		      .byte.b	$00
+   1854  f7e5		       00		      .byte.b	$00
+   1855  f7e6		       00		      .byte.b	$00
+   1856  f7e7		       00		      .byte.b	$00
+   1857  f7e8		       00		      .byte.b	$00
+   1858  f7e9		       00		      .byte.b	$00
+   1859  f7ea		       00		      .byte.b	$00
+   1860  f7eb		       00		      .byte.b	$00
+   1861  f7ec		       00		      .byte.b	$00
+   1862  f7ed		       00		      .byte.b	$00
+   1863  f7ee		       00		      .byte.b	$00
+   1864  f7ef		       00		      .byte.b	$00
+   1865  f7f0		       00		      .byte.b	$00
+   1866  f7f1		       00		      .byte.b	$00
+   1867  f7f2		       00		      .byte.b	$00
+   1868  f7f3		       00		      .byte.b	$00
+   1869  f7f4		       00		      .byte.b	$00
+   1870  f7f5		       00		      .byte.b	$00
+   1871  f7f6		       00		      .byte.b	$00
+   1872  f7f7		       00		      .byte.b	$00
+   1873  f7f8		       00		      .byte.b	$00
+   1874  f7f9		       00		      .byte.b	$00
+   1875  f7fa		       00		      .byte.b	$00
+   1876  f7fb		       00		      .byte.b	$00
+   1877  f7fc		       00		      .byte.b	$00
+   1878  f7fd		       00		      .byte.b	$00
+   1879  f7fe		       00		      .byte.b	$00
+   1880  f7ff		       00		      .byte.b	$00
+   1881  f800		       00		      .byte.b	$00
+   1882  f801		       00		      .byte.b	$00
+   1883  f802		       00		      .byte.b	$00
+   1884  f803		       00		      .byte.b	$00
+   1885  f804		       00		      .byte.b	$00
+   1886  f805		       00		      .byte.b	$00
+   1887  f806		       00		      .byte.b	$00
+   1888  f807		       00		      .byte.b	$00
+   1889  f808		       00		      .byte.b	$00
+   1890  f809		       00		      .byte.b	$00
+   1891  f80a		       00		      .byte.b	$00
+   1892  f80b		       00		      .byte.b	$00
+   1893  f80c		       00		      .byte.b	$00
+   1894  f80d		       00		      .byte.b	$00
+   1895  f80e		       00		      .byte.b	$00
+   1896  f80f		       00		      .byte.b	$00
+   1897  f810		       00		      .byte.b	$00
+   1898  f811		       00		      .byte.b	$00
+   1899  f812		       00		      .byte.b	$00
+   1900  f813		       00		      .byte.b	$00
+   1901  f814		       00		      .byte.b	$00
+   1902  f815		       00		      .byte.b	$00
+   1903  f816		       00		      .byte.b	$00
+   1904  f817		       00		      .byte.b	$00
+   1905  f818		       00		      .byte.b	$00
+   1906  f819		       00		      .byte.b	$00
+   1907  f81a		       00		      .byte.b	$00
+   1908  f81b		       00		      .byte.b	$00
+   1909  f81c		       00		      .byte.b	$00
+   1910  f81d		       00		      .byte.b	$00
+   1911  f81e		       00		      .byte.b	$00
+   1912  f81f		       00		      .byte.b	$00
+   1913  f820		       00		      .byte.b	$00
+   1914  f821		       00		      .byte.b	$00
+   1915  f822		       00		      .byte.b	$00
+   1916  f823		       00		      .byte.b	$00
+   1917  f824		       00		      .byte.b	$00
+   1918  f825		       00		      .byte.b	$00
+   1919  f826		       00		      .byte.b	$00
+   1920  f827		       00		      .byte.b	$00
+   1921  f828		       00		      .byte.b	$00
+   1922  f829		       00		      .byte.b	$00
+   1923  f82a		       00		      .byte.b	$00
+   1924  f82b		       00		      .byte.b	$00
+   1925  f82c		       00		      .byte.b	$00
+   1926  f82d		       00		      .byte.b	$00
+   1927  f82e		       00		      .byte.b	$00
+   1928  f82f		       00		      .byte.b	$00
+   1929  f830		       00		      .byte.b	$00
+   1930  f831		       00		      .byte.b	$00
+   1931  f832		       00		      .byte.b	$00
+   1932  f833		       00		      .byte.b	$00
+   1933  f834		       00		      .byte.b	$00
+   1934  f835		       00		      .byte.b	$00
+   1935  f836		       00		      .byte.b	$00
+   1936  f837		       00		      .byte.b	$00
+   1937  f838		       00		      .byte.b	$00
+   1938  f839		       00		      .byte.b	$00
+   1939  f83a		       00		      .byte.b	$00
+   1940  f83b		       00		      .byte.b	$00
+   1941  f83c		       00		      .byte.b	$00
+   1942  f83d		       00		      .byte.b	$00
+   1943  f83e		       00		      .byte.b	$00
+   1944  f83f		       00		      .byte.b	$00
+   1945  f840		       00		      .byte.b	$00
+   1946  f841		       00		      .byte.b	$00
+   1947  f842		       00		      .byte.b	$00
+   1948  f843		       00		      .byte.b	$00
+   1949  f844		       00		      .byte.b	$00
+   1950  f845		       00		      .byte.b	$00
+   1951  f846		       00		      .byte.b	$00
+   1952  f847		       00		      .byte.b	$00
+   1953  f848		       00		      .byte.b	$00
+   1954  f849		       00		      .byte.b	$00
+   1955  f84a		       00		      .byte.b	$00
+   1956  f84b		       00		      .byte.b	$00
+   1957  f84c		       00		      .byte.b	$00
+   1958  f84d		       00		      .byte.b	$00
+   1959  f84e		       00		      .byte.b	$00
+   1960  f84f		       00		      .byte.b	$00
+   1961  f850		       00		      .byte.b	$00
+   1962  f851		       00		      .byte.b	$00
+   1963  f852		       00		      .byte.b	$00
+   1964  f853		       00		      .byte.b	$00
+   1965  f854		       00		      .byte.b	$00
+   1966  f855		       00		      .byte.b	$00
+   1967  f856		       00		      .byte.b	$00
+   1968  f857		       00		      .byte.b	$00
+   1969  f858		       00		      .byte.b	$00
+   1970  f859		       00		      .byte.b	$00
+   1971  f85a		       00		      .byte.b	$00
+   1972  f85b		       00		      .byte.b	$00
+   1973  f85c		       00		      .byte.b	$00
+   1974  f85d		       00		      .byte.b	$00
+   1975  f85e		       00		      .byte.b	$00
+   1976  f85f		       00		      .byte.b	$00
+   1977  f860		       00		      .byte.b	$00
+   1978  f861		       00		      .byte.b	$00
+   1979  f862		       00		      .byte.b	$00
+   1980  f863		       00		      .byte.b	$00
+   1981  f864		       00		      .byte.b	$00
+   1982  f865		       00		      .byte.b	$00
+   1983  f866		       00		      .byte.b	$00
+   1984  f867		       00		      .byte.b	$00
+   1985  f868		       00		      .byte.b	$00
+   1986  f869		       00		      .byte.b	$00
+   1987  f86a		       00		      .byte.b	$00
+   1988  f86b		       00		      .byte.b	$00
+   1989  f86c		       00		      .byte.b	$00
+   1990  f86d
+   1991  f86d				   GRP0Data
+   1992  f86d		       00		      .byte.b	$00
+   1993  f86e		       00		      .byte.b	$00
+   1994  f86f		       00		      .byte.b	$00
+   1995  f870		       00		      .byte.b	$00
+   1996  f871		       00		      .byte.b	$00
+   1997  f872		       00		      .byte.b	$00
+   1998  f873		       00		      .byte.b	$00
+   1999  f874		       00		      .byte.b	$00
+   2000  f875		       00		      .byte.b	$00
+   2001  f876		       00		      .byte.b	$00
+   2002  f877		       00		      .byte.b	$00
+   2003  f878		       00		      .byte.b	$00
+   2004  f879		       00		      .byte.b	$00
+   2005  f87a		       00		      .byte.b	$00
+   2006  f87b		       00		      .byte.b	$00
+   2007  f87c		       00		      .byte.b	$00
+   2008  f87d		       00		      .byte.b	$00
+   2009  f87e		       00		      .byte.b	$00
+   2010  f87f		       00		      .byte.b	$00
+   2011  f880		       00		      .byte.b	$00
+   2012  f881		       00		      .byte.b	$00
+   2013  f882		       00		      .byte.b	$00
+   2014  f883		       00		      .byte.b	$00
+   2015  f884		       00		      .byte.b	$00
+   2016  f885		       00		      .byte.b	$00
+   2017  f886		       00		      .byte.b	$00
+   2018  f887		       00		      .byte.b	$00
+   2019  f888		       00		      .byte.b	$00
+   2020  f889		       00		      .byte.b	$00
+   2021  f88a		       00		      .byte.b	$00
+   2022  f88b		       00		      .byte.b	$00
+   2023  f88c		       00		      .byte.b	$00
+   2024  f88d		       00		      .byte.b	$00
+   2025  f88e		       00		      .byte.b	$00
+   2026  f88f		       00		      .byte.b	$00
+   2027  f890		       00		      .byte.b	$00
+   2028  f891		       00		      .byte.b	$00
+   2029  f892		       00		      .byte.b	$00
+   2030  f893		       00		      .byte.b	$00
+   2031  f894		       00		      .byte.b	$00
+   2032  f895		       ff		      .byte.b	$FF
+   2033  f896		       81		      .byte.b	$81
+   2034  f897		       81		      .byte.b	$81
+   2035  f898		       81		      .byte.b	$81
+   2036  f899		       81		      .byte.b	$81
+   2037  f89a		       81		      .byte.b	$81
+   2038  f89b		       81		      .byte.b	$81
+   2039  f89c		       ff		      .byte.b	$FF
+   2040  f89d		       00		      .byte.b	$00
+   2041  f89e		       00		      .byte.b	$00
+   2042  f89f		       00		      .byte.b	$00
+   2043  f8a0		       00		      .byte.b	$00
+   2044  f8a1		       00		      .byte.b	$00
+   2045  f8a2		       00		      .byte.b	$00
+   2046  f8a3		       00		      .byte.b	$00
+   2047  f8a4		       00		      .byte.b	$00
+   2048  f8a5		       00		      .byte.b	$00
+   2049  f8a6		       00		      .byte.b	$00
+   2050  f8a7		       00		      .byte.b	$00
+   2051  f8a8		       00		      .byte.b	$00
+   2052  f8a9		       00		      .byte.b	$00
+   2053  f8aa		       00		      .byte.b	$00
+   2054  f8ab		       00		      .byte.b	$00
+   2055  f8ac		       00		      .byte.b	$00
+   2056  f8ad		       00		      .byte.b	$00
+   2057  f8ae		       00		      .byte.b	$00
+   2058  f8af		       00		      .byte.b	$00
+   2059  f8b0		       00		      .byte.b	$00
+   2060  f8b1		       00		      .byte.b	$00
+   2061  f8b2		       00		      .byte.b	$00
+   2062  f8b3		       00		      .byte.b	$00
+   2063  f8b4		       00		      .byte.b	$00
+   2064  f8b5		       00		      .byte.b	$00
+   2065  f8b6		       00		      .byte.b	$00
+   2066  f8b7		       00		      .byte.b	$00
+   2067  f8b8		       00		      .byte.b	$00
+   2068  f8b9		       00		      .byte.b	$00
+   2069  f8ba		       00		      .byte.b	$00
+   2070  f8bb		       00		      .byte.b	$00
+   2071  f8bc		       00		      .byte.b	$00
+   2072  f8bd		       00		      .byte.b	$00
+   2073  f8be		       00		      .byte.b	$00
+   2074  f8bf		       00		      .byte.b	$00
+   2075  f8c0		       00		      .byte.b	$00
+   2076  f8c1		       00		      .byte.b	$00
+   2077  f8c2		       00		      .byte.b	$00
+   2078  f8c3		       00		      .byte.b	$00
+   2079  f8c4		       00		      .byte.b	$00
+   2080  f8c5		       00		      .byte.b	$00
+   2081  f8c6		       00		      .byte.b	$00
+   2082  f8c7		       00		      .byte.b	$00
+   2083  f8c8		       00		      .byte.b	$00
+   2084  f8c9		       00		      .byte.b	$00
+   2085  f8ca		       00		      .byte.b	$00
+   2086  f8cb		       00		      .byte.b	$00
+   2087  f8cc		       00		      .byte.b	$00
+   2088  f8cd		       00		      .byte.b	$00
+   2089  f8ce		       00		      .byte.b	$00
+   2090  f8cf		       00		      .byte.b	$00
+   2091  f8d0		       00		      .byte.b	$00
+   2092  f8d1		       00		      .byte.b	$00
+   2093  f8d2		       00		      .byte.b	$00
+   2094  f8d3		       00		      .byte.b	$00
+   2095  f8d4		       00		      .byte.b	$00
+   2096  f8d5		       00		      .byte.b	$00
+   2097  f8d6		       00		      .byte.b	$00
+   2098  f8d7		       00		      .byte.b	$00
+   2099  f8d8		       00		      .byte.b	$00
+   2100  f8d9		       00		      .byte.b	$00
+   2101  f8da		       00		      .byte.b	$00
+   2102  f8db		       00		      .byte.b	$00
+   2103  f8dc		       00		      .byte.b	$00
+   2104  f8dd		       00		      .byte.b	$00
+   2105  f8de		       00		      .byte.b	$00
+   2106  f8df		       00		      .byte.b	$00
+   2107  f8e0		       00		      .byte.b	$00
+   2108  f8e1		       00		      .byte.b	$00
+   2109  f8e2		       00		      .byte.b	$00
+   2110  f8e3		       00		      .byte.b	$00
+   2111  f8e4		       00		      .byte.b	$00
+   2112  f8e5		       00		      .byte.b	$00
+   2113  f8e6		       00		      .byte.b	$00
+   2114  f8e7		       00		      .byte.b	$00
+   2115  f8e8		       00		      .byte.b	$00
+   2116  f8e9		       00		      .byte.b	$00
+   2117  f8ea		       00		      .byte.b	$00
+   2118  f8eb		       00		      .byte.b	$00
+   2119  f8ec		       00		      .byte.b	$00
+   2120  f8ed		       00		      .byte.b	$00
+   2121  f8ee		       00		      .byte.b	$00
+   2122  f8ef		       00		      .byte.b	$00
+   2123  f8f0		       00		      .byte.b	$00
+   2124  f8f1		       00		      .byte.b	$00
+   2125  f8f2		       00		      .byte.b	$00
+   2126  f8f3		       00		      .byte.b	$00
+   2127  f8f4		       00		      .byte.b	$00
+   2128  f8f5		       00		      .byte.b	$00
+   2129  f8f6		       00		      .byte.b	$00
+   2130  f8f7		       00		      .byte.b	$00
+   2131  f8f8		       00		      .byte.b	$00
+   2132  f8f9		       00		      .byte.b	$00
+   2133  f8fa		       00		      .byte.b	$00
+   2134  f8fb		       00		      .byte.b	$00
+   2135  f8fc		       00		      .byte.b	$00
+   2136  f8fd		       00		      .byte.b	$00
+   2137  f8fe		       00		      .byte.b	$00
+   2138  f8ff		       00		      .byte.b	$00
+   2139  f900		       00		      .byte.b	$00
+   2140  f901		       00		      .byte.b	$00
+   2141  f902		       00		      .byte.b	$00
+   2142  f903		       00		      .byte.b	$00
+   2143  f904		       00		      .byte.b	$00
+   2144  f905		       00		      .byte.b	$00
+   2145  f906		       00		      .byte.b	$00
+   2146  f907		       00		      .byte.b	$00
+   2147  f908		       00		      .byte.b	$00
+   2148  f909		       00		      .byte.b	$00
+   2149  f90a		       00		      .byte.b	$00
+   2150  f90b		       00		      .byte.b	$00
+   2151  f90c		       00		      .byte.b	$00
+   2152  f90d		       00		      .byte.b	$00
+   2153  f90e		       00		      .byte.b	$00
+   2154  f90f		       00		      .byte.b	$00
+   2155  f910		       00		      .byte.b	$00
+   2156  f911		       00		      .byte.b	$00
+   2157  f912		       00		      .byte.b	$00
+   2158  f913				   GRP1Data
+   2159  f913		       00		      .byte.b	$00
+   2160  f914		       00		      .byte.b	$00
+   2161  f915		       00		      .byte.b	$00
+   2162  f916		       00		      .byte.b	$00
+   2163  f917		       00		      .byte.b	$00
+   2164  f918		       00		      .byte.b	$00
+   2165  f919		       00		      .byte.b	$00
+   2166  f91a		       00		      .byte.b	$00
+   2167  f91b		       00		      .byte.b	$00
+   2168  f91c		       00		      .byte.b	$00
+   2169  f91d		       00		      .byte.b	$00
+   2170  f91e		       00		      .byte.b	$00
+   2171  f91f		       00		      .byte.b	$00
+   2172  f920		       00		      .byte.b	$00
+   2173  f921		       00		      .byte.b	$00
+   2174  f922		       00		      .byte.b	$00
+   2175  f923		       00		      .byte.b	$00
+   2176  f924		       00		      .byte.b	$00
+   2177  f925		       00		      .byte.b	$00
+   2178  f926		       00		      .byte.b	$00
+   2179  f927		       00		      .byte.b	$00
+   2180  f928		       00		      .byte.b	$00
+   2181  f929		       00		      .byte.b	$00
+   2182  f92a		       00		      .byte.b	$00
+   2183  f92b		       00		      .byte.b	$00
+   2184  f92c		       00		      .byte.b	$00
+   2185  f92d		       00		      .byte.b	$00
+   2186  f92e		       00		      .byte.b	$00
+   2187  f92f		       00		      .byte.b	$00
+   2188  f930		       00		      .byte.b	$00
+   2189  f931		       00		      .byte.b	$00
+   2190  f932		       00		      .byte.b	$00
+   2191  f933		       00		      .byte.b	$00
+   2192  f934		       00		      .byte.b	$00
+   2193  f935		       00		      .byte.b	$00
+   2194  f936		       00		      .byte.b	$00
+   2195  f937		       00		      .byte.b	$00
+   2196  f938		       00		      .byte.b	$00
+   2197  f939		       00		      .byte.b	$00
+   2198  f93a		       00		      .byte.b	$00
+   2199  f93b		       ff		      .byte.b	$FF
+   2200  f93c		       81		      .byte.b	$81
+   2201  f93d		       81		      .byte.b	$81
+   2202  f93e		       81		      .byte.b	$81
+   2203  f93f		       81		      .byte.b	$81
+   2204  f940		       81		      .byte.b	$81
+   2205  f941		       81		      .byte.b	$81
+   2206  f942		       ff		      .byte.b	$FF
+   2207  f943		       00		      .byte.b	$00
+   2208  f944		       00		      .byte.b	$00
+   2209  f945		       00		      .byte.b	$00
+   2210  f946		       00		      .byte.b	$00
+   2211  f947		       00		      .byte.b	$00
+   2212  f948		       00		      .byte.b	$00
+   2213  f949		       00		      .byte.b	$00
+   2214  f94a		       00		      .byte.b	$00
+   2215  f94b		       00		      .byte.b	$00
+   2216  f94c		       00		      .byte.b	$00
+   2217  f94d		       00		      .byte.b	$00
+   2218  f94e		       00		      .byte.b	$00
+   2219  f94f		       00		      .byte.b	$00
+   2220  f950		       00		      .byte.b	$00
+   2221  f951		       00		      .byte.b	$00
+   2222  f952		       00		      .byte.b	$00
+   2223  f953		       00		      .byte.b	$00
+   2224  f954		       00		      .byte.b	$00
+   2225  f955		       00		      .byte.b	$00
+   2226  f956		       00		      .byte.b	$00
+   2227  f957		       00		      .byte.b	$00
+   2228  f958		       00		      .byte.b	$00
+   2229  f959		       00		      .byte.b	$00
+   2230  f95a		       00		      .byte.b	$00
+   2231  f95b		       00		      .byte.b	$00
+   2232  f95c		       00		      .byte.b	$00
+   2233  f95d		       00		      .byte.b	$00
+   2234  f95e		       00		      .byte.b	$00
+   2235  f95f		       00		      .byte.b	$00
+   2236  f960		       00		      .byte.b	$00
+   2237  f961		       00		      .byte.b	$00
+   2238  f962		       00		      .byte.b	$00
+   2239  f963		       00		      .byte.b	$00
+   2240  f964		       00		      .byte.b	$00
+   2241  f965		       00		      .byte.b	$00
+   2242  f966		       00		      .byte.b	$00
+   2243  f967		       00		      .byte.b	$00
+   2244  f968		       00		      .byte.b	$00
+   2245  f969		       00		      .byte.b	$00
+   2246  f96a		       00		      .byte.b	$00
+   2247  f96b		       00		      .byte.b	$00
+   2248  f96c		       00		      .byte.b	$00
+   2249  f96d		       00		      .byte.b	$00
+   2250  f96e		       00		      .byte.b	$00
+   2251  f96f		       00		      .byte.b	$00
+   2252  f970		       00		      .byte.b	$00
+   2253  f971		       00		      .byte.b	$00
+   2254  f972		       00		      .byte.b	$00
+   2255  f973		       00		      .byte.b	$00
+   2256  f974		       00		      .byte.b	$00
+   2257  f975		       00		      .byte.b	$00
+   2258  f976		       00		      .byte.b	$00
+   2259  f977		       00		      .byte.b	$00
+   2260  f978		       00		      .byte.b	$00
+   2261  f979		       00		      .byte.b	$00
+   2262  f97a		       00		      .byte.b	$00
+   2263  f97b		       00		      .byte.b	$00
+   2264  f97c		       00		      .byte.b	$00
+   2265  f97d		       00		      .byte.b	$00
+   2266  f97e		       00		      .byte.b	$00
+   2267  f97f		       00		      .byte.b	$00
+   2268  f980		       00		      .byte.b	$00
+   2269  f981		       00		      .byte.b	$00
+   2270  f982		       00		      .byte.b	$00
+   2271  f983		       00		      .byte.b	$00
+   2272  f984		       00		      .byte.b	$00
+   2273  f985		       00		      .byte.b	$00
+   2274  f986		       00		      .byte.b	$00
+   2275  f987		       00		      .byte.b	$00
+   2276  f988		       00		      .byte.b	$00
+   2277  f989		       00		      .byte.b	$00
+   2278  f98a		       00		      .byte.b	$00
+   2279  f98b		       00		      .byte.b	$00
+   2280  f98c		       00		      .byte.b	$00
+   2281  f98d		       00		      .byte.b	$00
+   2282  f98e		       00		      .byte.b	$00
+   2283  f98f		       00		      .byte.b	$00
+   2284  f990		       00		      .byte.b	$00
+   2285  f991		       00		      .byte.b	$00
+   2286  f992		       00		      .byte.b	$00
+   2287  f993		       00		      .byte.b	$00
+   2288  f994		       00		      .byte.b	$00
+   2289  f995		       00		      .byte.b	$00
+   2290  f996		       00		      .byte.b	$00
+   2291  f997		       00		      .byte.b	$00
+   2292  f998		       00		      .byte.b	$00
+   2293  f999		       00		      .byte.b	$00
+   2294  f99a		       00		      .byte.b	$00
+   2295  f99b		       00		      .byte.b	$00
+   2296  f99c		       00		      .byte.b	$00
+   2297  f99d		       00		      .byte.b	$00
+   2298  f99e		       00		      .byte.b	$00
+   2299  f99f		       00		      .byte.b	$00
+   2300  f9a0		       00		      .byte.b	$00
+   2301  f9a1		       00		      .byte.b	$00
+   2302  f9a2		       00		      .byte.b	$00
+   2303  f9a3		       00		      .byte.b	$00
+   2304  f9a4		       00		      .byte.b	$00
+   2305  f9a5		       00		      .byte.b	$00
+   2306  f9a6		       00		      .byte.b	$00
+   2307  f9a7		       00		      .byte.b	$00
+   2308  f9a8		       00		      .byte.b	$00
+   2309  f9a9		       00		      .byte.b	$00
+   2310  f9aa		       00		      .byte.b	$00
+   2311  f9ab		       00		      .byte.b	$00
+   2312  f9ac		       00		      .byte.b	$00
+   2313  f9ad		       00		      .byte.b	$00
+   2314  f9ae		       00		      .byte.b	$00
+   2315  f9af		       00		      .byte.b	$00
+   2316  f9b0		       00		      .byte.b	$00
+   2317  f9b1		       00		      .byte.b	$00
+   2318  f9b2		       00		      .byte.b	$00
+   2319  f9b3		       00		      .byte.b	$00
+   2320  f9b4		       00		      .byte.b	$00
+   2321  f9b5		       00		      .byte.b	$00
+   2322  f9b6		       00		      .byte.b	$00
+   2323  f9b7		       00		      .byte.b	$00
+   2324  f9b8		       00		      .byte.b	$00
+   2325  f9b9
+   2326  f9b9							; Sprite graphics (linhas top→bottom, ref)
+   2327  f9b9							; Sprite graphics (linhas top→bottom)
    2328  fa00		       00 00 00 00*	      align	256
    2329  fa00				   Sprite0Data
    2330  fa00		       ff		      .byte.b	%11111111

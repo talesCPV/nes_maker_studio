@@ -9,7 +9,7 @@ then
 
     # Nome do seu arquivo PHP (ajuste o caminho se necessário)
     ARQUIVO_PHP="backend/config/database.php"
-    SENHA_REAL="TESTE_123"
+    SENHA_REAL="VOLTE_COM_A_SENHA_AQUI"
 
     # Substitui o valor da constante por *******
     sed -i -E "s/(const DB_PASSWORD = ')[^']*(')/\1*******\2/g" "$ARQUIVO_PHP"

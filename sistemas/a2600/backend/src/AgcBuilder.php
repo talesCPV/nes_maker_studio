@@ -38,12 +38,13 @@ final class AgcBuilder
         $scorePlayers = max(1, min(2, (int)($scoreBar['players'] ?? 1)));
         $digits = max(2, min(3, (int)($scoreBar['digits'] ?? 2)));
         $labelPlayers = !empty($scoreBar['labelPlayers']) && $digits === 3;
-        $scoreDelay = (int)($scoreBar['delay'] ?? ($digits >= 3 ? 7 : 4));
+        // 2 dig: 4=esq, 8=centro, 12=dir | 3 dig: só centro (#7)
         if ($digits >= 3) {
             $scoreDelay = 7;
         } else {
+            $scoreDelay = (int)($scoreBar['delay'] ?? 12);
             if (!in_array($scoreDelay, [4, 8, 12], true)) {
-                $scoreDelay = 4;
+                $scoreDelay = 12;
             }
         }
         $scoreBg = ($scoreBar['background'] ?? true) !== false;
@@ -56,10 +57,18 @@ final class AgcBuilder
         $vblank = $tv === 'PAL' ? 48 : 40;
         $overscan = $tv === 'PAL' ? 36 : 30;
         $glyphH = self::digitGlyphHeight();
-        $bandH = max($glyphH + 4, (int)($scoreBar['lines'] ?? ($glyphH + 6)));
-        $bandH = max(8, min(20, $bandH));
+        // bandH = altura de UMA faixa de placar (só dígitos + mínimo).
+        $bandH = (int)($scoreBar['lines'] ?? ($glyphH + 2));
+        $bandH = max($glyphH + 1, min(12, $bandH));
+        if ($scorePlayers >= 2) {
+            // 2 players: cada faixa ≈ altura do glifo. Gap entre faixas = 1–2 scanlines.
+            $bandH = max($glyphH, min($glyphH + 1, $bandH));
+        }
         $scoreLines = $scoreEnabled ? ($bandH * $scorePlayers) : 0;
-        $scoreLines = min(40, $scoreLines);
+        if ($scorePlayers >= 2) {
+            $scoreLines += 2; // reserva para o gap apertado entre as duas faixas
+        }
+        $scoreLines = min(24, $scoreLines);
         // playfield útil = total − placar − logo (logo sempre)
         $playLines = max(1, $scanlines - $scoreLines - $logoLines);
 
@@ -202,11 +211,15 @@ final class AgcBuilder
         $asm[] = '    sta TIM64T';
         $asm[] = '    jsr GameLogic';
         $asm[] = '    jsr PositionPlayers';
+        if ($scoreEnabled) {
+            // Pré-cálculo do placar no VBLANK (não pode rodar na área visível)
+            $asm[] = '    jsr ScorePrep';
+        }
         $asm[] = 'WaitVBlank:';
         $asm[] = '    lda INTIM';
         $asm[] = '    bne WaitVBlank';
         $asm[] = '    sta WSYNC';
-        $asm[] = '    sta VBLANK';
+        $asm[] = '    sta VBLANK              ; A=0 → fim do VBLANK, começa imagem';
         $asm[] = '';
         $asm[] = '    lda #$0E';
         $asm[] = '    sta COLUP0';
@@ -220,26 +233,43 @@ final class AgcBuilder
         $asm[] = '    sta NUSIZ0';
         $asm[] = '    sta NUSIZ1';
         $asm[] = '';
-        $asm[] = '    ; ===== HUD v1: placar (opcional) + play vazio + logo (sempre) =====';
-        $asm[] = '    ; playLines=' . $playLines . ' scoreLines=' . $scoreLines . ' logoLines=' . $logoLines;
+        $asm[] = '    ; ===== HUD: placar + playfield (tela) + logo =====';
+        $asm[] = '    ; playLines=' . $playLines . ' scoreLines=' . $scoreLines . ' logoLines=' . $logoLines
+            . ' pfMode=' . ($pfTables['mode'] ?? 'reflect');
         $asm[] = '';
         if ($scorePos === 'top') {
             $asm[] = '    jsr DrawScoreBand';
         }
-        $asm[] = '    ; --- área útil (sem PF por enquanto) ---';
-        $asm[] = '    ldx #' . $playLines;
-        $asm[] = 'BlankPlay:';
+        // CTRLPF bit0 = reflect
+        $asm[] = '    lda #' . $ctrlpf;
+        $asm[] = '    sta CTRLPF';
+        $asm[] = '    ; --- playfield: PF + cores cedo na scanline ---';
+        $asm[] = '    ldx #0';
+        $asm[] = 'PlayLoop:';
         $asm[] = '    sta WSYNC';
-        $asm[] = '    lda #0';
-        $asm[] = '    sta COLUBK';
+        $asm[] = '    lda PF0Data,x';
+        $asm[] = '    sta PF0';
+        $asm[] = '    lda PF1Data,x';
+        $asm[] = '    sta PF1';
+        $asm[] = '    lda PF2Data,x';
+        $asm[] = '    sta PF2';
+        $asm[] = '    lda COLUPFData,x';
         $asm[] = '    sta COLUPF';
+        $asm[] = '    lda COLUBKData,x';
+        $asm[] = '    sta COLUBK';
+        $asm[] = '    lda GRP0Data,x';
+        $asm[] = '    sta GRP0';
+        $asm[] = '    lda GRP1Data,x';
+        $asm[] = '    sta GRP1';
+        $asm[] = '    inx';
+        $asm[] = '    cpx #' . $playLines;
+        $asm[] = '    bne PlayLoop';
+        $asm[] = '    lda #0';
         $asm[] = '    sta PF0';
         $asm[] = '    sta PF1';
         $asm[] = '    sta PF2';
         $asm[] = '    sta GRP0';
         $asm[] = '    sta GRP1';
-        $asm[] = '    dex';
-        $asm[] = '    bne BlankPlay';
         $asm[] = '';
         if ($scorePos === 'bottom') {
             $asm[] = '    jsr DrawScoreBand';
@@ -378,8 +408,10 @@ final class AgcBuilder
         $asm[] = 'Dig11     equ $AB';
         $asm[] = 'ScRow     equ $AC';
         $asm[] = 'ScIdx     equ $AD';
-        $asm[] = 'ScStrip   equ $B2            ; H*6 bytes (até 16*6)';
+        $asm[] = 'ScStrip   equ $B2            ; H*3 bytes (faixa P0)';
+        $asm[] = 'ScStrip2  equ $C4            ; H*3 bytes (faixa P1)';
         $asm[] = 'Temp      equ $83';
+
         $asm[] = 'P0Y       equ $84';
         $asm[] = 'P0H       equ $85';
         $asm[] = 'P1Y       equ $86';
@@ -739,52 +771,32 @@ ASM;
         int $players = 1,
         bool $labelPlayers = false
     ): string {
-        // 2 dig: delay 4/8/12. 3 dig: delay 7 + NUSIZ.
-        // labelPlayers: Dig3 = 1P/2P (idx 10/11), valor 0-99 em Dig4/Dig5.
-        // 2 players: duas faixas empilhadas.
+        // Arquitetura:
+        // 1) Pré-cálculo (ScoreToDigits + build dos strips) no início da banda
+        //    (idealmente migrar para VBLANK depois).
+        // 2) Posicionamento horizontal UMA vez (RESP/HMOVE).
+        // 3) Display puro das faixas com gap de 1 scanline entre elas.
+        //    Mesma ideia de "várias instâncias" de P0/P1 em bandas diferentes.
         $digitRows = self::digitGlyphHeight();
         $h = $digitRows;
         $players = max(1, min(2, $players));
         $digits = max(2, min(3, $digits));
         $three = ($digits >= 3);
         $labelPlayers = $labelPlayers && $three;
+        // delay já vem resolvido do build(): 2dig 4/8/12, 3dig = 7 (centro)
         if ($three) {
             $delay = 7;
         } elseif (!in_array($delay, [4, 8, 12], true)) {
-            $delay = 4;
+            $delay = 12;
         }
-        $bandBudget = max($h + 2, (int)floor($scoreLines / max(1, $players)));
-        $pad = max(0, (int)(($bandBudget - $h) / 2));
-        $bot = max(0, $bandBudget - $pad - $h);
+        $pad = 0;
+        $bot = 0;
         $out = [];
         $out[] = '; --- Score players=' . $players . ' digits=' . $digits
-            . ' delay=' . $delay . ' label=' . ($labelPlayers ? '1' : '0') . ' ---';
-        $out[] = 'DrawScoreBand:';
-        $out[] = '    lda #0';
-        $out[] = '    sta PF0';
-        $out[] = '    sta PF1';
-        $out[] = '    sta PF2';
-        $out[] = '    sta CTRLPF';
-        $out[] = '    sta GRP0';
-        $out[] = '    sta GRP1';
-        $out[] = '    sta ENAM0';
-        $out[] = '    sta ENAM1';
-        $out[] = '    sta ENABL';
-        $out[] = '    sta VDELP0';
-        $out[] = '    sta VDELP1';
-        if ($three) {
-            $out[] = '    lda #1                  ; P0: 2 copias close';
-            $out[] = '    sta NUSIZ0';
-            $out[] = '    lda #0';
-            $out[] = '    sta NUSIZ1';
-        } else {
-            $out[] = '    sta NUSIZ0';
-            $out[] = '    sta NUSIZ1';
-        }
-        $out[] = '    lda #$0E';
-        $out[] = '    sta COLUP0';
-        $out[] = '    sta COLUP1';
-        $out[] = '    ; --- faixa scoreP0 ---';
+            . ' delay=' . $delay . ' label=' . ($labelPlayers ? '1' : '0')
+            . ' h=' . $h . ' (prep no VBLANK + display puro) ---';
+        // ===== ScorePrep: roda no VBLANK =====
+        $out[] = 'ScorePrep:';
         if ($labelPlayers) {
             $out[] = '    lda #10                 ; glifo 1P';
             $out[] = '    sta Dig3';
@@ -792,59 +804,8 @@ ASM;
         } else {
             $out[] = '    jsr ScoreToDigits0';
         }
-        $out[] = '    jsr ScoreDrawOne';
-        if ($players >= 2) {
-            $out[] = '    ; --- faixa scoreP1 ---';
-            if ($labelPlayers) {
-                $out[] = '    lda #11                 ; glifo 2P';
-                $out[] = '    sta Dig3';
-                $out[] = '    jsr ScoreToDigits1Val';
-            } else {
-                $out[] = '    jsr ScoreToDigits1';
-            }
-            $out[] = '    jsr ScoreDrawOne';
-        }
-        $out[] = '    lda #0';
-        $out[] = '    sta GRP0';
-        $out[] = '    sta GRP1';
-        $out[] = '    rts';
-        $out[] = '';
-        $out[] = 'ScoreDrawOne:';
-        $out[] = '    sta WSYNC';
-        $out[] = '    ldx #' . $delay;
-        $out[] = 'ScPos0:';
-        $out[] = '    dex';
-        $out[] = '    bne ScPos0';
-        $out[] = '    sta RESP0';
-        if ($three) {
-            $out[] = '    nop';
-            $out[] = '    sta RESP1';
-        } else {
-            $out[] = '    sta RESP1';
-        }
-        $out[] = '    lda #0';
-        $out[] = '    sta HMP0';
-        $out[] = '    sta HMP1';
-        $out[] = '    sta WSYNC';
-        $out[] = '    sta HMOVE';
-        $out[] = '    sta WSYNC';
-        $out[] = '    sta HMCLR';
-        if ($pad > 0) {
-            $out[] = '    ldx #' . $pad;
-            $out[] = 'ScPadT:';
-            $out[] = '    sta WSYNC';
-            if ($background) {
-                $out[] = '    lda #0';
-                $out[] = '    sta COLUBK';
-            }
-            $out[] = '    lda #0';
-            $out[] = '    sta GRP0';
-            $out[] = '    sta GRP1';
-            $out[] = '    dex';
-            $out[] = '    bne ScPadT';
-        }
         $out[] = '    ldy #0';
-        $out[] = 'ScBuild:';
+        $out[] = 'ScBuild0:';
         $out[] = '    sty ScRow';
         if ($three) {
             $out[] = '    tya';
@@ -886,9 +847,111 @@ ASM;
         }
         $out[] = '    iny';
         $out[] = '    cpy #' . $h;
-        $out[] = '    bcc ScBuild';
+        $out[] = '    bcc ScBuild0';
+        if ($players >= 2) {
+            if ($labelPlayers) {
+                $out[] = '    lda #11                 ; glifo 2P';
+                $out[] = '    sta Dig3';
+                $out[] = '    jsr ScoreToDigits1Val';
+            } else {
+                $out[] = '    jsr ScoreToDigits1';
+            }
+            $out[] = '    ldy #0';
+            $out[] = 'ScBuild1:';
+            $out[] = '    sty ScRow';
+            if ($three) {
+                $out[] = '    tya';
+                $out[] = '    sta TmpA';
+                $out[] = '    asl';
+                $out[] = '    clc';
+                $out[] = '    adc TmpA';
+                $out[] = '    sta ScIdx';
+                $out[] = '    lda Dig3';
+                $out[] = '    jsr GlyphRow';
+                $out[] = '    ldx ScIdx';
+                $out[] = '    sta ScStrip2,x';
+                $out[] = '    inx';
+                $out[] = '    stx ScIdx';
+                $out[] = '    lda Dig4';
+                $out[] = '    jsr GlyphRow';
+                $out[] = '    ldx ScIdx';
+                $out[] = '    sta ScStrip2,x';
+                $out[] = '    inx';
+                $out[] = '    stx ScIdx';
+                $out[] = '    lda Dig5';
+                $out[] = '    jsr GlyphRow';
+                $out[] = '    ldx ScIdx';
+                $out[] = '    sta ScStrip2,x';
+            } else {
+                $out[] = '    tya';
+                $out[] = '    asl';
+                $out[] = '    sta ScIdx';
+                $out[] = '    lda Dig4';
+                $out[] = '    jsr GlyphRow';
+                $out[] = '    ldx ScIdx';
+                $out[] = '    sta ScStrip2,x';
+                $out[] = '    inx';
+                $out[] = '    stx ScIdx';
+                $out[] = '    lda Dig5';
+                $out[] = '    jsr GlyphRow';
+                $out[] = '    ldx ScIdx';
+                $out[] = '    sta ScStrip2,x';
+            }
+            $out[] = '    iny';
+            $out[] = '    cpy #' . $h;
+            $out[] = '    bcc ScBuild1';
+        }
+        $out[] = '    rts';
+        $out[] = '';
+        // ===== DrawScoreBand: só display (WSYNC) =====
+        $out[] = 'DrawScoreBand:';
+        $out[] = '    lda #0';
+        $out[] = '    sta PF0';
+        $out[] = '    sta PF1';
+        $out[] = '    sta PF2';
+        $out[] = '    sta CTRLPF';
+        $out[] = '    sta GRP0';
+        $out[] = '    sta GRP1';
+        $out[] = '    sta ENAM0';
+        $out[] = '    sta ENAM1';
+        $out[] = '    sta ENABL';
+        $out[] = '    sta VDELP0';
+        $out[] = '    sta VDELP1';
+        if ($three) {
+            $out[] = '    lda #1                  ; P0: 2 copias close';
+            $out[] = '    sta NUSIZ0';
+            $out[] = '    lda #0';
+            $out[] = '    sta NUSIZ1';
+        } else {
+            $out[] = '    sta NUSIZ0';
+            $out[] = '    sta NUSIZ1';
+        }
+        $out[] = '    lda #$0E';
+        $out[] = '    sta COLUP0';
+        $out[] = '    sta COLUP1';
+        $out[] = '    ; === POSITION ===';
+        $out[] = '    sta WSYNC';
+        $out[] = '    ldx #' . $delay;
+        $out[] = 'ScPos0:';
+        $out[] = '    dex';
+        $out[] = '    bne ScPos0';
+        if ($three) {
+            $out[] = '    nop';
+        }
+        $out[] = '    sta RESP0';
+        $out[] = '    sta RESP1';
+        $out[] = '    lda #0';
+        $out[] = '    sta HMP0';
+        $out[] = '    sta HMP1';
+        $out[] = '    sta WSYNC';
+        $out[] = '    sta HMOVE';
+        $out[] = '    sta WSYNC';
+        $out[] = '    sta HMCLR';
+
+        // ---------- DISPLAY P0 ----------
+        $out[] = '    ; === DISPLAY faixa P0 ===';
         $out[] = '    ldy #0';
-        $out[] = 'ScDigRows:';
+        $out[] = 'ScDigRows0:';
         $out[] = '    sta WSYNC';
         if ($background) {
             $out[] = '    lda #0';
@@ -921,13 +984,14 @@ ASM;
         }
         $out[] = '    iny';
         $out[] = '    cpy #' . $h;
-        $out[] = '    bcc ScDigRows';
+        $out[] = '    bcc ScDigRows0';
         $out[] = '    lda #0';
         $out[] = '    sta GRP0';
         $out[] = '    sta GRP1';
-        if ($bot > 0) {
-            $out[] = '    ldx #' . $bot;
-            $out[] = 'ScPadB:';
+
+        if ($players >= 2) {
+            // gap de 1 scanline (o "atraso" controlado)
+            $out[] = '    ; === GAP 1 scanline entre faixas ===';
             $out[] = '    sta WSYNC';
             if ($background) {
                 $out[] = '    lda #0';
@@ -936,11 +1000,53 @@ ASM;
             $out[] = '    lda #0';
             $out[] = '    sta GRP0';
             $out[] = '    sta GRP1';
-            $out[] = '    dex';
-            $out[] = '    bne ScPadB';
+
+            // ---------- DISPLAY P1 ----------
+            $out[] = '    ; === DISPLAY faixa P1 ===';
+            $out[] = '    ldy #0';
+            $out[] = 'ScDigRows1:';
+            $out[] = '    sta WSYNC';
+            if ($background) {
+                $out[] = '    lda #0';
+                $out[] = '    sta COLUBK';
+            }
+            if ($three) {
+                $out[] = '    tya';
+                $out[] = '    sta TmpA';
+                $out[] = '    asl';
+                $out[] = '    clc';
+                $out[] = '    adc TmpA';
+                $out[] = '    tax';
+                $out[] = '    lda ScStrip2,x';
+                $out[] = '    sta GRP0';
+                $out[] = '    inx';
+                $out[] = '    lda ScStrip2,x';
+                $out[] = '    sta GRP1';
+                $out[] = '    inx';
+                $out[] = '    lda ScStrip2,x';
+                $out[] = '    sta GRP0';
+            } else {
+                $out[] = '    tya';
+                $out[] = '    asl';
+                $out[] = '    tax';
+                $out[] = '    lda ScStrip2,x';
+                $out[] = '    sta GRP0';
+                $out[] = '    inx';
+                $out[] = '    lda ScStrip2,x';
+                $out[] = '    sta GRP1';
+            }
+            $out[] = '    iny';
+            $out[] = '    cpy #' . $h;
+            $out[] = '    bcc ScDigRows1';
+            $out[] = '    lda #0';
+            $out[] = '    sta GRP0';
+            $out[] = '    sta GRP1';
         }
+
         $out[] = '    rts';
         $out[] = '';
+
+        // GlyphRow + ScoreToDigits (mantidos)
         $out[] = 'GlyphRow:';
         $out[] = '    sta Temp';
         $out[] = '    lda #0';

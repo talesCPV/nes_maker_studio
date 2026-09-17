@@ -81,15 +81,12 @@ const Project = {
     // --- placar ---
     if (sb.position && sb.position !== 'none') {
       const align = sb.align || 'center';
-      if (align === 'both') {
-        want.push({ name: 'scoreP0', type: 'byte', note: 'Placar jogador 1 (nativa)', value: 0 });
+      const twoPlayers = (sb.players | 0) === 2 || align === 'both';
+      want.push({ name: 'scoreP0', type: 'byte', note: twoPlayers ? 'Placar jogador 1 (nativa)' : 'Placar (nativa)', value: 0 });
+      if (twoPlayers) {
         want.push({ name: 'scoreP1', type: 'byte', note: 'Placar jogador 2 (nativa)', value: 0 });
-      } else {
-        // single score — sempre scoreP0 como canônico
-        want.push({ name: 'scoreP0', type: 'byte', note: 'Placar (nativa)', value: 0 });
       }
-      // aliases legados score → aponta mesmo uso no build via scoreP0
-      d.scoreBar.variable = align === 'both' ? 'scoreP0' : 'scoreP0';
+      d.scoreBar.variable = 'scoreP0';
       d.scoreBar.variable2 = 'scoreP1';
     }
 

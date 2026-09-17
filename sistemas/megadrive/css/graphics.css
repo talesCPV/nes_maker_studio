@@ -1,48 +1,807 @@
-/* RetroCompiler — Mega Drive — Gráficos
-   CSS isolado do módulo; não substitui css/style.css.
-*/
-.mdg-graphics{display:flex;flex-direction:column;height:100%;min-height:620px;gap:14px}
-.gfx-head{display:flex;justify-content:space-between;align-items:center}
-.gfx-kicker{font-size:11px;letter-spacing:1.5px;opacity:.55}
-.gfx-head h2{margin:3px 0;font-size:24px}.gfx-head p{margin:0;opacity:.65}
-.gfx-status,.gfx-badge{padding:7px 10px;border:1px solid rgba(100,170,255,.25);border-radius:6px;font-size:11px}
-.gfx-tabs{display:flex;gap:5px;border-bottom:1px solid rgba(255,255,255,.08)}
-.gfx-tab{background:none;border:0;color:inherit;padding:10px 16px;cursor:pointer;opacity:.6}
-.gfx-tab.active{opacity:1;border-bottom:2px solid #5da9ff}
-.gfx-workspace{display:grid;grid-template-columns:190px minmax(420px,1fr) 230px;gap:12px;min-height:0;flex:1}
-.gfx-library,.gfx-editor,.gfx-properties,.gfx-import-card,.gfx-import-preview{border:1px solid rgba(255,255,255,.08);border-radius:8px;background:rgba(255,255,255,.025)}
-.gfx-library,.gfx-properties{padding:12px}
-.gfx-panel-title,.gfx-subtitle,.gfx-label{font-size:11px;text-transform:uppercase;letter-spacing:.8px;opacity:.65}
-.gfx-list{display:flex;flex-direction:column;gap:3px;margin:10px 0}
-.gfx-list-item,.gfx-sheet-tile,.gfx-wide-btn,.gfx-add{border:1px solid transparent;background:rgba(255,255,255,.035);color:inherit;border-radius:5px;cursor:pointer}
-.gfx-list-item{text-align:left;padding:8px}.gfx-list-item.selected{border-color:rgba(93,169,255,.45);background:rgba(93,169,255,.1)}
-.gfx-folder{display:inline-block;width:22px;opacity:.6}.gfx-add{width:100%;padding:8px}
-.gfx-editor{display:flex;flex-direction:column;min-width:0}
-.gfx-toolbar{display:flex;gap:6px;align-items:center;padding:9px;border-bottom:1px solid rgba(255,255,255,.08)}
-.gfx-tool-group{display:flex;gap:3px}.gfx-icon-btn{width:32px;height:30px;border:1px solid transparent;background:rgba(255,255,255,.04);color:inherit;border-radius:5px;cursor:pointer}
-.gfx-icon-btn.active{border-color:rgba(93,169,255,.55)}
-.gfx-canvas-area,.gfx-meta-canvas{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;min-height:300px}
-.gfx-pixel-grid{display:grid;grid-template-columns:repeat(8,32px);grid-template-rows:repeat(8,32px);border:2px solid rgba(255,255,255,.2)}
-.gfx-pixel{border:0;border-right:1px solid rgba(255,255,255,.1);border-bottom:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);cursor:crosshair}
-.gfx-pixel:hover,.gfx-meta-cell:hover{outline:1px solid rgba(93,169,255,.8);z-index:2}
-.gfx-zoom,.gfx-canvas-label{font-size:11px;opacity:.5;margin:8px}
-.gfx-sheet{padding:10px;border-top:1px solid rgba(255,255,255,.08)}.gfx-sheet-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin-top:8px}
-.gfx-sheet-tile{aspect-ratio:1;min-width:24px;font-size:9px}.gfx-sheet-tile.selected{border-color:rgba(93,169,255,.7);box-shadow:inset 0 0 0 1px rgba(93,169,255,.3)}
-.gfx-properties{display:flex;flex-direction:column;gap:12px}.gfx-properties label{font-size:11px;display:flex;flex-direction:column;gap:5px;opacity:.8}
-.gfx-properties input,.gfx-properties select,.gfx-toolbar select{background:#111923;color:inherit;border:1px solid rgba(255,255,255,.12);border-radius:5px;padding:7px}
-.gfx-prop-block{padding-top:8px;border-top:1px solid rgba(255,255,255,.07)}.gfx-check{flex-direction:row!important;align-items:center;margin-top:7px}
-.gfx-palette{display:grid;grid-template-columns:repeat(8,1fr);gap:3px;margin-top:8px}.gfx-color{aspect-ratio:1;border:1px solid rgba(255,255,255,.12);background:#000}
-.gfx-color:nth-child(2n){background:#555}.gfx-color:nth-child(3n){background:#aaa}.gfx-color:nth-child(4n){background:#fff}
-.gfx-info{margin-top:auto;padding:9px;border-radius:6px;background:rgba(93,169,255,.06);font-size:10px;display:flex;flex-direction:column;gap:4px}
-.gfx-info b{font-size:11px}.gfx-wide-btn{padding:7px;margin-top:5px}.gfx-mini-value{padding:10px;border-radius:5px;background:rgba(255,255,255,.04);margin-top:6px}
-.gfx-meta-grid{display:grid;grid-template-columns:repeat(4,64px);grid-auto-rows:64px;border:2px solid rgba(255,255,255,.18)}
-.gfx-meta-cell{background:rgba(255,255,255,.05);color:inherit;border:1px solid rgba(255,255,255,.1);cursor:pointer}
-.gfx-toolbar-caption{font-size:11px;opacity:.6;margin-right:auto}
-.gfx-import{display:flex;flex-direction:column;gap:12px;overflow:auto}.gfx-import-head{display:flex;justify-content:space-between}
-.gfx-import-head h2{margin:0 0 4px}.gfx-import-head p{margin:0;opacity:.6}.gfx-import-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-.gfx-import-card,.gfx-import-preview{padding:14px}.gfx-import-card{display:flex;flex-direction:column;gap:10px}
-.gfx-file input{width:100%}.gfx-dropzone,.gfx-preview-empty{padding:32px;text-align:center;border:1px dashed rgba(255,255,255,.15);border-radius:6px;opacity:.5}
-.gfx-note{font-size:10px;opacity:.5}.gfx-import-actions{display:flex;justify-content:flex-end;gap:8px}
-.gfx-secondary,.gfx-primary{padding:8px 14px;border-radius:5px;border:1px solid rgba(255,255,255,.12);cursor:pointer;color:inherit}
-.gfx-primary{background:rgba(93,169,255,.15);border-color:rgba(93,169,255,.4)}
-@media(max-width:1000px){.gfx-workspace{grid-template-columns:160px 1fr}.gfx-properties{display:none}.gfx-import-grid{grid-template-columns:1fr}}
+
+/* ============================================================
+   RETROCOMPILER — MEGA DRIVE / GENESIS
+   GRAPHICS MODULE
+   Visual language inherited from NES CHR-EDIT.
+   ============================================================ */
+
+.mdg-graphics{
+  display:flex;
+  flex-direction:column;
+  height:100%;
+  min-height:0;
+  overflow:hidden;
+  background:#1e1e1e;
+  color:#ccc;
+  font-family:inherit;
+  font-size:12px;
+}
+
+.mdg-graphics button,
+.mdg-graphics input,
+.mdg-graphics select,
+.mdg-graphics textarea{font:inherit}
+
+.mdg-graphics .gfx-head{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-height:42px;
+  padding:6px 10px;
+  background:#252526;
+  border-bottom:1px solid #333;
+  flex-wrap:wrap;
+}
+
+.mdg-graphics .gfx-head h2{
+  margin:0;
+  font-size:12px;
+  color:#4ec9b0;
+  font-weight:700;
+}
+
+.mdg-graphics .gfx-head p{
+  margin:0;
+  color:#666;
+  font-size:10px;
+}
+
+.mdg-graphics .gfx-tabs{
+  display:flex;
+  gap:0;
+  align-items:center;
+  padding:0 10px;
+  background:#252526;
+  border-bottom:1px solid #333;
+  overflow-x:auto;
+}
+
+.mdg-graphics .gfx-tabs button{
+  appearance:none;
+  border:0;
+  border-bottom:2px solid transparent;
+  border-radius:0;
+  background:transparent;
+  color:#888;
+  padding:8px 13px;
+  cursor:pointer;
+  font-size:11px;
+  white-space:nowrap;
+}
+
+.mdg-graphics .gfx-tabs button:hover{
+  color:#ccc;
+  background:#2a2a2a;
+}
+
+.mdg-graphics .gfx-tabs button.active{
+  color:#4ec9b0;
+  border-bottom-color:#007acc;
+  background:#1e1e1e;
+}
+
+.mdg-graphics .gfx-workspace{
+  display:flex;
+  flex:1;
+  min-height:0;
+  overflow:hidden;
+  gap:0;
+}
+
+.mdg-graphics .gfx-library{
+  width:220px;
+  min-width:220px;
+  background:#181818;
+  border-right:1px solid #333;
+  padding:12px;
+  overflow:auto;
+}
+
+.mdg-graphics .gfx-editor{
+  flex:1;
+  min-width:460px;
+  min-height:0;
+  background:#1e1e1e;
+  padding:12px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  overflow:auto;
+}
+
+.mdg-graphics .gfx-properties{
+  width:260px;
+  min-width:260px;
+  background:#181818;
+  border-left:1px solid #333;
+  padding:12px;
+  overflow:auto;
+}
+
+.mdg-graphics .gfx-library-title,
+.mdg-graphics .gfx-properties-title{
+  margin:0 0 7px;
+  color:#666;
+  font-size:10px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+
+.mdg-graphics .gfx-library-item{
+  width:100%;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  box-sizing:border-box;
+  margin:2px 0;
+  padding:8px 9px;
+  border:1px solid transparent;
+  border-radius:4px;
+  background:transparent;
+  color:#888;
+  cursor:pointer;
+  text-align:left;
+  font-size:11px;
+}
+
+.mdg-graphics .gfx-library-item:hover{
+  color:#ccc;
+  background:#252526;
+}
+
+.mdg-graphics .gfx-library-item.active{
+  color:#fff;
+  background:#1e2a36;
+  border-color:#333;
+  box-shadow:inset 3px 0 0 #007acc;
+}
+
+.mdg-graphics .gfx-toolbar{
+  display:flex;
+  align-items:center;
+  gap:5px;
+  min-height:36px;
+  padding:5px 7px;
+  background:#252526;
+  border:1px solid #333;
+  border-radius:4px;
+  flex-wrap:wrap;
+}
+
+.mdg-graphics .gfx-toolbar-group{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  padding-right:6px;
+  margin-right:1px;
+  border-right:1px solid #444;
+}
+
+.mdg-graphics .gfx-toolbar-group:last-child{border-right:0}
+
+.mdg-graphics .gfx-icon-btn{
+  width:30px;
+  height:28px;
+  padding:0;
+  border:1px solid #444;
+  border-radius:3px;
+  background:#111;
+  color:#aaa;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.mdg-graphics .gfx-icon-btn:hover{
+  background:#2a2a2a;
+  color:#fff;
+  border-color:#007acc;
+}
+
+.mdg-graphics .gfx-icon-btn.active{
+  background:#1e2a36;
+  color:#fff;
+  border-color:#007acc;
+  box-shadow:inset 0 -2px 0 #007acc;
+}
+
+.mdg-graphics .gfx-button{
+  border:1px solid #444;
+  border-radius:4px;
+  background:#252526;
+  color:#ccc;
+  padding:6px 10px;
+  cursor:pointer;
+}
+
+.mdg-graphics .gfx-button:hover{
+  background:#2d2d30;
+  border-color:#007acc;
+  color:#fff;
+}
+
+.mdg-graphics .gfx-button.primary{
+  background:#007acc;
+  border-color:#007acc;
+  color:#fff;
+}
+
+.mdg-graphics .gfx-button.primary:hover{background:#1685c9}
+
+.mdg-graphics .gfx-pixel-grid{
+  width:min(512px,100%);
+  aspect-ratio:1;
+  align-self:center;
+  display:grid;
+  grid-template-columns:repeat(8,1fr);
+  grid-template-rows:repeat(8,1fr);
+  border:2px solid #333;
+  background:#000;
+  image-rendering:pixelated;
+  box-sizing:border-box;
+  cursor:crosshair;
+}
+
+.mdg-graphics .gfx-pixel{
+  min-width:0;
+  min-height:0;
+  border-right:1px solid rgba(255,255,255,.08);
+  border-bottom:1px solid rgba(255,255,255,.08);
+  background:#000;
+}
+
+.mdg-graphics .gfx-pixel:hover{
+  outline:1px solid #4ec9b0;
+  z-index:1;
+}
+
+.mdg-graphics .gfx-sheet{
+  display:grid;
+  grid-template-columns:repeat(16,minmax(22px,1fr));
+  gap:2px;
+  padding:6px;
+  background:#111;
+  border:1px solid #333;
+  border-radius:4px;
+  overflow:auto;
+  max-height:240px;
+}
+
+.mdg-graphics .gfx-sheet-tile{
+  position:relative;
+  aspect-ratio:1;
+  min-width:0;
+  background:#000;
+  border:1px solid #333;
+  cursor:pointer;
+  image-rendering:pixelated;
+}
+
+.mdg-graphics .gfx-sheet-tile:hover{border-color:#007acc}
+
+.mdg-graphics .gfx-sheet-tile.active{
+  border-color:#ffcc00;
+  box-shadow:0 0 0 1px #ffcc00;
+}
+
+.mdg-graphics .gfx-sheet-tile span{
+  position:absolute;
+  left:2px;
+  bottom:1px;
+  color:#888;
+  font:9px monospace;
+  text-shadow:0 1px 2px #000;
+  pointer-events:none;
+}
+
+.mdg-graphics .gfx-palette{
+  display:grid;
+  grid-template-columns:repeat(16,1fr);
+  gap:2px;
+  padding:5px;
+  background:#111;
+  border:1px solid #333;
+  border-radius:4px;
+}
+
+.mdg-graphics .gfx-palette-color{
+  aspect-ratio:1;
+  min-width:12px;
+  border:1px solid #333;
+  border-radius:2px;
+  cursor:pointer;
+}
+
+.mdg-graphics .gfx-palette-color:hover{border-color:#aaa}
+
+.mdg-graphics .gfx-palette-color.active{
+  outline:2px solid #ffcc00;
+  outline-offset:1px;
+  z-index:1;
+}
+
+.mdg-graphics .gfx-info{
+  background:#111;
+  border:1px solid #333;
+  border-radius:6px;
+  padding:9px 10px;
+  color:#777;
+  font-size:10px;
+  line-height:1.5;
+}
+
+.mdg-graphics .gfx-info strong{color:#4ec9b0}
+
+.mdg-graphics .gfx-meta-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+
+.mdg-graphics .gfx-field{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
+.mdg-graphics .gfx-field.full{grid-column:1/-1}
+
+.mdg-graphics .gfx-field label{
+  color:#888;
+  font-size:10px;
+}
+
+.mdg-graphics .gfx-field input,
+.mdg-graphics .gfx-field select,
+.mdg-graphics .gfx-field textarea{
+  width:100%;
+  box-sizing:border-box;
+  background:#000;
+  color:#fff;
+  border:1px solid #444;
+  border-radius:3px;
+  padding:5px 7px;
+  font-size:11px;
+  outline:none;
+}
+
+.mdg-graphics .gfx-field input:focus,
+.mdg-graphics .gfx-field select:focus,
+.mdg-graphics .gfx-field textarea:focus{
+  border-color:#007acc;
+}
+
+.mdg-graphics .gfx-field textarea{
+  min-height:70px;
+  resize:vertical;
+}
+
+.mdg-graphics .gfx-check{
+  display:flex;
+  align-items:center;
+  gap:5px;
+  color:#888;
+  font-size:10px;
+  cursor:pointer;
+  margin:5px 0;
+}
+
+.mdg-graphics .gfx-import{
+  flex:1;
+  min-height:0;
+  background:#1e1e1e;
+  padding:12px;
+  overflow:auto;
+}
+
+.mdg-graphics .gfx-import-grid{
+  display:grid;
+  grid-template-columns:minmax(280px,360px) 1fr;
+  gap:12px;
+}
+
+.mdg-graphics .gfx-import-preview{
+  min-height:300px;
+  background:#111;
+  border:1px solid #333;
+  border-radius:6px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:auto;
+  image-rendering:pixelated;
+}
+
+.mdg-graphics .gfx-import-preview canvas,
+.mdg-graphics .gfx-import-preview img{
+  max-width:100%;
+  max-height:100%;
+  image-rendering:pixelated;
+}
+
+.mdg-graphics .gfx-import-actions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:6px;
+  padding-top:8px;
+  margin-top:8px;
+  border-top:1px solid #333;
+}
+
+.mdg-graphics .gfx-metatile-grid{
+  display:grid;
+  gap:2px;
+  width:min(520px,100%);
+  margin:0 auto;
+  padding:4px;
+  background:#111;
+  border:2px solid #333;
+  border-radius:4px;
+}
+
+.mdg-graphics .gfx-metatile-cell{
+  min-width:0;
+  aspect-ratio:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#000;
+  border:1px solid #333;
+  color:#666;
+  cursor:pointer;
+  font-size:9px;
+}
+
+.mdg-graphics .gfx-metatile-cell:hover{border-color:#007acc}
+
+.mdg-graphics .gfx-metatile-cell.selected{
+  border-color:#ffcc00;
+  box-shadow:inset 0 0 0 1px #ffcc00;
+}
+
+.mdg-graphics .gfx-section{
+  background:#181818;
+  border:1px solid #333;
+  border-radius:6px;
+  padding:10px;
+}
+
+.mdg-graphics .gfx-section-title{
+  margin:0 0 7px;
+  color:#4ec9b0;
+  font-size:11px;
+  font-weight:700;
+}
+
+.mdg-graphics .gfx-divider{
+  height:1px;
+  background:#333;
+  margin:8px 0;
+}
+
+.mdg-graphics .gfx-status{
+  color:#666;
+  font-size:10px;
+}
+
+@media(max-width:1100px){
+  .mdg-graphics .gfx-library{
+    width:190px;
+    min-width:190px;
+  }
+  .mdg-graphics .gfx-properties{
+    width:220px;
+    min-width:220px;
+  }
+}
+
+@media(max-width:850px){
+  .mdg-graphics .gfx-workspace{
+    flex-wrap:wrap;
+    overflow:auto;
+  }
+  .mdg-graphics .gfx-library{
+    width:180px;
+    min-width:180px;
+    max-height:240px;
+  }
+  .mdg-graphics .gfx-properties{
+    width:100%;
+    min-width:0;
+    border-left:0;
+    border-top:1px solid #333;
+    max-height:280px;
+  }
+  .mdg-graphics .gfx-editor{
+    min-width:360px;
+  }
+  .mdg-graphics .gfx-import-grid{
+    grid-template-columns:1fr;
+  }
+}
+
+@media(max-width:600px){
+  .mdg-graphics .gfx-workspace{
+    display:block;
+  }
+  .mdg-graphics .gfx-library,
+  .mdg-graphics .gfx-editor,
+  .mdg-graphics .gfx-properties{
+    width:auto;
+    min-width:0;
+    border-left:0;
+    border-right:0;
+    border-bottom:1px solid #333;
+  }
+  .mdg-graphics .gfx-meta-grid{
+    grid-template-columns:1fr;
+  }
+}
+
+/* Importador de ROM — Mega Drive / Genesis */
+.mdg-graphics .gfx-head-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.mdg-graphics .gfx-rom-top-btn{
+  border:1px solid #3b6f68;
+  background:#17322f;
+  color:#8be0d0;
+  border-radius:4px;
+  padding:7px 10px;
+  font-size:10px;
+  cursor:pointer;
+}
+
+.mdg-graphics .gfx-rom-top-btn:hover{
+  background:#21463f;
+}
+
+.mdg-graphics .gfx-rom-shortcut{
+  margin-top:12px;
+  padding-top:10px;
+  border-top:1px solid #333;
+}
+
+.mdg-graphics .gfx-rom-button{
+  width:100%;
+  text-align:left;
+  margin-top:6px;
+}
+
+.mdg-graphics .gfx-rom-import{
+  padding:12px;
+  overflow:auto;
+  height:100%;
+  background:#1e1e1e;
+}
+
+.mdg-graphics .gfx-rom-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:16px;
+  padding-bottom:12px;
+  border-bottom:1px solid #333;
+}
+
+.mdg-graphics .gfx-rom-head h2{
+  margin:2px 0 5px;
+  font-size:16px;
+  color:#ddd;
+}
+
+.mdg-graphics .gfx-rom-head p{
+  margin:0;
+  color:#888;
+  font-size:11px;
+}
+
+.mdg-graphics .gfx-rom-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);
+  gap:10px;
+  margin-top:10px;
+}
+
+.mdg-graphics .gfx-rom-card{
+  background:#181818;
+  border:1px solid #333;
+  border-radius:6px;
+  padding:12px;
+  min-width:0;
+}
+
+.mdg-graphics .gfx-rom-info{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  margin-top:9px;
+  color:#888;
+  font-size:10px;
+}
+
+.mdg-graphics .gfx-rom-info b{
+  color:#ddd;
+  font-size:11px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.mdg-graphics .gfx-rom-candidates{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+  gap:6px;
+  max-height:260px;
+  overflow:auto;
+}
+
+.mdg-graphics .gfx-rom-candidate{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:2px;
+  background:#111;
+  border:1px solid #333;
+  color:#999;
+  border-radius:4px;
+  padding:8px;
+  cursor:pointer;
+  text-align:left;
+}
+
+.mdg-graphics .gfx-rom-candidate:hover{
+  border-color:#4ec9b0;
+}
+
+.mdg-graphics .gfx-rom-candidate.selected{
+  border-color:#007acc;
+  background:#102436;
+  color:#ddd;
+}
+
+.mdg-graphics .gfx-rom-candidate b{
+  color:#4ec9b0;
+  font-family:monospace;
+  font-size:11px;
+}
+
+.mdg-graphics .gfx-rom-candidate small{
+  color:#777;
+  font-size:9px;
+}
+
+.mdg-graphics .gfx-rom-manual{
+  margin-top:12px;
+  padding-top:10px;
+  border-top:1px solid #333;
+}
+
+.mdg-graphics .gfx-rom-fields{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-top:7px;
+}
+
+.mdg-graphics .gfx-rom-fields label,
+.mdg-graphics .gfx-rom-card > label{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  color:#999;
+  font-size:10px;
+}
+
+.mdg-graphics .gfx-rom-fields input,
+.mdg-graphics .gfx-rom-card select{
+  width:100%;
+  box-sizing:border-box;
+}
+
+.mdg-graphics .gfx-rom-options{
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  margin-top:14px;
+}
+
+.mdg-graphics .gfx-rom-selection{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  margin-top:14px;
+  padding:9px;
+  background:#111;
+  border:1px solid #333;
+  border-radius:4px;
+  color:#888;
+  font-size:10px;
+}
+
+.mdg-graphics .gfx-rom-selection b{
+  color:#4ec9b0;
+}
+
+.mdg-graphics .gfx-rom-preview{
+  margin-top:10px;
+}
+
+.mdg-graphics .gfx-rom-tile-preview{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(56px,1fr));
+  gap:6px;
+  min-height:84px;
+  max-height:190px;
+  overflow:auto;
+  margin-top:8px;
+  padding:8px;
+  background:#101010;
+  border:1px solid #2d2d2d;
+  border-radius:4px;
+  align-content:start;
+}
+
+.mdg-graphics .gfx-rom-preview-tile{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:3px;
+  color:#777;
+  font:9px monospace;
+}
+
+.mdg-graphics .gfx-rom-preview-tile > div{
+  display:grid;
+  grid-template-columns:repeat(8,4px);
+  grid-template-rows:repeat(8,4px);
+  width:32px;
+  height:32px;
+  border:1px solid #444;
+  image-rendering:pixelated;
+}
+
+.mdg-graphics .gfx-rom-preview-tile i{
+  display:block;
+  width:4px;
+  height:4px;
+  background:#4ec9b0;
+}
+
+.mdg-graphics .gfx-rom-preview-tile i:nth-child(1n){
+  /* A cor é propositalmente neutra; a palette real ainda não foi extraída. */
+}
+
+.mdg-graphics .gfx-rom-import .gfx-primary:disabled{
+  opacity:.45;
+  cursor:not-allowed;
+}
+
+.mdg-graphics .gfx-sheet-tile.has-data{
+  border-color:#3f655f;
+}
+
+@media(max-width:850px){
+  .mdg-graphics .gfx-rom-grid{
+    grid-template-columns:1fr;
+  }
+  .mdg-graphics .gfx-head-actions{
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+}
+
+@media(max-width:600px){
+  .mdg-graphics .gfx-rom-head{
+    flex-direction:column;
+  }
+  .mdg-graphics .gfx-rom-fields{
+    grid-template-columns:1fr;
+  }
+}
