@@ -776,6 +776,19 @@ final class ProjectParser
     private function resolveMapperBanks(array $project): array
     {
         $mapper = (int)($project['mapper'] ?? 0);
+        if ($mapper === 2) {
+            // UOROM etapa 1 (header+CHR-RAM, sem bankswitch de PRG ainda):
+            // CHR continua fixo em 1 combinacao so' (paginas 0+1), exatamente
+            // como NROM - a diferenca de UOROM fica toda em header.php
+            // (chrBanks=0, mapper=2) e no upload pra CHR-RAM no Reset
+            // (ver chars_segments.php e system.php 'reset'), nao aqui.
+            return [
+                'mapper' => 2,
+                'banks' => [['spritePage' => 0, 'bgPage' => 1]],
+                'phaseBankIndex' => [],
+                'defaultBankIndex' => 0,
+            ];
+        }
         if ($mapper !== 3) {
             return [
                 'mapper' => 0,

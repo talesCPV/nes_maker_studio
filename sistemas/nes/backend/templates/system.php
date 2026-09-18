@@ -16,11 +16,18 @@ return [
         // do mapper, baixo nibble aqui - mapper 3 cabe inteiro nele, entao o
         // byte 7 nao muda). Mirroring continua fixo vertical, como sempre foi.
         $mapper = (int)($ctx['mapperInfo']['mapper'] ?? 0);
-        $chrBanks = ($mapper === 3) ? 4 : 1;
+        // UOROM (mapper 2, etapa 1): chrBanks=0 sinaliza CHR-RAM pro
+        // header iNES (nao ha' chip de CHR-ROM fisico nesse board) - os
+        // dados de CHR viram tabela dentro do PRG e sao copiados pra
+        // CHR-RAM em tempo de boot (ver chars_segments.php + 'reset' logo
+        // abaixo). PRG continua 2 (32KB) nesta etapa - sem bankswitch.
+        $chrBanks = ($mapper === 3) ? 4 : (($mapper === 2) ? 0 : 1);
         $flags6 = ((($mapper) & 0x0F) << 4) | 0x01;
         $comment = ($mapper === 3)
             ? 'CNROM (32KB PRG fixa + CHR em 4 bancos de 8KB, trocados em runtime), vertical mirroring'
-            : 'NROM-256 (32KB PRG), vertical mirroring';
+            : (($mapper === 2)
+                ? 'UOROM etapa 1 (32KB PRG fixa, sem bankswitch ainda + CHR-RAM 8KB carregada no boot), vertical mirroring'
+                : 'NROM-256 (32KB PRG), vertical mirroring');
         $b6 = sprintf('$%02X', $flags6);
         return ".segment \"HEADER\"\n  .byte \$4E,\$45,\$53,\$1A,2,{$chrBanks},{$b6},0,0,0,0,0,0,0,0,0  ; {$comment}";
     },
@@ -338,6 +345,33 @@ ASM;
         $lines[] = 'vblankwait2:';
         $lines[] = '  BIT $2002';
         $lines[] = '  BPL vblankwait2';
+        if ((int)($ctx['mapperInfo']['mapper'] ?? 0) === 2) {
+            // UOROM etapa 1: nao ha' CHR-ROM fisico, os 8KB de tile (sprites
+            // $0000 + background $1000) moram no PRG (ver chars_segments.php,
+            // label ChrUploadData) e precisam ser copiados pra CHR-RAM uma
+            // unica vez aqui no boot, antes de ligar o rendering. Reaproveita
+            // mc_ptr_lo/mc_ptr_hi (par ZP da colisao por metatile) - nesse
+            // ponto do boot load_screen ainda nao rodou, entao esse par
+            // esta livre, evita gastar mais 2 bytes de zeropage so' pra isso.
+            $lines[] = '  ; upload CHR-RAM (UOROM - 8KB, 1x no boot)';
+            $lines[] = '  LDA #$00';
+            $lines[] = '  STA $2006';
+            $lines[] = '  STA $2006';
+            $lines[] = '  LDA #<ChrUploadData';
+            $lines[] = '  STA mc_ptr_lo';
+            $lines[] = '  LDA #>ChrUploadData';
+            $lines[] = '  STA mc_ptr_hi';
+            $lines[] = '  LDX #$20        ; 32 * 256 = 8192 bytes';
+            $lines[] = '  LDY #0';
+            $lines[] = 'chrupload:';
+            $lines[] = '  LDA (mc_ptr_lo),Y';
+            $lines[] = '  STA $2007';
+            $lines[] = '  INY';
+            $lines[] = '  BNE chrupload';
+            $lines[] = '  INC mc_ptr_hi';
+            $lines[] = '  DEX';
+            $lines[] = '  BNE chrupload';
+        }
         $lines[] = '  ; paletas';
         $lines[] = '  BIT $2002';
         $lines[] = '  LDA #$3F';

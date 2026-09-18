@@ -329,6 +329,7 @@ return [
                 $L[] = "  STA time_ptr_lo+{$slot}";
                 $L[] = "  LDA #>Time_{$lbl}_ch{$i}";
                 $L[] = "  STA time_ptr_hi+{$slot}";
+                $L[] = '  LDA #0';
                 $L[] = "  STA time_run_left+{$slot}";
                 $L[] = "  LDX #{$slot}";
                 $L[] = '  JSR rle_decode_scale';
@@ -407,6 +408,7 @@ return [
                 $L[] = "  STA time_ptr_lo+{$slot}";
                 $L[] = "  LDA #>Time_{$r}";
                 $L[] = "  STA time_ptr_hi+{$slot}";
+                $L[] = '  LDA #0';
                 $L[] = "  STA time_run_left+{$slot}";
                 $L[] = "  LDX #{$slot}";
                 $L[] = '  JSR rle_decode_scale';

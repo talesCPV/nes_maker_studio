@@ -28,6 +28,18 @@ return [
         };
 
         $out = [];
+        if ((int)($mapperInfo['mapper'] ?? 0) === 2) {
+            // UOROM etapa 1: sem chip de CHR-ROM (CHR-RAM), entao os mesmos
+            // 8KB que no NROM iriam pro segmento CHARS (mapeado direto no
+            // chip) aqui viram dado comum dentro do PRG (.segment "RODATA",
+            // ja mapeado em UoromCfg.php) - o 'reset' em system.php copia
+            // esses bytes pra CHR-RAM via $2007 uma vez no boot.
+            $out[] = '.segment "RODATA"';
+            $out[] = 'ChrUploadData:';
+            $out = array_merge($out, $emitBlock($spriteBanks[0] ?? [], 'pg0 sprites empacotado pelo NGC (copiado pra CHR-RAM no boot)'));
+            $out = array_merge($out, $emitBlock($bgBanks[0] ?? [], '$1000 background (copiado pra CHR-RAM no boot)'));
+            return implode("\n", $out);
+        }
         if ((int)($mapperInfo['mapper'] ?? 0) === 3) {
             // Sempre emite os 4 (mesmo os que o projeto nao usa) - o linker
             // (CnromCfg.php) declara os 4 segmentos incondicionalmente, e o

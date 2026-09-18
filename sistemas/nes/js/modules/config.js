@@ -109,6 +109,7 @@ const CONFIG = (() => {
                 <select id="dashMapper" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px">
                   <option value="0">NROM (0) — CHR fixo (págs 0+1)</option>
                   <option value="3">CNROM (3) — CHR por fase (páginas)</option>
+                  <option value="2">UOROM (2) — CHR-RAM fixo, PRG 32KB (etapa 1)</option>
                 </select>
                 <div style="font-size:9px;color:#666;margin-top:4px;line-height:1.4">
                   Mirroring agora é definido <b style="color:#aaa">por fase</b>, conforme o tipo de scroll.
@@ -214,16 +215,17 @@ const CONFIG = (() => {
     if(mapperEl) mapperEl.addEventListener('change', e=>{
       if(!Project.data) return;
       let m = parseInt(e.target.value, 10);
-      if(m !== 0 && m !== 3) m = 0;
+      if(m !== 0 && m !== 2 && m !== 3) m = 0;
       Project.data.mapper = m;
       mapperEl.value = String(m);
-      // NROM: todas as fases usam págs 0+1; CNROM: mantém escolhas
-      if(m === 0 && Array.isArray(Project.data.phases)){
+      // NROM e UOROM (etapa 1): todas as fases usam págs 0+1 (CHR fixo,
+      // sem paginação); CNROM: mantém escolhas por fase
+      if(m !== 3 && Array.isArray(Project.data.phases)){
         Project.data.phases.forEach(ph=>{
           ph.sprite_page = 0;
           ph.bg_page = 1;
           ph.bank = 0;
-          ph.mapper = 0;
+          ph.mapper = m;
         });
       } else if(Array.isArray(Project.data.phases)){
         Project.data.phases.forEach(ph=>{ ph.mapper = 3; });
@@ -231,7 +233,10 @@ const CONFIG = (() => {
       renderPhases();
       if(selectedPhase !== null) selectPhase(selectedPhase);
       if(typeof Project.status === 'function'){
-        Project.status(m === 3 ? 'Mapper CNROM — selecione páginas CHR por fase' : 'Mapper NROM — CHR fixo (págs 0 e 1)');
+        const msg = m === 3 ? 'Mapper CNROM — selecione páginas CHR por fase'
+          : m === 2 ? 'Mapper UOROM — CHR-RAM fixo (págs 0 e 1), PRG 32KB nesta etapa'
+          : 'Mapper NROM — CHR fixo (págs 0 e 1)';
+        Project.status(msg);
       }
     });
     if(controlModeEl) controlModeEl.addEventListener('change', e=>{ if(Project.data) Project.data.controlMode=e.target.value; });
@@ -360,7 +365,7 @@ const CONFIG = (() => {
     if(descEl) descEl.value=Project.data.description||'';
     if(mapperEl){
       let m = Project.data.mapper|0;
-      if(m !== 0 && m !== 3) m = 0;
+      if(m !== 0 && m !== 2 && m !== 3) m = 0;
       Project.data.mapper = m;
       mapperEl.value = String(m);
     }
@@ -604,12 +609,12 @@ const CONFIG = (() => {
     if(!phase.gravity) phase.gravity = 'down';
     if(phase.gravityStrength === undefined) phase.gravityStrength = 4;
     if(!phase.mirroring) phase.mirroring = mirroringFromScroll(phase.scroll);
-    const projectMapper = (Project.data.mapper === 3) ? 3 : 0;
+    const projectMapper = (Project.data.mapper === 3) ? 3 : (Project.data.mapper === 2 ? 2 : 0);
     Project.data.mapper = projectMapper;
     phase.mapper = projectMapper;
 
-    if(projectMapper === 0){
-      // NROM: sempre páginas 0 (sprites) e 1 (backgrounds)
+    if(projectMapper === 0 || projectMapper === 2){
+      // NROM e UOROM (etapa 1): sempre páginas 0 (sprites) e 1 (backgrounds)
       phase.sprite_page = 0;
       phase.bg_page = 1;
       phase.bank = 0;
@@ -622,7 +627,13 @@ const CONFIG = (() => {
     const bgOpts = pageOptionsHtml(phase.bg_page, 'background');
 
     let mapperWarning = '';
-    if(projectMapper === 0){
+    if(projectMapper === 2){
+      mapperWarning = `
+        <div style="background:#1a1a1a;border:1px solid #333;border-radius:4px;padding:8px;font-size:10px;color:#888;line-height:1.4">
+          <b style="color:#aaa">UOROM</b> — CHR-RAM fixo: página <b>0 (Sprites)</b> + página <b>1 (Backgrounds)</b>, igual NROM.
+          PRG ainda 32KB nesta etapa (bankswitch de PRG fica pra próxima etapa).
+        </div>`;
+    } else if(projectMapper === 0){
       mapperWarning = `
         <div style="background:#1a1a1a;border:1px solid #333;border-radius:4px;padding:8px;font-size:10px;color:#888;line-height:1.4">
           <b style="color:#aaa">NROM</b> — CHR fixo: página <b>0 (Sprites)</b> + página <b>1 (Backgrounds)</b>.
@@ -733,7 +744,7 @@ const CONFIG = (() => {
 
     phase.name = document.getElementById('editPhaseName')?.value || phase.name;
     phase.description = document.getElementById('editPhaseDesc')?.value || '';
-    const mapper = (Project.data.mapper === 3) ? 3 : 0;
+    const mapper = (Project.data.mapper === 3) ? 3 : (Project.data.mapper === 2 ? 2 : 0);
     phase.mapper = mapper;
     if(mapper === 3){
       const newSp = parseInt(document.getElementById('editPhaseSpritePage')?.value ?? 0, 10) || 0;
