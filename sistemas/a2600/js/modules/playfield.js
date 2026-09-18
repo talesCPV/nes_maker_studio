@@ -292,12 +292,10 @@ const PLAYFIELD = (() => {
     return [0, gap, gap * 2];
   }
 
+  /** Sempre recalcula a partir de baseX + spacing (xs nunca é editado à mão). */
   function bandXs(band) {
     const copies = Math.max(1, Math.min(3, band.copies | 0) || 1);
     const base = Math.max(0, Math.min(152, band.baseX | 0));
-    if (Array.isArray(band.xs) && band.xs.length === copies) {
-      return band.xs.map((x) => Math.max(0, Math.min(152, x | 0)));
-    }
     return nusizOffsets(copies, band.spacing || 'close').map((o) => Math.min(152, base + o));
   }
 
@@ -2413,6 +2411,14 @@ const PLAYFIELD = (() => {
       band.xs = bandXs(band);
     };
 
+    const commitBandFields = () => {
+      const yEl = document.getElementById('pfBandY');
+      const hEl = document.getElementById('pfBandH');
+      if (yEl) band.y = Math.max(0, Math.min(height - 1, parseInt(yEl.value, 10) || 0));
+      if (hEl) band.height = Math.max(4, Math.min(48, parseInt(hEl.value, 10) || 16));
+      syncXs();
+    };
+
     document.getElementById('pfBandRole')?.addEventListener('change', (e) => {
       band.role = e.target.value;
       if (band.role === 'hero') {
@@ -2423,12 +2429,18 @@ const PLAYFIELD = (() => {
       renderBandsPanel();
       redraw();
     });
+    // input = enquanto digita/spina; change = ao sair do campo
     ['pfBandY', 'pfBandH', 'pfBandCopies', 'pfBandBaseX'].forEach((id) => {
-      document.getElementById(id)?.addEventListener('change', (e) => {
-        if (id === 'pfBandY') band.y = Math.max(0, Math.min(height - 1, parseInt(e.target.value, 10) || 0));
-        if (id === 'pfBandH') band.height = Math.max(4, Math.min(48, parseInt(e.target.value, 10) || 16));
-        if (id === 'pfBandCopies' || id === 'pfBandBaseX') syncXs();
+      const el = document.getElementById(id);
+      if (!el) return;
+      const onEdit = () => {
+        commitBandFields();
         if (typeof Project.status === 'function') Project.status('faixa alterada — salve');
+        // não re-renderiza o painel no input (evita perder foco); só no change
+      };
+      el.addEventListener('input', onEdit);
+      el.addEventListener('change', () => {
+        onEdit();
         renderBandsPanel();
         redraw();
       });
@@ -2660,6 +2672,24 @@ const PLAYFIELD = (() => {
 
   function flush() {
     if (pixels) persist();
+    // Garante que copies/spacing/baseX do formulário da faixa selecionada
+    // entram no Project.data antes do Build (mesmo sem blur no input).
+    if (selectedBandId) {
+      const band = findBandById(selectedBandId);
+      if (band) {
+        const cEl = document.getElementById('pfBandCopies');
+        const sEl = document.getElementById('pfBandSpacing');
+        const xEl = document.getElementById('pfBandBaseX');
+        const yEl = document.getElementById('pfBandY');
+        const hEl = document.getElementById('pfBandH');
+        if (yEl) band.y = Math.max(0, Math.min(height - 1, parseInt(yEl.value, 10) || 0));
+        if (hEl) band.height = Math.max(4, Math.min(48, parseInt(hEl.value, 10) || 16));
+        if (cEl) band.copies = band.role === 'hero' ? 1 : Math.max(1, Math.min(3, parseInt(cEl.value, 10) || 1));
+        if (sEl) band.spacing = sEl.value || 'close';
+        if (xEl) band.baseX = Math.max(0, Math.min(152, parseInt(xEl.value, 10) || 0));
+        band.xs = bandXs(band);
+      }
+    }
   }
 
   function init() {

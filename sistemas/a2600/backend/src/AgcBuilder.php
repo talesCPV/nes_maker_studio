@@ -4,7 +4,8 @@ declare(strict_types=1);
 /**
  * Gera ASM Atari 2600 (DASM) a partir do JSON do projeto AGC.
  *
- * v0.2: kernel + score bar + glifos + spawn P0/P1 (boot) + gráfico do sprite.
+ * v0.3: kernel + score bar + glifos + spawn P0/P1 (boot) + gráfico do sprite
+ *       + faixas inimigos (bands) estilo Megamania: GRP1 por fileira + NUSIZ1.
  */
 final class AgcBuilder
 {
@@ -123,15 +124,80 @@ final class AgcBuilder
             }
         }
 
-        // X em color clocks (0–159). PositionPlayers: RESP0 + HMP0 + HMOVE (1 clock de precisão).
-        $d0 = max(0, min(160, (int)$p0x));
-        $d1 = max(0, min(160, (int)$p1x));
+        // --- Faixas (bands) do estilo vertical_shooter / Megamania ---
+        // Cada enemy_row pinta seu próprio sprite em GRP1 na faixa Y.
+        // Herói (role=hero) sobrescreve P0. NUSIZ1 vem da 1ª fileira (MVP: mesmo NUSIZ em todas).
+        $nusiz0 = 0;
+        $nusiz1 = 0;
+        $nusizCopies = 0;
+        $nusizSpacing = '-';
+        $bandMeta = self::resolveBands($project, $sprites, $playLines);
+        if ($bandMeta['hero'] !== null) {
+            $hb = $bandMeta['hero'];
+            $p0x = $hb['baseX'];
+            $p0y = $hb['y'];
+            $h0 = $hb['drawH'];
+            $col0 = $hb['color'];
+            $gfx0 = $hb['gfx'];
+            // limpa e repinta P0 só na faixa do herói
+            $grp0Line = array_fill(0, $playLines, 0);
+            for ($i = 0; $i < $h0; $i++) {
+                $y = $p0y + $i;
+                if ($y >= 0 && $y < $playLines) {
+                    $grp0Line[$y] = $gfx0[$i] & 0xff;
+                }
+            }
+        } elseif (count($bandMeta['enemies']) > 0) {
+            // Sem faixa herói: não deixar P0 “fantasma” com sprite de inimigo
+            $grp0Line = array_fill(0, $playLines, 0);
+        }
+        if (count($bandMeta['enemies']) > 0) {
+            $grp1Line = array_fill(0, $playLines, 0);
+            $first = $bandMeta['enemies'][0];
+            $p1x = $first['baseX'];
+            $p1y = $first['y'];
+            $h1 = $first['drawH'];
+            $col1 = $first['color'];
+            // NUSIZ é global no TIA (um valor por frame). Usa a 1ª fileira (topo)
+            // como referência: copies + spacing do seletor dessa faixa.
+            $nusizCopies = max(1, min(3, (int)($first['copies'] ?? 3)));
+            $nusizSpacing = (string)($first['spacing'] ?? 'close');
+            $nusiz1 = self::nusizValue($nusizCopies, $nusizSpacing);
+            $gfx1 = $first['gfx'];
+            foreach ($bandMeta['enemies'] as $eb) {
+                $eh = $eb['drawH'];
+                $egfx = $eb['gfx'];
+                $ey = $eb['y'];
+                for ($i = 0; $i < $eh; $i++) {
+                    $y = $ey + $i;
+                    if ($y >= 0 && $y < $playLines) {
+                        $grp1Line[$y] = $egfx[$i] & 0xff;
+                    }
+                }
+            }
+            // Formação NUSIZ precisa caber na tela
+            $span = self::nusizSpanPixels($nusizCopies, $nusizSpacing);
+            if ($p1x + $span > 152) {
+                $p1x = max(0, 152 - $span);
+            }
+        }
+
+        // X em color clocks (1–159). baseX do editor → SetHX.
+        // Com NUSIZ 3 cópias, X mínimo ~8 evita a 1ª cópia cair no HBLANK.
+        $minX = ($nusiz1 === 3 || $nusiz1 === 6) ? 8 : 1; // 3 cópias close/medium
+        $d0 = max($minX, min(160, (int)$p0x));
+        $d1 = max($minX, min(160, (int)$p1x));
+        $enemyBandCount = count($bandMeta['enemies']);
 
         $asm = [];
         $asm[] = '; ============================================================';
         $asm[] = '; AGC generated — ' . $name;
         $asm[] = '; TV=' . $tv . ' ROM=' . $romSize . ' scoreBar=' . ($scoreEnabled ? 'on' : 'off');
         $asm[] = '; P0 spawn=' . ($p0 ? 'yes' : 'default') . ' P1 spawn=' . ($p1 ? 'yes' : 'default');
+        $asm[] = '; Enemy bands=' . $enemyBandCount
+            . ' copies=' . (isset($nusizCopies) ? $nusizCopies : 0)
+            . ' spacing=' . (isset($nusizSpacing) ? $nusizSpacing : '-')
+            . ' NUSIZ1=$' . sprintf('%02X', $nusiz1);
         $asm[] = '; Assembler: DASM (-f3 raw binary)';
         $asm[] = '; ============================================================';
         $asm[] = '    processor 6502';
@@ -221,8 +287,9 @@ final class AgcBuilder
         $asm[] = '    sta WSYNC';
         $asm[] = '    sta VBLANK              ; A=0 → fim do VBLANK, começa imagem';
         $asm[] = '';
-        $asm[] = '    lda #$0E';
+        $asm[] = '    lda #$' . sprintf('%02X', $col0 & 0xfe);
         $asm[] = '    sta COLUP0';
+        $asm[] = '    lda #$' . sprintf('%02X', $col1 & 0xfe);
         $asm[] = '    sta COLUP1';
         $asm[] = '    lda #0';
         $asm[] = '    sta GRP0';
@@ -230,8 +297,10 @@ final class AgcBuilder
         $asm[] = '    sta PF0';
         $asm[] = '    sta PF1';
         $asm[] = '    sta PF2';
+        $asm[] = '    lda #' . ($nusiz0 & 7);
         $asm[] = '    sta NUSIZ0';
-        $asm[] = '    sta NUSIZ1';
+        $asm[] = '    lda #' . ($nusiz1 & 7);
+        $asm[] = '    sta NUSIZ1              ; fileiras inimigos (NUSIZ da 1ª faixa)';
         $asm[] = '';
         $asm[] = '    ; ===== HUD: placar + playfield (tela) + logo =====';
         $asm[] = '    ; playLines=' . $playLines . ' scoreLines=' . $scoreLines . ' logoLines=' . $logoLines
@@ -239,6 +308,17 @@ final class AgcBuilder
         $asm[] = '';
         if ($scorePos === 'top') {
             $asm[] = '    jsr DrawScoreBand';
+            // Score reposiciona P0/P1 para os dígitos — precisa recolocar os sprites do jogo
+            $asm[] = '    jsr PositionPlayers';
+            // Score também altera NUSIZ/cores — restaura para as fileiras
+            $asm[] = '    lda #' . ($nusiz0 & 7);
+            $asm[] = '    sta NUSIZ0';
+            $asm[] = '    lda #' . ($nusiz1 & 7);
+            $asm[] = '    sta NUSIZ1';
+            $asm[] = '    lda #$' . sprintf('%02X', $col0 & 0xfe);
+            $asm[] = '    sta COLUP0';
+            $asm[] = '    lda #$' . sprintf('%02X', $col1 & 0xfe);
+            $asm[] = '    sta COLUP1';
         }
         // CTRLPF bit0 = reflect
         $asm[] = '    lda #' . $ctrlpf;
@@ -293,8 +373,7 @@ final class AgcBuilder
         $asm[] = '    rts';
         $asm[] = '';
 
-        $asm[] = '; Posiciona P0/P1 com precisão de 1 color clock (RESP + HMxx + HMOVE)';
-        $asm[] = '; Rotina clássica: divide X por 15, resto vira HMP fine offset.';
+        $asm[] = '; Posiciona P0/P1 (RESP + HMxx + HMOVE) — fine-adjust table padrão 2600';
         $asm[] = 'PositionPlayers:';
         $asm[] = '    lda P0X';
         $asm[] = '    ldx #0                  ; objeto 0 = P0';
@@ -305,24 +384,26 @@ final class AgcBuilder
         $asm[] = '    sta WSYNC';
         $asm[] = '    sta HMOVE               ; aplica HMP0/HMP1';
         $asm[] = '    sta WSYNC';
-        $asm[] = '    sta HMCLR               ; evita comb no playfield';
+        $asm[] = '    sta HMCLR';
         $asm[] = '    rts';
         $asm[] = '';
-        $asm[] = '; A = X (0-159), X = índice do objeto (0=P0,1=P1)';
+        $asm[] = '; A = X desejado (1-160), X reg = índice (0=P0, 1=P1)';
         $asm[] = 'SetHX:';
         $asm[] = '    sta WSYNC';
         $asm[] = '    sec';
         $asm[] = 'SetHXDiv:';
         $asm[] = '    sbc #15';
         $asm[] = '    bcs SetHXDiv';
-        $asm[] = '    eor #7';
-        $asm[] = '    asl';
-        $asm[] = '    asl';
-        $asm[] = '    asl';
-        $asm[] = '    asl';
-        $asm[] = '    sta HMP0,x              ; HMP0 ou HMP1';
-        $asm[] = '    sta RESP0,x             ; RESP0 ou RESP1';
+        $asm[] = '    tay                      ; Y = resto (−15..−1 = $F1..$FF)';
+        $asm[] = '    lda FineAdj-$F1,y';
+        $asm[] = '    sta HMP0,x';
+        $asm[] = '    sta RESP0,x';
         $asm[] = '    rts';
+        $asm[] = '';
+        $asm[] = '; HMxx para resto $F1..$FF (tabela clássica SpiceWare)';
+        $asm[] = 'FineAdj:';
+        $asm[] = '    .byte $70,$60,$50,$40,$30,$20,$10,$00';
+        $asm[] = '    .byte $F0,$E0,$D0,$C0,$B0,$A0,$90';
         $asm[] = '';
         if ($scoreEnabled) {
             $asm[] = self::scoreBandRoutine($digits, $scoreBg, $scoreLines, $scoreDelay, $scorePlayers, $labelPlayers);
@@ -461,7 +542,7 @@ final class AgcBuilder
             'playLines' => $playLines,
             'spawns' => ['p0' => $p0, 'p1' => $p1],
             'meta' => [
-                'generator' => 'AgcBuilder/0.10.0-hud',
+                'generator' => 'AgcBuilder/0.11.0-bands',
                 'org' => sprintf('$%04X', $org),
             ],
         ];
@@ -592,6 +673,121 @@ final class AgcBuilder
             $rows[$y] = $byte;
         }
         return $rows;
+    }
+
+    /**
+     * Mapeia copies (1–3) + spacing → valor NUSIZ do TIA (bits 0–2).
+     * Tabela oficial TIA:
+     *   0 = 1 cópia
+     *   1 = 2 cópias close
+     *   2 = 2 cópias medium
+     *   3 = 3 cópias close
+     *   4 = 2 cópias wide
+     *   5 = double size
+     *   6 = 3 cópias medium
+     *   7 = quad size
+     */
+    private static function nusizValue(int $copies, string $spacing): int
+    {
+        $n = max(1, min(3, $copies));
+        $sp = strtolower($spacing);
+        if ($n === 1) {
+            return 0;
+        }
+        if ($sp === 'medium') {
+            return $n === 2 ? 2 : 6; // 2 med | 3 med
+        }
+        if ($sp === 'wide') {
+            return $n === 2 ? 4 : 6; // wide só tem 2; 3 → medium
+        }
+        // close (padrão)
+        return $n === 2 ? 1 : 3; // 2 close | 3 close
+    }
+
+    /**
+     * Largura aproximada da formação NUSIZ em color clocks (para clamp de X).
+     * close ≈ 16 px entre cópias; medium ≈ 32; wide ≈ 64.
+     */
+    private static function nusizSpanPixels(int $copies, string $spacing): int
+    {
+        $n = max(1, min(3, $copies));
+        if ($n <= 1) {
+            return 8;
+        }
+        $sp = strtolower($spacing);
+        $gap = ($sp === 'wide') ? 64 : (($sp === 'medium') ? 32 : 16);
+        return 8 + ($n - 1) * $gap;
+    }
+
+    /**
+     * Lê Project.data.bands e monta faixas prontas para pintar no GRP.
+     * @param array<string,mixed> $project
+     * @param array<int,mixed> $sprites
+     * @return array{hero: ?array, enemies: list<array>}
+     */
+    private static function resolveBands(array $project, array $sprites, int $playLines): array
+    {
+        $out = ['hero' => null, 'enemies' => []];
+        $bands = is_array($project['bands'] ?? null) ? $project['bands'] : [];
+        // Se não há bands, tenta profileOptions.enemyRows só como metadado (sem posições)
+        if (count($bands) === 0) {
+            return $out;
+        }
+
+        foreach ($bands as $b) {
+            if (!is_array($b)) {
+                continue;
+            }
+            $role = (string)($b['role'] ?? 'enemy_row');
+            $y = max(0, min($playLines - 1, (int)($b['y'] ?? 0)));
+            $bandH = max(1, min(48, (int)($b['height'] ?? 16)));
+            $baseX = max(0, min(152, (int)($b['baseX'] ?? 40)));
+            // Se o editor já calculou xs[], a 1ª cópia visual é xs[0]
+            if (isset($b['xs']) && is_array($b['xs']) && count($b['xs']) > 0) {
+                $baseX = max(0, min(152, (int)$b['xs'][0]));
+            }
+            $copies = max(1, min(3, (int)($b['copies'] ?? 1)));
+            $spacing = (string)($b['spacing'] ?? 'close');
+            $spriteId = (string)($b['spriteId'] ?? '');
+            $spr = self::findSprite($sprites, $spriteId);
+            if (!$spr) {
+                // fallback: primeiro sprite do projeto ou quadrado
+                $spr = is_array($sprites[0] ?? null) ? $sprites[0] : null;
+            }
+            $sprH = $spr ? max(1, min(32, (int)($spr['height'] ?? 8))) : 8;
+            $drawH = min($bandH, $sprH);
+            $color = $spr ? ((int)($spr['color'] ?? 0x6a) & 0xfe) : 0x6a;
+            $gfx = self::spriteRows($spr, $drawH);
+            $nusiz = self::nusizValue($copies, $spacing);
+
+            $entry = [
+                'id' => (string)($b['id'] ?? ''),
+                'role' => $role,
+                'y' => $y,
+                'bandH' => $bandH,
+                'drawH' => $drawH,
+                'baseX' => $baseX,
+                'copies' => $copies,
+                'spacing' => $spacing,
+                'nusiz' => $nusiz,
+                'color' => $color,
+                'gfx' => $gfx,
+                'spriteId' => $spriteId,
+            ];
+
+            if ($role === 'hero') {
+                // só uma faixa herói; a última ganha
+                $out['hero'] = $entry;
+            } else {
+                $out['enemies'][] = $entry;
+            }
+        }
+
+        usort($out['enemies'], static function ($a, $b) {
+            return ($a['y'] ?? 0) <=> ($b['y'] ?? 0);
+        });
+
+        return $out;
     }
 
     private static function registerEquates(): string
