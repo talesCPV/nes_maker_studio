@@ -66,11 +66,11 @@
             "color": 150,
             "nusiz": 0,
             "animSpeed": 4,
-            "data": "AAAAAAAAAAAAAAAAAAAAAAEAAAAAAAEAAAEAAQABAAAAAAEAAQAAAAAAAAEAAAAAAAABAAEAAAAAAQAAAAEAAAEAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBAAEBAAABAAABAAABAAAAAQAAAQAAAQAAAQAAAQAAAQEAAQEAAAAAAAAAAAAAAAEBAQEBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
             "lineColors": "SkpKShZKlkpKSkpKSkpKSg==",
             "frames": [
                 {
-                    "data": "AAAAAAAAAAAAAAAAAAAAAAEAAAAAAAEAAAEAAQABAAAAAAEAAQAAAAAAAAEAAAAAAAABAAEAAAAAAQAAAAEAAAEAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                    "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBAAEBAAABAAABAAABAAAAAQAAAQAAAQAAAQAAAQAAAQEAAQEAAAAAAAAAAAAAAAEBAQEBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
                     "lineColors": "SkpKShZKlkpKSkpKSkpKSg==",
                     "duration": 4
                 }
@@ -97,6 +97,22 @@
     "sounds": [],
     "variables": [
         {
+            "id": "native_rowX",
+            "name": "rowX",
+            "type": "byte",
+            "note": "X da fileira de inimigos (scroll). Nativa Megamania",
+            "value": 20,
+            "native": true
+        },
+        {
+            "id": "native_enemyAlive",
+            "name": "enemyAlive",
+            "type": "byte",
+            "note": "Máscara vivos fileira (bits 0–5, 0–63). 63=todos. Nativa Megamania",
+            "value": 63,
+            "native": true
+        },
+        {
             "id": "native_scoreP0",
             "name": "scoreP0",
             "type": "byte",
@@ -115,32 +131,20 @@
             "y": 12,
             "height": 22,
             "spriteId": "spr_mu6xog86_46g",
-            "copies": 3,
-            "spacing": "close",
-            "wrap": true,
-            "baseX": 40,
-            "xs": [
-                40,
-                56,
-                72
-            ]
-        },
-        {
-            "id": "band_mu6xr7km_9u",
-            "screenId": "screen_main",
-            "role": "enemy_row",
-            "y": 35,
-            "height": 20,
-            "spriteId": "spr_mu6xohzh_349",
-            "copies": 3,
-            "spacing": "close",
+            "copies": 6,
+            "spacing": "medium",
             "wrap": true,
             "baseX": 24,
             "xs": [
                 24,
                 40,
-                56
-            ]
+                56,
+                72,
+                88,
+                104
+            ],
+            "aliveMask": 3,
+            "moveDelay": 20
         }
     ],
     "scoreBar": {
@@ -238,5 +242,5 @@
     "programMeta": {
         "notes": ""
     },
-    "updated": 1789738828348
+    "updated": 1789758326896
 }

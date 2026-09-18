@@ -284,19 +284,38 @@ const PLAYFIELD = (() => {
     return 'band_' + Date.now().toString(36) + '_' + Math.floor(Math.random() * 1e4).toString(36);
   }
 
+  /**
+   * Offsets relativos das instâncias (0 = baseX).
+   * 1–3: NUSIZ clássico num único player.
+   * 4–6: P0×3 + P1×3 intercalados (estilo Space Invaders / Megamania).
+   *   medium gap=32 → posições a cada 16; close gap=16 → a cada 8.
+   */
   function nusizOffsets(copies, spacing) {
-    const n = Math.max(1, Math.min(3, copies | 0));
-    if (n === 1) return [0];
+    const n = Math.max(1, Math.min(6, copies | 0));
     const gap = spacing === 'wide' ? 64 : spacing === 'medium' ? 32 : 16;
-    if (n === 2) return [0, gap];
-    return [0, gap, gap * 2];
+    if (n <= 3) {
+      if (n === 1) return [0];
+      if (n === 2) return [0, gap];
+      return [0, gap, gap * 2];
+    }
+    // 4–6: intercalado P0/P1 (passo = gap/2)
+    const step = gap / 2;
+    const out = [];
+    for (let i = 0; i < n; i++) out.push(i * step);
+    return out;
   }
 
   /** Sempre recalcula a partir de baseX + spacing (xs nunca é editado à mão). */
   function bandXs(band) {
-    const copies = Math.max(1, Math.min(3, band.copies | 0) || 1);
+    const copies = Math.max(1, Math.min(6, band.copies | 0) || 1);
     const base = Math.max(0, Math.min(152, band.baseX | 0));
     return nusizOffsets(copies, band.spacing || 'close').map((o) => Math.min(152, base + o));
+  }
+
+  /** Máscara de vivos (bit0 = 1ª instância à esquerda). Default todos vivos. */
+  function defaultAliveMask(copies) {
+    const n = Math.max(1, Math.min(6, copies | 0));
+    return (1 << n) - 1;
   }
 
   function spriteOptionsHtml(selectedId) {
@@ -1094,7 +1113,7 @@ const PLAYFIELD = (() => {
         typeof CONFIG !== 'undefined' && CONFIG.getProfileOptions
           ? CONFIG.getProfileOptions()
           : {};
-      const copies = Math.max(1, Math.min(3, parseInt(opts.enemyCopies, 10) || 3));
+      const copies = Math.max(1, Math.min(6, parseInt(opts.enemyCopies, 10) || 6));
       const band = {
         id: uidBand(),
         screenId: currentScreenId(),
@@ -1105,8 +1124,9 @@ const PLAYFIELD = (() => {
         copies,
         spacing: 'close',
         wrap: true,
-        baseX: 40,
+        baseX: 24,
         xs: [],
+        aliveMask: defaultAliveMask(copies),
       };
       band.xs = bandXs(band);
       d.bands.push(band);
@@ -2359,12 +2379,13 @@ const PLAYFIELD = (() => {
     }
     detail.style.display = 'block';
     const xs = bandXs(band);
-    const copies = Math.max(1, Math.min(3, band.copies | 0) || 1);
+    const copies = Math.max(1, Math.min(6, band.copies | 0) || 1);
+    if (band.aliveMask == null) band.aliveMask = defaultAliveMask(copies);
     detail.innerHTML = `
       <div class="pf-band-fields">
         <label>Papel
           <select id="pfBandRole">
-            <option value="enemy_row" ${band.role !== 'hero' ? 'selected' : ''}>Inimigos (P1 + NUSIZ)</option>
+            <option value="enemy_row" ${band.role !== 'hero' ? 'selected' : ''}>Inimigos (fileira)</option>
             <option value="hero" ${band.role === 'hero' ? 'selected' : ''}>Herói (P0)</option>
           </select>
         </label>
@@ -2377,8 +2398,8 @@ const PLAYFIELD = (() => {
         <label>Sprite
           <select id="pfBandSprite">${spriteOptionsHtml(band.spriteId || '')}</select>
         </label>
-        <label>Instâncias (NUSIZ 1–3)
-          <input type="number" id="pfBandCopies" min="1" max="3" value="${copies}" ${
+        <label>Instâncias (1–6)
+          <input type="number" id="pfBandCopies" min="1" max="6" value="${copies}" ${
             band.role === 'hero' ? 'disabled title="Herói = 1"' : ''
           } />
         </label>
@@ -2389,26 +2410,42 @@ const PLAYFIELD = (() => {
             <option value="wide" ${band.spacing === 'wide' ? 'selected' : ''}>Wide</option>
           </select>
         </label>
-        <label>X base (color clocks)
+        <label>X base / scroll (color clocks)
           <input type="number" id="pfBandBaseX" min="0" max="152" value="${band.baseX | 0}" />
         </label>
-        <label class="pf-check" style="flex-direction:row;align-items:center;gap:8px;margin-top:4px">
-          <input type="checkbox" id="pfBandWrap" ${band.wrap !== false ? 'checked' : ''} ${
-            band.role === 'hero' ? 'disabled title="Só inimigos"' : ''
-          }/>
-          Wrap (volta na lateral)
+        <label>Velocidade H (quadros/passo)
+          <input type="number" id="pfBandMoveDelay" min="0" max="255" value="${
+            band.moveDelay != null ? band.moveDelay | 0 : 0
+          }" ${band.role === 'hero' ? 'disabled' : ''} title="0=parado · 1=1px/frame · N=1px a cada N frames" />
         </label>
-        <div class="pf-note">Xs calculados: ${xs.join(', ')}</div>
+        <label>Modo horizontal
+          <select id="pfBandMoveMode" ${band.role === 'hero' ? 'disabled' : ''}>
+            <option value="wrap" ${(band.moveMode || (band.wrap !== false ? 'wrap' : 'zigzag')) === 'wrap' ? 'selected' : ''}>Wrap (some de um lado, nasce do outro)</option>
+            <option value="zigzag" ${(band.moveMode || (band.wrap !== false ? 'wrap' : 'zigzag')) === 'zigzag' ? 'selected' : ''}>Zigue-zague (bate e volta)</option>
+          </select>
+        </label>
+        <div class="pf-note">Xs dos 6 slots (derivados de baseX + NUSIZ): ${xs.join(', ')}</div>
+        <div class="pf-note">Âncoras TIA: P0=baseX · P1=baseX+passo · cópias a cada 2×passo. Só a fileira inteira se move (RowX).</div>
+        <div class="pf-note">Vivos: <b>enemyAlive</b> em Programação (0–63). Morte individual fina = próximo passo.</div>
         <button type="button" class="pf-btn danger" id="pfBandDel">Excluir faixa</button>
       </div>`;
 
     const syncXs = () => {
-      const c = band.role === 'hero' ? 1 : Math.max(1, Math.min(3, parseInt(document.getElementById('pfBandCopies').value, 10) || 1));
+      const c = band.role === 'hero' ? 1 : Math.max(1, Math.min(6, parseInt(document.getElementById('pfBandCopies').value, 10) || 1));
       band.copies = c;
       band.spacing = document.getElementById('pfBandSpacing').value || 'close';
       band.baseX = Math.max(0, Math.min(152, parseInt(document.getElementById('pfBandBaseX').value, 10) || 0));
-      band.wrap = band.role === 'hero' ? false : !!document.getElementById('pfBandWrap')?.checked;
+      const mdEl = document.getElementById('pfBandMoveDelay');
+      if (mdEl) band.moveDelay = Math.max(0, Math.min(255, parseInt(mdEl.value, 10) || 0));
+      const mmEl = document.getElementById('pfBandMoveMode');
+      if (mmEl) {
+        band.moveMode = mmEl.value === 'zigzag' ? 'zigzag' : 'wrap';
+        band.wrap = band.moveMode === 'wrap';
+      }
       band.xs = bandXs(band);
+      const full = defaultAliveMask(c);
+      band.aliveMask = (band.aliveMask != null ? band.aliveMask : full) & full;
+      if ((band.aliveMask & full) === 0) band.aliveMask = full;
     };
 
     const commitBandFields = () => {
@@ -2430,7 +2467,7 @@ const PLAYFIELD = (() => {
       redraw();
     });
     // input = enquanto digita/spina; change = ao sair do campo
-    ['pfBandY', 'pfBandH', 'pfBandCopies', 'pfBandBaseX'].forEach((id) => {
+    ['pfBandY', 'pfBandH', 'pfBandCopies', 'pfBandBaseX', 'pfBandMoveDelay'].forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
       const onEdit = () => {
@@ -2451,8 +2488,9 @@ const PLAYFIELD = (() => {
       renderBandsPanel();
       redraw();
     });
-    document.getElementById('pfBandWrap')?.addEventListener('change', (e) => {
-      band.wrap = !!e.target.checked;
+    document.getElementById('pfBandMoveMode')?.addEventListener('change', (e) => {
+      band.moveMode = e.target.value === 'zigzag' ? 'zigzag' : 'wrap';
+      band.wrap = band.moveMode === 'wrap';
       if (typeof Project.status === 'function') Project.status('faixa alterada — salve');
       renderBandsPanel();
       redraw();
@@ -2658,7 +2696,11 @@ const PLAYFIELD = (() => {
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
       ctx.fillText(
-        (b.role === 'hero' ? 'P0 ' : 'P1×' + (b.copies | 1) + ' ') +
+        (b.role === 'hero'
+          ? 'P0 '
+          : (b.copies | 0) >= 4
+            ? 'P0+P1×' + (b.copies | 0) + ' '
+            : 'P1×' + (b.copies | 1) + ' ') +
           'Y' +
           (b.y | 0) +
           ' h' +
@@ -2684,10 +2726,21 @@ const PLAYFIELD = (() => {
         const hEl = document.getElementById('pfBandH');
         if (yEl) band.y = Math.max(0, Math.min(height - 1, parseInt(yEl.value, 10) || 0));
         if (hEl) band.height = Math.max(4, Math.min(48, parseInt(hEl.value, 10) || 16));
-        if (cEl) band.copies = band.role === 'hero' ? 1 : Math.max(1, Math.min(3, parseInt(cEl.value, 10) || 1));
+        if (cEl) band.copies = band.role === 'hero' ? 1 : Math.max(1, Math.min(6, parseInt(cEl.value, 10) || 1));
         if (sEl) band.spacing = sEl.value || 'close';
         if (xEl) band.baseX = Math.max(0, Math.min(152, parseInt(xEl.value, 10) || 0));
+        const mdEl = document.getElementById('pfBandMoveDelay');
+        if (mdEl) band.moveDelay = Math.max(0, Math.min(255, parseInt(mdEl.value, 10) || 0));
+        const mmEl = document.getElementById('pfBandMoveMode');
+        if (mmEl) {
+          band.moveMode = mmEl.value === 'zigzag' ? 'zigzag' : 'wrap';
+          band.wrap = band.moveMode === 'wrap';
+        }
         band.xs = bandXs(band);
+        if (band.role !== 'hero') {
+          const full = defaultAliveMask(band.copies);
+          band.aliveMask = (band.aliveMask != null ? band.aliveMask : full) & full;
+        }
       }
     }
   }

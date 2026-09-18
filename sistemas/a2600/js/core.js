@@ -124,6 +124,29 @@ const Project = {
       });
     }
 
+    // --- vertical shooter / Megamania ---
+    if (style === 'vertical_shooter') {
+      // Máscara de vivos da 1ª fileira (bits 0–5). Editável em Programação (0–63).
+      let aliveInit = 63;
+      const bands = Array.isArray(d.bands) ? d.bands : [];
+      const firstEnemy = bands.find((b) => b && b.role !== 'hero');
+      if (firstEnemy && firstEnemy.aliveMask != null) {
+        aliveInit = firstEnemy.aliveMask & 0x3f;
+      }
+      want.push({
+        name: 'enemyAlive',
+        type: 'byte',
+        note: 'Máscara vivos fileira (bits 0–5, 0–63). 63=todos. Nativa Megamania',
+        value: aliveInit,
+      });
+      want.push({
+        name: 'rowX',
+        type: 'byte',
+        note: 'X da fileira de inimigos (scroll). Nativa Megamania',
+        value: firstEnemy && firstEnemy.baseX != null ? firstEnemy.baseX & 0xff : 24,
+      });
+    }
+
     // --- boxing ---
     if (style === 'boxing') {
       const em = opts.energyMax != null ? opts.energyMax | 0 : 32;
@@ -167,6 +190,8 @@ const Project = {
       'energyMax',
       'rounds',
       'timer',
+      'enemyAlive',
+      'rowX',
     ]);
     // ensure each wanted native exists
     for (const w of want) {

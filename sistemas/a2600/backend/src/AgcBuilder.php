@@ -148,43 +148,115 @@ final class AgcBuilder
                 }
             }
         } elseif (count($bandMeta['enemies']) > 0) {
-            // Sem faixa herói: não deixar P0 “fantasma” com sprite de inimigo
+            // Sem faixa herói: limpa P0 (pode ser reusado pelos inimigos 4–6)
             $grp0Line = array_fill(0, $playLines, 0);
         }
-        if (count($bandMeta['enemies']) > 0) {
-            $grp1Line = array_fill(0, $playLines, 0);
-            $first = $bandMeta['enemies'][0];
-            $p1x = $first['baseX'];
-            $p1y = $first['y'];
-            $h1 = $first['drawH'];
-            $col1 = $first['color'];
-            // NUSIZ é global no TIA (um valor por frame). Usa a 1ª fileira (topo)
-            // como referência: copies + spacing do seletor dessa faixa.
-            $nusizCopies = max(1, min(3, (int)($first['copies'] ?? 3)));
-            $nusizSpacing = (string)($first['spacing'] ?? 'close');
-            $nusiz1 = self::nusizValue($nusizCopies, $nusizSpacing);
-            $gfx1 = $first['gfx'];
-            foreach ($bandMeta['enemies'] as $eb) {
-                $eh = $eb['drawH'];
-                $egfx = $eb['gfx'];
-                $ey = $eb['y'];
-                for ($i = 0; $i < $eh; $i++) {
-                    $y = $ey + $i;
-                    if ($y >= 0 && $y < $playLines) {
-                        $grp1Line[$y] = $egfx[$i] & 0xff;
-                    }
-                }
+
+        // --- Fileiras de inimigos (estilo Megamania / Space Invaders) ---
+        // 1–3 cópias: só P1 + NUSIZ
+        // 4–6 cópias: P0×3 + P1×3 intercalados (mesmo frame, sem flicker)
+        // Por enquanto: 1ª fileira apenas (multi-banda depois)
+        $grp1Bands = [];
+        $bandParams = [];
+        $flickerMode = false; // abandonado — caminho Megamania
+        $dualPlayerRow = false; // P0+P1 na mesma fileira
+        $rowAliveMask = 0x3f;
+        $rowXInit = 24;
+        $halfGap = 8;
+        $rowMoveDelay = 0; // 0=parado; N=1px a cada N frames
+        $rowWrap = true;
+        $rowZigzag = false;
+        $rowSpan = 40;
+        $varEnemyAlive = null;
+        $varRowX = null;
+        foreach ((is_array($project['variables'] ?? null) ? $project['variables'] : []) as $vv) {
+            if (!is_array($vv)) {
+                continue;
             }
-            // Formação NUSIZ precisa caber na tela
-            $span = self::nusizSpanPixels($nusizCopies, $nusizSpacing);
-            if ($p1x + $span > 152) {
-                $p1x = max(0, 152 - $span);
+            $vn = (string)($vv['name'] ?? '');
+            $val = max(0, min(255, (int)($vv['value'] ?? 0)));
+            if ($vn === 'enemyAlive') {
+                $varEnemyAlive = $val & 0x3f;
+            }
+            if ($vn === 'rowX') {
+                $varRowX = max(1, min(160, $val));
             }
         }
 
-        // X em color clocks (1–159). baseX do editor → SetHX.
-        // Com NUSIZ 3 cópias, X mínimo ~8 evita a 1ª cópia cair no HBLANK.
-        $minX = ($nusiz1 === 3 || $nusiz1 === 6) ? 8 : 1; // 3 cópias close/medium
+        if (count($bandMeta['enemies']) > 0) {
+            // Só a 1ª fileira (topo) neste passo
+            $first = $bandMeta['enemies'][0];
+            $nusizCopies = max(1, min(6, (int)($first['copies'] ?? 3)));
+            $nusizSpacing = (string)($first['spacing'] ?? 'close');
+            $gap = ($nusizSpacing === 'wide') ? 64 : (($nusizSpacing === 'medium') ? 32 : 16);
+            $halfGap = (int)($gap / 2);
+            $dualPlayerRow = ($nusizCopies >= 4);
+            $rowMoveDelay = max(0, min(255, (int)($first['moveDelay'] ?? 0)));
+            $mm = strtolower((string)($first['moveMode'] ?? ''));
+            if ($mm !== 'wrap' && $mm !== 'zigzag') {
+                $mm = !empty($first['wrap']) || !array_key_exists('wrap', $first) ? 'wrap' : 'zigzag';
+            }
+            $rowWrap = ($mm === 'wrap');
+            $rowZigzag = ($mm === 'zigzag');
+
+            // NUSIZ de cada player = min(3, cópias) no modo dual, ou cópias no single
+            $perPlayerCopies = $dualPlayerRow ? 3 : min(3, $nusizCopies);
+            $nusiz1 = self::nusizValue($perPlayerCopies, $nusizSpacing);
+            $nusiz0 = $dualPlayerRow ? $nusiz1 : 0;
+
+            $p1y = $first['y'];
+            $h1 = $first['drawH'];
+            $col1 = $first['color'];
+            $col0 = $dualPlayerRow ? $col1 : $col0; // mesma cor na fileira dual
+            $gfx1 = $first['gfx'];
+            $rowXInit = $varRowX !== null ? $varRowX : max(1, min(160, (int)$first['baseX']));
+            $rowAliveMask = $varEnemyAlive !== null
+                ? $varEnemyAlive
+                : max(0, min(0x3f, (int)($first['aliveMask'] ?? ((1 << $nusizCopies) - 1))));
+
+            // Span da formação completa
+            if ($dualPlayerRow) {
+                $span = 8 + ($nusizCopies - 1) * $halfGap;
+            } else {
+                $span = self::nusizSpanPixels($perPlayerCopies, $nusizSpacing);
+            }
+            $rowSpan = $span;
+            if ($rowXInit + $span > 152) {
+                $rowXInit = max(1, 152 - $span);
+            }
+            $p1x = $dualPlayerRow ? ($rowXInit + $halfGap) : $rowXInit;
+            $p0x = $dualPlayerRow ? $rowXInit : $p0x;
+
+            // Pinta gráfico da 1ª fileira
+            $grp1Line = array_fill(0, $playLines, 0);
+            if ($dualPlayerRow) {
+                $grp0Line = array_fill(0, $playLines, 0);
+            }
+            $eh = $first['drawH'];
+            $egfx = $first['gfx'];
+            $ey = $first['y'];
+            for ($i = 0; $i < $eh; $i++) {
+                $y = $ey + $i;
+                if ($y >= 0 && $y < $playLines) {
+                    $grp1Line[$y] = $egfx[$i] & 0xff;
+                    if ($dualPlayerRow) {
+                        $grp0Line[$y] = $egfx[$i] & 0xff;
+                    }
+                }
+            }
+
+            // Demais fileiras ignoradas neste passo (só 1 linha)
+            $bandParams[] = [
+                'x' => $rowXInit,
+                'nusiz' => $nusiz1,
+                'color' => $col1,
+                'copies' => $nusizCopies,
+                'spacing' => $nusizSpacing,
+                'aliveMask' => $rowAliveMask,
+            ];
+        }
+
+        $minX = ($nusiz1 === 3 || $nusiz1 === 6) ? 8 : 1;
         $d0 = max($minX, min(160, (int)$p0x));
         $d1 = max($minX, min(160, (int)$p1x));
         $enemyBandCount = count($bandMeta['enemies']);
@@ -197,7 +269,11 @@ final class AgcBuilder
         $asm[] = '; Enemy bands=' . $enemyBandCount
             . ' copies=' . (isset($nusizCopies) ? $nusizCopies : 0)
             . ' spacing=' . (isset($nusizSpacing) ? $nusizSpacing : '-')
-            . ' NUSIZ1=$' . sprintf('%02X', $nusiz1);
+            . ' NUSIZ0=$' . sprintf('%02X', $nusiz0)
+            . ' NUSIZ1=$' . sprintf('%02X', $nusiz1)
+            . ($dualPlayerRow ? ' DUAL=P0+P1' : '')
+            . ' RowX=' . $rowXInit
+            . ' Alive=$' . sprintf('%02X', $rowAliveMask);
         $asm[] = '; Assembler: DASM (-f3 raw binary)';
         $asm[] = '; ============================================================';
         $asm[] = '    processor 6502';
@@ -238,6 +314,19 @@ final class AgcBuilder
         $asm[] = '    sta PrevSWCHA';
         $asm[] = '    sta PrevINPT4';
         $asm[] = '    sta WalkTick';
+        $asm[] = '    sta FrameCnt';
+        $asm[] = '    sta BandSel';
+        $asm[] = '    sta BandNusiz';
+        $asm[] = '    sta BandCol';
+        $asm[] = '    lda #' . ($rowXInit & 0xff);
+        $asm[] = '    sta RowX                  ; deslocamento horizontal da fileira';
+        $asm[] = '    lda #$' . sprintf('%02X', $rowAliveMask & 0x3f);
+        $asm[] = '    sta EnemyAlive            ; bits 0–5 = instâncias vivas';
+        $asm[] = '    lda #' . ($rowMoveDelay & 0xff);
+        $asm[] = '    sta MoveDelay             ; quadros entre cada passo X';
+        $asm[] = '    sta MoveCtr';
+        $asm[] = '    lda #0';
+        $asm[] = '    sta RowDir                ; 0=direita (+), 1=esquerda (-)';
         $asm[] = '';
         foreach ($ruleCompiled['inits'] as $line) {
             $asm[] = $line;
@@ -256,10 +345,23 @@ final class AgcBuilder
         $asm[] = '    sta P1Y';
         $asm[] = '    lda #' . $h1;
         $asm[] = '    sta P1H';
-        $asm[] = '    lda #' . $d0;
-        $asm[] = '    sta P0X                 ; color clocks 0-160';
-        $asm[] = '    lda #' . $d1;
-        $asm[] = '    sta P1X';
+        if ($dualPlayerRow || $enemyBandCount > 0) {
+            // P0/P1 a partir de RowX (VBLANK atualiza a cada frame)
+            $asm[] = '    lda RowX';
+            $asm[] = '    sta P0X';
+            if ($dualPlayerRow) {
+                $asm[] = '    clc';
+                $asm[] = '    adc #' . ($halfGap & 0xff) . '              ; P1 intercalado';
+            } else {
+                $asm[] = '    lda RowX';
+            }
+            $asm[] = '    sta P1X';
+        } else {
+            $asm[] = '    lda #' . $d0;
+            $asm[] = '    sta P0X                 ; color clocks 0-160';
+            $asm[] = '    lda #' . $d1;
+            $asm[] = '    sta P1X';
+        }
         $asm[] = '    lda #1';
         $asm[] = '    sta P0En';
         $asm[] = '    sta P1En';
@@ -275,10 +377,21 @@ final class AgcBuilder
         $asm[] = '';
         $asm[] = '    lda #' . $vblank;
         $asm[] = '    sta TIM64T';
-        $asm[] = '    jsr GameLogic';
+        $asm[] = '    jsr GameLogic              ; VBLANK: movimento / regras';
+        if ($dualPlayerRow || $enemyBandCount > 0) {
+            // Atualiza X da fileira a partir de RowX (lógica pode incrementar no VBLANK)
+            $asm[] = '    lda RowX';
+            $asm[] = '    sta P0X';
+            if ($dualPlayerRow) {
+                $asm[] = '    clc';
+                $asm[] = '    adc #' . ($halfGap & 0xff);
+                $asm[] = '    sta P1X';
+            } else {
+                $asm[] = '    sta P1X';
+            }
+        }
         $asm[] = '    jsr PositionPlayers';
         if ($scoreEnabled) {
-            // Pré-cálculo do placar no VBLANK (não pode rodar na área visível)
             $asm[] = '    jsr ScorePrep';
         }
         $asm[] = 'WaitVBlank:';
@@ -289,8 +402,13 @@ final class AgcBuilder
         $asm[] = '';
         $asm[] = '    lda #$' . sprintf('%02X', $col0 & 0xfe);
         $asm[] = '    sta COLUP0';
-        $asm[] = '    lda #$' . sprintf('%02X', $col1 & 0xfe);
-        $asm[] = '    sta COLUP1';
+        if ($flickerMode) {
+            $asm[] = '    lda BandCol';
+            $asm[] = '    sta COLUP1';
+        } else {
+            $asm[] = '    lda #$' . sprintf('%02X', $col1 & 0xfe);
+            $asm[] = '    sta COLUP1';
+        }
         $asm[] = '    lda #0';
         $asm[] = '    sta GRP0';
         $asm[] = '    sta GRP1';
@@ -299,31 +417,43 @@ final class AgcBuilder
         $asm[] = '    sta PF2';
         $asm[] = '    lda #' . ($nusiz0 & 7);
         $asm[] = '    sta NUSIZ0';
-        $asm[] = '    lda #' . ($nusiz1 & 7);
-        $asm[] = '    sta NUSIZ1              ; fileiras inimigos (NUSIZ da 1ª faixa)';
+        if ($flickerMode) {
+            $asm[] = '    lda BandNusiz';
+            $asm[] = '    sta NUSIZ1';
+        } else {
+            $asm[] = '    lda #' . ($nusiz1 & 7);
+            $asm[] = '    sta NUSIZ1              ; fileiras inimigos';
+        }
         $asm[] = '';
-        $asm[] = '    ; ===== HUD: placar + playfield (tela) + logo =====';
+        $asm[] = '    ; ===== HUD: placar + playfield útil + logo =====';
         $asm[] = '    ; playLines=' . $playLines . ' scoreLines=' . $scoreLines . ' logoLines=' . $logoLines
-            . ' pfMode=' . ($pfTables['mode'] ?? 'reflect');
+            . ' pfMode=' . ($pfTables['mode'] ?? 'reflect')
+            . ' PlayLoop=PF+GRP only';
         $asm[] = '';
         if ($scorePos === 'top') {
             $asm[] = '    jsr DrawScoreBand';
-            // Score reposiciona P0/P1 para os dígitos — precisa recolocar os sprites do jogo
             $asm[] = '    jsr PositionPlayers';
-            // Score também altera NUSIZ/cores — restaura para as fileiras
             $asm[] = '    lda #' . ($nusiz0 & 7);
             $asm[] = '    sta NUSIZ0';
-            $asm[] = '    lda #' . ($nusiz1 & 7);
-            $asm[] = '    sta NUSIZ1';
-            $asm[] = '    lda #$' . sprintf('%02X', $col0 & 0xfe);
-            $asm[] = '    sta COLUP0';
-            $asm[] = '    lda #$' . sprintf('%02X', $col1 & 0xfe);
-            $asm[] = '    sta COLUP1';
+            if ($flickerMode) {
+                $asm[] = '    lda BandNusiz';
+                $asm[] = '    sta NUSIZ1';
+                $asm[] = '    lda #$' . sprintf('%02X', $col0 & 0xfe);
+                $asm[] = '    sta COLUP0';
+                $asm[] = '    lda BandCol';
+                $asm[] = '    sta COLUP1';
+            } else {
+                $asm[] = '    lda #' . ($nusiz1 & 7);
+                $asm[] = '    sta NUSIZ1';
+                $asm[] = '    lda #$' . sprintf('%02X', $col0 & 0xfe);
+                $asm[] = '    sta COLUP0';
+                $asm[] = '    lda #$' . sprintf('%02X', $col1 & 0xfe);
+                $asm[] = '    sta COLUP1';
+            }
         }
-        // CTRLPF bit0 = reflect
         $asm[] = '    lda #' . $ctrlpf;
         $asm[] = '    sta CTRLPF';
-        $asm[] = '    ; --- playfield: PF + cores cedo na scanline ---';
+        // PlayLoop sagrado: só pintura (PF + GRP0 + GRP1). Zero lógica.
         $asm[] = '    ldx #0';
         $asm[] = 'PlayLoop:';
         $asm[] = '    sta WSYNC';
@@ -367,6 +497,50 @@ final class AgcBuilder
         $asm[] = '    jmp MainLoop';
         $asm[] = '';
         $asm[] = 'GameLogic:';
+        // VBLANK/Overscan only — nunca chamado do PlayLoop
+        if ($enemyBandCount > 0) {
+            $minX = 8;
+            $maxX = max($minX, 160 - (int)$rowSpan);
+            $asm[] = '    ; --- VBLANK: movimento fileira (RowX) ---';
+            $asm[] = '    ; modo=' . ($rowZigzag ? 'zigzag' : 'wrap') . ' span=' . (int)$rowSpan;
+            $asm[] = '    lda MoveDelay';
+            $asm[] = '    beq RowMoveDone           ; 0 = parado';
+            $asm[] = '    dec MoveCtr';
+            $asm[] = '    bne RowMoveDone';
+            $asm[] = '    sta MoveCtr               ; recarrega delay';
+            $asm[] = '    lda RowDir';
+            $asm[] = '    bne RowGoLeft';
+            $asm[] = '    ; direita';
+            $asm[] = '    inc RowX';
+            $asm[] = '    lda RowX';
+            $asm[] = '    cmp #' . ($maxX & 0xff);
+            $asm[] = '    bcc RowMoveDone';
+            if ($rowZigzag) {
+                $asm[] = '    lda #' . ($maxX & 0xff);
+                $asm[] = '    sta RowX';
+                $asm[] = '    lda #1';
+                $asm[] = '    sta RowDir                ; vira esquerda';
+            } else {
+                $asm[] = '    lda #' . ($minX & 0xff);
+                $asm[] = '    sta RowX                  ; wrap: nasce na esquerda';
+            }
+            $asm[] = '    jmp RowMoveDone';
+            $asm[] = 'RowGoLeft:';
+            $asm[] = '    dec RowX';
+            $asm[] = '    lda RowX';
+            $asm[] = '    cmp #' . ($minX & 0xff);
+            $asm[] = '    bcs RowMoveDone           ; ainda >= min';
+            if ($rowZigzag) {
+                $asm[] = '    lda #' . ($minX & 0xff);
+                $asm[] = '    sta RowX';
+                $asm[] = '    lda #0';
+                $asm[] = '    sta RowDir                ; vira direita';
+            } else {
+                $asm[] = '    lda #' . ($maxX & 0xff);
+                $asm[] = '    sta RowX                  ; wrap: nasce na direita';
+            }
+            $asm[] = 'RowMoveDone:';
+        }
         foreach ($ruleCompiled['frame'] as $line) {
             $asm[] = $line;
         }
@@ -405,6 +579,41 @@ final class AgcBuilder
         $asm[] = '    .byte $70,$60,$50,$40,$30,$20,$10,$00';
         $asm[] = '    .byte $F0,$E0,$D0,$C0,$B0,$A0,$90';
         $asm[] = '';
+
+        if ($flickerMode) {
+            // ---- Flicker: 1 faixa inimigo por frame ----
+            $nFlick = min(2, count($bandParams)); // MVP: 2 faixas
+            $asm[] = '; SelectBand — intercalation flicker (teste Megamania)';
+            $asm[] = '; Frame par → faixa 0; frame ímpar → faixa 1';
+            $asm[] = 'SelectBand:';
+            $asm[] = '    inc FrameCnt';
+            $asm[] = '    lda FrameCnt';
+            $asm[] = '    and #1';
+            $asm[] = '    sta BandSel';
+            $asm[] = '    tax';
+            $asm[] = '    lda BandXTbl,x';
+            $asm[] = '    sta P1X';
+            $asm[] = '    lda BandNusizTbl,x';
+            $asm[] = '    sta BandNusiz';
+            $asm[] = '    lda BandColTbl,x';
+            $asm[] = '    sta BandCol';
+            $asm[] = '    rts';
+            $asm[] = '';
+            $asm[] = 'BandXTbl:';
+            for ($i = 0; $i < $nFlick; $i++) {
+                $asm[] = '    .byte ' . (int)$bandParams[$i]['x'];
+            }
+            $asm[] = 'BandNusizTbl:';
+            for ($i = 0; $i < $nFlick; $i++) {
+                $asm[] = '    .byte ' . (int)$bandParams[$i]['nusiz'];
+            }
+            $asm[] = 'BandColTbl:';
+            for ($i = 0; $i < $nFlick; $i++) {
+                $asm[] = '    .byte $' . sprintf('%02X', $bandParams[$i]['color'] & 0xfe);
+            }
+            $asm[] = '';
+        }
+
         if ($scoreEnabled) {
             $asm[] = self::scoreBandRoutine($digits, $scoreBg, $scoreLines, $scoreDelay, $scorePlayers, $labelPlayers);
         }
@@ -453,6 +662,15 @@ final class AgcBuilder
         $asm[] = 'GRP1Data:';
         foreach ($grp1Line as $b) {
             $asm[] = '    .byte $' . sprintf('%02X', $b & 0xff);
+        }
+        if ($flickerMode) {
+            $nFlick = min(2, count($grp1Bands));
+            for ($bi = 0; $bi < $nFlick; $bi++) {
+                $asm[] = 'GRP1Band' . $bi . ':';
+                foreach ($grp1Bands[$bi] as $b) {
+                    $asm[] = '    .byte $' . sprintf('%02X', $b & 0xff);
+                }
+            }
         }
         $asm[] = '';
         $asm[] = '; Sprite graphics (linhas top→bottom, ref)';
@@ -511,11 +729,20 @@ final class AgcBuilder
         $asm[] = 'ZCOLUPF   equ $93';
         $asm[] = 'ZGRP0     equ $94';
         $asm[] = 'ZGRP1     equ $95';
+        $asm[] = 'FrameCnt  equ $96            ; contador de frames';
+        $asm[] = 'BandSel   equ $97            ; (legado flicker)';
+        $asm[] = 'BandNusiz equ $98';
+        $asm[] = 'BandCol   equ $99';
+        $asm[] = 'RowX     equ $9A            ; X da fileira de inimigos (scroll)';
+        $asm[] = 'WalkTick  equ $9B';
         $asm[] = 'PrevSWCHA equ $9C';
         $asm[] = 'PrevINPT4 equ $9D';
         $asm[] = 'TmpA      equ $9E';
         $asm[] = 'TmpB      equ $9F';
-        $asm[] = 'WalkTick  equ $9B';
+        $asm[] = 'EnemyAlive equ $BA          ; bits 0–5 instâncias vivas na fileira';
+        $asm[] = 'MoveDelay equ $BB            ; quadros entre passos de scroll';
+        $asm[] = 'MoveCtr   equ $BC            ; contador regressivo';
+        $asm[] = 'RowDir   equ $BD            ; 0=direita 1=esquerda';
         foreach ($ruleCompiled['equates'] as $line) {
             $asm[] = $line;
         }
@@ -741,12 +968,9 @@ final class AgcBuilder
             $role = (string)($b['role'] ?? 'enemy_row');
             $y = max(0, min($playLines - 1, (int)($b['y'] ?? 0)));
             $bandH = max(1, min(48, (int)($b['height'] ?? 16)));
+            // baseX do editor manda; xs[] é só preview (pode estar defasado)
             $baseX = max(0, min(152, (int)($b['baseX'] ?? 40)));
-            // Se o editor já calculou xs[], a 1ª cópia visual é xs[0]
-            if (isset($b['xs']) && is_array($b['xs']) && count($b['xs']) > 0) {
-                $baseX = max(0, min(152, (int)$b['xs'][0]));
-            }
-            $copies = max(1, min(3, (int)($b['copies'] ?? 1)));
+            $copies = max(1, min(6, (int)($b['copies'] ?? 1)));
             $spacing = (string)($b['spacing'] ?? 'close');
             $spriteId = (string)($b['spriteId'] ?? '');
             $spr = self::findSprite($sprites, $spriteId);
@@ -758,7 +982,12 @@ final class AgcBuilder
             $drawH = min($bandH, $sprH);
             $color = $spr ? ((int)($spr['color'] ?? 0x6a) & 0xfe) : 0x6a;
             $gfx = self::spriteRows($spr, $drawH);
-            $nusiz = self::nusizValue($copies, $spacing);
+            // NUSIZ hardware max 3 por player; 4–6 = dual player
+            $nusiz = self::nusizValue(min(3, $copies), $spacing);
+            $aliveMask = (int)($b['aliveMask'] ?? ((1 << $copies) - 1));
+            $aliveMask &= ((1 << $copies) - 1);
+            $moveDelay = max(0, min(255, (int)($b['moveDelay'] ?? 0)));
+            $wrap = array_key_exists('wrap', $b) ? !empty($b['wrap']) : true;
 
             $entry = [
                 'id' => (string)($b['id'] ?? ''),
@@ -773,6 +1002,10 @@ final class AgcBuilder
                 'color' => $color,
                 'gfx' => $gfx,
                 'spriteId' => $spriteId,
+                'aliveMask' => $aliveMask,
+                'moveDelay' => $moveDelay,
+                'wrap' => $wrap,
+                'moveMode' => (string)($b['moveMode'] ?? ($wrap ? 'wrap' : 'zigzag')),
             ];
 
             if ($role === 'hero') {
