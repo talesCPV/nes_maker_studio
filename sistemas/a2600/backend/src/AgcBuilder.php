@@ -55,7 +55,7 @@ final class AgcBuilder
         $scoreVar2 = 'scoreP1';
 
         $scanlines = $tv === 'PAL' ? 242 : 192;
-        $vblank = $tv === 'PAL' ? 48 : 40;
+        $vblank = $tv === 'PAL' ? 52 : 45;
         $overscan = $tv === 'PAL' ? 36 : 30;
         $glyphH = self::digitGlyphHeight();
         // bandH = altura de UMA faixa de placar (só dígitos + mínimo).
@@ -71,7 +71,9 @@ final class AgcBuilder
         }
         $scoreLines = min(24, $scoreLines);
         // playfield útil = total − placar − logo (logo sempre)
-        $playLines = max(1, $scanlines - $scoreLines - $logoLines);
+        // 4 scanlines para PositionPlayers após o placar (obrigatório: score move P0/P1)
+        $posAfterScore = $scoreEnabled ? 4 : 0;
+        $playLines = max(1, $scanlines - $scoreLines - $logoLines - $posAfterScore);
 
         $pfTables = self::extractPlayfield($project, $playLines);
         $ctrlpf = ($pfTables['mode'] === 'reflect') ? 1 : 0; // bit0 reflect; asymmetric → left half only
@@ -159,9 +161,13 @@ final class AgcBuilder
         $grp1Bands = [];
         $bandParams = [];
         $flickerMode = false; // abandonado — caminho Megamania
-        $dualPlayerRow = false; // P0+P1 na mesma fileira
+        $dualPlayerRow = false;
+        $independentSlots = false;
+        $slotGap = 16;
         $rowAliveMask = 0x3f;
         $rowXInit = 24;
+        $rowX2Init = 24;
+        $splitLine = 0;
         $halfGap = 8;
         $rowMoveDelay = 0; // 0=parado; N=1px a cada N frames
         $rowWrap = true;
@@ -188,9 +194,12 @@ final class AgcBuilder
             $first = $bandMeta['enemies'][0];
             $nusizCopies = max(1, min(6, (int)($first['copies'] ?? 3)));
             $nusizSpacing = (string)($first['spacing'] ?? 'close');
-            $gap = ($nusizSpacing === 'wide') ? 64 : (($nusizSpacing === 'medium') ? 32 : 16);
+            $gap = ($nusizSpacing === 'wide') ? 40 : (($nusizSpacing === 'medium') ? 24 : 16);
             $halfGap = (int)($gap / 2);
-            $dualPlayerRow = ($nusizCopies >= 4);
+            // Caminho C: slots independentes (sem NUSIZ multi-copy). P0+P1, multiplex 3 pares @ 20Hz.
+            $independentSlots = ($nusizCopies >= 2);
+            $dualPlayerRow = $independentSlots; // usa P0+P1
+            $slotGap = $gap;
             $rowMoveDelay = max(0, min(255, (int)($first['moveDelay'] ?? 0)));
             $mm = strtolower((string)($first['moveMode'] ?? ''));
             if ($mm !== 'wrap' && $mm !== 'zigzag') {
@@ -199,62 +208,92 @@ final class AgcBuilder
             $rowWrap = ($mm === 'wrap');
             $rowZigzag = ($mm === 'zigzag');
 
-            // NUSIZ de cada player = min(3, cópias) no modo dual, ou cópias no single
-            $perPlayerCopies = $dualPlayerRow ? 3 : min(3, $nusizCopies);
-            $nusiz1 = self::nusizValue($perPlayerCopies, $nusizSpacing);
-            $nusiz0 = $dualPlayerRow ? $nusiz1 : 0;
+            // NUSIZ = 0 (cópia única). 6 slots lógicos; 2 visíveis por frame (par do FrameCnt%3).
+            $nusiz0 = 0;
+            $nusiz1 = 0;
+            $perPlayerCopies = 1;
 
             $p1y = $first['y'];
             $h1 = $first['drawH'];
             $col1 = $first['color'];
-            $col0 = $dualPlayerRow ? $col1 : $col0; // mesma cor na fileira dual
+            $col0 = $independentSlots ? $col1 : $col0;
             $gfx1 = $first['gfx'];
-            // Editor baseX manda no boot; variável rowX (Program) altera em runtime no mesmo RAM
             $rowXInit = max(1, min(160, (int)$first['baseX']));
             $rowAliveMask = $varEnemyAlive !== null
                 ? $varEnemyAlive
                 : max(0, min(0x3f, (int)($first['aliveMask'] ?? ((1 << $nusizCopies) - 1))));
 
-            // Span da formação completa
-            if ($dualPlayerRow) {
-                $span = 8 + ($nusizCopies - 1) * $halfGap;
-            } else {
-                $span = self::nusizSpanPixels($perPlayerCopies, $nusizSpacing);
-            }
+            $span = 8 + max(0, $nusizCopies - 1) * $slotGap;
             $rowSpan = $span;
             if ($rowXInit + $span > 152) {
                 $rowXInit = max(1, 152 - $span);
             }
-            $p1x = $dualPlayerRow ? ($rowXInit + $halfGap) : $rowXInit;
-            $p0x = $dualPlayerRow ? $rowXInit : $p0x;
+            $p1x = $independentSlots ? ($rowXInit + $slotGap) : $rowXInit;
+            $p0x = $independentSlots ? $rowXInit : $p0x;
 
-            // Pinta gráfico da 1ª fileira
+            // Pinta TODAS as fileiras enemy_row nas tabelas GRP (mesmo RowX / NUSIZ).
+            // X independente por faixa = próximo passo (RESP no gap entre linhas).
             $grp1Line = array_fill(0, $playLines, 0);
             if ($dualPlayerRow) {
                 $grp0Line = array_fill(0, $playLines, 0);
             }
-            $eh = $first['drawH'];
-            $egfx = $first['gfx'];
-            $ey = $first['y'];
-            for ($i = 0; $i < $eh; $i++) {
-                $y = $ey + $i;
-                if ($y >= 0 && $y < $playLines) {
-                    $grp1Line[$y] = $egfx[$i] & 0xff;
-                    if ($dualPlayerRow) {
-                        $grp0Line[$y] = $egfx[$i] & 0xff;
+            $bandColors = [];
+            $bandMasks = [];
+            foreach ($bandMeta['enemies'] as $bi => $eb) {
+                $eh = (int)$eb['drawH'];
+                $egfx = $eb['gfx'];
+                $ey = (int)$eb['y'];
+                // máscara por faixa (aliveMask do editor; runtime = EnemyAlive / EnemyAlive2)
+                $mask = max(0, min(0x3f, (int)($eb['aliveMask'] ?? ((1 << $nusizCopies) - 1))));
+                $bandMasks[] = $mask;
+                $bandColors[] = (int)$eb['color'] & 0xfe;
+                for ($i = 0; $i < $eh; $i++) {
+                    $y = $ey + $i;
+                    if ($y >= 0 && $y < $playLines) {
+                        // sprite próprio de cada faixa
+                        $grp1Line[$y] = $egfx[$i] & 0xff;
+                        if ($dualPlayerRow) {
+                            $grp0Line[$y] = $egfx[$i] & 0xff;
+                        }
                     }
                 }
+                $bandParams[] = [
+                    'x' => max(1, min(160, (int)$eb['baseX'])),
+                    'y' => $ey,
+                    'h' => $eh,
+                    'nusiz' => $nusiz1,
+                    'color' => (int)$eb['color'] & 0xfe,
+                    'copies' => $nusizCopies,
+                    'spacing' => $nusizSpacing,
+                    'aliveMask' => $mask,
+                    'id' => (string)($eb['id'] ?? ''),
+                ];
             }
-
-            // Demais fileiras ignoradas neste passo (só 1 linha)
-            $bandParams[] = [
-                'x' => $rowXInit,
-                'nusiz' => $nusiz1,
-                'color' => $col1,
-                'copies' => $nusizCopies,
-                'spacing' => $nusizSpacing,
-                'aliveMask' => $rowAliveMask,
-            ];
+            $colBand0 = $bandColors[0] ?? $col1;
+            $colBand1 = $bandColors[1] ?? $colBand0;
+            $maskInit0 = $bandMasks[0] ?? $rowAliveMask;
+            $maskInit1 = $bandMasks[1] ?? $maskInit0;
+            // cores da 1ª fileira no topo do kernel
+            $col0 = $dualPlayerRow ? $colBand0 : $col0;
+            $col1 = $colBand0;
+            // X independente: 2+ faixas com gap >= 4 scanlines para RESP mid-screen
+            $rowX2Init = $rowXInit;
+            $splitLine = 0; // 0 = desligado
+            if (count($bandMeta['enemies']) >= 2) {
+                $b0 = $bandMeta['enemies'][0];
+                $b1 = $bandMeta['enemies'][1];
+                $rowX2Init = max(1, min(160, (int)$b1['baseX']));
+                $gapStart = (int)$b0['y'] + (int)$b0['drawH'];
+                $gapEnd = (int)$b1['y'];
+                // TESTE ESTABILIDADE: mid RESP desligado (split=0 → um PlayLoop só)
+                if (false && ($gapEnd - $gapStart >= 6)) {
+                    $splitLine = max($gapStart, $gapEnd - 5);
+                    $splitLine = min($splitLine, $playLines - 6);
+                }
+                if ($rowX2Init + $rowSpan > 152) {
+                    $rowX2Init = max(1, 152 - (int)$rowSpan);
+                }
+            }
         }
 
         $minX = ($nusiz1 === 3 || $nusiz1 === 6) ? 8 : 1;
@@ -272,8 +311,8 @@ final class AgcBuilder
             . ' spacing=' . (isset($nusizSpacing) ? $nusizSpacing : '-')
             . ' NUSIZ0=$' . sprintf('%02X', $nusiz0)
             . ' NUSIZ1=$' . sprintf('%02X', $nusiz1)
-            . ($dualPlayerRow ? ' DUAL=P0+P1' : '')
-            . ' RowX=' . $rowXInit
+            . ($independentSlots ? ' SLOTS=indep/flicker3' : ($dualPlayerRow ? ' DUAL=P0+P1' : ''))
+            . ' RowX=' . $rowXInit . ' RowX2=' . $rowX2Init . ' split=' . $splitLine
             . ' Alive=$' . sprintf('%02X', $rowAliveMask);
         $asm[] = '; Assembler: DASM (-f3 raw binary)';
         $asm[] = '; ============================================================';
@@ -320,9 +359,22 @@ final class AgcBuilder
         $asm[] = '    sta BandNusiz';
         $asm[] = '    sta BandCol';
         $asm[] = '    lda #' . ($rowXInit & 0xff);
-        $asm[] = '    sta RowX                  ; deslocamento horizontal da fileira';
-        $asm[] = '    lda #$' . sprintf('%02X', $rowAliveMask & 0x3f);
-        $asm[] = '    sta EnemyAlive            ; bits 0–5 = instâncias vivas';
+        $asm[] = '    sta RowX                  ; X fileira 1';
+        if ($splitLine > 0) {
+            $asm[] = '    lda #' . ($rowX2Init & 0xff);
+            $asm[] = '    sta RowX2                 ; X fileira 2';
+        }
+        $mask0 = isset($maskInit0) ? $maskInit0 : $rowAliveMask;
+        $mask1 = isset($maskInit1) ? $maskInit1 : $mask0;
+        $asm[] = '    lda #$' . sprintf('%02X', $mask0 & 0x3f);
+        $asm[] = '    sta EnemyAlive            ; máscara fileira 1 (bits 0–5)';
+        $asm[] = '    lda #$' . sprintf('%02X', $mask1 & 0x3f);
+        $asm[] = '    sta EnemyAlive2           ; máscara fileira 2';
+        $asm[] = '    lda #0';
+        $asm[] = '    sta P0Alive';
+        $asm[] = '    sta P1Alive';
+        $asm[] = '    sta P0Alive2';
+        $asm[] = '    sta P1Alive2';
         $asm[] = '    lda #' . ($rowMoveDelay & 0xff);
         $asm[] = '    sta MoveDelay             ; quadros entre cada passo X';
         $asm[] = '    sta MoveCtr';
@@ -395,6 +447,20 @@ final class AgcBuilder
             $asm[] = '    lda #' . ($maxX & 0xff);
             $asm[] = '    sta RowX';
             $asm[] = 'RowXMaxOk:';
+            if ($splitLine > 0) {
+                $asm[] = '    lda RowX2';
+                $asm[] = '    cmp #' . ($minX & 0xff);
+                $asm[] = '    bcs RowX2MinOk';
+                $asm[] = '    lda #' . ($minX & 0xff);
+                $asm[] = '    sta RowX2';
+                $asm[] = 'RowX2MinOk:';
+                $asm[] = '    cmp #' . ($maxX & 0xff);
+                $asm[] = '    bcc RowX2MaxOk';
+                $asm[] = '    beq RowX2MaxOk';
+                $asm[] = '    lda #' . ($maxX & 0xff);
+                $asm[] = '    sta RowX2';
+                $asm[] = 'RowX2MaxOk:';
+            }
             $asm[] = '    lda RowX';
             $asm[] = '    sta P0X';
             if ($dualPlayerRow) {
@@ -405,6 +471,64 @@ final class AgcBuilder
                 $asm[] = '    sta P1X';
             }
         }
+        // Máscara fileira 1 → P0Alive/P1Alive (bits pares=P0, ímpares=P1 no dual)
+        if (!empty($independentSlots)) {
+            // TESTE: par fixo slots 0 e 1 (sem multiplex) — máscara bits 0 e 1
+            $sg = (int)$slotGap;
+            $asm[] = '    ; --- slots FIXOS 0/1 (teste máscara) ---';
+            $asm[] = '    lda RowX';
+            $asm[] = '    sta P0X';
+            $asm[] = '    clc';
+            $asm[] = '    adc #' . ($sg & 0xff);
+            $asm[] = '    sta P1X';
+            $asm[] = '    lda EnemyAlive';
+            $asm[] = '    and #1';
+            $asm[] = '    beq TMz0';
+            $asm[] = '    lda #$FF';
+            $asm[] = '    bne TMs0';
+            $asm[] = 'TMz0:';
+            $asm[] = '    lda #0';
+            $asm[] = 'TMs0:';
+            $asm[] = '    sta P0Alive';
+            $asm[] = '    lda EnemyAlive';
+            $asm[] = '    and #2';
+            $asm[] = '    beq TMz1';
+            $asm[] = '    lda #$FF';
+            $asm[] = '    bne TMs1';
+            $asm[] = 'TMz1:';
+            $asm[] = '    lda #0';
+            $asm[] = 'TMs1:';
+            $asm[] = '    sta P1Alive';
+            if ($splitLine > 0) {
+                $asm[] = '    lda RowX2';
+                $asm[] = '    sta P0X2';
+                $asm[] = '    clc';
+                $asm[] = '    adc #' . ($sg & 0xff);
+                $asm[] = '    sta P1X2';
+                $asm[] = '    lda EnemyAlive2';
+                $asm[] = '    and #1';
+                $asm[] = '    beq TM2z0';
+                $asm[] = '    lda #$FF';
+                $asm[] = '    bne TM2s0';
+                $asm[] = 'TM2z0:';
+                $asm[] = '    lda #0';
+                $asm[] = 'TM2s0:';
+                $asm[] = '    sta P0Alive2';
+                $asm[] = '    lda EnemyAlive2';
+                $asm[] = '    and #2';
+                $asm[] = '    beq TM2z1';
+                $asm[] = '    lda #$FF';
+                $asm[] = '    bne TM2s1';
+                $asm[] = 'TM2z1:';
+                $asm[] = '    lda #0';
+                $asm[] = 'TM2s1:';
+                $asm[] = '    sta P1Alive2';
+            }
+        }
+
+        // DEBUG: placar = EnemyAlive para ver máscara real na RAM
+        $asm[] = '    lda EnemyAlive';
+        $asm[] = '    sta ScoreP0';
         $asm[] = '    jsr PositionPlayers';
         if ($scoreEnabled) {
             $asm[] = '    jsr ScorePrep';
@@ -447,6 +571,7 @@ final class AgcBuilder
         $asm[] = '';
         if ($scorePos === 'top') {
             $asm[] = '    jsr DrawScoreBand';
+            // Score moveu P0/P1 — reposiciona inimigos (4 scanlines já reservadas em playLines)
             $asm[] = '    jsr PositionPlayers';
             $asm[] = '    lda #' . ($nusiz0 & 7);
             $asm[] = '    sta NUSIZ0';
@@ -468,27 +593,110 @@ final class AgcBuilder
         }
         $asm[] = '    lda #' . $ctrlpf;
         $asm[] = '    sta CTRLPF';
-        // PlayLoop sagrado: só pintura (PF + GRP0 + GRP1). Zero lógica.
+        // PlayLoop: PF+GRP. Com 2 fileiras: parte A → RESP mid (3 linhas) → parte B.
         $asm[] = '    ldx #0';
-        $asm[] = 'PlayLoop:';
-        $asm[] = '    sta WSYNC';
-        $asm[] = '    lda PF0Data,x';
-        $asm[] = '    sta PF0';
-        $asm[] = '    lda PF1Data,x';
-        $asm[] = '    sta PF1';
-        $asm[] = '    lda PF2Data,x';
-        $asm[] = '    sta PF2';
-        $asm[] = '    lda COLUPFData,x';
-        $asm[] = '    sta COLUPF';
-        $asm[] = '    lda COLUBKData,x';
-        $asm[] = '    sta COLUBK';
-        $asm[] = '    lda GRP0Data,x';
-        $asm[] = '    sta GRP0';
-        $asm[] = '    lda GRP1Data,x';
-        $asm[] = '    sta GRP1';
-        $asm[] = '    inx';
-        $asm[] = '    cpx #' . $playLines;
-        $asm[] = '    bne PlayLoop';
+        if ($splitLine > 0) {
+            $asm[] = '    lda #0';
+            $asm[] = '    sta NUSIZ0';
+            $asm[] = '    sta NUSIZ1';
+            $asm[] = 'PlayLoopA:';
+            $asm[] = '    sta WSYNC';
+            // GRP + máscara (P0Alive/P1Alive definidos no VBLANK a partir de EnemyAlive)
+            $asm[] = '    lda P0Alive';
+            $asm[] = '    beq PL0z';
+            $asm[] = '    lda GRP0Data,x';
+            $asm[] = '    jmp PL0s';
+            $asm[] = 'PL0z:';
+            $asm[] = '    lda #0';
+            $asm[] = 'PL0s:';
+            $asm[] = '    sta GRP0';
+            $asm[] = '    lda P1Alive';
+            $asm[] = '    beq PL1z';
+            $asm[] = '    lda GRP1Data,x';
+            $asm[] = '    jmp PL1s';
+            $asm[] = 'PL1z:';
+            $asm[] = '    lda #0';
+            $asm[] = 'PL1s:';
+            $asm[] = '    sta GRP1';
+            $asm[] = '    inx';
+            $asm[] = '    cpx #' . ($splitLine & 0xff);
+            $asm[] = '    bne PlayLoopA';
+            // Sync antes do mid — evita estouro de linha e flicker de tela inteira
+            $c2 = isset($colBand1) ? ($colBand1 & 0xfe) : ($col1 & 0xfe);
+            $asm[] = '    ; --- RESP fileira 2 — sync + 4 scanlines ---';
+            $asm[] = '    sta WSYNC';
+            $asm[] = '    lda #0';
+            $asm[] = '    sta GRP0';
+            $asm[] = '    sta GRP1';
+            $asm[] = '    sta NUSIZ0               ; garante single-copy';
+            $asm[] = '    sta NUSIZ1';
+            $asm[] = '    lda P0Alive2';
+            $asm[] = '    sta P0Alive';
+            $asm[] = '    lda P1Alive2';
+            $asm[] = '    sta P1Alive';
+            $asm[] = '    stx TmpLine               ; salva índice de scanline';
+            $asm[] = '    lda P0X2';
+            $asm[] = '    ldx #0';
+            $asm[] = '    jsr SetHX                 ; scanline 1: RESP P0 slot';
+            $asm[] = '    lda P1X2';
+            $asm[] = '    ldx #1';
+            $asm[] = '    jsr SetHX                 ; scanline 2: RESP P1 slot';
+            $asm[] = '    sta WSYNC';
+            $asm[] = '    sta HMOVE                 ; scanline 3: aplica fine pos';
+            $asm[] = '    sta WSYNC';
+            $asm[] = '    sta HMCLR                 ; scanline 4: limpa (depois do HMOVE!)';
+            $asm[] = '    ldx TmpLine';
+            $asm[] = '    inx';
+            $asm[] = '    inx';
+            $asm[] = '    inx';
+            $asm[] = '    inx';
+            $asm[] = '    inx                       ; +5 (sync+RESP)';
+            $asm[] = 'PlayLoopB:';
+            $asm[] = '    sta WSYNC';
+            // GRP + máscara (P0Alive/P1Alive definidos no VBLANK a partir de EnemyAlive)
+            $asm[] = '    lda P0Alive';
+            $asm[] = '    beq PL0z';
+            $asm[] = '    lda GRP0Data,x';
+            $asm[] = '    jmp PL0s';
+            $asm[] = 'PL0z:';
+            $asm[] = '    lda #0';
+            $asm[] = 'PL0s:';
+            $asm[] = '    sta GRP0';
+            $asm[] = '    lda P1Alive';
+            $asm[] = '    beq PL1z';
+            $asm[] = '    lda GRP1Data,x';
+            $asm[] = '    jmp PL1s';
+            $asm[] = 'PL1z:';
+            $asm[] = '    lda #0';
+            $asm[] = 'PL1s:';
+            $asm[] = '    sta GRP1';
+            $asm[] = '    inx';
+            $asm[] = '    cpx #' . $playLines;
+            $asm[] = '    bne PlayLoopB';
+        } else {
+            $asm[] = 'PlayLoop:';
+            $asm[] = '    sta WSYNC';
+            // GRP + máscara (P0Alive/P1Alive definidos no VBLANK a partir de EnemyAlive)
+            $asm[] = '    lda P0Alive';
+            $asm[] = '    beq PL0z';
+            $asm[] = '    lda GRP0Data,x';
+            $asm[] = '    jmp PL0s';
+            $asm[] = 'PL0z:';
+            $asm[] = '    lda #0';
+            $asm[] = 'PL0s:';
+            $asm[] = '    sta GRP0';
+            $asm[] = '    lda P1Alive';
+            $asm[] = '    beq PL1z';
+            $asm[] = '    lda GRP1Data,x';
+            $asm[] = '    jmp PL1s';
+            $asm[] = 'PL1z:';
+            $asm[] = '    lda #0';
+            $asm[] = 'PL1s:';
+            $asm[] = '    sta GRP1';
+            $asm[] = '    inx';
+            $asm[] = '    cpx #' . $playLines;
+            $asm[] = '    bne PlayLoop';
+        }
         $asm[] = '    lda #0';
         $asm[] = '    sta PF0';
         $asm[] = '    sta PF1';
@@ -499,7 +707,7 @@ final class AgcBuilder
         if ($scorePos === 'bottom') {
             $asm[] = '    jsr DrawScoreBand';
         }
-        $asm[] = '    jsr DrawLogo              ; sempre (plataforma)';
+        $asm[] = '    ; jsr DrawLogo              ; TESTE: logo off';
         $asm[] = '';
         $asm[] = '    lda #2';
         $asm[] = '    sta VBLANK';
@@ -555,6 +763,19 @@ final class AgcBuilder
         $asm[] = '    .byte $70,$60,$50,$40,$30,$20,$10,$00';
         $asm[] = '    .byte $F0,$E0,$D0,$C0,$B0,$A0,$90';
         $asm[] = '';
+        if (!empty($independentSlots)) {
+            $sg = (int)$slotGap;
+            $asm[] = '; X offset do P0/P1 de cada par (0,1,2)';
+            $asm[] = 'SlotOff0:';
+            $asm[] = '    .byte ' . (0) . ',' . (2 * $sg) . ',' . (4 * $sg);
+            $asm[] = 'SlotOff1:';
+            $asm[] = '    .byte ' . ($sg) . ',' . (3 * $sg) . ',' . (5 * $sg);
+            $asm[] = 'SlotBit0:';
+            $asm[] = '    .byte 1,4,16';
+            $asm[] = 'SlotBit1:';
+            $asm[] = '    .byte 2,8,32';
+            $asm[] = '';
+        }
 
         if ($flickerMode) {
             // ---- Flicker: 1 faixa inimigo por frame ----
@@ -709,16 +930,25 @@ final class AgcBuilder
         $asm[] = 'BandSel   equ $97            ; (legado flicker)';
         $asm[] = 'BandNusiz equ $98';
         $asm[] = 'BandCol   equ $99';
-        $asm[] = 'RowX     equ $9A            ; X da fileira de inimigos (scroll)';
-        $asm[] = 'WalkTick  equ $9B';
-        $asm[] = 'PrevSWCHA equ $9C';
-        $asm[] = 'PrevINPT4 equ $9D';
-        $asm[] = 'TmpA      equ $9E';
-        $asm[] = 'TmpB      equ $9F';
-        $asm[] = 'EnemyAlive equ $BA          ; bits 0–5 instâncias vivas na fileira';
-        $asm[] = 'MoveDelay equ $BB            ; quadros entre passos de scroll';
-        $asm[] = 'MoveCtr   equ $BC            ; contador regressivo';
-        $asm[] = 'RowDir   equ $BD            ; 0=direita 1=esquerda';
+        $asm[] = 'RowX     equ $9A            ; X da 1ª fileira';
+        $asm[] = 'RowX2    equ $9B            ; X da 2ª fileira';
+        $asm[] = 'TmpLine  equ $9C            ; índice scanline durante RESP mid';
+        $asm[] = 'WalkTick  equ $9D';
+        $asm[] = 'PrevSWCHA equ $9E';
+        $asm[] = 'PrevINPT4 equ $9F';
+        $asm[] = 'TmpA      equ $AE            ; livre entre score aux e ScStrip';
+        $asm[] = 'TmpB      equ $AF';
+        $asm[] = 'EnemyAlive equ $E0          ; máscara fileira 1 (bits 0–5)';
+        $asm[] = 'EnemyAlive2 equ $E1         ; máscara fileira 2';
+        $asm[] = 'P0Alive   equ $E2            ; enable GRP0 fileira atual';
+        $asm[] = 'P1Alive   equ $E3';
+        $asm[] = 'P0Alive2  equ $E4            ; enable pré-calc fileira 2';
+        $asm[] = 'P1Alive2  equ $E5';
+        $asm[] = 'P0X2      equ $E6            ; X do P0 na fileira 2 (slot)';
+        $asm[] = 'P1X2      equ $E7';
+        $asm[] = 'MoveDelay equ $E8';
+        $asm[] = 'MoveCtr   equ $E9';
+        $asm[] = 'RowDir   equ $EA';
         foreach ($ruleCompiled['equates'] as $line) {
             $asm[] = $line;
         }
@@ -2037,12 +2267,16 @@ ASM;
         // rowX / enemyAlive → RAM fixo do kernel (mesmo endereço do VBLANK)
         $fixedMega = [
             'rowX' => ['addr' => 0x9A, 'label' => 'RowX'],
-            'enemyAlive' => ['addr' => 0xBA, 'label' => 'EnemyAlive'],
+            'rowX2' => ['addr' => 0x9B, 'label' => 'RowX2'],
+            'enemyAlive' => ['addr' => 0xE0, 'label' => 'EnemyAlive'],
+            'enemyAlive1' => ['addr' => 0xE0, 'label' => 'EnemyAlive'],
+            'enemyAlive2' => ['addr' => 0xE1, 'label' => 'EnemyAlive2'],
             'scoreP0' => ['addr' => 0x80, 'label' => 'ScoreP0'],
             'scoreP1' => ['addr' => 0x81, 'label' => 'ScoreP1'],
             'score' => ['addr' => 0x80, 'label' => 'ScoreP0'],
         ];
-        $addr = 0xA0;
+        // $A0-$AB Digs, $AC-$AD ScRow/Idx, $AE-$AF TmpA/B, $B2+ ScStrip — user vars em $D0+
+        $addr = 0xD0;
         $varMap = []; // id|name -> ['addr'=>, 'type'=>, 'label'=>]
         foreach ($vars as $v) {
             if (!is_array($v)) continue;
@@ -2059,9 +2293,13 @@ ASM;
                 }
                 // NÃO reinicia RowX aqui: boot já carregou baseX do editor.
                 // enemyAlive: reforça valor da Programação se definido.
-                if ($name === 'enemyAlive') {
+                if ($name === 'enemyAlive' || $name === 'enemyAlive1') {
                     $inits[] = '    lda #' . ($initVal & 0x3f);
                     $inits[] = '    sta EnemyAlive';
+                }
+                if ($name === 'enemyAlive2') {
+                    $inits[] = '    lda #' . ($initVal & 0x3f);
+                    $inits[] = '    sta EnemyAlive2';
                 }
                 continue;
             }
@@ -2071,11 +2309,18 @@ ASM;
                 $size = 1;
             }
             if ($addr + $size > 0xFF) break;
-            if ($addr >= 0x9A && $addr <= 0x9B) {
-                $addr = 0x9C; // evita colidir com RowX
+            // evita regiões reservadas do kernel
+            if ($addr >= 0x9A && $addr <= 0x9F) {
+                $addr = 0xD0;
             }
-            if ($addr >= 0xBA && $addr <= 0xBE) {
-                $addr = 0xBF;
+            if ($addr >= 0xA0 && $addr <= 0xAF) {
+                $addr = 0xD0; // Digs / Tmp
+            }
+            if ($addr >= 0xB0 && $addr <= 0xCF) {
+                $addr = 0xD0; // ScStrip / score aux
+            }
+            if ($addr >= 0xE0 && $addr <= 0xE8) {
+                $addr = 0xE9;
             }
             $varMap[$id] = ['addr' => $addr, 'type' => $type, 'label' => $label, 'name' => $name];
             if ($name !== '') $varMap['name:' . $name] = $varMap[$id];
@@ -2187,6 +2432,7 @@ ASM;
         // Prefixo frame: input + timers em frames (1 tick = 1 frame)
         $framePrefix = [
             '    ; --- sample input ---',
+            '    inc FrameCnt',
             '    inc WalkTick',
             '    lda SWCHA',
             '    sta TmpA',
@@ -2225,257 +2471,361 @@ ASM;
     }
 
     /** @param list<array<string,mixed>> $steps @param array<string,array<string,mixed>> $varMap @param array<string,array<string,mixed>> $eventsById @return list<string> */
+
+    /** @param list<array<string,mixed>> $steps @param array<string,array<string,mixed>> $varMap @param array<string,array<string,mixed>> $eventsById @return list<string> */
     private static function compileRuleBody(array $steps, array $varMap, array $eventsById, array $timerById, string $tag, bool $isBoot): array
     {
-        $asm = [];
         $end = $tag . '_end';
-        $condI = 0;
+        $go = $tag . '_go'; // ações do SE (then)
+        $elseL = $tag . '_else';
+
+        // --- particiona: condições | then-ações | else-ações ---
+        $conds = []; // [ ['join'=>'and'|'or'|null, 'step'=>...] ]
+        $actions = [];
+        $elseActions = [];
+        $pendingJoin = null;
+        $inActions = false;
+        $inElse = false;
         foreach ($steps as $st) {
-            if (!is_array($st)) continue;
+            if (!is_array($st)) {
+                continue;
+            }
             $type = (string)($st['type'] ?? '');
-            $condI++;
-            $fail = $tag . '_f' . $condI;
-
-            if ($type === 'if_event') {
-                $eid = (string)($st['eventId'] ?? '');
-                $ev = $eventsById[$eid] ?? null;
-                $cat = $ev['category'] ?? '';
-                // Boot / vblank / overscan / system tick → sempre verdadeiro no slot certo
-                if ($eid === 'ev_boot' || $eid === 'boot' || $eid === 'ev_vblank' || $eid === 'vblank'
-                    || $eid === 'ev_overscan' || $eid === 'overscan' || $cat === 'system' || $cat === 'screen') {
-                    // no-op condition (slot já separa boot vs frame)
-                    continue;
-                }
-                if ($cat === 'timer' || isset($timerById[$eid])) {
-                    $tm = $timerById[$eid] ?? null;
-                    if ($tm) {
-                        $asm[] = '    lda ' . $tm['fireLabel'];
-                        $asm[] = '    beq ' . $fail; // só no frame em que o relógio zerou
-                        $asm[] = '    jmp ' . $tag . '_c' . $condI;
-                        $asm[] = $fail . ':';
-                        $asm[] = '    jmp ' . $end;
-                        $asm[] = $tag . '_c' . $condI . ':';
-                    }
-                    continue;
-                }
-                if ($cat === 'input' || isset($ev['button'])) {
-                    $btn = (string)($ev['button'] ?? 'P1-FIRE');
-                    $trig = (string)($ev['trigger'] ?? 'press');
-                    $asm = array_merge($asm, self::emitInputCheck($btn, $trig, $fail));
-                    $asm[] = '    jmp ' . $tag . '_c' . $condI;
-                    $asm[] = $fail . ':';
-                    $asm[] = '    jmp ' . $end;
-                    $asm[] = $tag . '_c' . $condI . ':';
-                    continue;
-                }
-                if ($cat === 'collision' || str_starts_with($eid, 'ev_col_')) {
-                    $col = (string)($ev['collision'] ?? '');
-                    if ($col === '' && str_starts_with($eid, 'ev_col_')) {
-                        $col = substr($eid, 7); // m0p1, p0pf...
-                    }
-                    $asm = array_merge($asm, self::emitCollisionCheck($col, $fail));
-                    $asm[] = '    jmp ' . $tag . '_c' . $condI;
-                    $asm[] = $fail . ':';
-                    $asm[] = '    jmp ' . $end;
-                    $asm[] = $tag . '_c' . $condI . ':';
-                    continue;
-                }
-                // timer/custom desconhecido: passa (não bloqueia)
+            if ($type === 'else' || $type === 'senao' || $type === 'senão') {
+                $inActions = true;
+                $inElse = true;
                 continue;
             }
-
-            if ($type === 'if_var') {
-                $ref = self::resolveVar($varMap, $st);
-                if (!$ref) continue;
-                $op = (string)($st['op'] ?? '==');
-                $val = (int)($st['value'] ?? 0) & 0xff;
-                $asm[] = '    lda ' . $ref['label'];
-                $asm[] = '    cmp #' . $val;
-                $asm = array_merge($asm, self::emitCmpBranch($op, $fail));
-                $asm[] = '    jmp ' . $tag . '_c' . $condI;
-                $asm[] = $fail . ':';
-                $asm[] = '    jmp ' . $end;
-                $asm[] = $tag . '_c' . $condI . ':';
-                continue;
-            }
-
-            if ($type === 'if_hitbox') {
-                $a = (string)($st['hitboxA'] ?? '');
-                $b = (string)($st['hitboxB'] ?? '');
-                $col = self::hitboxPairToCollision($a, $b);
-                if ($col !== '') {
-                    $asm = array_merge($asm, self::emitCollisionCheck($col, $fail));
-                    $asm[] = '    jmp ' . $tag . '_c' . $condI;
-                    $asm[] = $fail . ':';
-                    $asm[] = '    jmp ' . $end;
-                    $asm[] = $tag . '_c' . $condI . ':';
+            if ($type === 'join' || $type === 'complemento') {
+                $op = strtolower((string)($st['op'] ?? 'and'));
+                if ($op === 'then' || $op === 'então' || $op === 'entao') {
+                    $inActions = true;
+                    continue;
                 }
-                continue;
-            }
-
-            if ($type === 'if_screen') {
-                // single-screen v1: sempre ok
-                continue;
-            }
-
-            if ($type === 'set_var' || $type === 'add_var' || $type === 'sub_var') {
-                $ref = self::resolveVar($varMap, $st);
-                if (!$ref) continue;
-                $val = (int)($st['value'] ?? 0) & 0xff;
-                if ($type === 'set_var') {
-                    $asm[] = '    lda #' . $val;
-                    $asm[] = '    sta ' . $ref['label'];
-                } elseif ($type === 'add_var') {
-                    $asm[] = '    lda ' . $ref['label'];
-                    $asm[] = '    clc';
-                    $asm[] = '    adc #' . $val;
-                    $asm[] = '    sta ' . $ref['label'];
+                if ($op === 'or' || $op === 'ou') {
+                    $pendingJoin = 'or';
                 } else {
-                    $asm[] = '    lda ' . $ref['label'];
-                    $asm[] = '    sec';
-                    $asm[] = '    sbc #' . $val;
-                    $asm[] = '    sta ' . $ref['label'];
+                    $pendingJoin = 'and';
                 }
                 continue;
             }
-
-            if ($type === 'copy_var') {
-                // copiar de varIdFrom → para varIdTo
-                $src = self::resolveVar($varMap, [
-                    'varId' => (string)($st['varIdFrom'] ?? ''),
-                    'varName' => (string)($st['varNameFrom'] ?? ''),
-                ]);
-                $dst = self::resolveVar($varMap, [
-                    'varId' => (string)($st['varIdTo'] ?? ''),
-                    'varName' => (string)($st['varNameTo'] ?? ''),
-                ]);
-                if ($src && $dst) {
-                    $asm[] = '    lda ' . $src['label'] . '            ; copy_var de';
-                    $asm[] = '    sta ' . $dst['label'] . '            ; para';
+            $isCond = in_array($type, ['if_event', 'if_var', 'if_hitbox', 'if_screen'], true);
+            if ($inElse) {
+                if (!$isCond) {
+                    $elseActions[] = $st;
                 }
                 continue;
             }
+            if ($inActions || !$isCond) {
+                if (!$isCond) {
+                    $inActions = true;
+                    $actions[] = $st;
+                }
+                continue;
+            }
+            $conds[] = ['join' => $pendingJoin, 'step' => $st];
+            $pendingJoin = null; // sem E explícito = próximo SE é nível novo (guarda)
+        }
+        $hasElse = count($elseActions) > 0;
 
-            if ($type === 'action') {
-                $aid = (string)($st['actionId'] ?? '');
-                $arg = (string)($st['arg'] ?? '');
-                $arg2 = (string)($st['arg2'] ?? '');
-                $arg3 = $st['arg3'] ?? 1;
-                if ($aid === 'set_var' || $aid === 'add_var' || $aid === 'sub_var') {
-                    // treat arg as var name
-                    $st2 = ['varName' => $arg, 'value' => (int)$arg2];
-                    $ref = self::resolveVar($varMap, $st2);
-                    if ($ref) {
-                        $val = (int)$arg2 & 0xff;
-                        if ($aid === 'set_var') {
-                            $asm[] = '    lda #' . $val;
-                            $asm[] = '    sta ' . $ref['label'];
-                        } elseif ($aid === 'add_var') {
-                            $asm[] = '    lda ' . $ref['label'];
-                            $asm[] = '    clc';
-                            $asm[] = '    adc #' . $val;
-                            $asm[] = '    sta ' . $ref['label'];
-                        } else {
-                            $asm[] = '    lda ' . $ref['label'];
-                            $asm[] = '    sec';
-                            $asm[] = '    sbc #' . $val;
-                            $asm[] = '    sta ' . $ref['label'];
-                        }
+        // Agrupa condições: join "and" explícito une na mesma unidade;
+        // sem join = unidade nova (SENÃO só na última unidade / último SE da unidade).
+        $units = [];
+        if ($conds) {
+            $cur = [$conds[0]];
+            for ($i = 1; $i < count($conds); $i++) {
+                $j = $conds[$i]['join'] ?? null;
+                if ($j === 'and') {
+                    $cur[] = $conds[$i];
+                } elseif ($j === 'or') {
+                    $cur[] = $conds[$i]; // OU dentro da unidade
+                } else {
+                    $units[] = $cur;
+                    $cur = [$conds[$i]];
+                }
+            }
+            $units[] = $cur;
+        }
+
+        $asm = [];
+        $nu = count($units);
+        $ci = 0; // índice global de condição (labels únicos)
+        for ($u = 0; $u < $nu; $u++) {
+            $unit = $units[$u];
+            $isLastUnit = ($u === $nu - 1);
+            // Unidade guarda (não última): qualquer falha → end
+            // Última unidade: qualquer falha → else (se houver) ou end
+            $unitFail = ($isLastUnit && $hasElse) ? $elseL : $end;
+            $nIn = count($unit);
+            for ($k = 0; $k < $nIn; $k++) {
+                $st = $unit[$k]['step'];
+                $join = $unit[$k]['join'] ?? null;
+                $fail = $tag . '_f' . $ci;
+                $ok = $tag . '_c' . $ci;
+                $nextJoin = ($k + 1 < $nIn) ? ($unit[$k + 1]['join'] ?? null) : null;
+
+                if ($nextJoin === 'or') {
+                    $failTarget = $tag . '_t' . ($ci + 1);
+                } else {
+                    $failTarget = $unitFail;
+                }
+
+                if ($k > 0 && $join === 'or') {
+                    $asm[] = $tag . '_t' . $ci . ':';
+                }
+
+                $chunk = self::emitCondition($st, $varMap, $eventsById, $timerById, $fail, $ok, $isBoot);
+                $asm = array_merge($asm, $chunk);
+                $asm[] = '    jmp ' . $ok;
+                $asm[] = $fail . ':';
+                $asm[] = '    jmp ' . $failTarget;
+                $asm[] = $ok . ':';
+                if ($nextJoin === 'or') {
+                    // sucesso num OU → sai da unidade (passa adiante / go)
+                    $j = $k + 1;
+                    while ($j + 1 < $nIn && ($unit[$j + 1]['join'] ?? null) === 'or') {
+                        $j++;
                     }
-                } elseif ($aid === 'play_sound') {
-                    $ch = (int)$arg;
-                    if ($ch === 1) {
-                        $asm[] = '    lda #8';
-                        $asm[] = '    sta AUDV1';
-                        $asm[] = '    lda #4';
-                        $asm[] = '    sta AUDC1';
-                        $asm[] = '    lda #8';
-                        $asm[] = '    sta AUDF1';
+                    // após grupo OU: se ainda há AND na unidade, continua; senão fim da unidade
+                    if ($j + 1 < $nIn) {
+                        $asm[] = '    jmp ' . $tag . '_c' . ($ci + ($j - $k) + 1);
                     } else {
-                        $asm[] = '    lda #8';
-                        $asm[] = '    sta AUDV0';
-                        $asm[] = '    lda #4';
-                        $asm[] = '    sta AUDC0';
-                        $asm[] = '    lda #8';
-                        $asm[] = '    sta AUDF0';
-                    }
-                } elseif ($aid === 'stop_sound') {
-                    $ch = (int)$arg;
-                    $asm[] = '    lda #0';
-                    $asm[] = $ch === 1 ? '    sta AUDV1' : '    sta AUDV0';
-                } elseif ($aid === 'set_tia') {
-                    $reg = preg_replace('/[^A-Za-z0-9_]/', '', $arg) ?: 'COLUP0';
-                    $val = (int)$arg2 & 0xff;
-                    $asm[] = '    lda #' . $val;
-                    $asm[] = '    sta ' . $reg;
-                } elseif ($aid === 'toggle_bool') {
-                    $ref = self::resolveVar($varMap, ['varName' => $arg, 'varId' => $arg]);
-                    if ($ref) {
-                        $asm[] = '    lda ' . $ref['label'];
-                        $asm[] = '    eor #1';
-                        $asm[] = '    sta ' . $ref['label'];
-                    }
-                } elseif ($aid === 'move_player') {
-                    // Movimento suave (estilo comercial): 1 color clock / 1 scanline por disparo
-                    // Hold deve disparar todo frame (sem throttle no input de direção)
-                    $pl = ((string)$arg === '1') ? 1 : 0;
-                    $dir = strtolower(trim((string)$arg2));
-                    $dist = max(1, min(8, (int)$arg3)); // dist extra só multiplica passos unitários
-                    $xLab = $pl === 1 ? 'P1X' : 'P0X';
-                    $yLab = $pl === 1 ? 'P1Y' : 'P0Y';
-                    if (!in_array($dir, ['left', 'right', 'up', 'down'], true)) {
-                        $asm[] = '    ; move_player: direção inválida — no-op';
-                    } elseif ($dir === 'left') {
-                        for ($n = 0; $n < $dist; $n++) {
-                            $asm[] = '    lda ' . $xLab;
-                            $asm[] = '    beq Mv' . $tag . 'L' . $n; // já no 0
-                            $asm[] = '    sec';
-                            $asm[] = '    sbc #1';
-                            $asm[] = '    sta ' . $xLab;
-                            $asm[] = 'Mv' . $tag . 'L' . $n . ':';
+                        // última da unidade → próxima unidade ou go
+                        if ($isLastUnit) {
+                            $asm[] = '    jmp ' . $go;
                         }
-                    } elseif ($dir === 'right') {
-                        for ($n = 0; $n < $dist; $n++) {
-                            $asm[] = '    lda ' . $xLab;
-                            $asm[] = '    cmp #159';
-                            $asm[] = '    bcs Mv' . $tag . 'R' . $n;
-                            $asm[] = '    clc';
-                            $asm[] = '    adc #1';
-                            $asm[] = '    sta ' . $xLab;
-                            $asm[] = 'Mv' . $tag . 'R' . $n . ':';
-                        }
-                    } elseif ($dir === 'up') {
-                        for ($n = 0; $n < $dist; $n++) {
-                            $asm[] = '    lda ' . $yLab;
-                            $asm[] = '    beq Mv' . $tag . 'U' . $n;
-                            $asm[] = '    sec';
-                            $asm[] = '    sbc #1';
-                            $asm[] = '    sta ' . $yLab;
-                            $asm[] = 'Mv' . $tag . 'U' . $n . ':';
-                        }
-                    } elseif ($dir === 'down') {
-                        for ($n = 0; $n < $dist; $n++) {
-                            $asm[] = '    lda ' . $yLab;
-                            $asm[] = '    clc';
-                            $asm[] = '    adc #1';
-                            $asm[] = '    sta ' . $yLab;
-                            $asm[] = 'Mv' . $tag . 'D' . $n . ':';
-                        }
-                    }
-                } elseif ($aid === 'asm' || $aid === 'custom') {
-                    if ($arg !== '') {
-                        $asm[] = '    ; custom: ' . str_replace(["\n", "\r"], ' ', $arg);
+                        // senão fall-through para próxima unidade
                     }
                 }
-                // goto_screen: stub v1
-                continue;
+                $ci++;
+            }
+        }
+
+        $asm[] = $go . ':';
+        foreach ($actions as $st) {
+            $asm = array_merge($asm, self::emitAction($st, $varMap));
+        }
+        if ($hasElse) {
+            $asm[] = '    jmp ' . $end;
+            $asm[] = $elseL . ':';
+            foreach ($elseActions as $st) {
+                $asm = array_merge($asm, self::emitAction($st, $varMap));
             }
         }
         $asm[] = $end . ':';
         return $asm;
     }
 
-    /** @param array<string,array<string,mixed>> $varMap @param array<string,mixed> $st */
+    /**
+     * Emite teste de uma condição. Falha → jmp $fail. Sucesso → rótulo $ok.
+     * @return list<string>
+     */
+    private static function emitCondition(array $st, array $varMap, array $eventsById, array $timerById, string $fail, string $ok, bool $isBoot): array
+    {
+        $asm = [];
+        $type = (string)($st['type'] ?? '');
+
+        if ($type === 'if_event') {
+            $eid = (string)($st['eventId'] ?? '');
+            $ev = $eventsById[$eid] ?? null;
+            $cat = is_array($ev) ? (string)($ev['category'] ?? '') : '';
+            if ($eid === 'ev_boot' || $eid === 'boot' || $eid === 'ev_vblank' || $eid === 'vblank'
+                || $eid === 'ev_overscan' || $eid === 'overscan' || $cat === 'system' || $cat === 'screen') {
+                return []; // sempre ok no slot
+            }
+            if ($cat === 'timer' || isset($timerById[$eid])) {
+                $tm = $timerById[$eid] ?? null;
+                if (!$tm) {
+                    $asm[] = '    jmp ' . $fail; // timer desconhecido: falha fechada
+                    return $asm;
+                }
+                $asm[] = '    lda ' . $tm['fireLabel'];
+                $asm[] = '    beq ' . $fail;
+                return $asm;
+            }
+            if ($cat === 'input' || (is_array($ev) && isset($ev['button']))) {
+                $btn = (string)($ev['button'] ?? 'P1-FIRE');
+                $trig = (string)($ev['trigger'] ?? 'press');
+                return self::emitInputCheck($btn, $trig, $fail);
+            }
+            if ($cat === 'collision' || str_starts_with($eid, 'ev_col_')) {
+                $col = is_array($ev) ? (string)($ev['collision'] ?? '') : '';
+                if ($col === '' && str_starts_with($eid, 'ev_col_')) {
+                    $col = substr($eid, 7);
+                }
+                return self::emitCollisionCheck($col, $fail);
+            }
+            $asm[] = '    jmp ' . $fail;
+            return $asm;
+        }
+
+        if ($type === 'if_var') {
+            $ref = self::resolveVar($varMap, $st);
+            if (!$ref) {
+                $asm[] = '    jmp ' . $fail;
+                return $asm;
+            }
+            $op = (string)($st['op'] ?? '==');
+            $val = (int)($st['value'] ?? 0) & 0xff;
+            $asm[] = '    lda ' . $ref['label'];
+            $asm[] = '    cmp #' . $val;
+            $asm = array_merge($asm, self::emitCmpBranch($op, $fail));
+            return $asm;
+        }
+
+        if ($type === 'if_hitbox') {
+            $a = (string)($st['hitboxA'] ?? '');
+            $b = (string)($st['hitboxB'] ?? '');
+            $col = self::hitboxPairToCollision($a, $b);
+            if ($col !== '') {
+                return self::emitCollisionCheck($col, $fail);
+            }
+            $asm[] = '    jmp ' . $fail;
+            return $asm;
+        }
+
+        if ($type === 'if_screen') {
+            return [];
+        }
+
+        return [];
+    }
+
+    /** @return list<string> */
+    private static function emitAction(array $st, array $varMap): array
+    {
+        $asm = [];
+        $type = (string)($st['type'] ?? '');
+
+        if ($type === 'set_var' || $type === 'add_var' || $type === 'sub_var') {
+            $ref = self::resolveVar($varMap, $st);
+            if (!$ref) {
+                return [];
+            }
+            $val = (int)($st['value'] ?? 0) & 0xff;
+            if ($type === 'set_var') {
+                $asm[] = '    lda #' . $val;
+                $asm[] = '    sta ' . $ref['label'];
+            } elseif ($type === 'add_var') {
+                $asm[] = '    lda ' . $ref['label'];
+                $asm[] = '    clc';
+                $asm[] = '    adc #' . $val;
+                $asm[] = '    sta ' . $ref['label'];
+            } else {
+                $asm[] = '    lda ' . $ref['label'];
+                $asm[] = '    sec';
+                $asm[] = '    sbc #' . $val;
+                $asm[] = '    sta ' . $ref['label'];
+            }
+            return $asm;
+        }
+
+        if ($type === 'copy_var') {
+            $src = self::resolveVar($varMap, [
+                'varId' => (string)($st['varIdFrom'] ?? ''),
+                'varName' => (string)($st['varNameFrom'] ?? ''),
+            ]);
+            $dst = self::resolveVar($varMap, [
+                'varId' => (string)($st['varIdTo'] ?? ''),
+                'varName' => (string)($st['varNameTo'] ?? ''),
+            ]);
+            if ($src && $dst) {
+                $asm[] = '    lda ' . $src['label'] . '            ; copy_var de';
+                $asm[] = '    sta ' . $dst['label'] . '            ; para';
+            }
+            return $asm;
+        }
+
+        if ($type === 'action') {
+            $aid = (string)($st['actionId'] ?? '');
+            $arg = (string)($st['arg'] ?? '');
+            $arg2 = (string)($st['arg2'] ?? '');
+            $arg3 = $st['arg3'] ?? 1;
+            if ($aid === 'set_var' || $aid === 'add_var' || $aid === 'sub_var') {
+                $st2 = ['varName' => $arg, 'value' => (int)$arg2];
+                $ref = self::resolveVar($varMap, $st2);
+                if ($ref) {
+                    $val = (int)$arg2 & 0xff;
+                    if ($aid === 'set_var') {
+                        $asm[] = '    lda #' . $val;
+                        $asm[] = '    sta ' . $ref['label'];
+                    } elseif ($aid === 'add_var') {
+                        $asm[] = '    lda ' . $ref['label'];
+                        $asm[] = '    clc';
+                        $asm[] = '    adc #' . $val;
+                        $asm[] = '    sta ' . $ref['label'];
+                    } else {
+                        $asm[] = '    lda ' . $ref['label'];
+                        $asm[] = '    sec';
+                        $asm[] = '    sbc #' . $val;
+                        $asm[] = '    sta ' . $ref['label'];
+                    }
+                }
+            } elseif ($aid === 'play_sound') {
+                $ch = (int)$arg;
+                if ($ch === 1) {
+                    $asm[] = '    lda #8';
+                    $asm[] = '    sta AUDV1';
+                    $asm[] = '    lda #4';
+                    $asm[] = '    sta AUDC1';
+                    $asm[] = '    lda #8';
+                    $asm[] = '    sta AUDF1';
+                } else {
+                    $asm[] = '    lda #8';
+                    $asm[] = '    sta AUDV0';
+                    $asm[] = '    lda #4';
+                    $asm[] = '    sta AUDC0';
+                    $asm[] = '    lda #8';
+                    $asm[] = '    sta AUDF0';
+                }
+            } elseif ($aid === 'stop_sound') {
+                $ch = (int)$arg;
+                $asm[] = '    lda #0';
+                $asm[] = $ch === 1 ? '    sta AUDV1' : '    sta AUDV0';
+            } elseif ($aid === 'set_tia') {
+                $reg = preg_replace('/[^A-Za-z0-9_]/', '', $arg) ?: 'COLUP0';
+                $val = (int)$arg2 & 0xff;
+                $asm[] = '    lda #' . $val;
+                $asm[] = '    sta ' . $reg;
+            } elseif ($aid === 'toggle_bool') {
+                $ref = self::resolveVar($varMap, ['varName' => $arg, 'varId' => $arg]);
+                if ($ref) {
+                    $asm[] = '    lda ' . $ref['label'];
+                    $asm[] = '    eor #1';
+                    $asm[] = '    sta ' . $ref['label'];
+                }
+            } elseif ($aid === 'move_player') {
+                $pl = ((string)$arg === '1') ? 1 : 0;
+                $dir = strtolower(trim((string)$arg2));
+                $dist = max(1, min(8, (int)$arg3));
+                $xLab = $pl === 1 ? 'P1X' : 'P0X';
+                $yLab = $pl === 1 ? 'P1Y' : 'P0Y';
+                if (in_array($dir, ['left', 'right', 'up', 'down'], true)) {
+                    for ($n = 0; $n < $dist; $n++) {
+                        if ($dir === 'left') {
+                            $asm[] = '    dec ' . $xLab;
+                        } elseif ($dir === 'right') {
+                            $asm[] = '    inc ' . $xLab;
+                        } elseif ($dir === 'up') {
+                            $asm[] = '    dec ' . $yLab;
+                        } else {
+                            $asm[] = '    inc ' . $yLab;
+                        }
+                    }
+                }
+            } elseif ($aid === 'asm' || $aid === 'custom') {
+                foreach (preg_split("/\r\n|\n|\r/", $arg) as $line) {
+                    $line = trim($line);
+                    if ($line !== '') {
+                        $asm[] = '    ' . $line;
+                    }
+                }
+            }
+        }
+        return $asm;
+    }
+
+
     private static function resolveVar(array $varMap, array $st): ?array
     {
         $id = (string)($st['varId'] ?? '');

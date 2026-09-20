@@ -202,15 +202,23 @@ final class ProjectParser
         // sem custo nenhum. Precisa ser calculado ANTES de
         // buildMetatileCompression() porque muda o limite de metatiles
         // desse banco (reserva espaço pros tiles da fonte).
-        $textFontMode = ($project['textFontMode'] ?? 'ascii') === 'smb' ? 'smb' : 'ascii';
+        // "none" = usuário desligou texto no Config (trava a ferramenta no
+        // editor também) - nem verifica se sobrou textLayers de uma
+        // mudança anterior, ignora tudo de propósito, sem gastar 1 tile
+        // sequer nem rodar a varredura.
+        $textFontModeRaw = (string)($project['textFontMode'] ?? 'ascii');
+        $textDisabled = $textFontModeRaw === 'none';
+        $textFontMode = $textFontModeRaw === 'smb' ? 'smb' : 'ascii';
         $bankNeedsFont = [];
-        foreach ($screensByBank as $bi => $idxList) {
-            $needs = false;
-            foreach ($idxList as $si) {
-                $tl = $screenData[$si]['textLayers'] ?? [];
-                if (is_array($tl) && count($tl) > 0) { $needs = true; break; }
+        if (!$textDisabled) {
+            foreach ($screensByBank as $bi => $idxList) {
+                $needs = false;
+                foreach ($idxList as $si) {
+                    $tl = $screenData[$si]['textLayers'] ?? [];
+                    if (is_array($tl) && count($tl) > 0) { $needs = true; break; }
+                }
+                $bankNeedsFont[$bi] = $needs;
             }
-            $bankNeedsFont[$bi] = $needs;
         }
         $anyBankNeedsFont = in_array(true, $bankNeedsFont, true);
         $font = $anyBankNeedsFont ? FontAsset::load($textFontMode) : null;

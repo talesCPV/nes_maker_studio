@@ -119,6 +119,7 @@ const CONFIG = (() => {
               <div style="margin-top:8px">
                 <label style="font-size:10px;color:#666">Fonte do texto sobreposto</label>
                 <select id="dashTextFontMode" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px">
+                  <option value="none">Sem texto (desliga a ferramenta, zero custo de CHR)</option>
                   <option value="ascii">Completa (ASCII — maiúsc.+minúsc.+símbolos, 96 tiles)</option>
                   <option value="smb">Compacta (estilo SMB1 — maiúsc.+números, 40 tiles)</option>
                 </select>
@@ -226,7 +227,14 @@ const CONFIG = (() => {
     if(descEl) descEl.addEventListener('input', e=>{ if(Project.data) Project.data.description=e.target.value; });
     if(textFontModeEl) textFontModeEl.addEventListener('change', e=>{
       if(!Project.data) return;
-      Project.data.textFontMode = (e.target.value === 'smb') ? 'smb' : 'ascii';
+      const v = e.target.value;
+      Project.data.textFontMode = (v === 'none' || v === 'smb') ? v : 'ascii';
+      // "Sem texto": desliga a ferramenta de texto no editor de background
+      // e ativa a trava (BG.setTextToolEnabled), se o módulo já estiver
+      // carregado nesta sessão.
+      if(typeof BG !== 'undefined' && BG.setTextToolEnabled){
+        BG.setTextToolEnabled(Project.data.textFontMode !== 'none');
+      }
     });
     if(mapperEl) mapperEl.addEventListener('change', e=>{
       if(!Project.data) return;
@@ -387,9 +395,11 @@ const CONFIG = (() => {
     }
     const textFontModeEl=document.getElementById('dashTextFontMode');
     if(textFontModeEl){
-      const tfm = (Project.data.textFontMode === 'smb') ? 'smb' : 'ascii';
+      const stored = Project.data.textFontMode;
+      const tfm = (stored === 'none' || stored === 'smb') ? stored : 'ascii';
       Project.data.textFontMode = tfm;
       textFontModeEl.value = tfm;
+      if(typeof BG !== 'undefined' && BG.setTextToolEnabled) BG.setTextToolEnabled(tfm !== 'none');
     }
     const controlModeEl=document.getElementById('dashControlMode');
     if(controlModeEl) controlModeEl.value = Project.data.controlMode || 'auto';

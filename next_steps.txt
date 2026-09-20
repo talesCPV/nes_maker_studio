@@ -1,0 +1,38 @@
+Levantando tudo que está em aberto, organizado por prioridade:
+
+1. Aviso antecipado de limite de metatile+fonte — a pergunta que você acabou de fazer. Ainda não implementei 
+nenhuma das duas opções (avisar no editor de metatile com o limite dinâmico 64→40/54, e/ou mostrar a fonte 
+como preview na página de CHR). Não bloqueia nada, é melhoria de UX.
+STATUS: Implantado.
+OBS: Talvez um feedback na barra superior a cada salvamento de projeto
+
+2. Validar CNROM + texto sobreposto — só testei texto em NROM e UOROM com CPU real. CNROM sozinho (sem texto) 
+foi testado, mas a combinação específica CNROM+texto não. Deveria funcionar igual (mesmo caminho de código), 
+mas não coloquei na bancada ainda.
+STATUS: Em Execução
+OBS: VER BUG DE COR DE FUNDO DE BACKGROUND (Mario)
+
+3. Tabela de warps por instância — destino por posição (tela+célula) em runtime, em vez do targetId estático 
+de hoje. Diagnosticado e alinhado tecnicamente há várias sessões, nunca implementado. Simplificaria a UI da 
+ação "Ir para Warp" (tiraria o seletor de objeto).
+STATUS: Ainda Não Aplicado
+
+4. Limpeza de arquivos órfãos — sprite_chr.php e background_chr.php (removidos do código, mas ainda existem 
+fisicamente no seu servidor) e templates/cfg.php (o arquivo órfão que causou a confusão desta sessão). Só 
+remoção manual, nunca confirmado se já foi feito.
+STATUS: Ainda Não Aplicado
+
+5. Player de áudio genérico — unificar as rotinas por-música/por-SFX num player único indexado por tabela 
+(hoje ~117 bytes duplicados por canal/música; proposta ~200 fixos + ~8/canal). Puramente otimização de ROM, 
+discutido e medido, decisão de implementar em aberto.
+STATUS: Ainda Não Aplicado
+
+6. UOROM Etapa 2 — duas lacunas conhecidas: (a) se uma fase sozinha não couber em 16KB, hoje só o ld65 acusa 
+erro (menos amigável que o limite de metatile); (b) dividir 1 fase em mais de 1 banco está fora de escopo por 
+enquanto. Baixa prioridade.
+STATUS: Ainda Não Aplicado
+
+7. Animação de tile de cenário via CHR-RAM — ideia futura registrada, motor ainda não tem nenhum recurso pra 
+isso. Você mesmo pediu pra deixar pra depois da Etapa 2 (já concluída), então esse é o próximo natural se 
+quiser continuar por aí.
+STATUS: Ainda Não Aplicado

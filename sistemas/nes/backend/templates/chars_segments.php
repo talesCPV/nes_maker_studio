@@ -18,7 +18,14 @@ return [
         $banks = is_array($mapperInfo['banks'] ?? null) ? $mapperInfo['banks'] : [['spritePage' => 0, 'bgPage' => 1]];
 
         $emitBlock = static function (array $bytes, string $comment): array {
-            if (!$bytes) $bytes = array_fill(0, 4096, 0);
+            // CHR-ROM fisica (NROM/CNROM) precisa dos 4096 bytes inteiros
+            // sempre, mesmo que so' uma parte seja "significativa" - o
+            // resto vira preenchimento zero. bgChrBanks/spriteChrBanks
+            // pode chegar aqui MENOR que 4096 (ex: metatile+fonte cortado
+            // - ver ProjectParser, texto sobreposto) porque isso e'
+            // otimizacao PRA CHR-RAM do UOROM (outro branch, mais abaixo),
+            // que nao passa por aqui - aqui sempre preenche de volta.
+            if (count($bytes) < 4096) $bytes = array_pad($bytes, 4096, 0);
             $lines = ["  ; {$comment}"];
             for ($i = 0; $i < 4096; $i += 16) {
                 $slice = array_slice($bytes, $i, 16);

@@ -176,6 +176,7 @@ const BG = (() => {
                   <h4 style="font-size:11px;color:#4ec9b0;margin:0">NAMETABLES</h4>
                   <div style="display:flex;align-items:center;gap:4px"><span style="font-size:10px;color:#888">Fase:</span><select id="bgChrPageSelect" title="Fase → página BG do CHR" style="background:#000;color:#ffcc00;border:1px solid #665500;border-radius:3px;font-size:10px;padding:2px 6px;min-width:120px"></select></div>
                 </div>
+                <div id="metatileCountInfo" style="font-size:10px;margin-bottom:6px"></div>
                 <div id="metatilePalette" style="display:flex;flex-wrap:wrap;gap:6px;max-height:180px;overflow:auto;padding-right:4px"></div>
               </div>
 
@@ -261,6 +262,7 @@ const BG = (() => {
     refreshMetatileList();
     refreshBgPalettePanel();
     updateTextPaletteUI();
+    setTextToolEnabled(Project.data?.textFontMode !== 'none');
     render();
   }
 
@@ -290,7 +292,22 @@ const BG = (() => {
     applyCanvasZoom();
   }
 
+  let textToolEnabled = true;
+
+  function setTextToolEnabled(enabled){
+    textToolEnabled = !!enabled;
+    const btn = document.querySelector('#mod-bg .tool-btn[data-bg-tool="text"]');
+    if(btn){
+      btn.disabled = !textToolEnabled;
+      btn.style.opacity = textToolEnabled ? '' : '0.35';
+      btn.style.cursor = textToolEnabled ? '' : 'not-allowed';
+      btn.title = textToolEnabled ? 'Texto' : 'Texto desligado ("Sem texto" em Config)';
+    }
+    if(!textToolEnabled && currentTool === 'text') setTool('paint');
+  }
+
   function setTool(t) {
+    if(t === 'text' && !textToolEnabled) return; // "Sem texto" travado no config
     currentTool = t;
     document.querySelectorAll('#mod-bg .tool-btn[data-bg-tool]').forEach(b => {
       const on = b.getAttribute('data-bg-tool') === t;
@@ -943,6 +960,36 @@ const BG = (() => {
     }
   }
 
+  // Aviso ANTECIPADO (antes do build) do limite de metatiles distintos por
+  // página de CHR de background - 64 normalmente, ou 40/54 se essa página
+  // tiver alguma tela com texto sobreposto (a fonte reserva 96 ou 40 tiles
+  // - ver ProjectParser::computeChrUploadTrim/buildTextOverlays no
+  // backend, mesma conta refeita aqui só pra exibir cedo). Não é 100%
+  // idêntico ao cálculo real do backend (lá é por BANCO - combinação de
+  // sprite_page+bg_page - aqui é por PÁGINA de CHR sozinha), mas é
+  // conservador: se passar aqui, passa lá também.
+  function pageHasText(chrPage){
+    const scans = [
+      ...(Project.data?.backgrounds || []),
+      ...(Project.data?.splashScreens || [])
+    ];
+    return scans.some(bg => (bg.chrPage || 0) === chrPage && Array.isArray(bg.textLayers) && bg.textLayers.length > 0);
+  }
+  function updateMetatileCountInfo(count){
+    const el = document.getElementById('metatileCountInfo');
+    if(!el) return;
+    const hasText = pageHasText(currentChrPage);
+    const fontTiles = (Project.data?.textFontMode === 'smb') ? 40 : 96;
+    const cap = hasText ? Math.floor((256 - fontTiles) / 4) : 64;
+    const pct = cap > 0 ? Math.round((count / cap) * 100) : 0;
+    let color = '#4ec9b0';
+    if(pct >= 100) color = '#e74c3c'; else if(pct >= 85) color = '#f39c12';
+    const textNote = hasText
+      ? ` <span style="color:#888">(reduzido de 64 — esta página tem tela com texto, a fonte reserva ${fontTiles} tiles)</span>`
+      : '';
+    el.innerHTML = `<span style="color:${color}">${count} / ${cap} metatiles</span>${textNote}`;
+  }
+
   function refreshMetatileList(){
     const container = document.getElementById('metatilePalette'); if(!container) return;
     let mets = (typeof CHR !== 'undefined' && CHR.getMetatiles) ? CHR.getMetatiles() : (Project.data?.metatiles || []);
@@ -952,7 +999,9 @@ const BG = (() => {
     const startTile = currentChrPage * 256;
     const endTile = startTile + 256;
     const pageMetatiles = mets.filter(mt => { if(!mt.tiles || mt.tiles.length === 0) return true; return mt.tiles.some(t => t >= startTile && t < endTile); });
-    if(pageMetatiles.length === 0){ container.innerHTML = `<div style="font-size:10px;color:#666;padding:8px">Nenhum metatile na pág</div>`; return; }
+    if(pageMetatiles.length === 0){ container.innerHTML = `<div style="font-size:10px;color:#666;padding:8px">Nenhum metatile na pág</div>`; }
+    updateMetatileCountInfo(pageMetatiles.length);
+    if(pageMetatiles.length === 0) return;
     pageMetatiles.forEach((mt, idx) => {
       const div = document.createElement('div');
       const isSelected = selectedMetatile && selectedMetatile.id === mt.id;
@@ -1175,6 +1224,36 @@ const BG = (() => {
     }
   }
 
+  // Fonte pronta pro preview do texto sobreposto (mesma fonte que o backend
+  // usa em runtime - sistemas/nes/assets/novo.chr, página 0, índice de
+  // tile = código ASCII). Independente do chrBuffer do usuário (que pode
+  // ter sido totalmente sobrescrito pela arte dele) - carregada 1x, à
+  // parte, só pro canvas desenhar o texto com a cara real que vai sair na
+  // ROM, em vez de pegar lixo da página de CHR do usuário.
+  let fontGlyphs = null;
+  (function loadFontGlyphs(){
+    fetch('assets/novo.chr').then(r => r.arrayBuffer()).then(buf => {
+      const page0 = new Uint8Array(buf).slice(0, 4096);
+      fontGlyphs = page0;
+      render();
+    }).catch(() => {});
+  })();
+  function drawFontGlyph(code, dx, dy, pal){
+    if(!fontGlyphs) return false;
+    const off = (code & 0xFF) * 16;
+    if(off + 16 > fontGlyphs.length) return false;
+    for(let py=0; py<8; py++){
+      const p0 = fontGlyphs[off+py], p1 = fontGlyphs[off+py+8];
+      for(let px=0; px<8; px++){
+        const sh = 7-px, b0 = (p0>>sh)&1, b1 = (p1>>sh)&1, ci = (b1<<1)|b0;
+        if(ci === 0) continue; // cor 0 = transparente, deixa o fundo aparecer
+        bgCtx.fillStyle = NES_PALETTE[pal[ci]];
+        bgCtx.fillRect(dx + px*2, dy + py*2, 2, 2);
+      }
+    }
+    return true;
+  }
+
   function render(){
     if(!bgCtx || !bgCanvas) return;
     bgCtx.fillStyle = '#000'; bgCtx.fillRect(0,0,512,480);
@@ -1201,6 +1280,19 @@ const BG = (() => {
         }
       }
     }
+    // Texto sobreposto: desenha por cima com a fonte REAL (novo.chr), não
+    // mais lendo nametable[]/chrBuf pra essas células - o texto não vive
+    // mais na página de CHR do usuário, é um asset à parte (ver
+    // FontAsset.php no backend, mesma fonte usada em runtime).
+    const bgPals = getBgPalettes();
+    textLayers.forEach(layer => {
+      const pal = bgPals[layer.pal] || bgPals[0];
+      for(let i=0; i<layer.text.length; i++){
+        const tx = layer.x + i, ty = layer.y;
+        if(tx<0||tx>=32||ty<0||ty>=30) continue;
+        drawFontGlyph(layer.text.charCodeAt(i), tx*16, ty*16, pal);
+      }
+    });
     if(document.getElementById('chkShowHitbox')?.checked) {
       for(let ty=0; ty<30; ty++){
         for(let tx=0; tx<32; tx++){
@@ -1772,7 +1864,7 @@ const BG = (() => {
   }
 
   return {
-    init: buildHTML, setTool, setCollisionType, setAllSubTilesCollision, applyMetatileHitboxToCanvas, setMetatileDefaultObject,
+    init: buildHTML, setTool, setTextToolEnabled, setCollisionType, setAllSubTilesCollision, applyMetatileHitboxToCanvas, setMetatileDefaultObject,
     insertText, fillAllEmpty, fillEntireScreen, migrateLegacyScreen, applyAttrToAll, setTextOffsetMode,
     newCanvas, clearBackground, saveEntryAs, saveCurrentEntry, saveAsClone, deleteCurrentEntry, renameCurrentEntry, loadEntry,
     zoomIn, zoomOut,

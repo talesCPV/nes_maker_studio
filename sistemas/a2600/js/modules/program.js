@@ -42,11 +42,18 @@ const PROGRAM = (() => {
     if_var: { label: 'SE variável...' },
     if_hitbox: { label: 'SE hitbox... toca...' },
     if_screen: { label: 'SE carregar a tela...' },
+    join: { label: 'COMPLEMENTO (e / ou)' },
+    else: { label: 'SENÃO (else)' },
     set_var: { label: 'DEFINIR variável' },
     add_var: { label: 'SOMAR variável' },
     sub_var: { label: 'SUBTRAIR variável' },
     copy_var: { label: 'COPIAR variável' },
     action: { label: 'AÇÃO...' },
+  };
+
+  const JOIN_OPS = {
+    and: { label: 'e (E — todas as condições)' },
+    or: { label: 'ou (OU — qualquer condição)' },
   };
 
   const ACTION_CATALOG = {
@@ -617,6 +624,11 @@ const PROGRAM = (() => {
               const vt = (d.variables || []).find((v) => v.id === s.varIdTo);
               return 'COPIAR ' + (vf ? vf.name : '?') + ' → ' + (vt ? vt.name : '?');
             }
+            if (s.type === 'join') {
+              const op = s.op || 'and';
+              return op === 'or' ? 'OU' : 'E';
+            }
+            if (s.type === 'else') return 'SENÃO';
             if (s.type === 'action') return 'AÇÃO ' + (s.actionId || '');
             return (STEP_TYPES[s.type] || {}).label || s.type;
           })
@@ -753,6 +765,18 @@ const PROGRAM = (() => {
         <select ${sel} data-f="varIdFrom">${varOpts(step.varIdFrom)}</select>
         <span class="muted">para</span>
         <select ${sel} data-f="varIdTo">${varOpts(step.varIdTo)}</select>`;
+    } else if (step.type === 'join') {
+      if (!step.op) step.op = 'and';
+      const jopts = Object.entries(JOIN_OPS)
+        .map(
+          ([k, v]) =>
+            `<option value="${k}" ${step.op === k ? 'selected' : ''}>${v.label}</option>`
+        )
+        .join('');
+      fields = `<select ${sel} data-f="op">${jopts}</select>
+        <span class="muted" style="font-size:10px">E entre SEs = um teste só (SENÃO se algum falhar) · sem E = SENÃO só no último SE</span>`;
+    } else if (step.type === 'else') {
+      fields = `<span class="muted">se as condições acima falharem, executa os passos seguintes</span>`;
     } else if (step.type === 'action') {
       const actOpts = Object.entries(ACTION_CATALOG)
         .map(
@@ -1133,6 +1157,7 @@ const PROGRAM = (() => {
           const i = parseInt(sel.getAttribute('data-i'), 10);
           rule.steps[i] = { type: e.target.value };
           if (e.target.value === 'if_event') rule.steps[i].eventId = 'ev_vblank';
+          if (e.target.value === 'join') rule.steps[i].op = 'and';
           if (e.target.value === 'if_var') {
             rule.steps[i].op = '==';
             rule.steps[i].value = 0;

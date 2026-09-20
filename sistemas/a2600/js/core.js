@@ -126,25 +126,44 @@ const Project = {
 
     // --- vertical shooter / Megamania ---
     if (style === 'vertical_shooter') {
-      // Máscara de vivos da 1ª fileira (bits 0–5). Editável em Programação (0–63).
-      let aliveInit = 63;
       const bands = Array.isArray(d.bands) ? d.bands : [];
-      const firstEnemy = bands.find((b) => b && b.role !== 'hero');
-      if (firstEnemy && firstEnemy.aliveMask != null) {
-        aliveInit = firstEnemy.aliveMask & 0x3f;
-      }
+      const enemies = bands.filter((b) => b && b.role !== 'hero');
+      const firstEnemy = enemies[0];
+      const maskOf = (b, def = 63) =>
+        b && b.aliveMask != null ? b.aliveMask & 0x3f : def;
       want.push({
         name: 'enemyAlive',
         type: 'byte',
-        note: 'Máscara vivos fileira (bits 0–5, 0–63). 63=todos. Nativa Megamania',
-        value: aliveInit,
+        note: 'Máscara fileira 1 (alias enemyAlive1). Bits 0–5, 0–63',
+        value: maskOf(firstEnemy, 63),
+      });
+      want.push({
+        name: 'enemyAlive1',
+        type: 'byte',
+        note: 'Máscara vivos fileira 1. Bits pares=P0, ímpares=P1',
+        value: maskOf(firstEnemy, 63),
       });
       want.push({
         name: 'rowX',
         type: 'byte',
-        note: 'X da fileira de inimigos (scroll). Nativa Megamania',
+        note: 'X da 1ª fileira de inimigos. Nativa Megamania',
         value: firstEnemy && firstEnemy.baseX != null ? firstEnemy.baseX & 0xff : 24,
       });
+      if (enemies.length >= 2) {
+        const second = enemies[1];
+        want.push({
+          name: 'enemyAlive2',
+          type: 'byte',
+          note: 'Máscara vivos fileira 2. Bits pares=P0, ímpares=P1',
+          value: maskOf(second, 63),
+        });
+        want.push({
+          name: 'rowX2',
+          type: 'byte',
+          note: 'X da 2ª fileira de inimigos. Nativa Megamania',
+          value: second && second.baseX != null ? second.baseX & 0xff : 24,
+        });
+      }
     }
 
     // --- boxing ---
@@ -191,7 +210,10 @@ const Project = {
       'rounds',
       'timer',
       'enemyAlive',
+      'enemyAlive1',
+      'enemyAlive2',
       'rowX',
+      'rowX2',
     ]);
     // ensure each wanted native exists
     for (const w of want) {

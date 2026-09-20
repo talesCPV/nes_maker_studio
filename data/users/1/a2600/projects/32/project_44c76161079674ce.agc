@@ -97,18 +97,42 @@
     "sounds": [],
     "variables": [
         {
+            "id": "native_enemyAlive2",
+            "name": "enemyAlive2",
+            "type": "byte",
+            "note": "Máscara vivos fileira 2. Bits pares=P0, ímpares=P1",
+            "value": 6,
+            "native": true
+        },
+        {
+            "id": "native_enemyAlive1",
+            "name": "enemyAlive1",
+            "type": "byte",
+            "note": "Máscara vivos fileira 1. Bits pares=P0, ímpares=P1",
+            "value": 11,
+            "native": true
+        },
+        {
+            "id": "native_rowX2",
+            "name": "rowX2",
+            "type": "byte",
+            "note": "X da 2ª fileira de inimigos. Nativa Megamania",
+            "value": 59,
+            "native": true
+        },
+        {
             "id": "native_rowX",
             "name": "rowX",
             "type": "byte",
-            "note": "X da fileira de inimigos (scroll). Nativa Megamania",
-            "value": 0,
+            "note": "X da 1ª fileira de inimigos. Nativa Megamania",
+            "value": 7,
             "native": true
         },
         {
             "id": "native_enemyAlive",
             "name": "enemyAlive",
             "type": "byte",
-            "note": "Máscara vivos fileira (bits 0–5, 0–63). 63=todos. Nativa Megamania",
+            "note": "Máscara fileira 1 (alias enemyAlive1). Bits 0–5, 0–63",
             "value": 63,
             "native": true
         },
@@ -132,13 +156,22 @@
         {
             "id": "rule_mu7g4gvj_h6",
             "tabId": "main",
-            "name": "left",
+            "name": "zig-zag",
             "steps": [
+                {
+                    "type": "if_event",
+                    "eventId": "ev_mu7gvf8m_7jg"
+                },
                 {
                     "type": "if_var",
                     "op": "==",
                     "value": 1,
                     "varId": "var_mu7gvu7q_4af"
+                },
+                {
+                    "type": "add_var",
+                    "varId": "native_rowX2",
+                    "value": 1
                 },
                 {
                     "type": "sub_var",
@@ -147,21 +180,16 @@
                 },
                 {
                     "type": "copy_var",
-                    "varIdFrom": "native_rowX",
+                    "varIdFrom": "native_rowX2",
                     "varIdTo": "native_scoreP0"
-                }
-            ]
-        },
-        {
-            "id": "rule_mu7g4z5q_35a",
-            "tabId": "main",
-            "name": "rigth",
-            "steps": [
+                },
                 {
-                    "type": "if_var",
-                    "op": "==",
-                    "value": 0,
-                    "varId": "var_mu7gvu7q_4af"
+                    "type": "else"
+                },
+                {
+                    "type": "sub_var",
+                    "varId": "native_rowX2",
+                    "value": 1
                 },
                 {
                     "type": "add_var",
@@ -170,7 +198,7 @@
                 },
                 {
                     "type": "copy_var",
-                    "varIdFrom": "native_rowX",
+                    "varIdFrom": "native_rowX2",
                     "varIdTo": "native_scoreP0"
                 }
             ]
@@ -186,24 +214,8 @@
                 },
                 {
                     "type": "copy_var",
-                    "varIdFrom": "native_rowX",
+                    "varIdFrom": "native_rowX2",
                     "varIdTo": "native_scoreP0"
-                }
-            ]
-        },
-        {
-            "id": "rule_mu7gkk1x_5tb",
-            "tabId": "rtab_mu7hwkc8_2ck",
-            "name": "timer",
-            "steps": [
-                {
-                    "type": "if_event",
-                    "eventId": "ev_mu7hzq8f_5j8"
-                },
-                {
-                    "type": "add_var",
-                    "varId": "native_rowX",
-                    "value": 1
                 }
             ]
         },
@@ -214,7 +226,7 @@
             "steps": [
                 {
                     "type": "if_var",
-                    "op": "==",
+                    "op": ">=",
                     "value": 59,
                     "varId": "native_rowX"
                 },
@@ -232,7 +244,7 @@
             "steps": [
                 {
                     "type": "if_var",
-                    "op": "==",
+                    "op": "<=",
                     "value": 7,
                     "varId": "native_rowX"
                 },
@@ -255,17 +267,40 @@
             "copies": 6,
             "spacing": "medium",
             "wrap": true,
-            "baseX": 24,
+            "baseX": 7,
             "xs": [
-                24,
-                40,
-                56,
-                72,
-                88,
-                104
+                7,
+                23,
+                39,
+                55,
+                71,
+                87
             ],
             "aliveMask": 3,
             "moveDelay": 20,
+            "moveMode": "wrap"
+        },
+        {
+            "id": "band_mu99jrkz_2c3",
+            "screenId": "screen_main",
+            "role": "enemy_row",
+            "y": 44,
+            "height": 16,
+            "spriteId": "spr_mu6xohzh_349",
+            "copies": 6,
+            "spacing": "medium",
+            "wrap": true,
+            "baseX": 59,
+            "xs": [
+                59,
+                75,
+                91,
+                107,
+                123,
+                139
+            ],
+            "aliveMask": 7,
+            "moveDelay": 0,
             "moveMode": "wrap"
         }
     ],
@@ -416,5 +451,5 @@
     "programMeta": {
         "notes": ""
     },
-    "updated": 1789768574035
+    "updated": 1789930289444
 }

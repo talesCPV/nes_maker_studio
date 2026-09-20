@@ -27,6 +27,7 @@ then
     git add commit.sh
     git add deploy.sh
     git add futuro.txt
+    git add next_steps.txt
     git add index.html
     git add readme.md
     git add login.html
