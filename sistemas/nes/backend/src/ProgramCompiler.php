@@ -89,6 +89,18 @@ final class ProgramCompiler
      */
     public function compile(array $project, array $spriteCtx, array $playIdxs, array $screenData, array $screenIndexById = []): array
     {
+        // UOROM etapa 2: fase -> banco de PRG (mesma fonte que
+        // ProjectParser::resolveMapperBanks() usa - getUoromPrgBanks() e' o
+        // ponto publico unico, nunca duplicar esse algoritmo). So' calculado
+        // de verdade quando o mapper e' UOROM; nos outros dois fica vazio e
+        // compilePlaySound nem entra no caminho de troca de banco.
+        $phasePrgBankIndex = [];
+        if ((int)($project['mapper'] ?? 0) === 2) {
+            foreach ((new ProjectParser())->getUoromPrgBanks($project) as $bi => $b) {
+                $phasePrgBankIndex[(string)$b['phaseId']] = $bi;
+            }
+        }
+
         $vars = is_array($project['variables'] ?? null) ? $project['variables'] : [];
         $alloc = $this->allocateVariables($vars);
 
@@ -226,6 +238,7 @@ final class ProgramCompiler
             'phaseIndexById' => $phaseIndexById,
             'screenIndexById' => $screenIndexById,
             'soundsById' => $this->buildSoundsById($project),
+            'phasePrgBankIndex' => $phasePrgBankIndex,
             'heroAnimRanges' => is_array($spriteCtx['charData'][$heroIdx]['animRanges'] ?? null) ? $spriteCtx['charData'][$heroIdx]['animRanges'] : [],
             'heroCharIdx' => $heroIdx,
             'charAnimRangesById' => (static function () use ($charIndexById, $spriteCtx): array {
@@ -1079,6 +1092,23 @@ final class ProgramCompiler
         if (!$isSfx) {
             $lbl = $this->soundLabel('ms_', $targetId);
             $lines = ["  ; Acao: Tocar Musica '{$name}'", "  JSR snd_enable_apu"];
+            $pid = $sound['phaseId'] ?? null;
+            $ppb = $hbCtx['phasePrgBankIndex'] ?? [];
+            if ($pid !== null && $pid !== '' && isset($ppb[(string)$pid])) {
+                $bank = (int)$ppb[(string)$pid];
+                // UOROM etapa 2: essa musica mora no banco de PRG da fase
+                // dela - seleciona ele ANTES de montar o dispatch/ponteiros
+                // RLE abaixo (que so' fazem sentido se o banco certo ja'
+                // estiver mapeado em $8000-$BFFF quando music_update ler
+                // deles, no proximo frame). Troca sempre, sem comparar com
+                // cur_prg_bank - mais barato que arriscar um bug de estado
+                // e so' acontece 1x por "Tocar Som", nao por frame.
+                $lines[] = "  LDA #{$bank}";
+                $lines[] = '  STA cur_prg_bank';
+                $lines[] = '  TAX';
+                $lines[] = '  LDA UoromBankSelect,X';
+                $lines[] = '  STA UoromBankSelect,X';
+            }
             $lines[] = "  LDA #<music_update_{$lbl}";
             $lines[] = '  STA music_dispatch';
             $lines[] = "  LDA #>music_update_{$lbl}";

@@ -3,6 +3,7 @@
 require_once __DIR__ . '/ProjectParser.php';
 require_once __DIR__ . '/AsmBuilder.php';
 require_once __DIR__ . '/ProgramCompiler.php';
+require_once __DIR__ . '/FontAsset.php';
 
 final class NGC
 {

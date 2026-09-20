@@ -281,40 +281,10 @@ const BUILD = (() => {
   }
 
   /**
-   * Estima bytes ÚTEIS no PRG.
-   *
-   * Problema: os 6 últimos bytes do PRG são SEMPRE os vetores 6502 (NMI/RESET/IRQ)
-   * em $FFFA–$FFFF — por isso um scan "último ≠ 0" quase sempre dava ~100%.
-   *
-   * Método: ignora os 6 bytes finais (vetores), conta quantos $00 (ou $FF) de padding
-   * existem imediatamente antes deles, e:
-   *   útil ≈ tamanho_do_banco - padding
-   * (os 6 bytes de vetor contam como úteis).
+   * (Removida: measurePrgUseful() — heurística de padding por bytes $00/$FF.
+   * Substituída pelo tamanho real de cada segmento no mapa do ld65 -
+   * ver computeMemFromSegments() abaixo, que consome assembled.memory.)
    */
-  function measurePrgUseful(bytes, ines){
-    if(!bytes || !ines || !ines.prgBytes) return null;
-    const start = ines.headerSize|0;
-    const bank = ines.prgBytes|0;
-    const end = start + bank;
-    if(end > bytes.length || bank < 16) return null;
-
-    const VECTOR_BYTES = 6; // NMI, RESET, IRQ (2 bytes cada)
-    // Região de dados/código: [start, end - VECTOR_BYTES)
-    const dataEnd = end - VECTOR_BYTES;
-
-    // Padding típico do ld65: sequência de $00 (às vezes $FF) colada antes dos vetores
-    let pad = 0;
-    for(let i = dataEnd - 1; i >= start; i--){
-      const b = bytes[i];
-      if(b === 0x00 || b === 0xFF) pad++;
-      else break;
-    }
-
-    // Se "tudo" for padding, ainda assim há vetores
-    const used = Math.max(VECTOR_BYTES, bank - pad);
-    // Refino: se o padding for $FF no meio de dados reais, pad fica curto (ok, conservador)
-    return { used, bank, pad: bank - used };
-  }
 
   function formatKb(bytes){
     if(bytes == null || isNaN(bytes)) return '—';
@@ -323,44 +293,62 @@ const BUILD = (() => {
     return (kb >= 10 ? Math.round(kb) : kb.toFixed(1)) + ' KB';
   }
 
-  function updateMemPanel(ines, projectMapper, prgFill){
+  /**
+   * Monta o resumo de memória REAL a partir do mapa do ld65 (backend) -
+   * substitui a heurística de padding antiga, que só enxergava o ÚLTIMO
+   * banco (onde ficam os vetores) e não tinha como medir os bancos
+   * comutáveis do UOROM etapa 2 (BANK0, BANK1, ...) nem separar CODE de
+   * RODATA. Vem de assemble.php -> memory: [{name,start,end,size}, ...].
+   */
+  function computeMemFromSegments(memory){
+    if(!Array.isArray(memory) || !memory.length) return null;
+    const byName = {};
+    memory.forEach(s => { byName[s.name] = s; });
+    const fixedUsed = (byName.CODE ? byName.CODE.size : 0) +
+      (byName.RODATA ? byName.RODATA.size : 0) +
+      (byName.VECTORS ? byName.VECTORS.size : 0);
+    const banks = memory
+      .filter(s => /^BANK\d+$/.test(s.name))
+      .map(s => ({ name: s.name, index: parseInt(s.name.slice(4), 10), used: s.size }))
+      .sort((a, b) => a.index - b.index);
+    return { fixedUsed, banks };
+  }
+
+  function updateMemPanel(ines, projectMapper, mem){
     const el = document.getElementById('buildMemInfo');
     if(!el) return;
     const lim = mapperPrgLimit(projectMapper != null ? projectMapper : (ines && ines.mapper));
-    if(!ines){
+    if(!ines || !mem){
       el.innerHTML = `<span style="color:#888">Faça um build para medir o PRG útil.</span><br>
         Mapper do projeto: <b style="color:#ffcc00">${lim.label}</b> · teto típico <b>${formatKb(lim.max)}</b><br>
         <span style="color:#666;font-size:10px">${lim.note}</span>`;
       return;
     }
-    // prgFill.used = bytes úteis; ines.prgBytes = tamanho do banco no cartucho (sempre cheio no header)
-    const used = (prgFill && prgFill.used != null) ? prgFill.used : ines.prgBytes;
-    const bank = ines.prgBytes;
-    const max = lim.max;
-    const pct = max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0;
-    let color = '#27ae60';
-    if(pct >= 90) color = '#e74c3c';
-    else if(pct >= 75) color = '#f39c12';
-    const bar = `<div style="margin:6px 0 4px;height:8px;background:#222;border-radius:4px;overflow:hidden">
-      <div style="height:100%;width:${pct}%;background:${color};transition:width .2s"></div>
-    </div>`;
-    const warn = pct >= 90
-      ? `<div style="color:#e74c3c;margin-top:4px;font-size:10px">⚠ PRG útil no limite do ${lim.label}. Considere UNROM/MMC1.</div>`
-      : (pct >= 75
-        ? `<div style="color:#f39c12;margin-top:4px;font-size:10px">⚠ PRG útil acima de 75% do teto do ${lim.label}.</div>`
-        : '');
-    const pad = prgFill ? prgFill.pad : 0;
+    const row = (label, used, total) => {
+      const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
+      let color = '#27ae60';
+      if(pct >= 90) color = '#e74c3c'; else if(pct >= 75) color = '#f39c12';
+      return `<div style="margin-top:6px">${label}: <b style="color:${color}">${formatKb(used)}</b>
+          <span style="color:#666">/ ${formatKb(total)} (${pct}%)</span></div>
+        <div style="margin:2px 0 2px;height:6px;background:#222;border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${color}"></div>
+        </div>`;
+    };
+    const BANK_SIZE = 16384;
+    let body;
+    if(mem.banks && mem.banks.length){
+      // UOROM etapa 2: banco fixo + 1 linha por fase/banco comutável
+      body = row('Banco fixo (motor+SFX+CHR-RAM)', mem.fixedUsed, BANK_SIZE) +
+        mem.banks.map(b => row(`Banco ${b.index} (fase)`, b.used, BANK_SIZE)).join('');
+    } else {
+      // NROM/CNROM: 1 região de PRG só
+      body = row('PRG útil', mem.fixedUsed, ines.prgBytes);
+    }
     el.innerHTML = `
       <div>Mapper: <b style="color:#ffcc00">${lim.label}</b> <span style="color:#666">(${lim.note})</span></div>
-      <div style="margin-top:4px">PRG <b>útil</b>: <b style="color:${color}">${formatKb(used)}</b>
-        <span style="color:#666">(${used} bytes)</span></div>
-      <div>Banco no ROM: <b>${formatKb(bank)}</b> <span style="color:#666">(${ines.prgBanks16}×16 KB)</span>
-        ${pad ? ` · livre ~<b style="color:#888">${formatKb(pad)}</b>` : ''}</div>
-      <div>Limite mapper: <b>${formatKb(max)}</b> · uso útil <b style="color:${color}">${pct}%</b></div>
-      ${bar}
-      <div style="color:#888;font-size:10px">CHR: ${formatKb(ines.chrBytes)} (${ines.chrBanks8}×8 KB)</div>
-      ${warn}
-      <div style="color:#555;font-size:9px;margin-top:4px">* Útil ≈ banco − padding ($00/$FF) antes dos vetores em $FFFA. Não usa o .asm.</div>`;
+      ${body}
+      <div style="color:#888;font-size:10px;margin-top:4px">CHR: ${formatKb(ines.chrBytes)} (${ines.chrBanks8}×8 KB)</div>
+      <div style="color:#555;font-size:9px;margin-top:4px">* Tamanho real de cada segmento (mapa do ld65), não estimativa.</div>`;
   }
 
   function loadEmulatorLoader(){
@@ -546,19 +534,20 @@ const BUILD = (() => {
         if(btnPlay) btnPlay.style.display = "inline-block";
         const ines = parseINESHeader(bytes);
         const projMapper = Project?.data?.mapper != null ? Project.data.mapper : (ines ? ines.mapper : 0);
-        const prgFill = measurePrgUseful(bytes, ines);
-        updateMemPanel(ines, projMapper, prgFill);
+        const memInfo = computeMemFromSegments(assembled.memory);
+        updateMemPanel(ines, projMapper, memInfo);
         if(ines){
-          log("📦 PRG útil: " + formatKb(prgFill ? prgFill.used : ines.prgBytes) +
+          const fixedTotal = (memInfo && memInfo.banks && memInfo.banks.length) ? 16384 : mapperPrgLimit(projMapper).max;
+          log("📦 PRG útil: " + formatKb(memInfo ? memInfo.fixedUsed : ines.prgBytes) +
             " / banco " + formatKb(ines.prgBytes) +
             " · CHR: " + formatKb(ines.chrBytes) +
-            " · teto " + mapperPrgLimit(projMapper).label + " " + formatKb(mapperPrgLimit(projMapper).max));
+            " · teto " + mapperPrgLimit(projMapper).label + " " + formatKb(fixedTotal));
         }
         if(stats){
           stats.innerHTML =
             "ASM: " + asm.length + " chars<br>" +
             "ROM: " + bytes.length + " bytes<br>" +
-            (ines ? ("PRG útil: " + formatKb(prgFill ? prgFill.used : ines.prgBytes) +
+            (ines ? ("PRG útil: " + formatKb(memInfo ? memInfo.fixedUsed : ines.prgBytes) +
               " / " + formatKb(mapperPrgLimit(projMapper).max) +
               " (banco " + formatKb(ines.prgBytes) + ")<br>") : "") +
             "Arquivo: " + lastNES.filename +

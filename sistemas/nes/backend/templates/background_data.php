@@ -31,6 +31,29 @@ return [
         foreach ($screens as $i => $_) $bkBytes[] = max(0, min(3, (int)($sb[$i] ?? 0)));
         if (!$bkBytes) $bkBytes = [0];
         $lines[] = '  .byte ' . implode(', ', $bkBytes);
+        // UOROM etapa 2: banco de PRG (nao confundir com ScreenBank acima,
+        // que e' CHR) - $FF = banco fixo (tela sem fase, ou mapper != 2).
+        // load_screen usa essa tabela pra trocar de banco de PRG no corte
+        // duro de fase (mesmo ponto onde CNROM ja troca CHR).
+        $spb = is_array($ctx['screenPrgBankIndex'] ?? null) ? $ctx['screenPrgBankIndex'] : [];
+        $lines[] = 'ScreenPrgBank:';
+        $pbBytes = [];
+        foreach ($screens as $i => $_) {
+            $v = $spb[$i] ?? null;
+            $pbBytes[] = ($v === null) ? '$FF' : (string)max(0, min(254, (int)$v));
+        }
+        if (!$pbBytes) $pbBytes = ['$FF'];
+        $lines[] = '  .byte ' . implode(', ', $pbBytes);
+        // Texto sobreposto: ponteiro pra TextOverlay_<tela> (fica sempre no
+        // banco fixo - só guarda ENDEREÇOS de 16 bits, não os dados em si;
+        // o dado de cada tela mora no banco da fase dela, ver
+        // 'background_data' abaixo). Tela sem texto ainda ganha uma entrada
+        // valida (TextOverlay_<i>: .byte 0), sem sentinela - draw_text_overlays
+        // le o contador e simplesmente nao faz nada se for 0.
+        $lines[] = 'TextOverlayLo:';
+        foreach ($screens as $i => $_) $lines[] = "  .byte <TextOverlay_{$i}";
+        $lines[] = 'TextOverlayHi:';
+        foreach ($screens as $i => $_) $lines[] = "  .byte >TextOverlay_{$i}";
         // Camada 8/9: ponteiros pra MetatileCollision_bank<N> de cada um dos 4
         // bancos possíveis (CNROM) - em NROM só o banco 0 é usado de verdade,
         // mas a tabela sempre tem 4 entradas (as demais reaproveitam o banco
@@ -80,12 +103,20 @@ return [
     'background_data' => static function(array $ctx): string {
         $screens = is_array($ctx['screenData'] ?? null) ? $ctx['screenData'] : [];
         $mtIdxByScreen = is_array($ctx['metatileIndexByScreen'] ?? null) ? $ctx['metatileIndexByScreen'] : [];
+        $spb = is_array($ctx['screenPrgBankIndex'] ?? null) ? $ctx['screenPrgBankIndex'] : [];
         $lines = [];
         foreach ($screens as $i => $screen) {
             $name = (string)($screen['name'] ?? "Tela {$i}");
             $role = (string)($screen['role'] ?? 'play');
             $at = is_array($screen['attributes'] ?? null) ? $screen['attributes'] : [];
             $at = array_pad(array_slice($at, 0, 64), 64, 0);
+
+            // UOROM etapa 2: nametable+atributo dessa tela vao pro banco de
+            // PRG da FASE dela (so' lido 1x, no load_screen, exatamente
+            // quando aquele banco ja' foi selecionado) - null = banco fixo
+            // (tela sem fase, ou qualquer outro mapper).
+            $bank = $spb[$i] ?? null;
+            if ($bank !== null) $lines[] = ".segment \"BANK{$bank}\"";
 
             // 240 bytes (16x15 células de 2x2 tiles) - cada byte é o índice
             // LOCAL (desse banco) do metatile carimbado naquela célula.
@@ -102,6 +133,20 @@ return [
             for ($j = 0; $j < 64; $j += 16) {
                 $lines[] = '  .byte ' . implode(', ', array_map(static fn($b) => sprintf('$%02X', ((int)$b) & 0xFF), array_slice($at, $j, 16)));
             }
+
+            // Texto sobreposto: 0 ou mais camadas (x, y, len, tiles...) -
+            // fica no MESMO banco que MetatileIndex_i/Attr_i (mesma fase),
+            // já resolvido pelo NGC (ProjectParser::buildTextOverlays) -
+            // tile já vem somado com a base da fonte daquele banco.
+            $tov = is_array($ctx['textOverlayByScreen'][$i] ?? null) ? $ctx['textOverlayByScreen'][$i] : [];
+            $lines[] = "TextOverlay_{$i}:";
+            $lines[] = '  .byte ' . count($tov) . '  ; num de camadas de texto';
+            foreach ($tov as $layer) {
+                $tiles = $layer['tiles'];
+                $lines[] = '  .byte ' . (int)$layer['x'] . ', ' . (int)$layer['y'] . ', ' . count($tiles);
+                $lines[] = '  .byte ' . implode(', ', array_map(static fn($t) => (string)max(0, min(255, (int)$t)), $tiles));
+            }
+            if ($bank !== null) $lines[] = '.segment "CODE"';
             $lines[] = '';
         }
 

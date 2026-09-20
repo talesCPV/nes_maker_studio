@@ -1424,13 +1424,13 @@ const BG = (() => {
       const attrIdx=Math.floor(attrY/2)*8+Math.floor(attrX/2);
       const shift=((attrY%2)*2+(attrX%2))*2;
       attributes[attrIdx] = (attributes[attrIdx] & ~(0x03<<shift)) | ((layer.pal & 0x03)<<shift);
-      // Camada 8 (compressão por metatile): texto escreve tile a tile,
-      // por fora do carimbo de metatile - a célula de 2x2 que ele cobre
-      // não pode mais ser reconstruída a partir de 1 metatile só, então
-      // invalida (fica "suja" ali, fallback cru no build - ver
-      // restoreUnderText pra reverter isso quando o texto sai dali).
-      const gx = Math.floor(tx/2), gy = Math.floor(ty/2);
-      if(gx>=0 && gx<16 && gy>=0 && gy<15) metatileGrid[gy*16+gx] = null;
+      // Texto sobreposto (pós-compressão): o texto NÃO invalida mais a
+      // célula de metatile - fica guardado à parte em textLayers (já
+      // salvo normalmente) e escrito por cima em tempo de execução, depois
+      // que a tela normal (via metatile) já foi desenhada. O metatile
+      // original da célula continua válido/intacto o tempo todo - nada
+      // pra restaurar aqui, nametable/attributes acima são só preview do
+      // editor (não são mais lidos pelo NGC).
     }
     layer.x = x; layer.y = y;
   }

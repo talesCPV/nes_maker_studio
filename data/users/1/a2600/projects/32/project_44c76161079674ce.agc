@@ -101,7 +101,7 @@
             "name": "rowX",
             "type": "byte",
             "note": "X da fileira de inimigos (scroll). Nativa Megamania",
-            "value": 20,
+            "value": 0,
             "native": true
         },
         {
@@ -119,9 +119,130 @@
             "note": "Placar (nativa)",
             "value": 0,
             "native": true
+        },
+        {
+            "id": "var_mu7gvu7q_4af",
+            "name": "sentido",
+            "type": "bool",
+            "note": "",
+            "value": 0
         }
     ],
-    "rules": [],
+    "rules": [
+        {
+            "id": "rule_mu7g4gvj_h6",
+            "tabId": "main",
+            "name": "left",
+            "steps": [
+                {
+                    "type": "if_var",
+                    "op": "==",
+                    "value": 1,
+                    "varId": "var_mu7gvu7q_4af"
+                },
+                {
+                    "type": "sub_var",
+                    "varId": "native_rowX",
+                    "value": 1
+                },
+                {
+                    "type": "copy_var",
+                    "varIdFrom": "native_rowX",
+                    "varIdTo": "native_scoreP0"
+                }
+            ]
+        },
+        {
+            "id": "rule_mu7g4z5q_35a",
+            "tabId": "main",
+            "name": "rigth",
+            "steps": [
+                {
+                    "type": "if_var",
+                    "op": "==",
+                    "value": 0,
+                    "varId": "var_mu7gvu7q_4af"
+                },
+                {
+                    "type": "add_var",
+                    "varId": "native_rowX",
+                    "value": 1
+                },
+                {
+                    "type": "copy_var",
+                    "varIdFrom": "native_rowX",
+                    "varIdTo": "native_scoreP0"
+                }
+            ]
+        },
+        {
+            "id": "rule_mu7ggvv7_72o",
+            "tabId": "rtab_mu7hwkc8_2ck",
+            "name": "boot",
+            "steps": [
+                {
+                    "type": "if_event",
+                    "eventId": "ev_boot"
+                },
+                {
+                    "type": "copy_var",
+                    "varIdFrom": "native_rowX",
+                    "varIdTo": "native_scoreP0"
+                }
+            ]
+        },
+        {
+            "id": "rule_mu7gkk1x_5tb",
+            "tabId": "rtab_mu7hwkc8_2ck",
+            "name": "timer",
+            "steps": [
+                {
+                    "type": "if_event",
+                    "eventId": "ev_mu7hzq8f_5j8"
+                },
+                {
+                    "type": "add_var",
+                    "varId": "native_rowX",
+                    "value": 1
+                }
+            ]
+        },
+        {
+            "id": "rule_mu7gwsxr_3ls",
+            "tabId": "rtab_mu7hwkc8_2ck",
+            "name": "volta",
+            "steps": [
+                {
+                    "type": "if_var",
+                    "op": "==",
+                    "value": 59,
+                    "varId": "native_rowX"
+                },
+                {
+                    "type": "set_var",
+                    "varId": "var_mu7gvu7q_4af",
+                    "value": 1
+                }
+            ]
+        },
+        {
+            "id": "rule_mu7hfroa_6fp",
+            "tabId": "rtab_mu7hwkc8_2ck",
+            "name": "vai",
+            "steps": [
+                {
+                    "type": "if_var",
+                    "op": "==",
+                    "value": 7,
+                    "varId": "native_rowX"
+                },
+                {
+                    "type": "set_var",
+                    "varId": "var_mu7gvu7q_4af"
+                }
+            ]
+        }
+    ],
     "gameObjects": [],
     "bands": [
         {
@@ -144,7 +265,8 @@
                 104
             ],
             "aliveMask": 3,
-            "moveDelay": 20
+            "moveDelay": 20,
+            "moveMode": "wrap"
         }
     ],
     "scoreBar": {
@@ -169,6 +291,10 @@
         {
             "id": "main",
             "name": "main"
+        },
+        {
+            "id": "rtab_mu7hwkc8_2ck",
+            "name": "movimento"
         }
     ],
     "events": [
@@ -237,10 +363,58 @@
             "category": "collision",
             "collision": "blp1",
             "builtin": true
+        },
+        {
+            "id": "ev_mu7g2l7x_66x",
+            "name": "up",
+            "category": "input",
+            "builtin": false,
+            "button": "P1-UP",
+            "trigger": "press"
+        },
+        {
+            "id": "ev_mu7g43g8_1as",
+            "name": "left",
+            "category": "input",
+            "builtin": false,
+            "button": "P1-LEFT",
+            "trigger": "hold"
+        },
+        {
+            "id": "ev_mu7g4bo7_3vg",
+            "name": "rigth",
+            "category": "input",
+            "builtin": false,
+            "button": "P1-RIGHT",
+            "trigger": "hold"
+        },
+        {
+            "id": "ev_mu7gvf8m_7jg",
+            "name": "3fps",
+            "category": "timer",
+            "builtin": false,
+            "frames": 20,
+            "seconds": 1
+        },
+        {
+            "id": "ev_mu7he810_46q",
+            "name": "1seg",
+            "category": "timer",
+            "builtin": false,
+            "frames": 60,
+            "seconds": 1
+        },
+        {
+            "id": "ev_mu7hzq8f_5j8",
+            "name": "3seg",
+            "category": "timer",
+            "builtin": false,
+            "frames": 180,
+            "seconds": 3
         }
     ],
     "programMeta": {
         "notes": ""
     },
-    "updated": 1789758326896
+    "updated": 1789768574035
 }

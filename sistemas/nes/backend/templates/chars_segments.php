@@ -29,15 +29,27 @@ return [
 
         $out = [];
         if ((int)($mapperInfo['mapper'] ?? 0) === 2) {
-            // UOROM etapa 1: sem chip de CHR-ROM (CHR-RAM), entao os mesmos
-            // 8KB que no NROM iriam pro segmento CHARS (mapeado direto no
-            // chip) aqui viram dado comum dentro do PRG (.segment "RODATA",
-            // ja mapeado em UoromCfg.php) - o 'reset' em system.php copia
-            // esses bytes pra CHR-RAM via $2007 uma vez no boot.
+            // UOROM etapa 2: sem chip de CHR-ROM (CHR-RAM), entao os tiles
+            // realmente usados (nao os 512 slots possiveis - ver
+            // ProjectParser::computeChrUploadTrim(), fonte unica de
+            // verdade com o loop de upload em system.php 'reset', os dois
+            // TEM que concordar exatamente no numero de bytes) viram dado
+            // comum dentro do PRG_FIXED (.segment "RODATA") e sao copiados
+            // pra CHR-RAM via $2007 uma vez no boot. Sprite ($0000) e
+            // background ($1000) sao 2 tabelas SEPARADAS (nao contiguas em
+            // PPU) - nunca uma so' emenda com a outra.
+            $trim = is_array($ctx['chrUploadTrim'] ?? null) ? $ctx['chrUploadTrim'] : ['spriteBytes' => 4096, 'bgBytes' => 4096];
+            $emitTrimmed = static function (array $bytes, int $n, string $label, string $comment) {
+                $lines = ["  ; {$comment} ({$n} bytes)", "{$label}:"];
+                for ($i = 0; $i < $n; $i += 16) {
+                    $slice = array_slice($bytes, $i, 16);
+                    $lines[] = '  .byte ' . implode(', ', array_map(static fn($b) => sprintf('$%02X', ((int)$b) & 0xFF), array_pad($slice, 16, 0)));
+                }
+                return $lines;
+            };
             $out[] = '.segment "RODATA"';
-            $out[] = 'ChrUploadData:';
-            $out = array_merge($out, $emitBlock($spriteBanks[0] ?? [], 'pg0 sprites empacotado pelo NGC (copiado pra CHR-RAM no boot)'));
-            $out = array_merge($out, $emitBlock($bgBanks[0] ?? [], '$1000 background (copiado pra CHR-RAM no boot)'));
+            $out = array_merge($out, $emitTrimmed($spriteBanks[0] ?? [], $trim['spriteBytes'], 'ChrUploadDataSprite', 'sprites usados de verdade, empacotado pelo NGC'));
+            $out = array_merge($out, $emitTrimmed($bgBanks[0] ?? [], $trim['bgBytes'], 'ChrUploadDataBg', '$1000 background usado de verdade'));
             return implode("\n", $out);
         }
         if ((int)($mapperInfo['mapper'] ?? 0) === 3) {

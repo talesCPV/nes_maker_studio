@@ -233,7 +233,37 @@ $asmPath = $workDir . DIRECTORY_SEPARATOR . 'jogo.asm';
 $objPath = $workDir . DIRECTORY_SEPARATOR . 'jogo.o';
 $cfgPath = $workDir . DIRECTORY_SEPARATOR . 'nrom.cfg';
 $nesPath = $workDir . DIRECTORY_SEPARATOR . 'jogo.nes';
+$mapPath = $workDir . DIRECTORY_SEPARATOR . 'jogo.map';
 $logLines = [];
+
+/**
+ * Feedback real de espaço (substitui a estimativa por heurística de
+ * padding que o frontend fazia escaneando bytes $00/$FF no fim do PRG -
+ * isso só funcionava pro ÚLTIMO banco (onde ficam os vetores) e não
+ * enxergava nada dos bancos comutáveis do UOROM etapa 2. Aqui é o
+ * tamanho REAL de cada segmento, direto do mapa do ld65 - sem heurística.
+ */
+function parse_ld65_map(string $mapText): array
+{
+    $segments = [];
+    $inList = false;
+    foreach (preg_split('/\r\n|\r|\n/', $mapText) as $line) {
+        $t = trim($line);
+        if ($t === 'Segment list:') { $inList = true; continue; }
+        if ($inList && ($t === '' || str_starts_with($t, '---') || str_starts_with($t, 'Name'))) continue;
+        if ($inList && str_starts_with($t, 'Exports list')) break;
+        if (!$inList) continue;
+        if (preg_match('/^(\S+)\s+([0-9A-Fa-f]{6})\s+([0-9A-Fa-f]{6})\s+([0-9A-Fa-f]{6})\s+([0-9A-Fa-f]+)/', $t, $m)) {
+            $segments[] = [
+                'name' => $m[1],
+                'start' => hexdec($m[2]),
+                'end' => hexdec($m[3]),
+                'size' => hexdec($m[4]),
+            ];
+        }
+    }
+    return $segments;
+}
 
 try {
     if (file_put_contents($asmPath, $asm) === false) {
@@ -269,8 +299,8 @@ try {
         ], 400);
     }
 
-    // ld65 -C nrom.cfg jogo.o -o jogo.nes
-    $r2 = run_cmd([$ld65, '-C', 'nrom.cfg', 'jogo.o', '-o', 'jogo.nes'], $workDir, 120);
+    // ld65 -C nrom.cfg jogo.o -o jogo.nes -m jogo.map
+    $r2 = run_cmd([$ld65, '-C', 'nrom.cfg', 'jogo.o', '-o', 'jogo.nes', '-m', 'jogo.map'], $workDir, 120);
     $logLines[] = '$ ' . $r2['cmd'] . '  (via ' . ($r2['via'] ?? '?') . ')';
     if (trim($r2['stdout']) !== '') {
         $logLines[] = trim($r2['stdout']);
@@ -300,6 +330,8 @@ try {
 
     $logLines[] = 'OK — ROM ' . strlen($nesBin) . ' bytes';
 
+    $memSegments = is_file($mapPath) ? parse_ld65_map((string)file_get_contents($mapPath)) : [];
+
     // Persistir na pasta do projeto do usuário (se logado + project_id)
     $userId = (int)($_SESSION['user_id'] ?? 0);
     $projectId = (int)($body['project_id'] ?? 0);
@@ -324,6 +356,7 @@ try {
         'saved_path' => $saveInfo['path'] ?? null,
         'project_id' => $projectId > 0 ? $projectId : null,
         'log' => implode("\n", $logLines),
+        'memory' => $memSegments,
     ]);
 } catch (Throwable $e) {
     assemble_json([
@@ -332,7 +365,7 @@ try {
         'log' => implode("\n", $logLines),
     ], 500);
 } finally {
-    foreach ([$asmPath ?? '', $objPath ?? '', $cfgPath ?? '', $nesPath ?? ''] as $f) {
+    foreach ([$asmPath ?? '', $objPath ?? '', $cfgPath ?? '', $nesPath ?? '', $mapPath ?? ''] as $f) {
         if ($f !== '' && is_file($f)) {
             @unlink($f);
         }

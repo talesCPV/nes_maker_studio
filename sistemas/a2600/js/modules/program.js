@@ -26,7 +26,7 @@ const PROGRAM = (() => {
     { value: 'vblank', label: 'Before Frame (antes do desenho)' },
     { value: 'overscan', label: 'After Frame (depois do desenho)' },
     { value: 'input', label: 'Input (joystick / botão)' },
-    { value: 'timer', label: 'Timer (segundos)' },
+    { value: 'timer', label: 'Timer (frames)' },
     { value: 'enter_screen', label: 'Ao entrar na tela' },
     { value: 'collision_p0pf', label: 'Player 1 × Cenário' },
     { value: 'collision_p1pf', label: 'Player 2 × Cenário' },
@@ -45,6 +45,7 @@ const PROGRAM = (() => {
     set_var: { label: 'DEFINIR variável' },
     add_var: { label: 'SOMAR variável' },
     sub_var: { label: 'SUBTRAIR variável' },
+    copy_var: { label: 'COPIAR variável' },
     action: { label: 'AÇÃO...' },
   };
 
@@ -440,7 +441,10 @@ const PROGRAM = (() => {
         let detail = e.category || '';
         if (e.button) detail += ' (' + e.button + (e.trigger === 'hold' ? ' segurado' : '') + ')';
         if (e.category === 'collision' && e.collision) detail += ' [' + e.collision + ']';
-        if (e.category === 'timer') detail += ' a cada ' + (e.seconds | 0 || 1) + 's';
+        if (e.category === 'timer') {
+          const fr = e.frames != null ? e.frames | 0 : (e.seconds | 0) * 60 || 1;
+          detail += ' a cada ' + fr + ' frame' + (fr === 1 ? '' : 's');
+        }
         return (
           '<tr style="border-bottom:1px solid #222">' +
           '<td style="padding:6px;color:#fff">' +
@@ -495,14 +499,14 @@ const PROGRAM = (() => {
             </select>
             <label id="evSecondsWrap" class="muted" style="display:none;align-items:center;gap:4px;font-size:11px">
               a cada
-              <input id="evSeconds" class="prog-inp" type="number" min="1" max="255" value="1" style="width:64px" title="Segundos entre disparos" />
-              s
+              <input id="evSeconds" class="prog-inp" type="number" min="1" max="255" value="1" style="width:64px" title="Frames entre disparos (1 = todo frame)" />
+              frame(s)
             </label>
             <button type="button" class="prog-btn" id="evAddBtn" style="background:#27ae60;color:#fff">+ Adicionar</button>
           </div>
           <p class="muted" style="margin:8px 0 0">
             Input: joystick/botão. Colisões: TIA.
-            Timer: a cada N <b>segundos</b> (60 frames NTSC = 1s); reinicia ao zerar como um relógio.
+            Timer: a cada N <b>frames</b> (mín. 1). NTSC ≈ 60 frames/s — para 1 segundo use <b>60</b>. Reinicia ao zerar.
           </p>
         </div>
         <table class="prog-table">
@@ -555,10 +559,12 @@ const PROGRAM = (() => {
       ev.collision = colEl?.value || 'p0pf';
     }
     if (cat === 'timer') {
-      let sec = parseInt(document.getElementById('evSeconds')?.value, 10);
-      if (isNaN(sec) || sec < 1) sec = 1;
-      if (sec > 255) sec = 255;
-      ev.seconds = sec;
+      let fr = parseInt(document.getElementById('evSeconds')?.value, 10);
+      if (isNaN(fr) || fr < 1) fr = 1;
+      if (fr > 255) fr = 255;
+      ev.frames = fr;
+      // legado: seconds mantido só se alguém ainda ler; 1s ≈ 60 frames
+      ev.seconds = Math.max(1, Math.round(fr / 60));
     }
     d.events.push(ev);
     dirty();
@@ -606,6 +612,11 @@ const PROGRAM = (() => {
             if (s.type === 'if_var') return 'SE var ' + (s.op || '==');
             if (s.type === 'if_hitbox') return 'SE hitbox toca';
             if (s.type === 'if_screen') return 'SE tela';
+            if (s.type === 'copy_var') {
+              const vf = (d.variables || []).find((v) => v.id === s.varIdFrom);
+              const vt = (d.variables || []).find((v) => v.id === s.varIdTo);
+              return 'COPIAR ' + (vf ? vf.name : '?') + ' → ' + (vt ? vt.name : '?');
+            }
             if (s.type === 'action') return 'AÇÃO ' + (s.actionId || '');
             return (STEP_TYPES[s.type] || {}).label || s.type;
           })
@@ -729,6 +740,19 @@ const PROGRAM = (() => {
           .join('')}
       </select>
       <input type="number" ${sel} data-f="value" value="${step.value ?? 0}" style="width:70px" />`;
+    } else if (step.type === 'copy_var') {
+      const varOpts = (selId) =>
+        `<option value="">— variável —</option>` +
+        vars
+          .map(
+            (v) =>
+              `<option value="${escapeAttr(v.id)}" ${selId === v.id ? 'selected' : ''}>${escapeHtml(v.name)}</option>`
+          )
+          .join('');
+      fields = `<span class="muted">copiar de</span>
+        <select ${sel} data-f="varIdFrom">${varOpts(step.varIdFrom)}</select>
+        <span class="muted">para</span>
+        <select ${sel} data-f="varIdTo">${varOpts(step.varIdTo)}</select>`;
     } else if (step.type === 'action') {
       const actOpts = Object.entries(ACTION_CATALOG)
         .map(

@@ -15,6 +15,7 @@ header('Cache-Control: no-store');
 
 require_once __DIR__ . '/src/NromCfg.php';
 require_once __DIR__ . '/src/CnromCfg.php';
+require_once __DIR__ . '/src/UoromCfg.php';
 
 try {
     $project = [];
@@ -33,13 +34,16 @@ try {
         }
     }
 
-    $isCnrom = (int)($project['mapper'] ?? 0) === 3;
-    $cfg = $isCnrom ? CnromCfg::generate($project) : NromCfg::generate($project);
+    $mapperNum = (int)($project['mapper'] ?? 0);
+    $isCnrom = $mapperNum === 3;
+    $isUorom = $mapperNum === 2;
+    $cfg = $isCnrom ? CnromCfg::generate($project) : ($isUorom ? UoromCfg::generate($project) : NromCfg::generate($project));
+    $filename = $isCnrom ? 'cnrom.cfg' : ($isUorom ? 'uorom.cfg' : 'nrom.cfg');
 
     echo json_encode([
         'ok' => true,
         'cfg' => $cfg,
-        'filename' => $isCnrom ? 'cnrom.cfg' : 'nrom.cfg',
+        'filename' => $filename,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
     http_response_code(400);

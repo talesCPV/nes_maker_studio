@@ -370,8 +370,21 @@ return [
             foreach ($used as $u) {
                 $m = $chMeta[$u['type']]; $i = $m['idx'];
                 $enc = $encodeChannel($u['ch'], $baseFrames, $loop);
+                // UOROM etapa 2: dados de musica de uma fase vao pro banco
+                // de PRG daquela fase (so' sao lidos quando aquele banco ja'
+                // esta' selecionado - ver ProgramCompiler::compilePlaySound).
+                // Musica sem phaseId ("Todas as Fases" no editor de som)
+                // fica no banco fixo, igual SFX.
+                $bank = null;
+                if ((int)($ctx['mapperInfo']['mapper'] ?? 0) === 2) {
+                    $pid = $song['phaseId'] ?? null;
+                    $ppb = is_array($ctx['phasePrgBankIndex'] ?? null) ? $ctx['phasePrgBankIndex'] : [];
+                    if ($pid !== null && $pid !== '' && isset($ppb[(string)$pid])) $bank = $ppb[(string)$pid];
+                }
+                if ($bank !== null) $D[] = ".segment \"BANK{$bank}\"";
                 $D[] = "Scale_{$lbl}_ch{$i}:"; $D[] = $fmt($enc['scale']);
                 $D[] = "Time_{$lbl}_ch{$i}:";  $D[] = $fmt($enc['time']);
+                if ($bank !== null) $D[] = '.segment "CODE"';
                 $D[] = '';
             }
         }

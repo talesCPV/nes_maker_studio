@@ -177,12 +177,50 @@ final class ProjectParser
             $screenBankIndex[$i] = $bi;
         }
 
+        // UOROM etapa 2: banco de PRG por FASE - dimensao completamente
+        // separada do screenBankIndex acima (que e' so' CHR/pagina de
+        // tile). null = fica no banco fixo (telas/musicas sem phaseId, ou
+        // projeto sem essa fase usando banco nenhum ainda).
+        $isUorom = $mapperInfo['mapper'] === 2;
+        $prgBanks = $isUorom ? ($mapperInfo['prgBanks'] ?? []) : [];
+        $phasePrgBankIndex = [];
+        foreach ($prgBanks as $bi => $b) { $phasePrgBankIndex[(string)$b['phaseId']] = $bi; }
+        $screenPrgBankIndex = array_fill(0, count($screenData), null);
+        if ($isUorom) {
+            foreach ($screenData as $i => $sc) {
+                $pid = is_array($sc) ? ($sc['phaseId'] ?? null) : null;
+                if ($pid !== null && isset($phasePrgBankIndex[(string)$pid])) {
+                    $screenPrgBankIndex[$i] = $phasePrgBankIndex[(string)$pid];
+                }
+            }
+        }
+
+        // Texto sobreposto (pós-compressão): fonte pronta (não desenhada
+        // pelo usuário - ver FontAsset.php) só é carregada/reservada nos
+        // bancos de CHR que TÊM pelo menos 1 tela com textLayers - os
+        // outros bancos continuam com os 64 metatiles inteiros disponíveis,
+        // sem custo nenhum. Precisa ser calculado ANTES de
+        // buildMetatileCompression() porque muda o limite de metatiles
+        // desse banco (reserva espaço pros tiles da fonte).
+        $textFontMode = ($project['textFontMode'] ?? 'ascii') === 'smb' ? 'smb' : 'ascii';
+        $bankNeedsFont = [];
+        foreach ($screensByBank as $bi => $idxList) {
+            $needs = false;
+            foreach ($idxList as $si) {
+                $tl = $screenData[$si]['textLayers'] ?? [];
+                if (is_array($tl) && count($tl) > 0) { $needs = true; break; }
+            }
+            $bankNeedsFont[$bi] = $needs;
+        }
+        $anyBankNeedsFont = in_array(true, $bankNeedsFont, true);
+        $font = $anyBankNeedsFont ? FontAsset::load($textFontMode) : null;
+
         // Camada 9 (limpeza pré-áudio): telas sempre viram MetatileIndex_<tela>
         // (240 bytes) - não existe mais fallback cru/tela suja. Precisa rodar
         // ANTES do empacotamento de CHR porque os tiles dos metatiles ocupam
         // SEMPRE os slots 4*idLocal..4*idLocal+3 do banco (posição fixa, sem
         // tabela de índice) - ver buildMetatileCompression().
-        $metatileCompression = $this->buildMetatileCompression($project, $screenData, $screensByBank);
+        $metatileCompression = $this->buildMetatileCompression($project, $screenData, $screensByBank, $bankNeedsFont, $font['tiles'] ?? 0);
 
         // Stage 15: o empacotamento CHR dos sprites passa a ser responsabilidade do NGC.
         // O backend usa diretamente project.chr + project.metatiles + project.characters.
@@ -201,14 +239,32 @@ final class ProjectParser
         $chrRaw = is_array($project['chr'] ?? null) ? $project['chr'] : [];
         $bgChrBanks = [];
         $spriteChrBanks = [];
+        $fontBaseTileByBank = [];
         foreach ($mapperInfo['banks'] as $bi => $bank) {
             $mtBank = $metatileCompression['banks'][$bi] ?? ['tileRefs' => [0, 0, 0, 0]];
-            $bgChrBanks[$bi] = $this->packChrBytesForTiles($mtBank['tileRefs'], $chrRaw, $bank['bgPage'], 256);
+            $packed = $this->packChrBytesForTiles($mtBank['tileRefs'], $chrRaw, $bank['bgPage'], 256);
+            $fontBaseTileByBank[$bi] = (int)(count($mtBank['tileRefs']) / 4) * 4; // = metatileCount*4
+            if (!empty($bankNeedsFont[$bi]) && $font) {
+                // packChrBytesForTiles devolve sempre 4096 bytes (256 tiles,
+                // slots não usados zerados) - corta pro tamanho REAL (só os
+                // tiles que os metatiles usam) antes de grudar a fonte,
+                // senão ela ia parar 256 tiles depois do que devia (todo o
+                // preenchimento zerado do meio entraria no upload também).
+                $packed = array_slice($packed, 0, count($mtBank['tileRefs']) * 16);
+                $packed = array_merge($packed, $font['bytes']);
+            }
+            $bgChrBanks[$bi] = $packed;
 
             $spriteChrBanks[$bi] = ($bi === $mapperInfo['defaultBankIndex'])
                 ? $sprite['spriteChr']
                 : $this->packChrBytesForTiles($sprite['usedTiles'] ?? [], $chrRaw, $bank['spritePage'], 256);
         }
+
+        // Texto sobreposto: agora que sabemos onde a fonte de cada banco
+        // começa (fontBaseTileByBank), monta os dados de runtime (posição +
+        // tiles + bytes de atributo já mesclados) por tela.
+        $textOverlayByScreen = $this->buildTextOverlays($screenData, $screensByBank, $fontBaseTileByBank, $font, $textFontMode);
+
 
         // Stage 19: PaletteData (as 8 paletas de 4 cores + a cor de fundo universal,
         // detectada olhando o PIXEL real do tile 0 da 1ª tela) passa a ser calculada
@@ -248,10 +304,16 @@ final class ProjectParser
             'mapperInfo' => $mapperInfo,
             'bgChrBanks' => $bgChrBanks,
             'spriteChrBanks' => $spriteChrBanks,
+            'chrUploadTrim' => $this->computeChrUploadTrim($mapperInfo, $spriteChrBanks, $bgChrBanks),
             'screenBankIndex' => $screenBankIndex,
+            'screenPrgBankIndex' => $screenPrgBankIndex,
+            'phasePrgBankIndex' => $phasePrgBankIndex,
+            'prgBankCount' => count($prgBanks),
             'usedMetatiles' => $usedMetatiles,
             'metatileIndexByScreen' => $metatileCompression['metatileIndexByScreen'],
             'metatileCompressionBanks' => $metatileCompression['banks'],
+            'textOverlayByScreen' => $textOverlayByScreen,
+            'anyBankNeedsFont' => $anyBankNeedsFont,
             'program' => $program,
             'playIdxs' => $playIdxs,
             'splashIdx' => $this->findRoleIndex($screens, 'splash', 0),
@@ -777,16 +839,20 @@ final class ProjectParser
     {
         $mapper = (int)($project['mapper'] ?? 0);
         if ($mapper === 2) {
-            // UOROM etapa 1 (header+CHR-RAM, sem bankswitch de PRG ainda):
-            // CHR continua fixo em 1 combinacao so' (paginas 0+1), exatamente
-            // como NROM - a diferenca de UOROM fica toda em header.php
-            // (chrBanks=0, mapper=2) e no upload pra CHR-RAM no Reset
-            // (ver chars_segments.php e system.php 'reset'), nao aqui.
+            // UOROM etapa 1 (header+CHR-RAM): CHR continua fixo em 1
+            // combinacao so' (paginas 0+1), exatamente como NROM - CHR-RAM
+            // nunca troca em runtime, nem na etapa 2. A diferenca de UOROM
+            // fica em header.php (chrBanks=0, mapper=2), no upload pra
+            // CHR-RAM no Reset (chars_segments.php/system.php 'reset') e,
+            // a partir da etapa 2, em prgBanks abaixo (bankswitch de PRG
+            // de verdade, por FASE - nao tem nada a ver com o CHR banks[]
+            // acima, que e' conceito de pagina de tile, nao de codigo/dado).
             return [
                 'mapper' => 2,
                 'banks' => [['spritePage' => 0, 'bgPage' => 1]],
                 'phaseBankIndex' => [],
                 'defaultBankIndex' => 0,
+                'prgBanks' => $this->resolveUoromPrgBanks($project),
             ];
         }
         if ($mapper !== 3) {
@@ -838,6 +904,97 @@ final class ProjectParser
     }
 
     /**
+     * UOROM (qualquer etapa com CHR-RAM): quantos bytes de verdade precisam
+     * subir pra CHR-RAM no boot, por banco (sprite $0000 / bg $1000)
+     * SEPARADAMENTE - nunca um só número combinado, os dois PPU-endereços
+     * não são contíguos. Corta só o SUFIXO final sem nenhum tile usado
+     * (procura o último tile com conteúdo não-zero e arredonda pra cima,
+     * em unidade de tile = 16 bytes) - NUNCA pula tiles individuais no
+     * meio mesmo que deem zero, porque um tile deliberadamente em branco
+     * (ex: espaço vazio de cenário) também tem bytes zero e precisa ser
+     * gravado na CHR-RAM mesmo assim (ela começa com lixo no power-on,
+     * não com zero garantido). Fonte única - chars_segments.php (o que
+     * grava no PRG) e system.php 'reset' (quantos bytes copia no boot)
+     * usam ESTE MESMO número, senão um sobe menos do que o outro lê.
+     */
+    private function computeChrUploadTrim(array $mapperInfo, array $spriteChrBanks, array $bgChrBanks): array
+    {
+        if ((int)($mapperInfo['mapper'] ?? 0) !== 2) return ['spriteBytes' => 4096, 'bgBytes' => 4096];
+        $lastUsedTileBytes = static function (array $bytes): int {
+            $lastTile = -1;
+            $n = count($bytes);
+            for ($off = 0; $off < $n; $off += 16) {
+                $nonZero = false;
+                for ($k = 0; $k < 16 && $off + $k < $n; $k++) {
+                    if (($bytes[$off + $k] ?? 0) !== 0) { $nonZero = true; break; }
+                }
+                if ($nonZero) $lastTile = (int)($off / 16);
+            }
+            return ($lastTile + 1) * 16; // 0 se nenhum tile usado
+        };
+        return [
+            'spriteBytes' => max(16, $lastUsedTileBytes($spriteChrBanks[0] ?? [])),
+            'bgBytes' => max(16, $lastUsedTileBytes($bgChrBanks[0] ?? [])),
+        ];
+    }
+
+    /**
+     * Ponto de entrada público pra quem precisa só do número de bancos de
+     * PRG do UOROM etapa 2 SEM rodar o parse() inteiro (ex: UoromCfg.php,
+     * que gera o .cfg do linker antes/independente da montagem do .asm
+     * completo). Fonte única de verdade - resolveMapperBanks() usa a MESMA
+     * função por baixo, nunca duplicar essa lista em outro lugar.
+     */
+    public function getUoromPrgBanks(array $project): array
+    {
+        return $this->resolveUoromPrgBanks($project);
+    }
+
+    /**
+     * UOROM etapa 2 (bankswitch de PRG de verdade): BANCO = FASE, mesma
+     * unidade que o CNROM usa pra CHR, mas aqui é PRG (código+dado) - não
+     * tem nenhuma relação com o banks[]/phaseBankIndex de CHR acima (esses
+     * continuam fixos em 1 combinação só, CHR-RAM nunca troca).
+     *
+     * Só fases com conteúdo PRÓPRIO (pelo menos 1 tela OU 1 música com
+     * phaseId apontando pra ela) ganham banco - fase vazia não gasta
+     * banco. Telas/músicas SEM phaseId (splash/gameover soltos, ou projeto
+     * sem fase nenhuma) ficam de fora de prgBanks de propósito - o
+     * consumidor (ProjectParser::parse()) trata "sem entrada aqui" como
+     * "vai pro banco fixo", nunca pra um banco comutável.
+     *
+     * A VALIDAÇÃO de caber em 16KB por fase não acontece aqui (o tamanho
+     * comprimido de tela/música só existe depois da compressão de
+     * metatile/RLE, que roda depois) - ver checkUoromBankSizes() no fim do
+     * parse().
+     */
+    private function resolveUoromPrgBanks(array $project): array
+    {
+        $phases = is_array($project['phases'] ?? null) ? $project['phases'] : [];
+        $screens = $this->collectGameScreens($project);
+        $usedPhaseIds = [];
+        foreach ($screens as $sc) {
+            $pid = is_array($sc) ? ($sc['phaseId'] ?? null) : null;
+            if ($pid !== null && $pid !== '') $usedPhaseIds[(string)$pid] = true;
+        }
+        $soundItems = is_array($project['sounds']['items'] ?? null) ? $project['sounds']['items'] : [];
+        foreach ($soundItems as $s) {
+            if (!is_array($s) || (($s['type'] ?? 'song') === 'sfx')) continue;
+            $pid = $s['phaseId'] ?? null;
+            if ($pid !== null && $pid !== '') $usedPhaseIds[(string)$pid] = true;
+        }
+
+        $prgBanks = [];
+        foreach ($phases as $ph) {
+            if (!is_array($ph) || !isset($ph['id'])) continue;
+            $pid = (string)$ph['id'];
+            if (!isset($usedPhaseIds[$pid])) continue; // fase sem conteudo proprio, nao gasta banco
+            $prgBanks[] = ['phaseId' => $pid, 'phaseName' => (string)($ph['name'] ?? $pid)];
+        }
+        return $prgBanks; // indice no array = numero do banco comutavel (0..N-1)
+    }
+
+    /**
      * Camada 8 (compressão por metatile): $seedMapping/$seedUsedTiles deixam
      * pré-reservar um PREFIXO do espaço compacto de 256 tiles antes de
      * varrer as telas "sujas" (nametable cru) - é assim que os slots dos
@@ -862,7 +1019,7 @@ final class ProjectParser
      * compacto inteiro) - estoura vira erro claro, igual o limite de 4
      * bancos do CNROM.
      */
-    private function buildMetatileCompression(array $project, array $screenData, array $screensByBank): array
+    private function buildMetatileCompression(array $project, array $screenData, array $screensByBank, array $bankNeedsFont = [], int $fontTiles = 0): array
     {
         $metatilesById = [];
         foreach ((is_array($project['metatiles'] ?? null) ? $project['metatiles'] : []) as $mt) {
@@ -898,14 +1055,18 @@ final class ProjectParser
                 }
 
                 $localIds = [];
+                $mtCap = (!empty($bankNeedsFont[$bi]) && $fontTiles > 0) ? (int)floor((256 - $fontTiles) / 4) : 64;
                 foreach ($grid as $mtId) {
                     $key = (string)$mtId;
                     if (!isset($localIndexByMtId[$key])) {
-                        if (count($localIndexByMtId) >= 64) {
+                        if (count($localIndexByMtId) >= $mtCap) {
+                            $fontNote = (!empty($bankNeedsFont[$bi]) && $fontTiles > 0)
+                                ? " (esse banco reserva {$fontTiles} tiles pra fonte do texto sobreposto, por isso o limite caiu de 64 pra {$mtCap} - remova texto de alguma tela desse banco pra recuperar o limite cheio)"
+                                : '';
                             throw new RuntimeException(
                                 "Compressão de tela: a tela \"{$screenName}\" (e outras que compartilham o mesmo banco de CHR) " .
-                                "usam mais de 64 metatiles de background distintos - é o máximo que cabe comprimido num banco " .
-                                "de 4KB (64 metatiles × 4 tiles = 256, o pattern table inteiro). Reduza a variedade de " .
+                                "usam mais de {$mtCap} metatiles de background distintos - é o máximo que cabe comprimido num banco " .
+                                "de 4KB (256 tiles no total){$fontNote}. Reduza a variedade de " .
                                 "metatiles usados nesse conjunto de telas, ou separe em fases com páginas de CHR diferentes."
                             );
                         }
@@ -934,6 +1095,48 @@ final class ProjectParser
             'metatileIndexByScreen' => $metatileIndexByScreen,
             'banks' => $banks,
         ];
+    }
+
+    /**
+     * Texto sobreposto (pós-compressão): monta, por tela, a lista de
+     * camadas de texto prontas pra runtime (posição + índice de tile já
+     * somado à base da fonte daquele banco - ver fontBaseTileByBank em
+     * parse()). NÃO mexe em atributo/paleta - isso já foi gravado
+     * permanentemente no Attr_i normal pelo próprio editor (backgrounds.js
+     * writeTextAt já mescla a paleta no array attributes[] da tela, que é
+     * salvo do jeito de sempre) - aqui só falta o BYTE DE TILE em si, que
+     * não existe mais em lugar nenhum desde que nametable cru parou de ser
+     * lido (Camada 9).
+     */
+    private function buildTextOverlays(array $screenData, array $screensByBank, array $fontBaseTileByBank, ?array $font, string $textFontMode): array
+    {
+        $out = [];
+        if (!$font) return $out;
+        $spaceRel = $font['map'][32] ?? 0;
+        foreach ($screensByBank as $bi => $idxList) {
+            $base = $fontBaseTileByBank[$bi] ?? 0;
+            foreach ($idxList as $si) {
+                $layers = is_array($screenData[$si]['textLayers'] ?? null) ? $screenData[$si]['textLayers'] : [];
+                if (!$layers) continue;
+                $entries = [];
+                foreach ($layers as $tl) {
+                    if (!is_array($tl)) continue;
+                    $text = (string)($tl['text'] ?? '');
+                    if ($text === '') continue;
+                    $x = max(0, min(31, (int)($tl['x'] ?? 0)));
+                    $y = max(0, min(29, (int)($tl['y'] ?? 0)));
+                    $tiles = [];
+                    $len = strlen($text);
+                    for ($i = 0; $i < $len && ($x + $i) < 32; $i++) {
+                        $rel = FontAsset::mapChar($text[$i], $font['map']);
+                        $tiles[] = $base + ($rel ?? $spaceRel);
+                    }
+                    if ($tiles) $entries[] = ['x' => $x, 'y' => $y, 'tiles' => $tiles];
+                }
+                if ($entries) $out[$si] = $entries;
+            }
+        }
+        return $out;
     }
 
     /**
@@ -1019,6 +1222,12 @@ final class ProjectParser
                 // crus não são mais lidos em canto nenhum (removidos daqui de
                 // propósito; não existe mais "tela suja" pra sustentar).
                 'metatileGrid' => is_array($asset['metatileGrid'] ?? null) ? $asset['metatileGrid'] : null,
+                // Camada de texto sobreposto (pós-compressão): texto não
+                // invalida mais célula de metatile nenhuma - fica guardado
+                // à parte e escrito por cima em tempo de execução, depois
+                // que a tela normal (via metatile) já foi desenhada. Ver
+                // buildTextOverlays().
+                'textLayers' => is_array($asset['textLayers'] ?? null) ? $asset['textLayers'] : [],
             ];
         };
 

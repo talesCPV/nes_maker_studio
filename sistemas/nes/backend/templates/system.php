@@ -16,20 +16,25 @@ return [
         // do mapper, baixo nibble aqui - mapper 3 cabe inteiro nele, entao o
         // byte 7 nao muda). Mirroring continua fixo vertical, como sempre foi.
         $mapper = (int)($ctx['mapperInfo']['mapper'] ?? 0);
-        // UOROM (mapper 2, etapa 1): chrBanks=0 sinaliza CHR-RAM pro
-        // header iNES (nao ha' chip de CHR-ROM fisico nesse board) - os
-        // dados de CHR viram tabela dentro do PRG e sao copiados pra
-        // CHR-RAM em tempo de boot (ver chars_segments.php + 'reset' logo
-        // abaixo). PRG continua 2 (32KB) nesta etapa - sem bankswitch.
+        // UOROM (mapper 2, etapa 2 - bankswitch de PRG por FASE): chrBanks=0
+        // sinaliza CHR-RAM pro header iNES (CHR-RAM nunca banca, fixa desde
+        // a etapa 1 - so' os dados de CHR viram tabela dentro do PRG_FIXED e
+        // sao copiados pra CHR-RAM em tempo de boot, ver chars_segments.php
+        // + 'reset' logo abaixo). PRG agora e' VARIAVEL: 1 banco fixo de
+        // 16KB + N bancos comutaveis de 16KB (1 por fase com conteudo
+        // proprio - ver ProjectParser::resolveUoromPrgBanks() e
+        // UoromCfg.php, que usam a MESMA formula de banco minimo, senao o
+        // header declara um tamanho que nao bate com o .cfg de verdade).
         $chrBanks = ($mapper === 3) ? 4 : (($mapper === 2) ? 0 : 1);
+        $prgUnits = ($mapper === 2) ? (max(1, (int)($ctx['prgBankCount'] ?? 0)) + 1) : 2;
         $flags6 = ((($mapper) & 0x0F) << 4) | 0x01;
         $comment = ($mapper === 3)
             ? 'CNROM (32KB PRG fixa + CHR em 4 bancos de 8KB, trocados em runtime), vertical mirroring'
             : (($mapper === 2)
-                ? 'UOROM etapa 1 (32KB PRG fixa, sem bankswitch ainda + CHR-RAM 8KB carregada no boot), vertical mirroring'
+                ? "UOROM etapa 2 ({$prgUnits}x16KB PRG - 1 fixo + " . ($prgUnits - 1) . " por fase + CHR-RAM 8KB carregada no boot), vertical mirroring"
                 : 'NROM-256 (32KB PRG), vertical mirroring');
         $b6 = sprintf('$%02X', $flags6);
-        return ".segment \"HEADER\"\n  .byte \$4E,\$45,\$53,\$1A,2,{$chrBanks},{$b6},0,0,0,0,0,0,0,0,0  ; {$comment}";
+        return ".segment \"HEADER\"\n  .byte \$4E,\$45,\$53,\$1A,{$prgUnits},{$chrBanks},{$b6},0,0,0,0,0,0,0,0,0  ; {$comment}";
     },
 
     'vectors' => static function(array $ctx): string {
@@ -68,6 +73,15 @@ ASM;
         $lines[] = 'pad1_edge:  .res 1';
         $lines[] = 'game_state: .res 1    ; 0=splash 1=play 2=gameover';
         $lines[] = 'cur_screen: .res 1';
+        if ((int)($ctx['mapperInfo']['mapper'] ?? 0) === 2) {
+            // UOROM etapa 2: banco de PRG comutavel atualmente selecionado -
+            // precisa persistir por toda a sessao de jogo (nao so' no boot,
+            // ao contrario de mc_ptr_lo/hi que a etapa 1 reaproveita so' pro
+            // upload de CHR-RAM). Inicializado com $FF de proposito (ver
+            // 'reset' abaixo) pra forcar a troca de banco real no primeiro
+            // load_screen, mesmo que a 1a tela caia no banco 0 por coincidencia.
+            $lines[] = 'cur_prg_bank: .res 1';
+        }
         $lines[] = 'scroll_x:   .res 1  ; Camada 5: fine scroll (0-255) dentro do par de telas visivel';
         $lines[] = 'nt_page:    .res 1  ; Camada 5: 0/1 - qual nametable fisica ($2000/$2400) tem a tela esquerda';
         $lines[] = 'gcw_col:    .res 1  ; scratch: coluna de pixel mundial pro check de parede durante scroll';
@@ -108,6 +122,18 @@ ASM;
         $lines[] = 'mc_ptr_lo:   .res 1  ; ponteiro (baixo) reaproveitado 2x: 1o MetatileIndex_<tela>, depois MetatileCollision_bank<N>';
         $lines[] = 'mc_ptr_hi:   .res 1  ; ponteiro (alto)';
         $lines[] = 'mtx_scratch: .res 1  ; scratch de mtx_expand_nt (load_screen) - guarda 4*idLocal entre as 2 escritas ($2007) de cada subtile';
+        if (!empty($ctx['anyBankNeedsFont'])) {
+            // Texto sobreposto: so' declara esses 2 bytes se o projeto usa
+            // texto de verdade em alguma tela (ver ProjectParser -
+            // bankNeedsFont/anyBankNeedsFont) - dto_lcount (quantas camadas
+            // de texto faltam processar) e dto_base_hi (byte alto do
+            // nametable fisico alvo, $20 no load_screen normal ou o valor
+            // de psn_base_hi no preload de scroll). mc_ptr_lo/hi acima sao
+            // reaproveitados de novo aqui como scratch da multiplicacao
+            // y*32 - livres nesse ponto, mtx_expand_nt ja terminou.
+            $lines[] = 'dto_lcount:  .res 1  ; texto sobreposto: camadas restantes';
+            $lines[] = 'dto_base_hi: .res 1  ; texto sobreposto: $20 ou $24 (qual nametable fisico)';
+        }
         $lines[] = 'play_idx:   .res 1    ; indice 0..playCount-1 na sequencia da fase';
         $lines[] = "; pool de {$numInstances} instancia(s) - SoA pra indexar com LDA tabela,X";
         $lines[] = "inst_x:       .res {$numInstances}";
@@ -346,31 +372,55 @@ ASM;
         $lines[] = '  BIT $2002';
         $lines[] = '  BPL vblankwait2';
         if ((int)($ctx['mapperInfo']['mapper'] ?? 0) === 2) {
-            // UOROM etapa 1: nao ha' CHR-ROM fisico, os 8KB de tile (sprites
-            // $0000 + background $1000) moram no PRG (ver chars_segments.php,
-            // label ChrUploadData) e precisam ser copiados pra CHR-RAM uma
-            // unica vez aqui no boot, antes de ligar o rendering. Reaproveita
-            // mc_ptr_lo/mc_ptr_hi (par ZP da colisao por metatile) - nesse
-            // ponto do boot load_screen ainda nao rodou, entao esse par
-            // esta livre, evita gastar mais 2 bytes de zeropage so' pra isso.
-            $lines[] = '  ; upload CHR-RAM (UOROM - 8KB, 1x no boot)';
-            $lines[] = '  LDA #$00';
-            $lines[] = '  STA $2006';
-            $lines[] = '  STA $2006';
-            $lines[] = '  LDA #<ChrUploadData';
-            $lines[] = '  STA mc_ptr_lo';
-            $lines[] = '  LDA #>ChrUploadData';
-            $lines[] = '  STA mc_ptr_hi';
-            $lines[] = '  LDX #$20        ; 32 * 256 = 8192 bytes';
-            $lines[] = '  LDY #0';
-            $lines[] = 'chrupload:';
-            $lines[] = '  LDA (mc_ptr_lo),Y';
-            $lines[] = '  STA $2007';
-            $lines[] = '  INY';
-            $lines[] = '  BNE chrupload';
-            $lines[] = '  INC mc_ptr_hi';
-            $lines[] = '  DEX';
-            $lines[] = '  BNE chrupload';
+            // UOROM etapa 2: nao ha' CHR-ROM fisico, so' os tiles REALMENTE
+            // usados (nao os 512 slots possiveis - ver
+            // ProjectParser::computeChrUploadTrim(), MESMO numero de bytes
+            // que chars_segments.php gravou, senao um upload menos/mais do
+            // que existe) moram no PRG_FIXED e sao copiados pra CHR-RAM
+            // aqui no boot, antes de ligar o rendering. Sprite ($0000) e
+            // background ($1000) sao 2 blocos separados (PPU nao e'
+            // contiguo entre eles). Reaproveita mc_ptr_lo/mc_ptr_hi (par ZP
+            // da colisao por metatile) - nesse ponto do boot load_screen
+            // ainda nao rodou, entao esse par esta livre.
+            $trim = is_array($ctx['chrUploadTrim'] ?? null) ? $ctx['chrUploadTrim'] : ['spriteBytes' => 4096, 'bgBytes' => 4096];
+            $emitUpload = static function (string $label, int $n, string $ppuHi, string $ppuLo) use (&$lines) {
+                $pages = intdiv($n, 256);
+                $rem = $n % 256;
+                $lines[] = "  ; upload CHR-RAM {$label} ({$n} bytes reais, nao os 4096 possiveis)";
+                $lines[] = "  LDA #{$ppuHi}";
+                $lines[] = '  STA $2006';
+                $lines[] = "  LDA #{$ppuLo}";
+                $lines[] = '  STA $2006';
+                $lines[] = "  LDA #<{$label}";
+                $lines[] = '  STA mc_ptr_lo';
+                $lines[] = "  LDA #>{$label}";
+                $lines[] = '  STA mc_ptr_hi';
+                if ($pages > 0) {
+                    $lines[] = "  LDX #{$pages}";
+                    $lines[] = '  LDY #0';
+                    $lines[] = "cu_{$label}_pg:";
+                    $lines[] = '  LDA (mc_ptr_lo),Y';
+                    $lines[] = '  STA $2007';
+                    $lines[] = '  INY';
+                    $lines[] = "  BNE cu_{$label}_pg";
+                    $lines[] = '  INC mc_ptr_hi';
+                    $lines[] = '  DEX';
+                    $lines[] = "  BNE cu_{$label}_pg";
+                }
+                if ($rem > 0) {
+                    $lines[] = '  LDY #0';
+                    $lines[] = "cu_{$label}_rem:";
+                    $lines[] = '  LDA (mc_ptr_lo),Y';
+                    $lines[] = '  STA $2007';
+                    $lines[] = '  INY';
+                    $lines[] = "  CPY #{$rem}";
+                    $lines[] = "  BNE cu_{$label}_rem";
+                }
+            };
+            $lines[] = '  BIT $2002';
+            $emitUpload('ChrUploadDataSprite', $trim['spriteBytes'], '$00', '$00');
+            $lines[] = '  BIT $2002';
+            $emitUpload('ChrUploadDataBg', $trim['bgBytes'], '$10', '$00');
         }
         $lines[] = '  ; paletas';
         $lines[] = '  BIT $2002';
@@ -396,6 +446,13 @@ ASM;
         $lines[] = '  LDA #0';
         $lines[] = '  STA game_state';
         $lines[] = '  STA player_on';
+        if ((int)($ctx['mapperInfo']['mapper'] ?? 0) === 2) {
+            // UOROM etapa 2: $FF garante que o 1o load_screen abaixo sempre
+            // faz a troca de banco de verdade (RAM no power-on e' lixo, nao
+            // da' pra confiar que "por acaso" ja' esta' no banco certo).
+            $lines[] = '  LDA #$FF';
+            $lines[] = '  STA cur_prg_bank';
+        }
         $lines[] = "  LDA #{$splashIdx}";
         $lines[] = '  JSR load_screen';
         $lines[] = '  LDA #1';

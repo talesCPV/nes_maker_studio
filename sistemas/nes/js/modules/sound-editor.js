@@ -189,6 +189,7 @@ const SOUND = (() => {
       name: name || (isSfx ? "Novo SFX" : "Nova Musica"),
       loop: !isSfx,
       baseFrames: isSfx ? 20 : 30,
+      phaseId: null,
       channels: defaultChannels(isSfx)
     };
   }
@@ -211,6 +212,12 @@ const SOUND = (() => {
     it.baseFrames = getBaseFrames();
     const loopCb = document.getElementById("loop-checkbox");
     if(loopCb) it.loop = !!loopCb.checked;
+    if(it.type !== "sfx"){
+      const phaseSel = document.getElementById("song-phase-select");
+      if(phaseSel && phaseSel.closest("#song-phase-wrap")?.style.display !== "none"){
+        it.phaseId = phaseSel.value || null;
+      }
+    }
   }
 
   // Carrega um item para edicao
@@ -233,6 +240,7 @@ const SOUND = (() => {
     if(els.quarterInput) els.quarterInput.value = it.baseFrames || 30;
     const loopCb = document.getElementById("loop-checkbox");
     if(loopCb) loopCb.checked = it.loop !== false;
+    renderSongPhaseSelect();
     renderLibrarySelect();
     renderAll();
   }
@@ -495,6 +503,22 @@ const SOUND = (() => {
     return parseInt(els.quarterInput?.value) || getActiveItem()?.baseFrames || 30;
   }
 
+  // Fase da musica (so' relevante p/ UOROM - define o banco de PRG que a
+  // musica vai ocupar junto com as telas daquela fase). SFX nunca aparece
+  // aqui: fica sempre no banco fixo, ja que se repete entre fases.
+  function renderSongPhaseSelect(){
+    const wrap = document.getElementById("song-phase-wrap");
+    const sel = document.getElementById("song-phase-select");
+    if(!wrap || !sel) return;
+    const it = getActiveItem();
+    const show = !!it && it.type !== "sfx" && (Project.data?.mapper|0) === 2;
+    wrap.style.display = show ? "flex" : "none";
+    if(!show) return;
+    const phases = Project.data.phases || [];
+    sel.innerHTML = '<option value="">Todas as Fases (banco fixo, junto com o SFX)</option>' +
+      phases.map(ph => `<option value="${ph.id}" ${it.phaseId===ph.id?"selected":""}>${ph.name}</option>`).join("");
+  }
+
   // ===== HTML =====
   function buildHTML(){
     const mod = document.getElementById("mod-sound");
@@ -536,6 +560,9 @@ const SOUND = (() => {
             <input type="number" id="quarter-frames" value="${active?.baseFrames || 30}" min="4" max="255">
           </div>
           <label style="font-size:12px"><input type="checkbox" id="loop-checkbox" ${active?.loop !== false ? "checked" : ""}> Loop ($FF)</label>
+          <label id="song-phase-wrap" style="font-size:12px;display:none;align-items:center;gap:4px">Fase:
+            <select id="song-phase-select" title="Em qual fase essa musica toca (UOROM: define em qual banco de PRG ela vai)"></select>
+          </label>
           <button id="add-channel-btn" class="btn-add-ch" ${active?.type==='sfx' ? 'disabled title="SFX so pode ter 1 canal - crie outro SFX se precisar de mais sons simultaneos"' : ''}>+ Canal</button>
           <button id="btn-merge-layers" class="btn-merge" title="Mescla faixas com o mesmo tipo APU usando a voz ativa em cada coluna">Mesclar</button>
         </div>
@@ -2336,6 +2363,11 @@ Time_${label}:
       playFromIndex(bounds.start, bounds.end);
     };
 
+    document.getElementById("song-phase-select").onchange = (e)=>{
+      const it = getActiveItem();
+      if(it && it.type !== "sfx") it.phaseId = e.target.value || null;
+    };
+
     document.getElementById("rewind-btn").onclick = ()=>{
       if(isPlaying) stopPlayback();
       selectedIndex = 0; playbackIndex = 0;
@@ -2527,6 +2559,7 @@ Time_${label}:
         channels = JSON.parse(JSON.stringify(items[0].channels));
       }
       buildHTML();
+      renderSongPhaseSelect();
     },
 
     getData(){
@@ -2553,6 +2586,7 @@ Time_${label}:
         selectedIndex = 0;
         playbackIndex = 0;
         undoStack = [];
+        renderSongPhaseSelect();
         return;
       }
 
@@ -2573,6 +2607,7 @@ Time_${label}:
         selectedIndex = 0;
         playbackIndex = 0;
         undoStack = [];
+        renderSongPhaseSelect();
         return;
       }
 
@@ -2585,6 +2620,7 @@ Time_${label}:
       selectedIndex = 0;
       playbackIndex = 0;
       undoStack = [];
+      renderSongPhaseSelect();
     },
 
     saveToProject(){

@@ -2425,8 +2425,8 @@ const PLAYFIELD = (() => {
           </select>
         </label>
         <div class="pf-note">Xs dos 6 slots (derivados de baseX + NUSIZ): ${xs.join(', ')}</div>
-        <div class="pf-note">Âncoras TIA: P0=baseX · P1=baseX+passo · cópias a cada 2×passo. Só a fileira inteira se move (RowX).</div>
-        <div class="pf-note">Vivos: <b>enemyAlive</b> em Programação (0–63). Morte individual fina = próximo passo.</div>
+        <div class="pf-note">X inicial = baseX → RAM <b>rowX</b>. No jogo, mova com regras/timer em Programação (variável nativa rowX).</div>
+        <div class="pf-note">Âncoras: P0=rowX · P1=rowX+passo · 6 cópias NUSIZ. Vivos: <b>enemyAlive</b> (0–63).</div>
         <button type="button" class="pf-btn danger" id="pfBandDel">Excluir faixa</button>
       </div>`;
 

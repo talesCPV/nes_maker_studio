@@ -209,7 +209,8 @@ final class AgcBuilder
             $col1 = $first['color'];
             $col0 = $dualPlayerRow ? $col1 : $col0; // mesma cor na fileira dual
             $gfx1 = $first['gfx'];
-            $rowXInit = $varRowX !== null ? $varRowX : max(1, min(160, (int)$first['baseX']));
+            // Editor baseX manda no boot; variável rowX (Program) altera em runtime no mesmo RAM
+            $rowXInit = max(1, min(160, (int)$first['baseX']));
             $rowAliveMask = $varEnemyAlive !== null
                 ? $varEnemyAlive
                 : max(0, min(0x3f, (int)($first['aliveMask'] ?? ((1 << $nusizCopies) - 1))));
@@ -379,7 +380,21 @@ final class AgcBuilder
         $asm[] = '    sta TIM64T';
         $asm[] = '    jsr GameLogic              ; VBLANK: movimento / regras';
         if ($dualPlayerRow || $enemyBandCount > 0) {
-            // Atualiza X da fileira a partir de RowX (lógica pode incrementar no VBLANK)
+            $minX = 8;
+            $maxX = max($minX, 160 - (int)$rowSpan);
+            // Clamp RowX — evita underflow (255) e cópias NUSIZ fora da tela
+            $asm[] = '    lda RowX';
+            $asm[] = '    cmp #' . ($minX & 0xff);
+            $asm[] = '    bcs RowXMinOk';
+            $asm[] = '    lda #' . ($minX & 0xff);
+            $asm[] = '    sta RowX';
+            $asm[] = 'RowXMinOk:';
+            $asm[] = '    cmp #' . ($maxX & 0xff);
+            $asm[] = '    bcc RowXMaxOk';
+            $asm[] = '    beq RowXMaxOk';
+            $asm[] = '    lda #' . ($maxX & 0xff);
+            $asm[] = '    sta RowX';
+            $asm[] = 'RowXMaxOk:';
             $asm[] = '    lda RowX';
             $asm[] = '    sta P0X';
             if ($dualPlayerRow) {
@@ -497,84 +512,45 @@ final class AgcBuilder
         $asm[] = '    jmp MainLoop';
         $asm[] = '';
         $asm[] = 'GameLogic:';
-        // VBLANK/Overscan only — nunca chamado do PlayLoop
-        if ($enemyBandCount > 0) {
-            $minX = 8;
-            $maxX = max($minX, 160 - (int)$rowSpan);
-            $asm[] = '    ; --- VBLANK: movimento fileira (RowX) ---';
-            $asm[] = '    ; modo=' . ($rowZigzag ? 'zigzag' : 'wrap') . ' span=' . (int)$rowSpan;
-            $asm[] = '    lda MoveDelay';
-            $asm[] = '    beq RowMoveDone           ; 0 = parado';
-            $asm[] = '    dec MoveCtr';
-            $asm[] = '    bne RowMoveDone';
-            $asm[] = '    sta MoveCtr               ; recarrega delay';
-            $asm[] = '    lda RowDir';
-            $asm[] = '    bne RowGoLeft';
-            $asm[] = '    ; direita';
-            $asm[] = '    inc RowX';
-            $asm[] = '    lda RowX';
-            $asm[] = '    cmp #' . ($maxX & 0xff);
-            $asm[] = '    bcc RowMoveDone';
-            if ($rowZigzag) {
-                $asm[] = '    lda #' . ($maxX & 0xff);
-                $asm[] = '    sta RowX';
-                $asm[] = '    lda #1';
-                $asm[] = '    sta RowDir                ; vira esquerda';
-            } else {
-                $asm[] = '    lda #' . ($minX & 0xff);
-                $asm[] = '    sta RowX                  ; wrap: nasce na esquerda';
-            }
-            $asm[] = '    jmp RowMoveDone';
-            $asm[] = 'RowGoLeft:';
-            $asm[] = '    dec RowX';
-            $asm[] = '    lda RowX';
-            $asm[] = '    cmp #' . ($minX & 0xff);
-            $asm[] = '    bcs RowMoveDone           ; ainda >= min';
-            if ($rowZigzag) {
-                $asm[] = '    lda #' . ($minX & 0xff);
-                $asm[] = '    sta RowX';
-                $asm[] = '    lda #0';
-                $asm[] = '    sta RowDir                ; vira direita';
-            } else {
-                $asm[] = '    lda #' . ($maxX & 0xff);
-                $asm[] = '    sta RowX                  ; wrap: nasce na direita';
-            }
-            $asm[] = 'RowMoveDone:';
-        }
+        // VBLANK only — sem auto-scroll.
+        // Movimento da fileira: altere a variável nativa rowX em Programação (timer/regra).
+        // RowX é aplicado em P0X/P1X + PositionPlayers logo após este jsr.
         foreach ($ruleCompiled['frame'] as $line) {
             $asm[] = $line;
         }
         $asm[] = '    rts';
         $asm[] = '';
 
-        $asm[] = '; Posiciona P0/P1 (RESP + HMxx + HMOVE) — fine-adjust table padrão 2600';
+        $asm[] = '; Posiciona P0/P1 — 3 scanlines fixas';
         $asm[] = 'PositionPlayers:';
         $asm[] = '    lda P0X';
-        $asm[] = '    ldx #0                  ; objeto 0 = P0';
+        $asm[] = '    ldx #0';
         $asm[] = '    jsr SetHX';
         $asm[] = '    lda P1X';
-        $asm[] = '    ldx #1                  ; objeto 1 = P1';
+        $asm[] = '    ldx #1';
         $asm[] = '    jsr SetHX';
         $asm[] = '    sta WSYNC';
-        $asm[] = '    sta HMOVE               ; aplica HMP0/HMP1';
+        $asm[] = '    sta HMOVE';
         $asm[] = '    sta WSYNC';
         $asm[] = '    sta HMCLR';
         $asm[] = '    rts';
         $asm[] = '';
-        $asm[] = '; A = X desejado (1-160), X reg = índice (0=P0, 1=P1)';
+        $asm[] = '; A = X (1–160), X reg = objeto (0=P0,1=P1)';
         $asm[] = 'SetHX:';
         $asm[] = '    sta WSYNC';
         $asm[] = '    sec';
         $asm[] = 'SetHXDiv:';
         $asm[] = '    sbc #15';
         $asm[] = '    bcs SetHXDiv';
-        $asm[] = '    tay                      ; Y = resto (−15..−1 = $F1..$FF)';
+        $asm[] = '    tay';
         $asm[] = '    lda FineAdj-$F1,y';
         $asm[] = '    sta HMP0,x';
+        $asm[] = '    nop';
+        $asm[] = '    nop';
         $asm[] = '    sta RESP0,x';
         $asm[] = '    rts';
         $asm[] = '';
-        $asm[] = '; HMxx para resto $F1..$FF (tabela clássica SpiceWare)';
+        $asm[] = '    ALIGN 256';
         $asm[] = 'FineAdj:';
         $asm[] = '    .byte $70,$60,$50,$40,$30,$20,$10,$00';
         $asm[] = '    .byte $F0,$E0,$D0,$C0,$B0,$A0,$90';
@@ -2058,6 +2034,14 @@ ASM;
         }
 
         // Aloca variáveis do usuário a partir de $A0
+        // rowX / enemyAlive → RAM fixo do kernel (mesmo endereço do VBLANK)
+        $fixedMega = [
+            'rowX' => ['addr' => 0x9A, 'label' => 'RowX'],
+            'enemyAlive' => ['addr' => 0xBA, 'label' => 'EnemyAlive'],
+            'scoreP0' => ['addr' => 0x80, 'label' => 'ScoreP0'],
+            'scoreP1' => ['addr' => 0x81, 'label' => 'ScoreP1'],
+            'score' => ['addr' => 0x80, 'label' => 'ScoreP0'],
+        ];
         $addr = 0xA0;
         $varMap = []; // id|name -> ['addr'=>, 'type'=>, 'label'=>]
         foreach ($vars as $v) {
@@ -2065,17 +2049,37 @@ ASM;
             $id = (string)($v['id'] ?? '');
             $name = (string)($v['name'] ?? 'var');
             $type = (string)($v['type'] ?? 'byte');
+            $initVal = (int)($v['value'] ?? $v['init'] ?? 0) & 0xff;
+            if (isset($fixedMega[$name])) {
+                $fm = $fixedMega[$name];
+                $label = $fm['label'];
+                $varMap[$id] = ['addr' => $fm['addr'], 'type' => $type, 'label' => $label, 'name' => $name];
+                if ($name !== '') {
+                    $varMap['name:' . $name] = $varMap[$id];
+                }
+                // NÃO reinicia RowX aqui: boot já carregou baseX do editor.
+                // enemyAlive: reforça valor da Programação se definido.
+                if ($name === 'enemyAlive') {
+                    $inits[] = '    lda #' . ($initVal & 0x3f);
+                    $inits[] = '    sta EnemyAlive';
+                }
+                continue;
+            }
             $label = self::varLabel($name, $id);
             $size = $type === 'word' ? 2 : 1;
             if ($type === 'bool') {
-                // 1 byte por bool na v1 (simples)
                 $size = 1;
             }
             if ($addr + $size > 0xFF) break;
+            if ($addr >= 0x9A && $addr <= 0x9B) {
+                $addr = 0x9C; // evita colidir com RowX
+            }
+            if ($addr >= 0xBA && $addr <= 0xBE) {
+                $addr = 0xBF;
+            }
             $varMap[$id] = ['addr' => $addr, 'type' => $type, 'label' => $label, 'name' => $name];
             if ($name !== '') $varMap['name:' . $name] = $varMap[$id];
             $equates[] = sprintf('%-10s equ $%02X', $label, $addr);
-            $initVal = (int)($v['value'] ?? $v['init'] ?? 0) & 0xff;
             $inits[] = '    lda #' . ($initVal & 0xff);
             $inits[] = '    sta ' . $label;
             if ($size === 2) {
@@ -2086,31 +2090,37 @@ ASM;
         }
 
 
-        // Timers de jogo (segundos): 60 frames = 1s NTSC
+        // Timers de jogo em FRAMES (1 frame = mínimo; 60 ≈ 1s NTSC)
         $timers = [];
         foreach ($events as $ev) {
-            if (!is_array($ev) || ($ev['category'] ?? '') !== 'timer') continue;
+            if (!is_array($ev) || ($ev['category'] ?? '') !== 'timer') {
+                continue;
+            }
             $tid = (string)($ev['id'] ?? '');
-            if ($tid === '') continue;
-            $sec = max(1, min(255, (int)($ev['seconds'] ?? 1)));
+            if ($tid === '') {
+                continue;
+            }
+            // Novo: frames. Legado: seconds → ×60
+            if (isset($ev['frames'])) {
+                $period = max(1, min(255, (int)$ev['frames']));
+            } else {
+                $period = max(1, min(255, ((int)($ev['seconds'] ?? 1)) * 60));
+            }
             $lab = 'Tmr_' . substr(preg_replace('/[^A-Za-z0-9]/', '', $tid) ?: 'x', 0, 10);
             $fire = 'TFire_' . substr(preg_replace('/[^A-Za-z0-9]/', '', $tid) ?: 'x', 0, 8);
-            $timers[] = ['id' => $tid, 'seconds' => $sec, 'remLabel' => $lab, 'fireLabel' => $fire];
+            $timers[] = ['id' => $tid, 'frames' => $period, 'remLabel' => $lab, 'fireLabel' => $fire];
             $equates[] = sprintf('%-10s equ $%02X', $lab, $addr);
             $addr++;
-            if ($addr > 0xFE) break;
+            if ($addr > 0xFE) {
+                break;
+            }
             $equates[] = sprintf('%-10s equ $%02X', $fire, $addr);
             $addr++;
-            $inits[] = '    lda #' . $sec;
+            $inits[] = '    lda #' . $period;
             $inits[] = '    sta ' . $lab;
             $inits[] = '    lda #0';
             $inits[] = '    sta ' . $fire;
         }
-        // divisores de frame (1 segundo)
-        $equates[] = sprintf('%-10s equ $%02X', 'FrameDiv', $addr);
-        $addr++;
-        $inits[] = '    lda #0';
-        $inits[] = '    sta FrameDiv';
         $timerById = [];
         foreach ($timers as $tm) {
             $timerById[$tm['id']] = $tm;
@@ -2174,7 +2184,7 @@ ASM;
             }
         }
 
-        // Prefixo frame: input + relógio de segundos (60 frames)
+        // Prefixo frame: input + timers em frames (1 tick = 1 frame)
         $framePrefix = [
             '    ; --- sample input ---',
             '    inc WalkTick',
@@ -2182,38 +2192,20 @@ ASM;
             '    sta TmpA',
             '    lda INPT4',
             '    sta TmpB',
-            '    ; --- timers (60 frames = 1s) ---',
-            '    ldx #0',
-            '    stx TmpB              ; reusa: flag “houve segundo” no carry path',
-            '    inc FrameDiv',
-            '    lda FrameDiv',
-            '    cmp #60',
-            '    bne NoSecTick',
-            '    lda #0',
-            '    sta FrameDiv',
+            '    ; --- timers (período em frames) ---',
         ];
         foreach ($timers as $i => $tm) {
-            $framePrefix[] = '    ; timer ' . $tm['id'] . ' (' . $tm['seconds'] . 's)';
+            $fr = (int)$tm['frames'];
+            $framePrefix[] = '    ; timer ' . $tm['id'] . ' a cada ' . $fr . ' frame(s)';
             $framePrefix[] = '    lda #0';
             $framePrefix[] = '    sta ' . $tm['fireLabel'];
             $framePrefix[] = '    dec ' . $tm['remLabel'];
             $framePrefix[] = '    bne TmrOk' . $i;
-            $framePrefix[] = '    lda #' . $tm['seconds'];
+            $framePrefix[] = '    lda #' . $fr;
             $framePrefix[] = '    sta ' . $tm['remLabel'];
             $framePrefix[] = '    lda #1';
             $framePrefix[] = '    sta ' . $tm['fireLabel'];
             $framePrefix[] = 'TmrOk' . $i . ':';
-        }
-        $framePrefix[] = 'NoSecTick:';
-        // se não houve tick de segundo, zera flags de fogo (senão re-dispara todo frame)
-        if ($timers) {
-            $framePrefix[] = '    lda FrameDiv';
-            $framePrefix[] = '    beq SecTickDone      ; FrameDiv==0 significa que acabamos de tickar';
-            foreach ($timers as $i => $tm) {
-                $framePrefix[] = '    lda #0';
-                $framePrefix[] = '    sta ' . $tm['fireLabel'];
-            }
-            $framePrefix[] = 'SecTickDone:';
         }
 
         $frame = array_merge($framePrefix, $frame, [
@@ -2343,6 +2335,23 @@ ASM;
                     $asm[] = '    sec';
                     $asm[] = '    sbc #' . $val;
                     $asm[] = '    sta ' . $ref['label'];
+                }
+                continue;
+            }
+
+            if ($type === 'copy_var') {
+                // copiar de varIdFrom → para varIdTo
+                $src = self::resolveVar($varMap, [
+                    'varId' => (string)($st['varIdFrom'] ?? ''),
+                    'varName' => (string)($st['varNameFrom'] ?? ''),
+                ]);
+                $dst = self::resolveVar($varMap, [
+                    'varId' => (string)($st['varIdTo'] ?? ''),
+                    'varName' => (string)($st['varNameTo'] ?? ''),
+                ]);
+                if ($src && $dst) {
+                    $asm[] = '    lda ' . $src['label'] . '            ; copy_var de';
+                    $asm[] = '    sta ' . $dst['label'] . '            ; para';
                 }
                 continue;
             }

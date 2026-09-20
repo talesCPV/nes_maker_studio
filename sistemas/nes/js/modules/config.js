@@ -116,6 +116,17 @@ const CONFIG = (() => {
                 </div>
               </div>
 
+              <div style="margin-top:8px">
+                <label style="font-size:10px;color:#666">Fonte do texto sobreposto</label>
+                <select id="dashTextFontMode" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px">
+                  <option value="ascii">Completa (ASCII — maiúsc.+minúsc.+símbolos, 96 tiles)</option>
+                  <option value="smb">Compacta (estilo SMB1 — maiúsc.+números, 40 tiles)</option>
+                </select>
+                <div style="font-size:9px;color:#666;margin-top:4px;line-height:1.4">
+                  Fonte pronta (não precisa desenhar) — só reserva espaço de CHR nas telas que usam texto.
+                </div>
+              </div>
+
               <div style="margin-top:12px;background:#111;border:1px solid #333;border-radius:6px;padding:10px">
                 <label style="font-size:10px;color:#666">Controle do Herói</label>
                 <select id="dashControlMode" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px;margin-top:4px">
@@ -202,6 +213,7 @@ const CONFIG = (() => {
     const genreEl = document.getElementById('dashGenre');
     const descEl = document.getElementById('dashDesc');
     const mapperEl = document.getElementById('dashMapper');
+    const textFontModeEl = document.getElementById('dashTextFontMode');
     const livesEl = document.getElementById('dashLives');
     const continuesEl = document.getElementById('dashContinues');
     const energyEl = document.getElementById('dashEnergy');
@@ -212,6 +224,10 @@ const CONFIG = (() => {
     if(authorEl) authorEl.addEventListener('input', e=>{ if(Project.data) Project.data.author=e.target.value; });
     if(genreEl) genreEl.addEventListener('change', e=>{ if(Project.data) Project.data.genre=e.target.value; });
     if(descEl) descEl.addEventListener('input', e=>{ if(Project.data) Project.data.description=e.target.value; });
+    if(textFontModeEl) textFontModeEl.addEventListener('change', e=>{
+      if(!Project.data) return;
+      Project.data.textFontMode = (e.target.value === 'smb') ? 'smb' : 'ascii';
+    });
     if(mapperEl) mapperEl.addEventListener('change', e=>{
       if(!Project.data) return;
       let m = parseInt(e.target.value, 10);
@@ -368,6 +384,12 @@ const CONFIG = (() => {
       if(m !== 0 && m !== 2 && m !== 3) m = 0;
       Project.data.mapper = m;
       mapperEl.value = String(m);
+    }
+    const textFontModeEl=document.getElementById('dashTextFontMode');
+    if(textFontModeEl){
+      const tfm = (Project.data.textFontMode === 'smb') ? 'smb' : 'ascii';
+      Project.data.textFontMode = tfm;
+      textFontModeEl.value = tfm;
     }
     const controlModeEl=document.getElementById('dashControlMode');
     if(controlModeEl) controlModeEl.value = Project.data.controlMode || 'auto';
