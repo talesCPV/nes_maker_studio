@@ -9,13 +9,17 @@ OBS: Talvez um feedback na barra superior a cada salvamento de projeto
 2. Validar CNROM + texto sobreposto — só testei texto em NROM e UOROM com CPU real. CNROM sozinho (sem texto) 
 foi testado, mas a combinação específica CNROM+texto não. Deveria funcionar igual (mesmo caminho de código), 
 mas não coloquei na bancada ainda.
-STATUS: Em Execução
+STATUS: Aplicado
 OBS: VER BUG DE COR DE FUNDO DE BACKGROUND (Mario)
 
 3. Tabela de warps por instância — destino por posição (tela+célula) em runtime, em vez do targetId estático 
 de hoje. Diagnosticado e alinhado tecnicamente há várias sessões, nunca implementado. Simplificaria a UI da 
 ação "Ir para Warp" (tiraria o seletor de objeto).
-STATUS: Ainda Não Aplicado
+STATUS: Em andamento
+OBS: 
+* Em level-design, poder trocar a ordem das telas nem "BACKGROUNDS DESENHADOS" por drag n drop
+* Eliminar a ferramenta "atribuir objeto dano/warp" de BACKGROUNDS
+* reconhecer os pontos de warp desenhando em BACKGROUND no modulo level-design
 
 4. Limpeza de arquivos órfãos — sprite_chr.php e background_chr.php (removidos do código, mas ainda existem 
 fisicamente no seu servidor) e templates/cfg.php (o arquivo órfão que causou a confusão desta sessão). Só 
@@ -31,6 +35,7 @@ STATUS: Ainda Não Aplicado
 erro (menos amigável que o limite de metatile); (b) dividir 1 fase em mais de 1 banco está fora de escopo por 
 enquanto. Baixa prioridade.
 STATUS: Ainda Não Aplicado
+OBS: Verificar a possibilidade de roms de 256Kb
 
 7. Animação de tile de cenário via CHR-RAM — ideia futura registrada, motor ainda não tem nenhum recurso pra 
 isso. Você mesmo pediu pra deixar pra depois da Etapa 2 (já concluída), então esse é o próximo natural se 

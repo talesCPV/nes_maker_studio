@@ -1,0 +1,24 @@
+<!--
+PATCH para sistemas/megadrive/editor.html
+Garanta que o <head> tenha:
+<link rel="stylesheet" href="css/core.css">
+<link rel="stylesheet" href="css/graphics.css">
+
+E no <body>, antes de fechar:
+<script src="js/render-utils.js"></script>
+<script src="js/core.js"></script>
+<script src="js/modules/config.js"></script>
+<script src="js/modules/graphics.js"></script>
+
+Estrutura de containers esperada (igual NES):
+<div id="editor-content">
+  <div id="panel-config" class="module-panel"></div>
+  <div id="panel-graphics" class="module-panel"></div>
+</div>
+
+Menu:
+<button class="module-btn" data-module="config" onclick="MDCore.TabManager.open('config')">⚙️ Config</button>
+<button class="module-btn" data-module="graphics" onclick="MDCore.TabManager.open('graphics')">🎨 Gráficos/Tiles</button>
+
+O core.js novo já gerencia a troca de modulo via AppState.switchModule(id)
+-->

@@ -14,6 +14,30 @@ const CHR = (() => {
   let activePal = 0, activeSlot = 1;
   let colorSwap = null; // null | { step:0|1, a:0-3 }
 
+  /**
+   * Aplica uma cor num slot de paleta. Slot 0 de QUALQUER paleta - fundo
+   * (0-3) OU sprite (4-7) - é o MESMO byte físico na PPU ($3F00/$3F04/
+   * $3F08/$3F0C/$3F10/$3F14/$3F18/$3F1C são todos espelhos um do outro).
+   * Isso vale mesmo a cor 0 de sprite nunca sendo desenhada (é sempre
+   * transparente) - ela ainda assim SOBRESCREVE o backdrop de fundo se for
+   * carregada depois, já que o motor sobe as 8 paletas em sequência (fundo
+   * primeiro, sprite depois) - a última escrita no byte compartilhado
+   * vence. Por isso a sincronização precisa cobrir as 8, não só as 4 de
+   * fundo, senão o "preto padrão" que sobra na paleta de sprite (comum,
+   * já que ali normalmente ninguém liga pra cor 0) apaga o backdrop.
+   * Retorna false se o usuário cancelou a confirmação (nada foi alterado).
+   */
+  function applyPaletteColor(pal, slot, colorIdx){
+    if(slot === 0){
+      const ok = confirm('Esta cor será aplicada na posição 0 das 8 paletas (fundo e sprite - o hardware do NES compartilha o mesmo byte de cor 0 entre todas elas, mesmo a de sprite, que nunca é desenhada mas ainda assim sobrescreve o backdrop). Deseja continuar?');
+      if(!ok) return false;
+      for(let p=0; p<8; p++) palettes[p][0] = colorIdx;
+      return true;
+    }
+    palettes[pal][slot] = colorIdx;
+    return true;
+  }
+
   let _palBankSel = 0; // índice selecionado na lista do banco
   let currentBank = 0, gridW=2, gridH=2, selectedTiles=[0,1,16,17], selectedFlips=[0,0,0,0], activeSlotIdx=0, isDrawing=false, undoStack=[];
   // selectedFlips: 0=none 1=H 2=V 3=HV — flip de OAM por célula (não altera pixels do CHR)
@@ -865,7 +889,7 @@ const CHR = (() => {
     const cont=document.getElementById('subpalettesContainer'); if(!cont) return; cont.innerHTML="";
     if(isSpriteBank(currentBank)) createRow("SPR",[4,5,6,7]); else createRow("BG",[0,1,2,3]);
     const grid=document.getElementById('masterPaletteGrid'); grid.innerHTML=""; let line=null;
-    NES_PALETTE.forEach((col,idx)=>{ if(idx%16===0){ line=document.createElement('div'); line.style.display='flex'; line.style.gap='2px'; grid.appendChild(line); } const b=document.createElement('div'); b.style.cssText=`width:18px;height:18px;background:${col};border:1px solid #333;border-radius:2px;cursor:pointer`; b.title=`NES $${idx.toString(16).padStart(2,'0').toUpperCase()}`; b.onclick=()=>{ palettes[activePal][activeSlot]=idx; syncActiveBankEntryFromPpu(); initPalUI(); renderAll(); renderPaletteBankUI(); }; line.appendChild(b); });
+    NES_PALETTE.forEach((col,idx)=>{ if(idx%16===0){ line=document.createElement('div'); line.style.display='flex'; line.style.gap='2px'; grid.appendChild(line); } const b=document.createElement('div'); b.style.cssText=`width:18px;height:18px;background:${col};border:1px solid #333;border-radius:2px;cursor:pointer`; b.title=`NES $${idx.toString(16).padStart(2,'0').toUpperCase()}`; b.onclick=()=>{ if(!applyPaletteColor(activePal, activeSlot, idx)) return; syncActiveBankEntryFromPpu(); initPalUI(); renderAll(); renderPaletteBankUI(); }; line.appendChild(b); });
     const qc=document.getElementById('quickColors'); if(qc){ qc.innerHTML=''; for(let c=0;c<4;c++){ const isActive=c===activeSlot; const btn=document.createElement('div'); btn.style.cssText=`width:32px;height:24px;background:${NES_PALETTE[palettes[activePal][c]]};border:${isActive?'2px solid #ffcc00':'1px solid #555'};border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:#000;font-weight:bold`; btn.textContent=c+1; btn.onclick=()=>{ activeSlot=c; initPalUI(); renderAll(); updateLabels(); }; qc.appendChild(btn); } }
     ensurePaletteBank();
     renderPaletteBankUI();
@@ -3785,7 +3809,7 @@ function paintZoomPixel(px, py, colorSlot){
       const s = Math.max(0, Math.min(3, parseInt(slotIdx,10)||0));
       const c = Math.max(0, Math.min(63, parseInt(colorIdx,10)||0));
       if(!Array.isArray(palettes[p])) palettes[p] = [15,0,16,48];
-      palettes[p][s] = c;
+      if(!applyPaletteColor(p, s, c)) return;
       activePal = p;
       activeSlot = s;
       try{ syncActiveBankEntryFromPpu(); }catch(e){}

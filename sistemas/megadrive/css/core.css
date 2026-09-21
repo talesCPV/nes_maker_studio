@@ -1,0 +1,105 @@
+/* sistemas/megadrive/css/core.css - CORES NES - MENU RETRÁTIL */
+:root { --bg:#1e1e1e; --panel:#252525; --border:#333; --accent:#e8c36a; --accent2:#e94560; --text:#ccc; --muted:#666; }
+body { background:var(--bg); color:var(--text); font-family:'Consolas','Segoe UI',monospace; margin:0; }
+.module-panel { display:none; flex:1; min-height:0; background:var(--bg); }
+.module-panel.active { display:flex; }
+.module-btn.active { background:#2a3a5a!important; color:#fff!important; border-left-color:var(--accent)!important; }
+#editor-content { flex:1; display:flex; min-height:0; background:var(--bg); overflow:hidden; }
+
+/* CONFIG EDITOR - RESTORED */
+.config-editor-container {
+  background:#1e1e1e;
+  color:#ccc;
+  font-family:'Consolas',monospace;
+  display:flex;
+  flex-direction:column;
+  flex:1;
+  min-height:0;
+  padding:20px;
+  overflow:auto;
+}
+.config-header {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:20px;
+  border-bottom:1px solid #333;
+  padding-bottom:12px;
+}
+.config-header h2 {
+  margin:0;
+  font-size:18px;
+  color:#e8c36a;
+}
+.save-status {
+  font-size:11px;
+  padding:2px 8px;
+  border-radius:3px;
+  background:#1a1a1a;
+  border:1px solid #333;
+  color:#00ff88;
+}
+.config-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));
+  gap:16px;
+  margin-bottom:20px;
+  background:#252525;
+  border:1px solid #333;
+  border-radius:4px;
+  padding:16px;
+}
+.config-grid label {
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  font-size:12px;
+  color:#aaa;
+}
+.config-grid input[type="text"],
+.config-grid input:not([type="checkbox"]),
+.config-grid select {
+  background:#1a1a1a;
+  border:1px solid #444;
+  color:#ccc;
+  padding:6px 8px;
+  border-radius:2px;
+  font-family:inherit;
+  font-size:13px;
+}
+.config-grid label.check {
+  flex-direction:row;
+  align-items:center;
+  gap:8px;
+}
+.config-info {
+  background:#1a1a1a;
+  border:1px solid #333;
+  border-radius:4px;
+  padding:12px;
+  font-size:12px;
+  color:#888;
+  line-height:1.6;
+  margin-bottom:16px;
+}
+.config-info strong { color:#e8c36a; }
+.config-actions {
+  display:flex;
+  gap:8px;
+}
+.config-actions .btn {
+  background:#2a2a2a;
+  border:1px solid #444;
+  color:#ccc;
+  padding:8px 16px;
+  border-radius:3px;
+  cursor:pointer;
+  font-family:inherit;
+  font-size:12px;
+}
+.config-actions .btn.primary {
+  background:#2a4a3a;
+  border-color:#3a6a4a;
+  color:#aaffaa;
+}
+.config-actions .btn:hover { filter:brightness(1.2); }

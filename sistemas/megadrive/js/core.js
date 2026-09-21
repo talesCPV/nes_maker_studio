@@ -1,191 +1,152 @@
-(function () {
-  'use strict';
-
-  const params = new URLSearchParams(location.search);
-  const projectId = params.get('id') || params.get('project');
-
-  const modules = [
-    ['config', 'Configurações'],
-    ['graphics', 'Gráficos / Tiles'],
-    ['maps', 'Mapas'],
-    ['sprites', 'Sprites'],
-    ['audio', 'Áudio'],
-    ['code', 'Programação'],
-    ['build', 'Build ROM']
-  ];
-
-  const menu = document.querySelectorAll('.side-item[data-mod]');
-  let project = null;
-  let currentModule = 'config';
-
-  function esc(v) {
-    return String(v ?? '').replace(/[&<>"']/g, m => ({
-      '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
-    }[m]));
-  }
-
-  function status(text, ok) {
-    const el = document.getElementById('projStatus');
-    if (!el) return;
-    el.textContent = '● ' + text;
-    el.style.color = ok === false ? '#d85b6a' : '#27ae60';
-  }
-
-  function updateHeader() {
-    const name = document.getElementById('projNameLabel');
-    const file = document.getElementById('projFileLabel');
-    if (name) name.textContent = project?.name || 'Sem projeto';
-    if (file) file.textContent = project ? (project.file_name || project.fileName || ((project.name || 'projeto') + '.mdg')) : '—';
-  }
-
-  function refreshFooter() {
-    const d = project || {};
-    const cpu = document.getElementById('infoCpu');
-    const video = document.getElementById('infoVideo');
-    const rom = document.getElementById('infoRom');
-    if (cpu) cpu.textContent = d.cpu || '68000';
-    if (video) video.textContent = d.video || 'VDP';
-    if (rom) {
-      const n = Number(d.romSize || d.rom_size || 0);
-      rom.textContent = n > 0 ? ((n / 1024) | 0) + ' KB' : '—';
-    }
-  }
-
-  function toggleSidebar() {
-    const sb = document.getElementById('sidebar');
-    const btn = document.getElementById('btnSideToggle');
-    const collapsed = sb.classList.toggle('collapsed');
-    try { localStorage.setItem('mdg_sidebar_collapsed', collapsed ? '1' : '0'); } catch (e) {}
-    if (btn) {
-      btn.textContent = collapsed ? '»' : '«';
-      btn.title = collapsed ? 'Expandir menu' : 'Recolher menu';
-    }
-  }
-
-  function restoreSidebar() {
-    try {
-      if (localStorage.getItem('mdg_sidebar_collapsed') === '1') {
-        const sb = document.getElementById('sidebar');
-        const btn = document.getElementById('btnSideToggle');
-        if (sb) sb.classList.add('collapsed');
-        if (btn) { btn.textContent = '»'; btn.title = 'Expandir menu'; }
-      }
-    } catch (e) {}
-  }
-
-  async function openModule(name) {
-    const item = document.querySelector('.side-item[data-mod="' + name + '"]');
-    if (!item || item.classList.contains('disabled')) return;
-
-    document.querySelectorAll('.side-item').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.module').forEach(el => el.classList.remove('active'));
-    item.classList.add('active');
-
-    const panel = document.getElementById('mod-' + name);
-    if (!panel) return;
-    panel.classList.add('active');
-    currentModule = name;
-
-    try {
-      const mod = await import('./modules/' + name + '.js');
-      panel.innerHTML = typeof mod.render === 'function'
-        ? mod.render(project)
-        : '<div class="panel"><h2>' + esc(modules.find(m => m[0] === name)?.[1] || name) + '</h2><p class="muted">Módulo carregado.</p></div>';
-      if (typeof mod.mount === 'function') mod.mount(panel, project, API);
-      status('módulo: ' + (modules.find(m => m[0] === name)?.[1] || name));
-    } catch (e) {
-      panel.innerHTML = '<div class="panel"><h2>Erro no módulo</h2><p class="muted">' + esc(e.message || e) + '</p></div>';
-      status('erro no módulo', false);
-    }
-  }
-
-  async function loadProject() {
-    if (!projectId) {
-      project = {
-        version: '0.1.0', system: 'MEGADRIVE', name: 'Novo Jogo Mega Drive',
-        cpu: '68000', video: 'VDP', romSize: 0
-      };
-      updateHeader(); refreshFooter();
-      await openModule('config');
-      status('sem projeto carregado');
-      return;
-    }
-
-    status('carregando...');
-    const r = await fetch('backend/projects/load.php?id=' + encodeURIComponent(projectId), {
-      credentials: 'same-origin', cache: 'no-store'
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok || !d.success) throw new Error(d.message || 'Não foi possível carregar o projeto.');
-    project = d.project;
-    updateHeader(); refreshFooter();
-    await openModule('config');
-    status('pronto');
-  }
-
-  async function saveProject() {
-    if (!projectId || !project) {
-      status('nenhum projeto para salvar', false);
-      return;
-    }
-    status('salvando...');
-    const r = await fetch('backend/projects/save.php', {
-      method: 'POST', credentials: 'same-origin',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ id: projectId, project: project })
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok || !d.success) throw new Error(d.message || 'Falha ao salvar o projeto.');
-    if (d.project) project = d.project;
-    updateHeader(); refreshFooter();
-    status('salvo');
-  }
-
-  async function ensureSession() {
-    const r = await fetch(APP('/backend/auth/session.php'), { credentials: 'same-origin', cache: 'no-store' });
-    const j = await r.json().catch(() => ({}));
-    if (!j.authenticated) {
-      location.replace(APP('/login.html') + '?next=' + encodeURIComponent(location.pathname + location.search));
-      return false;
-    }
-    return true;
-  }
-
-  const API = {
-    getProject: () => project,
-    setProject: (p) => { project = p; updateHeader(); refreshFooter(); },
-    save: saveProject,
-    refresh: () => openModule(currentModule),
-    openModule
+/**
+ * sistemas/megadrive/js/core.js
+ * Core MD - mesmo padrão do NES (sistemas/nes/js/core.js)
+ * - AppState global, EventBus, TabManager, ModuleRegistry
+ * - Compatível com backend/projects/* e app-config.js
+ */
+(function(){
+  const EventBus = {
+    _events: {},
+    on(evt, fn){ (this._events[evt] = this._events[evt] || []).push(fn); },
+    off(evt, fn){ if(!this._events[evt]) return; this._events[evt] = this._events[evt].filter(f=>f!==fn); },
+    emit(evt, data){ (this._events[evt]||[]).forEach(fn=>{ try{ fn(data); }catch(e){ console.error('[MD EventBus]', evt, e); } }); window.dispatchEvent(new CustomEvent(evt, {detail: data})); }
   };
 
-  document.getElementById('btnSideToggle')?.addEventListener('click', toggleSidebar);
-  menu.forEach(el => el.addEventListener('click', () => openModule(el.getAttribute('data-mod'))));
-
-  document.getElementById('btnDash')?.addEventListener('click', () => {
-    location.href = APP('/sistemas/megadrive/dashboard.html');
-  });
-
-  document.getElementById('btnSave')?.addEventListener('click', () => {
-    saveProject().catch(e => { status('erro ao salvar', false); alert(e.message || e); });
-  });
-
-  document.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-      e.preventDefault();
-      saveProject().catch(err => { status('erro ao salvar', false); alert(err.message || err); });
+  const AppState = {
+    project: null,
+    projectId: null,
+    currentModule: 'config',
+    isDirty: false,
+    modules: {},
+    palettes: [], // CRAM decoded to CSS
+    init(projectData, projectId){
+      this.project = projectData || this.createDefaultProject();
+      this.projectId = projectId;
+      this.palettes = this.decodePalettes(this.project.palettes);
+      EventBus.emit('project:loaded', this.project);
+    },
+    createDefaultProject(){
+      return {
+        meta: { name: 'Novo Jogo MD', author: '', version: '0.1.0', region: 'U', sram: false },
+        tiles: new Uint8Array(256*32), // 8192 bytes 4bpp
+        palettes: [
+          [0x000,0x00E,0x0E0,0xE00,0xEEE,0x222,0x444,0x888,0xAAA,0xFFF,0x0EE,0xEE0,0xE0E,0xA0A,0x0A0,0xA00],
+          [0x000,0x00E,0x0E0,0xE00,0xEEE,0x222,0x444,0x888,0xAAA,0xFFF,0x0EE,0xEE0,0xE0E,0xA0A,0x0A0,0xA00],
+          [0x000,0x00E,0x0E0,0xE00,0xEEE,0x222,0x444,0x888,0xAAA,0xFFF,0x0EE,0xEE0,0xE0E,0xA0A,0x0A0,0xA00],
+          [0x000,0x00E,0x0E0,0xE00,0xEEE,0x222,0x444,0x888,0xAAA,0xFFF,0x0EE,0xEE0,0xE0E,0xA0A,0x0A0,0xA00]
+        ],
+        maps: [],
+        sprites: [],
+        audio: { tracks: [] },
+        program: { main: '; 68k main\nmove.w #$2700,sr\nloop: bra loop' }
+      };
+    },
+    decodePalettes(cramPalettes){
+      // CRAM 0BBB0GGG0RRR -> CSS hex
+      return (cramPalettes||[]).map(pal=> pal.map(cram=>{
+        let r = (cram & 0x07);
+        let g = (cram>>4) & 0x07;
+        let b = (cram>>8) & 0x07;
+        r = (r<<5)|(r<<2)|(r>>1);
+        g = (g<<5)|(g<<2)|(g>>1);
+        b = (b<<5)|(b<<2)|(b>>1);
+        return `rgb(${r},${g},${b})`;
+      }));
+    },
+    markDirty(){ this.isDirty=true; EventBus.emit('project:dirty', true); const el=document.querySelector('#save-status'); if(el) el.textContent='● não salvo'; },
+    markClean(){ this.isDirty=false; EventBus.emit('project:clean', false); const el=document.querySelector('#save-status'); if(el) el.textContent='✔ salvo'; },
+    registerModule(id, mod){ this.modules[id]=mod; EventBus.emit('module:registered', {id}); },
+    switchModule(id){
+      // V13 FIX - permite abrir mesmo se modulo ainda não registrado, para debug
+      const actualId = id==='maps' && !this.modules[id] && this.modules['backgrounds'] ? 'backgrounds' : id;
+      const moduleId = this.modules[id] ? id : actualId;
+      if(!this.modules[moduleId]){ console.warn('[MDCore] modulo nao encontrado', id, 'tentando', moduleId, 'disponiveis:', Object.keys(this.modules)); }
+      this.currentModule=moduleId;
+      document.querySelectorAll('.module-btn').forEach(b=> b.classList.toggle('active', b.dataset.module===id || b.dataset.module===moduleId));
+      document.querySelectorAll('.module-panel').forEach(p=> {
+        const shouldShow = p.id===`panel-${id}` || p.id===`panel-${moduleId}`;
+        p.style.display = shouldShow ? 'flex' : 'none';
+        if(shouldShow) p.classList.add('active'); else p.classList.remove('active');
+      });
+      const mod = this.modules[moduleId];
+      if(mod && mod.render) {
+        try{ mod.render(); }catch(e){ console.error('[MDCore] render erro', moduleId, e); }
+      }
+      EventBus.emit('module:switch', {id:moduleId});
+      try{ history.replaceState(null,'', `?project=${this.projectId}&module=${id}`); }catch{}
+    },
+    getProjectForSave(){
+      const p = this.project ? JSON.parse(JSON.stringify(this.project)) : {};
+      
+      // V19 FIX: Salva tiles como array (seguro) + b64 chunked
+      try{
+        let chrData = null;
+        if(this.modules.graphics && this.modules.graphics.data) chrData = this.modules.graphics.data;
+        else if(window.MDGraphics && window.MDGraphics.data) chrData = window.MDGraphics.data;
+        else if(window.MDGraphics && window.MDGraphics.chrData) chrData = window.MDGraphics.chrData;
+        
+        if(chrData){
+          p.tiles = Array.from(chrData);
+          // b64 chunked para evitar stack overflow do apply
+          try{
+            let binary = '';
+            const chunkSize = 8192;
+            for(let i=0;i<chrData.length;i+=chunkSize){
+              const chunk = chrData.subarray ? chrData.subarray(i, i+chunkSize) : chrData.slice(i, i+chunkSize);
+              binary += String.fromCharCode.apply(null, chunk);
+            }
+            p.tiles_b64 = btoa(binary);
+            // Salva também no localStorage para fallback
+            try{ localStorage.setItem('mdg_chrData', p.tiles_b64); }catch{}
+          }catch(e){ console.warn('tiles_b64 encode fail', e); }
+        }
+      }catch(e){ console.error('tiles save', e); }
+      
+      // Metatiles
+      try{
+        if(this.project && this.project.metatiles && this.project.metatiles.length>0){
+          p.metatiles = this.project.metatiles;
+        }
+        if(window.MDGraphics && window.MDGraphics.metatiles && window.MDGraphics.metatiles.length>0){
+          p.metatiles = window.MDGraphics.metatiles;
+        } else if(window.AppState && window.AppState.project && window.AppState.project.metatiles){
+          p.metatiles = window.AppState.project.metatiles;
+        }
+        console.log('[MD Save] metatiles', p.metatiles ? p.metatiles.length : 0, 'tiles', p.tiles ? p.tiles.length : 0);
+      }catch(e){ console.error('metatiles save', e); }
+      
+      if(this.modules.backgrounds && this.modules.backgrounds.data){
+        p.backgrounds = this.modules.backgrounds.data;
+      }
+      if(this.modules.maps && this.modules.maps.data){
+        p.backgrounds = this.modules.maps.data;
+      }
+      if(this.project && this.project.backgrounds && !p.backgrounds){
+        p.backgrounds = this.project.backgrounds;
+      }
+      
+      return p;
     }
+  };
+
+  // Tab manager compativel NES
+  const TabManager = {
+    open(id){ AppState.switchModule(id); }
+  };
+
+  window.MDCore = { EventBus, AppState, TabManager, on: EventBus.on.bind(EventBus), emit: EventBus.emit.bind(EventBus), registerModule: AppState.registerModule.bind(AppState) };
+  window.AppState = AppState; // alias compat NES
+  window.core = window.MDCore; // alias loader antigo
+  window.MDProject = AppState; // alias antigo MD
+  window.MDModules = {};
+
+  // Auto-init quando editor.html carrega
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const params = new URLSearchParams(location.search);
+    const mod = params.get('module') || 'config';
+    // delay para modulos se registrarem
+    setTimeout(()=> AppState.switchModule(mod), 200);
   });
 
-  (async function init() {
-    restoreSidebar();
-    if (!(await ensureSession())) return;
-    try {
-      await loadProject();
-    } catch (e) {
-      status('erro ao carregar', false);
-      const panel = document.getElementById('mod-config');
-      if (panel) panel.innerHTML = '<div class="panel"><h2>Erro</h2><p class="muted">' + esc(e.message || e) + '</p></div>';
-    }
-  })();
+  console.log('[MDCore] core carregado - padrao NES');
 })();

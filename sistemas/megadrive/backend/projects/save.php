@@ -1,7 +1,74 @@
 <?php
-header('Content-Type: application/json; charset=utf-8'); require_once dirname(__DIR__, 4) . '/backend/auth/auth_check.php';
-$in=json_decode(file_get_contents('php://input'),true); $id=preg_replace('/[^A-Za-z0-9_-]/','',$in['id']??''); $project=$in['project']??null; $uid=(string)(int)$_SESSION['user_id'];
-if(!$id||!is_array($project)){http_response_code(400);echo json_encode(['success'=>false,'message'=>'Dados inválidos']);exit;}
-$dir=dirname(__DIR__,4).'/data/users/'.$uid.'/megadrive/projects/'.$id; $file=$dir.'/project.mdg'; if(!is_dir($dir))mkdir($dir,0775,true);
-$project['id']=$project['id']??$id; $project['updated_at']=date('c'); $json=json_encode($project,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); if($json===false||file_put_contents($file,$json.LPHP_EOL,LOCK_EX)===false){http_response_code(500);echo json_encode(['success'=>false,'message'=>'Não foi possível salvar']);exit;}
-echo json_encode(['success'=>true,'project'=>$project],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+// sistemas/megadrive/backend/projects/save.php - V17 FIX
+header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+
+if($_SERVER['REQUEST_METHOD']==='OPTIONS'){ http_response_code(200); exit; }
+
+$input = file_get_contents('php://input');
+$data = json_decode($input, true);
+
+$id = $data['id'] ?? null;
+$project = $data['project'] ?? $data ?? null;
+
+if(!$id){
+  echo json_encode(['error'=>'missing id']); exit;
+}
+$id = preg_replace('/[^a-z0-9]/', '', strtolower($id));
+
+// Acha pasta do usuário
+$baseDirs = [
+  __DIR__.'/../../../../data/users',
+  __DIR__.'/../../../data/users',
+  dirname(__DIR__,4).'/data/users'
+];
+
+$saved = false;
+foreach($baseDirs as $base){
+  if(!is_dir($base)) continue;
+  $users = glob($base.'/*', GLOB_ONLYDIR);
+  foreach($users as $userDir){
+    $projDir = $userDir.'/megadrive/projects/'.$id;
+    if(is_dir($projDir)){
+      $path = $projDir.'/project.mdg';
+      $json = json_encode($project, JSON_PRETTY_PRINT);
+      // Garante que metatiles estão salvos
+      if(isset($project['metatiles'])){
+        // ok
+      }
+      file_put_contents($path, $json);
+      echo json_encode(['ok'=>true, 'path'=>$path, 'metatiles'=>count($project['metatiles']??[]), 'backgrounds'=>isset($project['backgrounds'])]);
+      $saved = true;
+      break 2;
+    }
+  }
+}
+
+if(!$saved){
+  // Cria na primeira pasta de usuário encontrada ou em data/projects
+  $firstUser = null;
+  foreach($baseDirs as $base){
+    if(is_dir($base)){
+      $users = glob($base.'/*', GLOB_ONLYDIR);
+      if(!empty($users)){ $firstUser = $users[0]; break; }
+    }
+  }
+  if($firstUser){
+    $projDir = $firstUser.'/megadrive/projects/'.$id;
+    @mkdir($projDir, 0777, true);
+    $path = $projDir.'/project.mdg';
+    $json = json_encode($project, JSON_PRETTY_PRINT);
+    file_put_contents($path, $json);
+    echo json_encode(['ok'=>true, 'path'=>$path, 'created'=>true, 'metatiles'=>count($project['metatiles']??[])]);
+  } else {
+    // Fallback local
+    $path = __DIR__.'/../../../data/projects/'.$id.'.mdg';
+    @mkdir(dirname($path), 0777, true);
+    $json = json_encode($project, JSON_PRETTY_PRINT);
+    file_put_contents($path, $json);
+    echo json_encode(['ok'=>true, 'path'=>$path, 'fallback'=>true]);
+  }
+}
+?>

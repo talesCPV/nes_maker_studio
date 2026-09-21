@@ -30,6 +30,7 @@ then
     git add next_steps.txt
     git add index.html
     git add readme.md
+    git add intro.md
     git add login.html
     git add register.html
     git add config_hub.php

@@ -1,107 +1,275 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<script>
-(function () {
-  function detect() {
-    if (typeof window.APP_BASE === 'string' && window.APP_BASE !== '') return String(window.APP_BASE).replace(/\/$/, '');
-    var p = location.pathname || '';
-    var entries = ['/login.html', '/register.html', '/index.html'];
-    for (var i = 0; i < entries.length; i++) {
-      var e = entries[i];
-      if (p.length >= e.length && p.slice(-e.length) === e) {
-        var b = p.slice(0, -e.length); return b === '/' ? '' : b;
-      }
-    }
-    var markers = ['/sistemas/megadrive/', '/megadrive/'];
-    for (var j = 0; j < markers.length; j++) {
-      var idx = p.indexOf(markers[j]);
-      if (idx >= 0) return p.slice(0, idx);
-    }
-    if (p === '/' || p === '') return '';
-    return '';
-  }
-  window.APP_BASE = detect();
-  window.APP = function (path) {
-    var b = String(window.APP_BASE || '').replace(/\/$/, '');
-    var x = String(path || '');
-    if (!x) return b || '/';
-    if (/^https?:\/\//i.test(x)) return x;
-    if (x.charAt(0) !== '/') x = '/' + x;
-    return b + x;
-  };
-})();
-</script>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RetroCompiler — Mega Drive / Genesis</title>
-<link rel="icon" href="../nes/assets/icon.png" type="image/png">
-<link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/config.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MDG — Mega Drive / Genesis | RetroCompiler</title>
+  <link rel="stylesheet" href="css/core.css">
   <link rel="stylesheet" href="css/graphics.css">
+  <link rel="stylesheet" href="css/backgrounds.css">
+  <style>
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:#1e1e1e;color:#ccc;font-family:'Consolas','Segoe UI',monospace;overflow:hidden}
+    #topbar{height:36px;background:#111;border-bottom:1px solid #333;display:flex;align-items:center;padding:0 8px;gap:8px;flex-shrink:0;font-size:12px}
+    #topbar .brand{color:#e8c36a;font-weight:700;letter-spacing:.05em;display:flex;align-items:center;gap:6px}
+    #topbar .brand::before{content:'▶';color:#e94560;font-size:10px}
+    #topbar .ver{color:#00ff88;font-size:11px;margin-left:12px}
+    #topbar button{background:#2a2a2a;border:1px solid #444;color:#aaa;padding:3px 8px;border-radius:2px;cursor:pointer;font-family:inherit;font-size:11px}
+    #topbar button:hover{background:#3a3a3a;border-color:#666;color:#fff}
+    #topbar .project{margin-left:auto;color:#e8c36a;background:#1a1a1a;border:1px solid #333;padding:2px 8px;border-radius:2px;font-size:11px}
+    #topbar .status{font-size:11px;color:#666}
+    #topbar .status.ok{color:#00ff88}
+    #layout{display:flex;flex:1;min-height:0;height:calc(100% - 36px)}
+
+    /* SIDEBAR RETRÁTIL FIX - BOTÃO SEMPRE VISÍVEL */
+    #sidebar{
+      width:180px;
+      background:#252525;
+      border-right:1px solid #333;
+      display:flex;
+      flex-direction:column;
+      flex-shrink:0;
+      transition:width .18s ease;
+      overflow:hidden;
+      position:relative;
+    }
+    #sidebar.collapsed{width:44px}
+    #sidebar .modulos-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:8px 6px 6px 10px;
+      background:#1e1e1e;
+      border-bottom:1px solid #2a2a2a;
+      flex-shrink:0;
+      min-height:32px;
+    }
+    #sidebar.collapsed .modulos-head{
+      justify-content:center;
+      padding:8px 0;
+    }
+    #sidebar .modulos-label{font-size:10px;color:#666;letter-spacing:.15em;text-transform:uppercase;font-weight:700;flex:1}
+    #sidebar.collapsed .modulos-label{display:none !important}
+    #sidebar .collapse-btn{
+      background:#2a2a2a;border:1px solid #555;color:#e8c36a;
+      width:24px;height:22px;border-radius:2px;cursor:pointer;
+      display:grid;place-items:center;font-size:14px;font-weight:800;
+      flex-shrink:0;
+      z-index:10;
+    }
+    #sidebar .collapse-btn:hover{background:#3a3a3a;color:#fff;border-color:#e8c36a}
+    #sidebar.collapsed .collapse-btn{
+      width:28px;height:28px;
+      background:#3a3a3a;
+      border-color:#e8c36a;
+      color:#e8c36a;
+    }
+    #sidebar .menu-list{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 0}
+    #sidebar .menu-list::-webkit-scrollbar{width:4px}
+    #sidebar .menu-list::-webkit-scrollbar-thumb{background:#333}
+    .module-btn{
+      width:100%;
+      text-align:left;
+      background:transparent;
+      border:0;
+      border-left:3px solid transparent;
+      color:#888;
+      padding:7px 8px 7px 8px;
+      font-family:inherit;
+      font-size:12px;
+      cursor:pointer;
+      display:flex;
+      gap:8px;
+      align-items:center;
+      white-space:nowrap;
+      transition:all .12s;
+    }
+    .module-btn .ico{width:20px;height:20px;display:grid;place-items:center;font-size:14px;flex-shrink:0}
+    .module-btn .txt{flex:1;overflow:hidden;text-overflow:ellipsis}
+    .module-btn:hover{background:#2a2a2a;color:#ccc;border-left-color:#444}
+    .module-btn.active{background:#2a3a5a;color:#fff;border-left-color:#e8c36a}
+    #sidebar.collapsed .module-btn .txt{display:none}
+    #sidebar.collapsed .module-btn{justify-content:center;padding:10px 0}
+    #sidebar.collapsed .module-btn .ico{width:24px;font-size:16px}
+    #sidebar .footer{
+      margin-top:auto;
+      padding:8px;
+      border-top:1px solid #2a2a2a;
+      font-size:9px;
+      color:#555;
+      line-height:1.4;
+      background:#1e1e1e;
+      flex-shrink:0;
+    }
+    #sidebar.collapsed .footer{display:none}
+    #editor-content{flex:1;display:flex;flex-direction:column;min-width:0;background:#1e1e1e;overflow:hidden}
+    .module-panel{display:none;flex:1;min-height:0;overflow:hidden;flex-direction:column}
+    .module-panel.active{display:flex}
+  </style>
 </head>
 <body>
-<div id="topbar">
-  <div class="top-logo"><span>▶</span> MDG — Mega Drive / Genesis</div>
-  <div class="divider"></div>
-  <button type="button" class="icon-btn" id="btnSave" title="Salvar no servidor (Ctrl+S)">💾 Salvar</button>
-  <button type="button" class="icon-btn" id="btnDash" title="Dashboard Mega Drive">🏠 Dashboard</button>
-  <span id="topStatus" style="display:none">—</span>
-  <div class="proj-info">
-    <span id="projNameLabel">Sem projeto</span>
-    <b id="projFileLabel">—</b>
-    <span id="projStatus">● pronto</span>
+  <div id="topbar">
+    <div class="brand">www.retrocompiler.com - MDG</div>
+    <button id="btn-save">💾</button>
+    <button onclick="location.href='dashboard.html'" style="background:#1a1a1a" title="Dashboard MD">🏠</button>
+    <span class="ver">v0.7 - MD Game Compiler</span>
+    <div class="project" id="project-name">project_9ef8f9c6.mdg</div>
+    <div class="status" id="core-status">● pronto</div>
+    <div class="status ok" id="save-status">● pronto</div>
   </div>
-</div>
 
-<div id="app">
-  <div id="sidebar">
-    <div class="side-header">
-      <span class="side-title">Módulos</span>
-      <button type="button" class="side-toggle" id="btnSideToggle" title="Recolher menu">«</button>
-    </div>
-
-    <div class="side-item active" data-mod="config" title="Configurações">
-      <span class="side-ico">⚙</span><span class="side-label">Config</span>
-    </div>
-    <div class="side-item" data-mod="graphics" title="Gráficos / Tiles">
-      <span class="side-ico">🎨</span><span class="side-label">Gráficos / Tiles</span>
-    </div>
-    <div class="side-item" data-mod="maps" title="Mapas">
-      <span class="side-ico">🗺</span><span class="side-label">Mapas</span>
-    </div>
-    <div class="side-item" data-mod="sprites" title="Sprites">
-      <span class="side-ico">👾</span><span class="side-label">Sprites</span>
-    </div>
-    <div class="side-item" data-mod="audio" title="Áudio">
-      <span class="side-ico">🎵</span><span class="side-label">Áudio</span>
-    </div>
-    <div class="side-item" data-mod="code" title="Programação">
-      <span class="side-ico">🧠</span><span class="side-label">Programação</span>
-    </div>
-    <div class="side-item" data-mod="build" title="Build ROM">
-      <span class="side-ico">🔨</span><span class="side-label">Build ROM</span>
+  <div id="layout">
+    <div id="sidebar">
+      <div class="modulos-head">
+        <span class="modulos-label">Módulos</span>
+        <button class="collapse-btn" id="btn-collapse" title="Recolher/Expandir menu">«</button>
+      </div>
+      <div class="menu-list">
+        <button class="module-btn active" data-module="config" onclick="MDCore.TabManager.open('config')"><span class="ico">⚙️</span><span class="txt">Configurações</span></button>
+        <button class="module-btn" data-module="graphics" onclick="MDCore.TabManager.open('graphics')"><span class="ico">🎨</span><span class="txt">CHR Editor</span></button>
+        <button class="module-btn" data-module="maps" onclick="MDCore.TabManager.open('maps')"><span class="ico">🗺️</span><span class="txt">Backgrounds</span></button>
+        <button class="module-btn" data-module="sprites" onclick="alert('Sprites em construção')"><span class="ico">👾</span><span class="txt">Personagens</span></button>
+        <button class="module-btn" data-module="audio" onclick="alert('Audio em construção')"><span class="ico">🎵</span><span class="txt">Sons APU</span></button>
+        <button class="module-btn" data-module="level" onclick="alert('Level em construção')"><span class="ico">🌍</span><span class="txt">Level-Design</span></button>
+        <button class="module-btn" data-module="program" onclick="alert('Prog em construção')"><span class="ico">🧠</span><span class="txt">Programação</span></button>
+        <button class="module-btn" data-module="build" onclick="alert('Build em construção')"><span class="ico">🔨</span><span class="txt">Build ROM</span></button>
+      </div>
+      <div class="footer">
+        <div>CPU: 68000</div>
+        <div>Vídeo: VDP</div>
+        <div>ROM: —</div>
+        <div>Formato: <span style="color:#e8c36a">.mdg</span></div>
+        <div id="debug-info" style="margin-top:6px;color:#444"></div>
+      </div>
     </div>
 
-    <div class="side-footer">
-      <div>CPU: <span id="infoCpu">68000</span></div>
-      <div>Vídeo: <span id="infoVideo">VDP</span></div>
-      <div>ROM: <span id="infoRom">—</span></div>
-      <div style="margin-top:6px">Formato: <b>.mdg</b></div>
+    <div id="editor-content">
+      <div id="panel-config" class="module-panel active"></div>
+      <div id="panel-graphics" class="module-panel"></div>
+      <div id="panel-maps" class="module-panel"></div>
     </div>
   </div>
 
-  <div id="content">
-    <div class="module active" id="mod-config"></div>
-    <div class="module" id="mod-graphics"></div>
-    <div class="module" id="mod-maps"></div>
-    <div class="module" id="mod-sprites"></div>
-    <div class="module" id="mod-audio"></div>
-    <div class="module" id="mod-code"></div>
-    <div class="module" id="mod-build"></div>
-  </div>
-</div>
+  <script src="../../app-config.js"></script>
+  <script>
+    window.MD_PROJECT_ID = new URLSearchParams(location.search).get('project');
+    // FIX MENU RETRÁTIL
+    document.getElementById('btn-collapse').onclick = function(){
+      const sb = document.getElementById('sidebar');
+      const isCollapsed = sb.classList.toggle('collapsed');
+      this.textContent = isCollapsed ? '»' : '«';
+      this.title = isCollapsed ? 'Expandir menu' : 'Recolher menu';
+      localStorage.setItem('md_sidebar_collapsed', isCollapsed?'1':'0');
+    };
+    if(localStorage.getItem('md_sidebar_collapsed')==='1'){
+      document.getElementById('sidebar').classList.add('collapsed');
+      document.getElementById('btn-collapse').textContent='»';
+      document.getElementById('btn-collapse').title='Expandir menu';
+    }
+  </script>
 
-<script src="js/core.js"></script>
+  <script src="js/render-utils.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/modules/config.js"></script>
+  <script src="js/modules/graphics.js"></script>
+  <script src="js/modules/backgrounds.js"></script>
+
+  <script>
+    async function loadProject(){
+      const pid = window.MD_PROJECT_ID;
+      const nameEl=document.getElementById('project-name');
+      const coreStatus=document.getElementById('core-status');
+      if(!pid){
+        window.AppState.init(null,'demo');
+        nameEl.textContent='demo.mdg';
+        coreStatus.textContent='● demo';
+        return;
+      }
+      // V17 FIX: path correto é sistemas/megadrive/backend/projects/load.php
+      // estrutura: retrocompiler/data/users/{id}/megadrive/projects/{hash}/project.mdg
+      // e backend em sistemas/megadrive/backend/projects/
+      const possibleUrls = [];
+      if(window.APP){
+        try{ 
+          possibleUrls.push(window.APP('sistemas/megadrive/backend/projects/load.php')); 
+          possibleUrls.push(window.APP('backend/projects/load.php')); 
+        }catch{}
+      }
+      possibleUrls.push('backend/projects/load.php'); // relativo a sistemas/megadrive/editor.html -> sistemas/megadrive/backend/projects/load.php
+      possibleUrls.push('./backend/projects/load.php');
+      possibleUrls.push('sistemas/megadrive/backend/projects/load.php');
+      possibleUrls.push('/retrocompiler/sistemas/megadrive/backend/projects/load.php');
+      possibleUrls.push('../../backend/projects/load.php');
+      possibleUrls.push('/retrocompiler/backend/projects/load.php');
+      
+      let data = null;
+      for(const url of possibleUrls){
+        try{
+          console.log('[MD Load] tentando', url);
+          const res = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:pid,system:'megadrive'})});
+          if(!res.ok){ console.warn('[MD Load] ', url, 'status', res.status); continue; }
+          const text = await res.text();
+          try {
+            data = JSON.parse(text);
+            console.log('[MD Load] sucesso em', url);
+            break;
+          } catch(jsonErr){
+            console.warn('[MD Load] Resposta não é JSON em', url, text.substring(0,200));
+            continue;
+          }
+        }catch(e){
+          console.warn('[MD Load] erro em', url, e);
+          continue;
+        }
+      }
+      
+      try{
+        if(data && data.project){
+          window.AppState.init(data.project,pid);
+          nameEl.textContent=data.project.meta?.name||pid+'.mdg';
+        } else if(data && data.meta){
+          window.AppState.init(data,pid);
+          nameEl.textContent=data.meta?.name||pid+'.mdg';
+        } else {
+          const saved=localStorage.getItem(`mdg_project_${pid}`);
+          if(saved){ 
+            try{ window.AppState.init(JSON.parse(saved),pid); console.log('[MD Load] usando localStorage'); }catch{ window.AppState.init(null,pid); }
+            nameEl.textContent=pid+'.mdg'; 
+          }
+          else { window.AppState.init(null,pid); nameEl.textContent=pid+'.mdg'; }
+        }
+        coreStatus.textContent='● pronto'; coreStatus.className='status ok';
+      }catch(e){
+        console.error('[MD Load] erro final:', e);
+        try{
+          const saved=localStorage.getItem(`mdg_project_${pid}`);
+          if(saved){ window.AppState.init(JSON.parse(saved),pid); }
+          else { window.AppState.init(null,pid||'demo'); }
+        }catch{ window.AppState.init(null,pid||'demo'); }
+        nameEl.textContent=(pid||'demo')+'.mdg';
+        coreStatus.textContent='● erro load - demo';
+        coreStatus.className='status';
+      }
+      const mod = new URLSearchParams(location.search).get('module')||'config';
+      setTimeout(()=>{ try{ window.MDCore.TabManager.open(mod); }catch(e){ console.error('[MDCore open]', e); } },400);
+    }
+    document.getElementById('btn-save').onclick=async()=>{
+      const pid=window.AppState.projectId||window.MD_PROJECT_ID||'demo';
+      const proj=window.AppState.getProjectForSave();
+      try{
+        const possibleSaveUrls = [];
+        if(window.APP){ try{ possibleSaveUrls.push(window.APP('sistemas/megadrive/backend/projects/save.php')); }catch{} }
+        possibleSaveUrls.push('backend/projects/save.php');
+        possibleSaveUrls.push('./backend/projects/save.php');
+        possibleSaveUrls.push('/retrocompiler/sistemas/megadrive/backend/projects/save.php');
+        const url = possibleSaveUrls[0]; // tenta primeiro
+        await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:pid,system:'megadrive',project:proj})});
+        localStorage.setItem(`mdg_project_${pid}`,JSON.stringify(proj));
+        window.AppState.markClean();
+      }catch(e){ localStorage.setItem(`mdg_project_${pid}`,JSON.stringify(proj)); window.AppState.markClean(); }
+    };
+    document.addEventListener('DOMContentLoaded', loadProject);
+    window.addEventListener('load', ()=>setTimeout(loadProject,400));
+  </script>
 </body>
 </html>
