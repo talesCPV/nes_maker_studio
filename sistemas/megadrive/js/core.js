@@ -150,3 +150,47 @@
 
   console.log('[MDCore] core carregado - padrao NES');
 })();
+
+// V23 UNDO GLOBAL SHORTCUTS - volátil
+document.addEventListener('keydown', (e)=>{
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z'){
+    e.preventDefault();
+    if(window.AppState){
+      if(e.shiftKey) window.AppState.doRedo();
+      else window.AppState.doUndo();
+    }
+  }
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='y'){
+    e.preventDefault();
+    if(window.AppState) window.AppState.doRedo();
+  }
+});
+
+    this.updateUndoButtons = function(){
+      try{
+        document.querySelectorAll('#md-undo-btn, #bg-undo-btn').forEach(btn=>{
+          btn.disabled = this.undoPointer <= 0;
+          btn.style.opacity = this.undoPointer <= 0 ? '0.4' : '1';
+          btn.title = `Desfazer (${this.undoPointer}/${this.undoStack.length-1}) - Ctrl+Z`;
+        });
+        document.querySelectorAll('#md-redo-btn, #bg-redo-btn').forEach(btn=>{
+          btn.disabled = this.undoPointer >= this.undoStack.length - 1;
+          btn.style.opacity = this.undoPointer >= this.undoStack.length - 1 ? '0.4' : '1';
+          btn.title = `Refazer (${this.undoPointer+1}/${this.undoStack.length}) - Ctrl+Y`;
+        });
+      }catch(e){ console.warn('updateUndoButtons', e); }
+    };
+
+    // FIX: expõe métodos no window.AppState para botões chamarem - evita TypeError is not a function
+    try{
+      window.AppState = window.AppState || this;
+      window.AppState.undoStack = this.undoStack;
+      window.AppState.undoPointer = this.undoPointer;
+      window.AppState.doUndo = this.doUndo.bind(this);
+      window.AppState.doRedo = this.doRedo.bind(this);
+      window.AppState.saveUndoState = this.saveUndoState.bind(this);
+      window.AppState.updateUndoButtons = this.updateUndoButtons.bind(this);
+      window.AppState.clearUndo = this.clearUndo.bind(this);
+      window.AppState.applyUndoState = this.applyUndoState.bind(this);
+      window.AppState.cloneModuleState = this.cloneModuleState.bind(this);
+    }catch(e){ console.warn('bind AppState', e); }

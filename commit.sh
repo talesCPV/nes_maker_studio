@@ -26,11 +26,9 @@ then
     git add app-config.js
     git add commit.sh
     git add deploy.sh
-    git add futuro.txt
     git add next_steps.txt
     git add index.html
     git add readme.md
-    git add intro.md
     git add login.html
     git add register.html
     git add config_hub.php

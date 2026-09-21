@@ -66,11 +66,11 @@
             "color": 150,
             "nusiz": 0,
             "animSpeed": 4,
-            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBAAEBAAABAAABAAABAAAAAQAAAQAAAQAAAQAAAQAAAQEAAQEAAAAAAAAAAAAAAAEBAQEBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBAAEBAAABAAABAAABAAEAAQABAAEAAQAAAQAAAQAAAQEAAQEAAAAAAAAAAAAAAAEBAQEBAAAAAAABAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
             "lineColors": "SkpKShZKlkpKSkpKSkpKSg==",
             "frames": [
                 {
-                    "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBAAEBAAABAAABAAABAAAAAQAAAQAAAQAAAQAAAQAAAQEAAQEAAAAAAAAAAAAAAAEBAQEBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                    "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBAAEBAAABAAABAAABAAEAAQABAAEAAQAAAQAAAQAAAQEAAQEAAAAAAAAAAAAAAAEBAQEBAAAAAAABAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
                     "lineColors": "SkpKShZKlkpKSkpKSkpKSg==",
                     "duration": 4
                 }
@@ -101,7 +101,7 @@
             "name": "enemyAlive2",
             "type": "byte",
             "note": "Máscara vivos fileira 2. Bits pares=P0, ímpares=P1",
-            "value": 6,
+            "value": 63,
             "native": true
         },
         {
@@ -109,7 +109,7 @@
             "name": "enemyAlive1",
             "type": "byte",
             "note": "Máscara vivos fileira 1. Bits pares=P0, ímpares=P1",
-            "value": 11,
+            "value": 62,
             "native": true
         },
         {
@@ -133,7 +133,7 @@
             "name": "enemyAlive",
             "type": "byte",
             "note": "Máscara fileira 1 (alias enemyAlive1). Bits 0–5, 0–63",
-            "value": 63,
+            "value": 62,
             "native": true
         },
         {
@@ -141,7 +141,7 @@
             "name": "scoreP0",
             "type": "byte",
             "note": "Placar (nativa)",
-            "value": 0,
+            "value": 7,
             "native": true
         },
         {
@@ -175,7 +175,7 @@
                 },
                 {
                     "type": "sub_var",
-                    "varId": "native_rowX",
+                    "varId": "native_enemyAlive1",
                     "value": 1
                 },
                 {
@@ -198,7 +198,7 @@
                 },
                 {
                     "type": "copy_var",
-                    "varIdFrom": "native_rowX2",
+                    "varIdFrom": "native_enemyAlive1",
                     "varIdTo": "native_scoreP0"
                 }
             ]
@@ -261,10 +261,10 @@
             "id": "band_mu6xr6nr_1y3",
             "screenId": "screen_main",
             "role": "enemy_row",
-            "y": 12,
-            "height": 22,
+            "y": 19,
+            "height": 19,
             "spriteId": "spr_mu6xog86_46g",
-            "copies": 6,
+            "copies": 5,
             "spacing": "medium",
             "wrap": true,
             "baseX": 7,
@@ -273,8 +273,7 @@
                 23,
                 39,
                 55,
-                71,
-                87
+                71
             ],
             "aliveMask": 3,
             "moveDelay": 20,
@@ -284,7 +283,7 @@
             "id": "band_mu99jrkz_2c3",
             "screenId": "screen_main",
             "role": "enemy_row",
-            "y": 44,
+            "y": 50,
             "height": 16,
             "spriteId": "spr_mu6xohzh_349",
             "copies": 6,
@@ -451,5 +450,5 @@
     "programMeta": {
         "notes": ""
     },
-    "updated": 1789930289444
+    "updated": 1790021323588
 }

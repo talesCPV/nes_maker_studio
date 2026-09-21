@@ -72,7 +72,8 @@ final class AgcBuilder
         $scoreLines = min(24, $scoreLines);
         // playfield útil = total − placar − logo (logo sempre)
         // 4 scanlines para PositionPlayers após o placar (obrigatório: score move P0/P1)
-        $posAfterScore = $scoreEnabled ? 4 : 0;
+        // 4 (PositionPlayers legado) + ~5 (SetHX×2 + HMOVE + HMCLR + folga) para setup fileira 1
+        $posAfterScore = $scoreEnabled ? 9 : 0;
         $playLines = max(1, $scanlines - $scoreLines - $logoLines - $posAfterScore);
 
         $pfTables = self::extractPlayfield($project, $playLines);
@@ -194,11 +195,12 @@ final class AgcBuilder
             $first = $bandMeta['enemies'][0];
             $nusizCopies = max(1, min(6, (int)($first['copies'] ?? 3)));
             $nusizSpacing = (string)($first['spacing'] ?? 'close');
-            $gap = ($nusizSpacing === 'wide') ? 40 : (($nusizSpacing === 'medium') ? 24 : 16);
-            $halfGap = (int)($gap / 2);
-            // Caminho C: slots independentes (sem NUSIZ multi-copy). P0+P1, multiplex 3 pares @ 20Hz.
-            $independentSlots = ($nusizCopies >= 2);
-            $dualPlayerRow = $independentSlots; // usa P0+P1
+            // Megamania: 3 cópias MÉDIAS (32px) de P0 + 3 de P1 intercalado (+16).
+            // Máscara 6 bits → NUSIZ (1 / 2-med / 2-wide / 3-med) + offset X. Sem flicker.
+            $gap = 32;
+            $halfGap = 16;
+            $independentSlots = false;
+            $dualPlayerRow = ($nusizCopies >= 4);
             $slotGap = $gap;
             $rowMoveDelay = max(0, min(255, (int)($first['moveDelay'] ?? 0)));
             $mm = strtolower((string)($first['moveMode'] ?? ''));
@@ -208,28 +210,27 @@ final class AgcBuilder
             $rowWrap = ($mm === 'wrap');
             $rowZigzag = ($mm === 'zigzag');
 
-            // NUSIZ = 0 (cópia única). 6 slots lógicos; 2 visíveis por frame (par do FrameCnt%3).
-            $nusiz0 = 0;
-            $nusiz1 = 0;
-            $perPlayerCopies = 1;
+            $nusiz0 = $dualPlayerRow ? 6 : 0; // THREE_MED_COPIES
+            $nusiz1 = 6;
+            $perPlayerCopies = 3;
 
             $p1y = $first['y'];
             $h1 = $first['drawH'];
             $col1 = $first['color'];
-            $col0 = $independentSlots ? $col1 : $col0;
+            $col0 = $dualPlayerRow ? $col1 : $col0;
             $gfx1 = $first['gfx'];
             $rowXInit = max(1, min(160, (int)$first['baseX']));
             $rowAliveMask = $varEnemyAlive !== null
                 ? $varEnemyAlive
                 : max(0, min(0x3f, (int)($first['aliveMask'] ?? ((1 << $nusizCopies) - 1))));
 
-            $span = 8 + max(0, $nusizCopies - 1) * $slotGap;
+            $span = $dualPlayerRow ? (8 + 16 + 64) : (8 + 64); // P1 last copy @ +80
             $rowSpan = $span;
             if ($rowXInit + $span > 152) {
                 $rowXInit = max(1, 152 - $span);
             }
-            $p1x = $independentSlots ? ($rowXInit + $slotGap) : $rowXInit;
-            $p0x = $independentSlots ? $rowXInit : $p0x;
+            $p1x = $dualPlayerRow ? ($rowXInit + $halfGap) : $rowXInit;
+            $p0x = $dualPlayerRow ? $rowXInit : $p0x;
 
             // Pinta TODAS as fileiras enemy_row nas tabelas GRP (mesmo RowX / NUSIZ).
             // X independente por faixa = próximo passo (RESP no gap entre linhas).
@@ -285,8 +286,8 @@ final class AgcBuilder
                 $rowX2Init = max(1, min(160, (int)$b1['baseX']));
                 $gapStart = (int)$b0['y'] + (int)$b0['drawH'];
                 $gapEnd = (int)$b1['y'];
-                // TESTE ESTABILIDADE: mid RESP desligado (split=0 → um PlayLoop só)
-                if (false && ($gapEnd - $gapStart >= 6)) {
+                // Gap suficiente → mid RESP (X/máscara independentes por fileira)
+                if ($gapEnd - $gapStart >= 6) {
                     $splitLine = max($gapStart, $gapEnd - 5);
                     $splitLine = min($splitLine, $playLines - 6);
                 }
@@ -311,7 +312,7 @@ final class AgcBuilder
             . ' spacing=' . (isset($nusizSpacing) ? $nusizSpacing : '-')
             . ' NUSIZ0=$' . sprintf('%02X', $nusiz0)
             . ' NUSIZ1=$' . sprintf('%02X', $nusiz1)
-            . ($independentSlots ? ' SLOTS=indep/flicker3' : ($dualPlayerRow ? ' DUAL=P0+P1' : ''))
+            . ($dualPlayerRow ? ' MEGA=NUSIZ3med+mask' : '')
             . ' RowX=' . $rowXInit . ' RowX2=' . $rowX2Init . ' split=' . $splitLine
             . ' Alive=$' . sprintf('%02X', $rowAliveMask);
         $asm[] = '; Assembler: DASM (-f3 raw binary)';
@@ -360,10 +361,8 @@ final class AgcBuilder
         $asm[] = '    sta BandCol';
         $asm[] = '    lda #' . ($rowXInit & 0xff);
         $asm[] = '    sta RowX                  ; X fileira 1';
-        if ($splitLine > 0) {
-            $asm[] = '    lda #' . ($rowX2Init & 0xff);
-            $asm[] = '    sta RowX2                 ; X fileira 2';
-        }
+        $asm[] = '    lda #' . ($rowX2Init & 0xff);
+        $asm[] = '    sta RowX2                 ; X fileira 2 (sempre; rules/editor)';
         $mask0 = isset($maskInit0) ? $maskInit0 : $rowAliveMask;
         $mask1 = isset($maskInit1) ? $maskInit1 : $mask0;
         $asm[] = '    lda #$' . sprintf('%02X', $mask0 & 0x3f);
@@ -375,6 +374,11 @@ final class AgcBuilder
         $asm[] = '    sta P1Alive';
         $asm[] = '    sta P0Alive2';
         $asm[] = '    sta P1Alive2';
+        $asm[] = '    lda #6';
+        $asm[] = '    sta P0Nusiz               ; THREE_MED default';
+        $asm[] = '    sta P1Nusiz';
+        $asm[] = '    sta P0Nusiz2';
+        $asm[] = '    sta P1Nusiz2';
         $asm[] = '    lda #' . ($rowMoveDelay & 0xff);
         $asm[] = '    sta MoveDelay             ; quadros entre cada passo X';
         $asm[] = '    sta MoveCtr';
@@ -447,20 +451,18 @@ final class AgcBuilder
             $asm[] = '    lda #' . ($maxX & 0xff);
             $asm[] = '    sta RowX';
             $asm[] = 'RowXMaxOk:';
-            if ($splitLine > 0) {
-                $asm[] = '    lda RowX2';
-                $asm[] = '    cmp #' . ($minX & 0xff);
-                $asm[] = '    bcs RowX2MinOk';
-                $asm[] = '    lda #' . ($minX & 0xff);
-                $asm[] = '    sta RowX2';
-                $asm[] = 'RowX2MinOk:';
-                $asm[] = '    cmp #' . ($maxX & 0xff);
-                $asm[] = '    bcc RowX2MaxOk';
-                $asm[] = '    beq RowX2MaxOk';
-                $asm[] = '    lda #' . ($maxX & 0xff);
-                $asm[] = '    sta RowX2';
-                $asm[] = 'RowX2MaxOk:';
-            }
+            $asm[] = '    lda RowX2';
+            $asm[] = '    cmp #' . ($minX & 0xff);
+            $asm[] = '    bcs RowX2MinOk';
+            $asm[] = '    lda #' . ($minX & 0xff);
+            $asm[] = '    sta RowX2';
+            $asm[] = 'RowX2MinOk:';
+            $asm[] = '    cmp #' . ($maxX & 0xff);
+            $asm[] = '    bcc RowX2MaxOk';
+            $asm[] = '    beq RowX2MaxOk';
+            $asm[] = '    lda #' . ($maxX & 0xff);
+            $asm[] = '    sta RowX2';
+            $asm[] = 'RowX2MaxOk:';
             $asm[] = '    lda RowX';
             $asm[] = '    sta P0X';
             if ($dualPlayerRow) {
@@ -471,68 +473,18 @@ final class AgcBuilder
                 $asm[] = '    sta P1X';
             }
         }
-        // Máscara fileira 1 → P0Alive/P1Alive (bits pares=P0, ímpares=P1 no dual)
-        if (!empty($independentSlots)) {
-            // TESTE: par fixo slots 0 e 1 (sem multiplex) — máscara bits 0 e 1
-            $sg = (int)$slotGap;
-            $asm[] = '    ; --- slots FIXOS 0/1 (teste máscara) ---';
-            $asm[] = '    lda RowX';
-            $asm[] = '    sta P0X';
-            $asm[] = '    clc';
-            $asm[] = '    adc #' . ($sg & 0xff);
-            $asm[] = '    sta P1X';
-            $asm[] = '    lda EnemyAlive';
-            $asm[] = '    and #1';
-            $asm[] = '    beq TMz0';
-            $asm[] = '    lda #$FF';
-            $asm[] = '    bne TMs0';
-            $asm[] = 'TMz0:';
-            $asm[] = '    lda #0';
-            $asm[] = 'TMs0:';
-            $asm[] = '    sta P0Alive';
-            $asm[] = '    lda EnemyAlive';
-            $asm[] = '    and #2';
-            $asm[] = '    beq TMz1';
-            $asm[] = '    lda #$FF';
-            $asm[] = '    bne TMs1';
-            $asm[] = 'TMz1:';
-            $asm[] = '    lda #0';
-            $asm[] = 'TMs1:';
-            $asm[] = '    sta P1Alive';
-            if ($splitLine > 0) {
-                $asm[] = '    lda RowX2';
-                $asm[] = '    sta P0X2';
-                $asm[] = '    clc';
-                $asm[] = '    adc #' . ($sg & 0xff);
-                $asm[] = '    sta P1X2';
-                $asm[] = '    lda EnemyAlive2';
-                $asm[] = '    and #1';
-                $asm[] = '    beq TM2z0';
-                $asm[] = '    lda #$FF';
-                $asm[] = '    bne TM2s0';
-                $asm[] = 'TM2z0:';
-                $asm[] = '    lda #0';
-                $asm[] = 'TM2s0:';
-                $asm[] = '    sta P0Alive2';
-                $asm[] = '    lda EnemyAlive2';
-                $asm[] = '    and #2';
-                $asm[] = '    beq TM2z1';
-                $asm[] = '    lda #$FF';
-                $asm[] = '    bne TM2s1';
-                $asm[] = 'TM2z1:';
-                $asm[] = '    lda #0';
-                $asm[] = 'TM2s1:';
-                $asm[] = '    sta P1Alive2';
-            }
-        }
-
-        // DEBUG: placar = EnemyAlive para ver máscara real na RAM
-        $asm[] = '    lda EnemyAlive';
-        $asm[] = '    sta ScoreP0';
-        $asm[] = '    jsr PositionPlayers';
         if ($scoreEnabled) {
             $asm[] = '    jsr ScorePrep';
         }
+        // Máscara DEPOIS do ScorePrep (ScStrip não pode clobberar resultado)
+        if ($dualPlayerRow || $enemyBandCount > 0) {
+            $asm[] = '    jsr ApplyMegaMask         ; EnemyAlive → NUSIZ/X/Alive';
+        }
+        $asm[] = '    jsr PositionPlayers';
+        $asm[] = '    lda P0Nusiz';
+        $asm[] = '    sta NUSIZ0';
+        $asm[] = '    lda P1Nusiz';
+        $asm[] = '    sta NUSIZ1';
         $asm[] = 'WaitVBlank:';
         $asm[] = '    lda INTIM';
         $asm[] = '    bne WaitVBlank';
@@ -554,15 +506,10 @@ final class AgcBuilder
         $asm[] = '    sta PF0';
         $asm[] = '    sta PF1';
         $asm[] = '    sta PF2';
-        $asm[] = '    lda #' . ($nusiz0 & 7);
+        $asm[] = '    lda P0Nusiz';
         $asm[] = '    sta NUSIZ0';
-        if ($flickerMode) {
-            $asm[] = '    lda BandNusiz';
-            $asm[] = '    sta NUSIZ1';
-        } else {
-            $asm[] = '    lda #' . ($nusiz1 & 7);
-            $asm[] = '    sta NUSIZ1              ; fileiras inimigos';
-        }
+        $asm[] = '    lda P1Nusiz';
+        $asm[] = '    sta NUSIZ1              ; da máscara (ApplyMegaMask)';
         $asm[] = '';
         $asm[] = '    ; ===== HUD: placar + playfield útil + logo =====';
         $asm[] = '    ; playLines=' . $playLines . ' scoreLines=' . $scoreLines . ' logoLines=' . $logoLines
@@ -572,51 +519,46 @@ final class AgcBuilder
         if ($scorePos === 'top') {
             $asm[] = '    jsr DrawScoreBand';
             // Score moveu P0/P1 — reposiciona inimigos (4 scanlines já reservadas em playLines)
-            $asm[] = '    jsr PositionPlayers';
-            $asm[] = '    lda #' . ($nusiz0 & 7);
+            $asm[] = '    ; --- setup fileira 1 (mesmo padrão da fileira 2 / mid-RESP) ---';
+            $asm[] = '    lda #0';
+            $asm[] = '    sta GRP0';
+            $asm[] = '    sta GRP1';
+            $asm[] = '    lda P0X';
+            $asm[] = '    ldx #0';
+            $asm[] = '    jsr SetHX                 ; scanline: RESP P0';
+            $asm[] = '    lda P1X';
+            $asm[] = '    ldx #1';
+            $asm[] = '    jsr SetHX                 ; scanline: RESP P1';
+            $asm[] = '    sta WSYNC';
+            $asm[] = '    sta HMOVE';
+            $asm[] = '    lda P0Nusiz';
             $asm[] = '    sta NUSIZ0';
-            if ($flickerMode) {
-                $asm[] = '    lda BandNusiz';
-                $asm[] = '    sta NUSIZ1';
-                $asm[] = '    lda #$' . sprintf('%02X', $col0 & 0xfe);
-                $asm[] = '    sta COLUP0';
-                $asm[] = '    lda BandCol';
-                $asm[] = '    sta COLUP1';
-            } else {
-                $asm[] = '    lda #' . ($nusiz1 & 7);
-                $asm[] = '    sta NUSIZ1';
-                $asm[] = '    lda #$' . sprintf('%02X', $col0 & 0xfe);
-                $asm[] = '    sta COLUP0';
-                $asm[] = '    lda #$' . sprintf('%02X', $col1 & 0xfe);
-                $asm[] = '    sta COLUP1';
-            }
+            $asm[] = '    lda P1Nusiz';
+            $asm[] = '    sta NUSIZ1';
+            $asm[] = '    lda #$' . sprintf('%02X', $col0 & 0xfe);
+            $asm[] = '    sta COLUP0';
+            $asm[] = '    lda #$' . sprintf('%02X', $col1 & 0xfe);
+            $asm[] = '    sta COLUP1';
+            $asm[] = '    sta WSYNC';
+            $asm[] = '    sta HMCLR';
+            $asm[] = '    sta WSYNC                 ; folga extra antes da fileira 1';
         }
         $asm[] = '    lda #' . $ctrlpf;
         $asm[] = '    sta CTRLPF';
-        // PlayLoop: PF+GRP. Com 2 fileiras: parte A → RESP mid (3 linhas) → parte B.
+        $asm[] = '    lda P0Nusiz';
+        $asm[] = '    sta NUSIZ0';
+        $asm[] = '    lda P1Nusiz';
+        $asm[] = '    sta NUSIZ1';
         $asm[] = '    ldx #0';
         if ($splitLine > 0) {
-            $asm[] = '    lda #0';
-            $asm[] = '    sta NUSIZ0';
-            $asm[] = '    sta NUSIZ1';
+            // NUSIZ já veio de P0Nusiz/P1Nusiz (máscara fileira 1) — NÃO zerar
             $asm[] = 'PlayLoopA:';
             $asm[] = '    sta WSYNC';
-            // GRP + máscara (P0Alive/P1Alive definidos no VBLANK a partir de EnemyAlive)
-            $asm[] = '    lda P0Alive';
-            $asm[] = '    beq PL0z';
             $asm[] = '    lda GRP0Data,x';
-            $asm[] = '    jmp PL0s';
-            $asm[] = 'PL0z:';
-            $asm[] = '    lda #0';
-            $asm[] = 'PL0s:';
+            $asm[] = '    and P0Alive';
             $asm[] = '    sta GRP0';
-            $asm[] = '    lda P1Alive';
-            $asm[] = '    beq PL1z';
             $asm[] = '    lda GRP1Data,x';
-            $asm[] = '    jmp PL1s';
-            $asm[] = 'PL1z:';
-            $asm[] = '    lda #0';
-            $asm[] = 'PL1s:';
+            $asm[] = '    and P1Alive';
             $asm[] = '    sta GRP1';
             $asm[] = '    inx';
             $asm[] = '    cpx #' . ($splitLine & 0xff);
@@ -634,17 +576,21 @@ final class AgcBuilder
             $asm[] = '    sta P0Alive';
             $asm[] = '    lda P1Alive2';
             $asm[] = '    sta P1Alive';
-            $asm[] = '    stx TmpLine               ; salva índice de scanline';
+            $asm[] = '    stx TmpLine';
             $asm[] = '    lda P0X2';
             $asm[] = '    ldx #0';
-            $asm[] = '    jsr SetHX                 ; scanline 1: RESP P0 slot';
+            $asm[] = '    jsr SetHX';
             $asm[] = '    lda P1X2';
             $asm[] = '    ldx #1';
-            $asm[] = '    jsr SetHX                 ; scanline 2: RESP P1 slot';
+            $asm[] = '    jsr SetHX';
             $asm[] = '    sta WSYNC';
-            $asm[] = '    sta HMOVE                 ; scanline 3: aplica fine pos';
+            $asm[] = '    sta HMOVE';
+            $asm[] = '    lda P0Nusiz2';
+            $asm[] = '    sta NUSIZ0';
+            $asm[] = '    lda P1Nusiz2';
+            $asm[] = '    sta NUSIZ1';
             $asm[] = '    sta WSYNC';
-            $asm[] = '    sta HMCLR                 ; scanline 4: limpa (depois do HMOVE!)';
+            $asm[] = '    sta HMCLR';
             $asm[] = '    ldx TmpLine';
             $asm[] = '    inx';
             $asm[] = '    inx';
@@ -653,22 +599,11 @@ final class AgcBuilder
             $asm[] = '    inx                       ; +5 (sync+RESP)';
             $asm[] = 'PlayLoopB:';
             $asm[] = '    sta WSYNC';
-            // GRP + máscara (P0Alive/P1Alive definidos no VBLANK a partir de EnemyAlive)
-            $asm[] = '    lda P0Alive';
-            $asm[] = '    beq PL0z';
             $asm[] = '    lda GRP0Data,x';
-            $asm[] = '    jmp PL0s';
-            $asm[] = 'PL0z:';
-            $asm[] = '    lda #0';
-            $asm[] = 'PL0s:';
+            $asm[] = '    and P0Alive';
             $asm[] = '    sta GRP0';
-            $asm[] = '    lda P1Alive';
-            $asm[] = '    beq PL1z';
             $asm[] = '    lda GRP1Data,x';
-            $asm[] = '    jmp PL1s';
-            $asm[] = 'PL1z:';
-            $asm[] = '    lda #0';
-            $asm[] = 'PL1s:';
+            $asm[] = '    and P1Alive';
             $asm[] = '    sta GRP1';
             $asm[] = '    inx';
             $asm[] = '    cpx #' . $playLines;
@@ -676,22 +611,11 @@ final class AgcBuilder
         } else {
             $asm[] = 'PlayLoop:';
             $asm[] = '    sta WSYNC';
-            // GRP + máscara (P0Alive/P1Alive definidos no VBLANK a partir de EnemyAlive)
-            $asm[] = '    lda P0Alive';
-            $asm[] = '    beq PL0z';
             $asm[] = '    lda GRP0Data,x';
-            $asm[] = '    jmp PL0s';
-            $asm[] = 'PL0z:';
-            $asm[] = '    lda #0';
-            $asm[] = 'PL0s:';
+            $asm[] = '    and P0Alive';
             $asm[] = '    sta GRP0';
-            $asm[] = '    lda P1Alive';
-            $asm[] = '    beq PL1z';
             $asm[] = '    lda GRP1Data,x';
-            $asm[] = '    jmp PL1s';
-            $asm[] = 'PL1z:';
-            $asm[] = '    lda #0';
-            $asm[] = 'PL1s:';
+            $asm[] = '    and P1Alive';
             $asm[] = '    sta GRP1';
             $asm[] = '    inx';
             $asm[] = '    cpx #' . $playLines;
@@ -707,7 +631,7 @@ final class AgcBuilder
         if ($scorePos === 'bottom') {
             $asm[] = '    jsr DrawScoreBand';
         }
-        $asm[] = '    ; jsr DrawLogo              ; TESTE: logo off';
+        $asm[] = '    jsr DrawLogo              ; sempre (plataforma)';
         $asm[] = '';
         $asm[] = '    lda #2';
         $asm[] = '    sta VBLANK';
@@ -762,21 +686,171 @@ final class AgcBuilder
         $asm[] = 'FineAdj:';
         $asm[] = '    .byte $70,$60,$50,$40,$30,$20,$10,$00';
         $asm[] = '    .byte $F0,$E0,$D0,$C0,$B0,$A0,$90';
+                $asm[] = '; NUSIZ: 0=1copy 2=2med 4=2wide 6=3med';
+        $asm[] = 'MegaCopyTbl:';
+        $asm[] = '    .byte 0,0,0,2,0,4,2,6';
+        $asm[] = 'MegaOffTbl:';
+        $asm[] = '    .byte 0,64,32,32,0,0,0,0';
         $asm[] = '';
-        if (!empty($independentSlots)) {
-            $sg = (int)$slotGap;
-            $asm[] = '; X offset do P0/P1 de cada par (0,1,2)';
-            $asm[] = 'SlotOff0:';
-            $asm[] = '    .byte ' . (0) . ',' . (2 * $sg) . ',' . (4 * $sg);
-            $asm[] = 'SlotOff1:';
-            $asm[] = '    .byte ' . ($sg) . ',' . (3 * $sg) . ',' . (5 * $sg);
-            $asm[] = 'SlotBit0:';
-            $asm[] = '    .byte 1,4,16';
-            $asm[] = 'SlotBit1:';
-            $asm[] = '    .byte 2,8,32';
-            $asm[] = '';
-        }
-
+        $asm[] = 'ApplyMegaMask:';
+        $asm[] = '    ; ----- fileira 1: EnemyAlive + RowX → P0Nusiz/P1Nusiz/P0Alive/P1Alive/P0X/P1X -----';
+        $asm[] = '    lda #0';
+        $asm[] = '    sta TmpA';
+        $asm[] = '    lda EnemyAlive';
+        $asm[] = '    and #1';
+        $asm[] = '    beq MM1_0a';
+        $asm[] = '    lda TmpA';
+        $asm[] = '    ora #4';
+        $asm[] = '    sta TmpA';
+        $asm[] = 'MM1_0a:';
+        $asm[] = '    lda EnemyAlive';
+        $asm[] = '    and #4';
+        $asm[] = '    beq MM1_0b';
+        $asm[] = '    lda TmpA';
+        $asm[] = '    ora #2';
+        $asm[] = '    sta TmpA';
+        $asm[] = 'MM1_0b:';
+        $asm[] = '    lda EnemyAlive';
+        $asm[] = '    and #16';
+        $asm[] = '    beq MM1_0c';
+        $asm[] = '    lda TmpA';
+        $asm[] = '    ora #1';
+        $asm[] = '    sta TmpA';
+        $asm[] = 'MM1_0c:';
+        $asm[] = '    ldx TmpA';
+        $asm[] = '    lda MegaCopyTbl,x';
+        $asm[] = '    sta P0Nusiz';
+        $asm[] = '    lda RowX';
+        $asm[] = '    clc';
+        $asm[] = '    adc MegaOffTbl,x';
+        $asm[] = '    sta P0X';
+        $asm[] = '    lda TmpA';
+        $asm[] = '    beq MM1_0z';
+        $asm[] = '    lda #$FF';
+        $asm[] = '    bne MM1_0s';
+        $asm[] = 'MM1_0z:';
+        $asm[] = '    lda #0';
+        $asm[] = 'MM1_0s:';
+        $asm[] = '    sta P0Alive';
+        $asm[] = '    lda #0';
+        $asm[] = '    sta TmpA';
+        $asm[] = '    lda EnemyAlive';
+        $asm[] = '    and #2';
+        $asm[] = '    beq MM1_1a';
+        $asm[] = '    lda TmpA';
+        $asm[] = '    ora #4';
+        $asm[] = '    sta TmpA';
+        $asm[] = 'MM1_1a:';
+        $asm[] = '    lda EnemyAlive';
+        $asm[] = '    and #8';
+        $asm[] = '    beq MM1_1b';
+        $asm[] = '    lda TmpA';
+        $asm[] = '    ora #2';
+        $asm[] = '    sta TmpA';
+        $asm[] = 'MM1_1b:';
+        $asm[] = '    lda EnemyAlive';
+        $asm[] = '    and #32';
+        $asm[] = '    beq MM1_1c';
+        $asm[] = '    lda TmpA';
+        $asm[] = '    ora #1';
+        $asm[] = '    sta TmpA';
+        $asm[] = 'MM1_1c:';
+        $asm[] = '    ldx TmpA';
+        $asm[] = '    lda MegaCopyTbl,x';
+        $asm[] = '    sta P1Nusiz';
+        $asm[] = '    lda RowX';
+        $asm[] = '    clc';
+        $asm[] = '    adc #16';
+        $asm[] = '    adc MegaOffTbl,x';
+        $asm[] = '    sta P1X';
+        $asm[] = '    lda TmpA';
+        $asm[] = '    beq MM1_1z';
+        $asm[] = '    lda #$FF';
+        $asm[] = '    bne MM1_1s';
+        $asm[] = 'MM1_1z:';
+        $asm[] = '    lda #0';
+        $asm[] = 'MM1_1s:';
+        $asm[] = '    sta P1Alive';
+        $asm[] = '    ; ----- fileira 2: EnemyAlive2 + RowX2 -----';
+        $asm[] = '    lda #0';
+        $asm[] = '    sta TmpA';
+        $asm[] = '    lda EnemyAlive2';
+        $asm[] = '    and #1';
+        $asm[] = '    beq MM2_0a';
+        $asm[] = '    lda TmpA';
+        $asm[] = '    ora #4';
+        $asm[] = '    sta TmpA';
+        $asm[] = 'MM2_0a:';
+        $asm[] = '    lda EnemyAlive2';
+        $asm[] = '    and #4';
+        $asm[] = '    beq MM2_0b';
+        $asm[] = '    lda TmpA';
+        $asm[] = '    ora #2';
+        $asm[] = '    sta TmpA';
+        $asm[] = 'MM2_0b:';
+        $asm[] = '    lda EnemyAlive2';
+        $asm[] = '    and #16';
+        $asm[] = '    beq MM2_0c';
+        $asm[] = '    lda TmpA';
+        $asm[] = '    ora #1';
+        $asm[] = '    sta TmpA';
+        $asm[] = 'MM2_0c:';
+        $asm[] = '    ldx TmpA';
+        $asm[] = '    lda MegaCopyTbl,x';
+        $asm[] = '    sta P0Nusiz2';
+        $asm[] = '    lda RowX2';
+        $asm[] = '    clc';
+        $asm[] = '    adc MegaOffTbl,x';
+        $asm[] = '    sta P0X2';
+        $asm[] = '    lda TmpA';
+        $asm[] = '    beq MM2_0z';
+        $asm[] = '    lda #$FF';
+        $asm[] = '    bne MM2_0s';
+        $asm[] = 'MM2_0z:';
+        $asm[] = '    lda #0';
+        $asm[] = 'MM2_0s:';
+        $asm[] = '    sta P0Alive2';
+        $asm[] = '    lda #0';
+        $asm[] = '    sta TmpA';
+        $asm[] = '    lda EnemyAlive2';
+        $asm[] = '    and #2';
+        $asm[] = '    beq MM2_1a';
+        $asm[] = '    lda TmpA';
+        $asm[] = '    ora #4';
+        $asm[] = '    sta TmpA';
+        $asm[] = 'MM2_1a:';
+        $asm[] = '    lda EnemyAlive2';
+        $asm[] = '    and #8';
+        $asm[] = '    beq MM2_1b';
+        $asm[] = '    lda TmpA';
+        $asm[] = '    ora #2';
+        $asm[] = '    sta TmpA';
+        $asm[] = 'MM2_1b:';
+        $asm[] = '    lda EnemyAlive2';
+        $asm[] = '    and #32';
+        $asm[] = '    beq MM2_1c';
+        $asm[] = '    lda TmpA';
+        $asm[] = '    ora #1';
+        $asm[] = '    sta TmpA';
+        $asm[] = 'MM2_1c:';
+        $asm[] = '    ldx TmpA';
+        $asm[] = '    lda MegaCopyTbl,x';
+        $asm[] = '    sta P1Nusiz2';
+        $asm[] = '    lda RowX2';
+        $asm[] = '    clc';
+        $asm[] = '    adc #16';
+        $asm[] = '    adc MegaOffTbl,x';
+        $asm[] = '    sta P1X2';
+        $asm[] = '    lda TmpA';
+        $asm[] = '    beq MM2_1z';
+        $asm[] = '    lda #$FF';
+        $asm[] = '    bne MM2_1s';
+        $asm[] = 'MM2_1z:';
+        $asm[] = '    lda #0';
+        $asm[] = 'MM2_1s:';
+        $asm[] = '    sta P1Alive2';
+        $asm[] = '    rts';
+        $asm[] = '';
         if ($flickerMode) {
             // ---- Flicker: 1 faixa inimigo por frame ----
             $nFlick = min(2, count($bandParams)); // MVP: 2 faixas
@@ -930,6 +1004,10 @@ final class AgcBuilder
         $asm[] = 'BandSel   equ $97            ; (legado flicker)';
         $asm[] = 'BandNusiz equ $98';
         $asm[] = 'BandCol   equ $99';
+        $asm[] = 'P0Nusiz  equ $EB            ; NUSIZ0 calculado (máscara Megamania)';
+        $asm[] = 'P1Nusiz  equ $EC            ; NUSIZ1 calculado';
+        $asm[] = 'P0Nusiz2 equ $ED            ; NUSIZ fileira 2';
+        $asm[] = 'P1Nusiz2 equ $EE';
         $asm[] = 'RowX     equ $9A            ; X da 1ª fileira';
         $asm[] = 'RowX2    equ $9B            ; X da 2ª fileira';
         $asm[] = 'TmpLine  equ $9C            ; índice scanline durante RESP mid';

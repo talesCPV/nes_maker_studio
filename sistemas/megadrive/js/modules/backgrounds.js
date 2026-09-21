@@ -263,6 +263,7 @@
 
       // Interação: pintar metatile no mapa
       mapCanvas.onmousedown=(e)=>{
+        if(window.AppState) window.AppState.saveUndoState('backgrounds');
         isDrawing=true;
         const rect = mapCanvas.getBoundingClientRect();
         const scaleX = mapCanvas.width / rect.width;
@@ -352,8 +353,8 @@
     });
     containerEl.querySelectorAll('[data-action]').forEach(btn=>{
       const act=btn.dataset.action;
-      if(act==='clearMap'){ btn.onclick=()=>{ if(confirm('Limpar mapa?')){ mapData=Array.from({length:mapHeight},()=>Array(mapWidth).fill(null)); if(window.AppState){ window.AppState.project.backgrounds={width:mapWidth,height:mapHeight,map:mapData}; window.AppState.markDirty(); } render(); } }; }
-      if(act==='fillMap'){ btn.onclick=()=>{ if(!selectedMetatileId){ alert('Selecione um metatile'); return; } for(let y=0;y<mapHeight;y++) for(let x=0;x<mapWidth;x++) mapData[y][x]={metatileId:selectedMetatileId, palette:selectedPalette}; if(window.AppState){ window.AppState.project.backgrounds={width:mapWidth,height:mapHeight,map:mapData}; window.AppState.markDirty(); } render(); }; }
+      if(act==='clearMap'){ btn.onclick=()=>{ if(confirm('Limpar mapa?')){ if(window.AppState) window.AppState.saveUndoState('backgrounds'); mapData=Array.from({length:mapHeight},()=>Array(mapWidth).fill(null)); if(window.AppState){ window.AppState.project.backgrounds={width:mapWidth,height:mapHeight,map:mapData}; window.AppState.markDirty(); } render(); } }; }
+      if(act==='fillMap'){ btn.onclick=()=>{ if(!selectedMetatileId){ alert('Selecione um metatile'); return; } if(window.AppState) window.AppState.saveUndoState('backgrounds'); for(let y=0;y<mapHeight;y++) for(let x=0;x<mapWidth;x++) mapData[y][x]={metatileId:selectedMetatileId, palette:selectedPalette}; if(window.AppState){ window.AppState.project.backgrounds={width:mapWidth,height:mapHeight,map:mapData}; window.AppState.markDirty(); } render(); }; }
     });
 
     // Paletas

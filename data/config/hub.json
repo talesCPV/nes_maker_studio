@@ -23,10 +23,10 @@
       "label": "Mega Drive / Genesis",
       "disponivel": true,
       "visivel": true,
-      "sobre": "Sistema de desenvolvimento para Mega Drive / Genesis.",
+      "sobre": "MDG - Sistema de desenvolvimento para Mega Drive / Genesis. (módulos em construção)",
       "dashboard": "/sistemas/megadrive/dashboard.html",
       "projectExtension": ".mdg",
-      "background": ""
+      "background": "/sistemas/megadrive/assets/wallpaper.jpg"
     }
   }
 }

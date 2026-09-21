@@ -1,0 +1,129 @@
+
+/* sistemas/megadrive/css/backgrounds.css - CLONE NES */
+.bg-editor-nes-clone {
+  background:#1e1e1e;
+  color:#ccc;
+  font-family:'Consolas',monospace;
+  display:flex;
+  flex-direction:column;
+  flex:1;
+  min-height:0;
+  overflow:hidden;
+}
+.bg-main {
+  display:flex;
+  flex:1;
+  min-height:0;
+  background:#1e1e1e;
+  overflow:hidden;
+}
+.bg-metatiles-palette {
+  width:240px;
+  background:#252525;
+  border-right:2px solid #333;
+  display:flex;
+  flex-direction:column;
+  flex-shrink:0;
+  overflow:hidden;
+}
+.bg-palette-title {
+  background:#1e1e1e;
+  border-bottom:1px solid #333;
+  padding:6px 8px;
+  font-size:10px;
+  color:#00ff88;
+  font-weight:800;
+  text-transform:uppercase;
+}
+.bg-metatiles-grid {
+  flex:1;
+  overflow:auto;
+  padding:6px;
+  display:grid;
+  grid-template-columns:repeat(2, 1fr);
+  gap:6px;
+  align-content:start;
+}
+.bg-metatile-cell {
+  background:#000;
+  border:1px solid #333;
+  border-radius:2px;
+  padding:4px;
+  cursor:pointer;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:3px;
+}
+.bg-metatile-cell:hover { border-color:#666; }
+.bg-metatile-cell.selected { border-color:#00ff88; box-shadow:0 0 6px rgba(0,255,136,0.5); }
+.bg-metatile-cell canvas { image-rendering:pixelated; border:1px solid #222; }
+.bg-metatile-label { font-size:9px; color:#888; text-align:center; max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bg-palette-tools { padding:6px; border-top:1px solid #333; display:flex; flex-direction:column; gap:4px; }
+
+.bg-map-wrap {
+  flex:1;
+  overflow:auto;
+  background:#111;
+  padding:8px;
+  display:flex;
+  align-items:flex-start;
+  justify-content:flex-start;
+}
+.bg-map-wrap::-webkit-scrollbar { width:10px; height:10px; }
+.bg-map-wrap::-webkit-scrollbar-thumb { background:#333; }
+.bg-map-canvas {
+  background:#000;
+  border:2px solid #444;
+  image-rendering:pixelated;
+  cursor:crosshair;
+  box-shadow:0 4px 20px rgba(0,0,0,0.8);
+}
+.bg-tools-panel {
+  width:200px;
+  background:#252525;
+  border-left:2px solid #333;
+  display:flex;
+  flex-direction:column;
+  flex-shrink:0;
+  overflow:auto;
+}
+.bg-tools-grid {
+  display:grid;
+  grid-template-columns:repeat(2, 1fr);
+  gap:4px;
+  padding:6px;
+}
+.bg-tools-section {
+  border-top:1px solid #333;
+  padding:6px;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+.bg-tools-title { font-size:9px; color:#888; font-weight:700; text-transform:uppercase; margin-bottom:4px; }
+
+/* Reuse chr styles */
+.chr-tools-top { background:#2a2a2a; border-bottom:2px solid #3a3a3a; padding:4px 6px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; flex-wrap:wrap; gap:6px; }
+.chr-tools-left { display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+.chr-tools-label { background:#1a1a1a; border:1px solid #444; color:#e8c36a; padding:2px 8px; font-size:11px; font-weight:700; letter-spacing:.08em; border-radius:2px; margin:0 4px; }
+.chr-tbtn { background:#3a3a3a; border:1px solid #555; color:#ccc; padding:3px 8px; font-size:11px; cursor:pointer; border-radius:2px; font-family:inherit; min-width:28px; height:24px; display:grid; place-items:center; }
+.chr-tbtn:hover { background:#4a4a4a; border-color:#777; color:#fff; }
+.chr-sep { width:1px; height:18px; background:#444; margin:0 4px; }
+.chr-fila { color:#888; font-size:11px; margin-left:6px; }
+.chr-check { font-size:11px; color:#888; display:flex; align-items:center; gap:4px; cursor:pointer; }
+.chr-select { background:#1a1a1a; border:1px solid #444; color:#ccc; padding:3px 6px; font-size:11px; font-family:inherit; border-radius:2px; }
+.chr-select.small { font-size:10px; padding:2px 4px; }
+.chr-btn { background:#3a3a3a; border:1px solid #555; color:#ccc; padding:3px 8px; font-size:11px; cursor:pointer; border-radius:2px; font-family:inherit; }
+.chr-btn.small { font-size:10px; padding:2px 6px; }
+.chr-btn.blue { background:#2a4a6a; border-color:#3a5a7a; color:#aaccff; }
+.chr-tool-btn { width:100%; height:28px; background:#2a2a2a; border:1px solid #444; color:#aaa; border-radius:2px; cursor:pointer; font-size:14px; display:grid; place-items:center; }
+.chr-tool-btn.active { background:#00ff88; border-color:#00ff88; color:#000; }
+.chr-preview-title { background:#2a2a2a; border-bottom:1px solid #333; padding:4px 6px; font-size:10px; color:#e94560; letter-spacing:.06em; font-weight:700; text-transform:uppercase; }
+.chr-status-blue { background:#0066cc; color:#fff; font-size:11px; padding:4px 8px; display:flex; gap:12px; align-items:center; flex-shrink:0; font-family:'Consolas',monospace; }
+.chr-palettes-bar { background:#1a1a1a; border-top:1px solid #333; flex-shrink:0; }
+.chr-palettes-title { padding:4px 8px; font-size:10px; color:#e94560; background:#222; border-bottom:1px solid #333; }
+.chr-palettes-content { padding:4px 8px; display:flex; flex-direction:column; gap:2px; max-height:80px; overflow:auto; }
+.chr-palette-full-row { display:flex; gap:1px; }
+.chr-palette-full-swatch { width:18px; height:14px; border:1px solid #333; border-radius:1px; cursor:pointer; }
+#md-mt-list { max-width:150px !important; }

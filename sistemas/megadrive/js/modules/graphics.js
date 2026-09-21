@@ -353,6 +353,9 @@
             <button class="chr-tbtn" data-action="circle">⭕</button>
             <button class="chr-tbtn" data-action="copy">📋</button>
             <button class="chr-tbtn" data-action="paste">📌</button>
+            <span class="chr-sep"></span>
+            <button class="chr-tbtn" id="md-undo-btn" title="Desfazer (Ctrl+Z)" style="background:#3a2a1a;border-color:#5a4a2a;color:#e8c36a;">↩️ Undo</button>
+            <button class="chr-tbtn" id="md-redo-btn" title="Refazer (Ctrl+Y)" style="background:#2a2a2a;">↪️ Redo</button>
             <span class="chr-fila">Fila: 0</span>
           </div>
           <div class="chr-tools-right">
@@ -715,6 +718,7 @@
     containerEl.querySelectorAll('.chr-tool-btn[data-action], .chr-tbtn[data-action]').forEach(btn=>{
       btn.onclick=()=>{
         const act=btn.dataset.action;
+        if(['left','right','up','down','flipH','flipV','rotate','clear','fillAll','rect','circle','clearAll'].includes(act)){ if(window.AppState) window.AppState.saveUndoState('graphics'); }
         // Se metatile tem mais de 1 tile, aplica em todos os tiles do metatile
         const targets = metatileSlots.length>1 ? [...metatileSlots] : [selectedTile];
         let anyChanged=false;
@@ -1026,6 +1030,11 @@
 
     const chk=containerEl.querySelector('#md-show-grid');
     if(chk) chk.onchange=(e)=>{ showGrid=e.target.checked; render(); };
+    const undoBtn=containerEl.querySelector('#md-undo-btn');
+    const redoBtn=containerEl.querySelector('#md-redo-btn');
+    if(undoBtn) undoBtn.onclick=()=>{ try{ if(window.AppState && typeof window.AppState.doUndo==='function') window.AppState.doUndo(); else console.warn('doUndo not function', window.AppState); }catch(e){ console.error('undo btn', e); } };
+    if(redoBtn) redoBtn.onclick=()=>{ try{ if(window.AppState && typeof window.AppState.doRedo==='function') window.AppState.doRedo(); }catch(e){ console.error(e); } };
+    if(window.AppState) window.AppState.updateUndoButtons();
 
     document.onkeydown=(e)=>{
       if(e.key>='0' && e.key<='7'){ selectedColor=parseInt(e.key); render(); }
