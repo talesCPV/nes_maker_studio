@@ -41,3 +41,24 @@ OBS: Verificar a possibilidade de roms de 256Kb
 isso. Você mesmo pediu pra deixar pra depois da Etapa 2 (já concluída), então esse é o próximo natural se 
 quiser continuar por aí.
 STATUS: Ainda Não Aplicado
+
+*** ITENS DETALHADOS ***
+
+3 - Quase isso, vamos imaginar por modulos:
+
+BACKGROUNDS:
+1- Eliminamos a ferramenta atribuir objeto
+2- Na ferramenta HitBox manual, quando pintarmos um tile como "warp", vamos colocar uma div dentro de #bgSidePane
+com uma lista das warps da tela (já mergeadas com flood) com um nome automatico formado pelo nome da tela mais um 
+contador (ex. tela_1-1, tela_1-2), mas deixando o usuario editar este nome se quiser
+ 
+LEVEL-DESIGN
+1- Já temos uma ferramenta de ponto de spaw, a lista mostra todos personagens criados e cada personagem tem um tipo 
+atribuido a ele em personagens.js, se for tipo player este é um ponto destino de spaw dos hitbox criados em backgrounds,
+se for enemy/ncp/boss o personagem deve spawnar na tela assim que a tela entrar em cena e se for item, só spawna se program 
+mandar. Uma coisa que ajudaria muito seria se pudessemos dar um nome para cada ponto de spaw criado para usarmos depois em program
+
+PROGRAM/ regras
+
+Se hitbox [lista apenas com personagens]  toca [ lista completa com personagens, pontos de hitbox (inclusive dano) ]
+
