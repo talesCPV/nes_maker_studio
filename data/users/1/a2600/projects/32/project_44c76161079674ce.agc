@@ -4,7 +4,7 @@
     "name": "Vertical Shooter",
     "author": "Tales Cembraneli Dantas",
     "description": "Estilo Megamania",
-    "romSize": 4096,
+    "romSize": 8192,
     "tv": "NTSC",
     "kernel": "single_screen",
     "gameStyle": "vertical_shooter",
@@ -75,6 +75,24 @@
                     "duration": 4
                 }
             ]
+        },
+        {
+            "id": "spr_mubx8qv7_6mi",
+            "name": "Nave",
+            "player": 0,
+            "height": 16,
+            "color": 12,
+            "nusiz": 0,
+            "animSpeed": 4,
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBAAAAAAABAAABAAAAAQAAAAABAAAAAQAAAQAAAAAAAQEAAAAAAAABAQAAAAEAAAEBAAABAQAAAQEAAAEBAQABAQABAQEAAQAAAQABAQAAAAAAAAE=",
+            "lineColors": "KioqKpSUlAyUDJSUlJSUlA==",
+            "frames": [
+                {
+                    "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBAAAAAAABAAABAAAAAQAAAAABAAAAAQAAAQAAAAAAAQEAAAAAAAABAQAAAAEAAAEBAAABAQAAAQEAAAEBAQABAQABAQEAAQAAAQABAQAAAAAAAAE=",
+                    "lineColors": "KioqKpSUlAyUDJSUlJSUlA==",
+                    "duration": 4
+                }
+            ]
         }
     ],
     "projectiles": {
@@ -97,19 +115,75 @@
     "sounds": [],
     "variables": [
         {
+            "id": "native_heroY",
+            "name": "heroY",
+            "type": "byte",
+            "note": "Y do herói (scanline, faixa PF)",
+            "value": 138,
+            "native": true
+        },
+        {
+            "id": "native_m0Active",
+            "name": "m0Active",
+            "type": "byte",
+            "note": "Míssil 0 ativo (0=off, ≠0=on)",
+            "value": 0,
+            "native": true
+        },
+        {
+            "id": "native_m0Y",
+            "name": "m0Y",
+            "type": "byte",
+            "note": "Míssil 0 Y (scanline)",
+            "value": 0,
+            "native": true
+        },
+        {
+            "id": "native_m0X",
+            "name": "m0X",
+            "type": "byte",
+            "note": "Míssil 0 X (color clocks)",
+            "value": 0,
+            "native": true
+        },
+        {
+            "id": "native_heroX",
+            "name": "heroX",
+            "type": "byte",
+            "note": "X do herói (faixa PF role=hero)",
+            "value": 72,
+            "native": true
+        },
+        {
+            "id": "native_colY2",
+            "name": "colY2",
+            "type": "byte",
+            "note": "Y (scanline) da 2ª fileira — módulo PF",
+            "value": 51,
+            "native": true
+        },
+        {
+            "id": "native_colY",
+            "name": "colY",
+            "type": "byte",
+            "note": "Y (scanline) da 1ª fileira — módulo PF",
+            "value": 21,
+            "native": true
+        },
+        {
             "id": "native_enemyAlive2",
             "name": "enemyAlive2",
             "type": "byte",
             "note": "Máscara vivos fileira 2. Bits pares=P0, ímpares=P1",
-            "value": 63,
+            "value": 1,
             "native": true
         },
         {
             "id": "native_enemyAlive1",
             "name": "enemyAlive1",
             "type": "byte",
-            "note": "Máscara vivos fileira 1. Bits pares=P0, ímpares=P1",
-            "value": 62,
+            "note": "Máscara vivos fileira 1 (6 bits, 0–63). Bits: P0=0,2,4 · P1=1,3,5",
+            "value": 3,
             "native": true
         },
         {
@@ -126,14 +200,6 @@
             "type": "byte",
             "note": "X da 1ª fileira de inimigos. Nativa Megamania",
             "value": 7,
-            "native": true
-        },
-        {
-            "id": "native_enemyAlive",
-            "name": "enemyAlive",
-            "type": "byte",
-            "note": "Máscara fileira 1 (alias enemyAlive1). Bits 0–5, 0–63",
-            "value": 62,
             "native": true
         },
         {
@@ -214,8 +280,22 @@
                 },
                 {
                     "type": "copy_var",
-                    "varIdFrom": "native_rowX2",
+                    "varIdFrom": "native_heroX",
                     "varIdTo": "native_scoreP0"
+                },
+                {
+                    "type": "set_var",
+                    "varId": "native_m0Active"
+                },
+                {
+                    "type": "set_var",
+                    "varId": "native_enemyAlive2",
+                    "value": 63
+                },
+                {
+                    "type": "set_var",
+                    "varId": "native_enemyAlive1",
+                    "value": 63
                 }
             ]
         },
@@ -253,6 +333,109 @@
                     "varId": "var_mu7gvu7q_4af"
                 }
             ]
+        },
+        {
+            "id": "rule_mubxmwbt_6ly",
+            "tabId": "rtab_mubxmup2_1x2",
+            "name": "esquerda",
+            "steps": [
+                {
+                    "type": "if_event",
+                    "eventId": "ev_mu7g43g8_1as"
+                },
+                {
+                    "type": "sub_var",
+                    "varId": "native_heroX",
+                    "value": 1
+                }
+            ]
+        },
+        {
+            "id": "rule_mubxn4pu_5it",
+            "tabId": "rtab_mubxmup2_1x2",
+            "name": "direita",
+            "steps": [
+                {
+                    "type": "if_event",
+                    "eventId": "ev_mu7g4bo7_3vg"
+                },
+                {
+                    "type": "add_var",
+                    "varId": "native_heroX",
+                    "value": 1
+                }
+            ]
+        },
+        {
+            "id": "rule_muby6egh_6zu",
+            "tabId": "rtab_mubxmup2_1x2",
+            "name": "tiro",
+            "steps": [
+                {
+                    "type": "if_event",
+                    "eventId": "ev_muby6aim_1vb"
+                },
+                {
+                    "type": "join",
+                    "op": "and"
+                },
+                {
+                    "type": "if_var",
+                    "op": "==",
+                    "value": 0,
+                    "varId": "native_m0Active"
+                },
+                {
+                    "type": "set_var",
+                    "varId": "native_m0Active",
+                    "value": 1
+                },
+                {
+                    "type": "copy_var",
+                    "varIdFrom": "native_heroY",
+                    "varIdTo": "native_m0Y"
+                },
+                {
+                    "type": "copy_var",
+                    "varIdFrom": "native_heroX",
+                    "varIdTo": "native_m0X"
+                }
+            ]
+        },
+        {
+            "id": "rule_muby8x84_52f",
+            "tabId": "main",
+            "name": "tiro player",
+            "steps": [
+                {
+                    "type": "if_var",
+                    "op": "==",
+                    "value": 1,
+                    "varId": "native_m0Active"
+                },
+                {
+                    "type": "sub_var",
+                    "varId": "native_m0Y",
+                    "value": 1
+                }
+            ]
+        },
+        {
+            "id": "rule_muc11q8k_uk",
+            "tabId": "main",
+            "name": "zera tiro",
+            "steps": [
+                {
+                    "type": "if_var",
+                    "op": "==",
+                    "value": 0,
+                    "varId": "native_m0Y"
+                },
+                {
+                    "type": "set_var",
+                    "varId": "native_m0Active"
+                }
+            ]
         }
     ],
     "gameObjects": [],
@@ -261,7 +444,7 @@
             "id": "band_mu6xr6nr_1y3",
             "screenId": "screen_main",
             "role": "enemy_row",
-            "y": 19,
+            "y": 21,
             "height": 19,
             "spriteId": "spr_mu6xog86_46g",
             "copies": 5,
@@ -283,7 +466,7 @@
             "id": "band_mu99jrkz_2c3",
             "screenId": "screen_main",
             "role": "enemy_row",
-            "y": 50,
+            "y": 51,
             "height": 16,
             "spriteId": "spr_mu6xohzh_349",
             "copies": 6,
@@ -301,6 +484,25 @@
             "aliveMask": 7,
             "moveDelay": 0,
             "moveMode": "wrap"
+        },
+        {
+            "id": "band_mubxm3ek_5bg",
+            "screenId": "screen_main",
+            "role": "hero",
+            "y": 138,
+            "height": 16,
+            "spriteId": "spr_mubx8qv7_6mi",
+            "copies": 1,
+            "spacing": "close",
+            "wrap": false,
+            "baseX": 80,
+            "xs": [
+                80
+            ],
+            "aliveMask": 1,
+            "moveDelay": 0,
+            "moveMode": "zigzag",
+            "shot": "m0"
         }
     ],
     "scoreBar": {
@@ -329,6 +531,10 @@
         {
             "id": "rtab_mu7hwkc8_2ck",
             "name": "movimento"
+        },
+        {
+            "id": "rtab_mubxmup2_1x2",
+            "name": "joystick"
         }
     ],
     "events": [
@@ -445,10 +651,18 @@
             "builtin": false,
             "frames": 180,
             "seconds": 3
+        },
+        {
+            "id": "ev_muby6aim_1vb",
+            "name": "shoot",
+            "category": "input",
+            "builtin": false,
+            "button": "P1-FIRE",
+            "trigger": "press"
         }
     ],
     "programMeta": {
         "notes": ""
     },
-    "updated": 1790021323588
+    "updated": 1790045552945
 }

@@ -1127,6 +1127,7 @@ const PLAYFIELD = (() => {
         baseX: 24,
         xs: [],
         aliveMask: defaultAliveMask(copies),
+        shot: 'none',
       };
       band.xs = bandXs(band);
       d.bands.push(band);
@@ -2424,9 +2425,18 @@ const PLAYFIELD = (() => {
             <option value="zigzag" ${(band.moveMode || (band.wrap !== false ? 'wrap' : 'zigzag')) === 'zigzag' ? 'selected' : ''}>Zigue-zague (bate e volta)</option>
           </select>
         </label>
+        <label>Tiro
+          <select id="pfBandShot">
+            <option value="none" ${(band.shot || 'none') === 'none' ? 'selected' : ''}>Nenhum</option>
+            <option value="m0" ${band.shot === 'm0' ? 'selected' : ''}>Míssil 0</option>
+            <option value="m1" ${band.shot === 'm1' ? 'selected' : ''}>Míssil 1</option>
+            <option value="ball" ${band.shot === 'ball' ? 'selected' : ''}>Ball</option>
+          </select>
+        </label>
+        <div class="pf-note">Tiro: cria em Programação as nativas <b>m0X/m0Y/m0Active</b> (ou m1… / ball…) só se alguma faixa usar.</div>
         <div class="pf-note">Xs dos 6 slots (derivados de baseX + NUSIZ): ${xs.join(', ')}</div>
         <div class="pf-note">X inicial = baseX → RAM <b>rowX</b>. No jogo, mova com regras/timer em Programação (variável nativa rowX).</div>
-        <div class="pf-note">Âncoras: P0=rowX · P1=rowX+passo · 6 cópias NUSIZ. Vivos: <b>enemyAlive</b> (0–63).</div>
+        <div class="pf-note">Âncoras: P0=rowX · P1=rowX+passo · 6 cópias NUSIZ. Vivos: <b>enemyAlive1</b> / <b>enemyAlive2</b> (0–63). Y: <b>colY</b> / <b>colY2</b>.</div>
         <button type="button" class="pf-btn danger" id="pfBandDel">Excluir faixa</button>
       </div>`;
 
@@ -2441,6 +2451,11 @@ const PLAYFIELD = (() => {
       if (mmEl) {
         band.moveMode = mmEl.value === 'zigzag' ? 'zigzag' : 'wrap';
         band.wrap = band.moveMode === 'wrap';
+      }
+      const shotEl = document.getElementById('pfBandShot');
+      if (shotEl) {
+        const s = shotEl.value;
+        band.shot = s === 'm0' || s === 'm1' || s === 'ball' ? s : 'none';
       }
       band.xs = bandXs(band);
       const full = defaultAliveMask(c);
@@ -2485,6 +2500,15 @@ const PLAYFIELD = (() => {
     document.getElementById('pfBandSpacing')?.addEventListener('change', () => {
       syncXs();
       if (typeof Project.status === 'function') Project.status('faixa alterada — salve');
+      renderBandsPanel();
+      redraw();
+    });
+    document.getElementById('pfBandShot')?.addEventListener('change', () => {
+      syncXs();
+      if (typeof Project !== 'undefined' && Project.syncNativeVariables) {
+        try { Project.syncNativeVariables(); } catch (e) {}
+      }
+      if (typeof Project.status === 'function') Project.status('tiro da faixa — salve');
       renderBandsPanel();
       redraw();
     });

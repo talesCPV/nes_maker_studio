@@ -132,15 +132,9 @@ const Project = {
       const maskOf = (b, def = 63) =>
         b && b.aliveMask != null ? b.aliveMask & 0x3f : def;
       want.push({
-        name: 'enemyAlive',
-        type: 'byte',
-        note: 'Máscara fileira 1 (alias enemyAlive1). Bits 0–5, 0–63',
-        value: maskOf(firstEnemy, 63),
-      });
-      want.push({
         name: 'enemyAlive1',
         type: 'byte',
-        note: 'Máscara vivos fileira 1. Bits pares=P0, ímpares=P1',
+        note: 'Máscara vivos fileira 1 (6 bits, 0–63). Bits: P0=0,2,4 · P1=1,3,5',
         value: maskOf(firstEnemy, 63),
       });
       want.push({
@@ -148,6 +142,12 @@ const Project = {
         type: 'byte',
         note: 'X da 1ª fileira de inimigos. Nativa Megamania',
         value: firstEnemy && firstEnemy.baseX != null ? firstEnemy.baseX & 0xff : 24,
+      });
+      want.push({
+        name: 'colY',
+        type: 'byte',
+        note: 'Y (scanline) da 1ª fileira — módulo PF',
+        value: firstEnemy && firstEnemy.y != null ? firstEnemy.y & 0xff : 0,
       });
       if (enemies.length >= 2) {
         const second = enemies[1];
@@ -163,7 +163,61 @@ const Project = {
           note: 'X da 2ª fileira de inimigos. Nativa Megamania',
           value: second && second.baseX != null ? second.baseX & 0xff : 24,
         });
+        want.push({
+          name: 'colY2',
+          type: 'byte',
+          note: 'Y (scanline) da 2ª fileira — módulo PF',
+          value: second && second.y != null ? second.y & 0xff : 0,
+        });
       }
+      const heroBand = bands.find((b) => b && b.role === 'hero');
+      if (heroBand) {
+        want.push({
+          name: 'heroX',
+          type: 'byte',
+          note: 'X do herói (faixa PF role=hero)',
+          value: heroBand.baseX != null ? heroBand.baseX & 0xff : 76,
+        });
+        want.push({
+          name: 'heroY',
+          type: 'byte',
+          note: 'Y do herói (scanline, faixa PF)',
+          value: heroBand.y != null ? heroBand.y & 0xff : 0,
+        });
+      }
+      // Tiros usados em alguma faixa → nativas X/Y/Active só se selecionados
+      const shotsUsed = new Set();
+      bands.forEach((b) => {
+        if (!b) return;
+        const s = b.shot || 'none';
+        if (s === 'm0' || s === 'm1' || s === 'ball') shotsUsed.add(s);
+      });
+      const shotMeta = {
+        m0: { prefix: 'm0', label: 'Míssil 0' },
+        m1: { prefix: 'm1', label: 'Míssil 1' },
+        ball: { prefix: 'ball', label: 'Ball' },
+      };
+      shotsUsed.forEach((s) => {
+        const m = shotMeta[s];
+        want.push({
+          name: m.prefix + 'X',
+          type: 'byte',
+          note: m.label + ' X (color clocks)',
+          value: 0,
+        });
+        want.push({
+          name: m.prefix + 'Y',
+          type: 'byte',
+          note: m.label + ' Y (scanline)',
+          value: 0,
+        });
+        want.push({
+          name: m.prefix + 'Active',
+          type: 'byte',
+          note: m.label + ' ativo (0=off, ≠0=on)',
+          value: 0,
+        });
+      });
     }
 
     // --- boxing ---
@@ -209,12 +263,24 @@ const Project = {
       'energyMax',
       'rounds',
       'timer',
-      'enemyAlive',
       'enemyAlive1',
       'enemyAlive2',
       'rowX',
       'rowX2',
-    ]);
+      'colY',
+      'colY2',
+
+      'heroX',
+      'm0X',
+      'm0Y',
+      'm0Active',
+      'm1X',
+      'm1Y',
+      'm1Active',
+      'ballX',
+      'ballY',
+      'ballActive',
+      'heroY',    ]);
     // ensure each wanted native exists
     for (const w of want) {
       let v = d.variables.find((x) => x.name === w.name);
@@ -239,6 +305,8 @@ const Project = {
     d.variables.forEach((v) => {
       if (nativeNames.has(v.name)) v.native = true;
     });
+    // remove legacy alias enemyAlive (conflitava com enemyAlive1 no mesmo $E0)
+    d.variables = d.variables.filter((v) => v && v.name !== 'enemyAlive');
     return d.variables;
   },
 
