@@ -79,7 +79,11 @@ const Project = {
     const want = []; // { name, type, note, value }
 
     // --- placar ---
-    if (sb.position && sb.position !== 'none') {
+    if (style === 'river_scroll' && (!sb.position || sb.position === 'none')) {
+      d.scoreBar.position = 'top';
+      d.scoreBar.enabled = true;
+    }
+    if ((sb.position && sb.position !== 'none') || style === 'river_scroll') {
       const align = sb.align || 'center';
       const twoPlayers = (sb.players | 0) === 2 || align === 'both';
       want.push({ name: 'scoreP0', type: 'byte', note: twoPlayers ? 'Placar jogador 1 (nativa)' : 'Placar (nativa)', value: 0 });
@@ -100,6 +104,13 @@ const Project = {
         note: 'Velocidade do scroll (1 lento · 2 normal · 3 rápido) — nativa',
         value: map[sp] != null ? map[sp] : 2,
       });
+      if (style === 'river_scroll') {
+        want.push({ name: 'scrollY', type: 'byte', note: 'Offset vertical da track (nativa)', value: 0 });
+        want.push({ name: 'heroX', type: 'byte', note: 'X do herói no rio (nativa)', value: 76 });
+        want.push({ name: 'heroY', type: 'byte', note: 'Y do herói no PF útil (nativa)', value: 150 });
+        want.push({ name: 'objX', type: 'byte', note: 'X do objeto no rio P1 (nativa)', value: 80 });
+        want.push({ name: 'objY', type: 'byte', note: 'Y do objeto no PF útil (nativa)', value: 0 });
+      }
       if (opts.seedMode === 'fixed' || opts.seedMode === 'title_entropy' || style === 'river_scroll' || (style === 'racing' && opts.camera !== 'top')) {
         want.push({
           name: 'mapSeed',

@@ -87,6 +87,12 @@ final class AgcBuilder
 
         // Resolve boot spawns
         $spawns = self::resolveBootSpawns($project);
+        $gameStyle = (string)($project['gameStyle'] ?? '');
+        $kernelName = (string)($project['kernel'] ?? '');
+        if ($gameStyle === 'river_scroll' || $kernelName === 'vertical_scroll') {
+            return self::buildRiverScroll($project);
+        }
+
         $ruleCompiled = self::compileRules($project);
         $sprites = is_array($project['sprites'] ?? null) ? $project['sprites'] : [];
 
@@ -553,7 +559,11 @@ final class AgcBuilder
         $asm[] = '';
         $asm[] = '    lda #' . $vblank;
         $asm[] = '    sta TIM64T';
-        $asm[] = '    jsr GameLogic              ; VBLANK: regras (sempre banco 0)';
+        if ($useBankswitch) {
+            $asm[] = '    jsr CallGameLogic          ; VBLANK → banco 1 (regras)';
+        } else {
+            $asm[] = '    jsr GameLogic              ; VBLANK: regras';
+        }
         if ($dualPlayerRow || $enemyBandCount > 0) {
             $minX = 8;
             $maxX = max($minX, 160 - (int)$rowSpan);
@@ -940,7 +950,9 @@ $asm[] = '    inx';
 
 
 
+
         if (!$useBankswitch) {
+            // ----- 4K: tudo no banco 0 -----
             $asm[] = 'KillHitEnemy:';
             $asm[] = '    lda M0Active';
             $asm[] = '    beq KHEd';
@@ -1017,16 +1029,16 @@ $asm[] = '    inx';
             $asm[] = 'KHEbits:';
             $asm[] = '    .byte 1,2,4,8,16,32';
             $asm[] = '';
+            $asm[] = 'GameLogic:';
+            $asm[] = '    ; Regras de frame — VBLANK apenas';
+            foreach ($ruleCompiled['frame'] as $line) {
+                $asm[] = $line;
+            }
+            $asm[] = '    rts';
+            $asm[] = '';
         }
-        $asm[] = 'GameLogic:';
-        $asm[] = '    ; Regras de frame — VBLANK/Overscan apenas (nunca no PlayLoop)';
-        foreach ($ruleCompiled['frame'] as $line) {
-            $asm[] = $line;
-        }
-        $asm[] = '    rts';
-        $asm[] = '';
+        // Com bankswitch: GameLogic + KillHitEnemy ficam no banco 1 (ver rodapé)
 
-                $asm[] = '; Posiciona P0/P1 — 3 scanlines fixas';
         $asm[] = 'PositionPlayers:';
         $asm[] = '    lda P0X';
         $asm[] = '    ldx #0';
@@ -1291,6 +1303,7 @@ $asm[] = '    inx';
 
         $asm[] = '; Playfield tables (por scanline)';
         $asm[] = 'PF0Data:';
+        $asm[] = 'PF0Data:';
         foreach ($pfTables['pf0'] as $b) {
             $asm[] = '    .byte $' . sprintf('%02X', $b & 0xff);
         }
@@ -1441,25 +1454,33 @@ $asm[] = '    inx';
         foreach ($ruleCompiled['equates'] as $line) {
             $asm[] = $line;
         }
+
         if (!$useBankswitch) {
             $asm[] = '    ORG $FFFA';
             $asm[] = '    .word Start';
             $asm[] = '    .word Start';
             $asm[] = '    .word Start';
             $asm[] = '';
-
         } else {
-            // Hotspot → banco 1 (F8=$FFF9 · F6=$FFF7 · F4=$FFF5)
-            $hs1 = ($mapper === 'F8') ? '$FFF9' : (($mapper === 'F6') ? '$FFF7' : '$FFF5');
+            $hs0 = (($mapper === 'F8') ? '$FFF8' : (($mapper === 'F6') ? '$FFF6' : '$FFF4'));
+            $hs1 = (($mapper === 'F8') ? '$FFF9' : (($mapper === 'F6') ? '$FFF7' : '$FFF5'));
 
-            // Trampolim FIXO $FFE0 — bytes espelhados no banco 1
+            // ============================================================
+            // Trampolim IDÊNTICO em todos os bancos ($FFE0):
+            //   CallGameLogic: bit hs1 / jmp DoGameLogic
+            //   BankReturn:    bit hs0 / rts
+            // Após bit, a CPU busca o PRÓXIMO opcode no banco novo —
+            // por isso bit+rts e bit+jmp precisam existir nos dois lados.
+            // ============================================================
             $asm[] = '    ORG $0FE0';
             $asm[] = '    RORG $FFE0';
-            $asm[] = 'KillHitEnemy:';
+            $asm[] = 'CallGameLogic:';
             $asm[] = '    bit ' . $hs1;
-            $asm[] = '    jmp KillHitEnemyReal';
+            $asm[] = '    jmp DoGameLogic';
+            $asm[] = 'BankReturn:';
+            $asm[] = '    bit ' . $hs0;
+            $asm[] = '    rts';
             $asm[] = '';
-
             if ($mapper === 'F8') {
                 $asm[] = '    ORG $0FF8';
                 $asm[] = '    RORG $FFF8';
@@ -1480,97 +1501,137 @@ $asm[] = '    inx';
             $asm[] = '    .word Start';
             $asm[] = '';
 
-            for ($bi = 1; $bi < $bankCount; $bi++) {
+            // ===== BANCO 1 =====
+            $asm[] = '    ORG $1000';
+            $asm[] = '    RORG $F000';
+            $asm[] = 'StartB1:';
+            $asm[] = '    bit ' . $hs0;
+            $asm[] = '    jmp Start';
+            $asm[] = '';
+            $asm[] = 'DoGameLogic:';
+            $asm[] = 'GameLogic:';
+            foreach ($ruleCompiled['frame'] as $line) {
+                $asm[] = $line;
+            }
+            $asm[] = '    jmp BankReturn            ; bit hs0 + rts (trampolim)';
+            $asm[] = '';
+            $asm[] = 'KillHitEnemy:';
+            $asm[] = '    lda M0Active';
+            $asm[] = '    beq KHEd';
+            $asm[] = '    ldx #0';
+            $asm[] = '    lda ColY2';
+            $asm[] = '    beq KHEr1';
+            $asm[] = '    sec';
+            $asm[] = '    sbc #8';
+            $asm[] = '    cmp M0Y';
+            $asm[] = '    bcs KHEr1';
+            $asm[] = '    ldx #1';
+            $asm[] = 'KHEr1:';
+            $asm[] = '    stx TmpB';
+            $asm[] = '    lda RowX';
+            $asm[] = '    cpx #0';
+            $asm[] = '    beq KHEb';
+            $asm[] = '    lda RowX2';
+            $asm[] = 'KHEb:';
+            $asm[] = '    sta TmpA';
+            $asm[] = '    lda CXM0P';
+            $asm[] = '    and #$C0';
+            $asm[] = '    beq KHEd';
+            $asm[] = '    sta TmpLine';
+            $asm[] = '    lda M0X';
+            $asm[] = '    sec';
+            $asm[] = '    sbc TmpA';
+            $asm[] = '    bcc KHEi0';
+            $asm[] = '    lsr';
+            $asm[] = '    lsr';
+            $asm[] = '    lsr';
+            $asm[] = '    lsr';
+            $asm[] = '    cmp #6';
+            $asm[] = '    bcc KHEi';
+            $asm[] = '    lda #5';
+            $asm[] = '    bne KHEi';
+            $asm[] = 'KHEi0:';
+            $asm[] = '    lda #0';
+            $asm[] = 'KHEi:';
+            $asm[] = '    tax';
+            $asm[] = '    lda TmpLine';
+            $asm[] = '    and #$C0';
+            $asm[] = '    cmp #$C0';
+            $asm[] = '    beq KHEm';
+            $asm[] = '    and #$40';
+            $asm[] = '    beq KHEo';
+            $asm[] = '    txa';
+            $asm[] = '    and #$FE';
+            $asm[] = '    tax';
+            $asm[] = '    jmp KHEm';
+            $asm[] = 'KHEo:';
+            $asm[] = '    txa';
+            $asm[] = '    ora #1';
+            $asm[] = '    cmp #6';
+            $asm[] = '    bcc KHEo2';
+            $asm[] = '    lda #5';
+            $asm[] = 'KHEo2:';
+            $asm[] = '    tax';
+            $asm[] = 'KHEm:';
+            $asm[] = '    lda KHEbits,x';
+            $asm[] = '    eor #$FF';
+            $asm[] = '    sta TmpA';
+            $asm[] = '    lda TmpB';
+            $asm[] = '    bne KHEr2';
+            $asm[] = '    lda EnemyAlive';
+            $asm[] = '    and TmpA';
+            $asm[] = '    sta EnemyAlive';
+            $asm[] = '    rts';
+            $asm[] = 'KHEr2:';
+            $asm[] = '    lda EnemyAlive2';
+            $asm[] = '    and TmpA';
+            $asm[] = '    sta EnemyAlive2';
+            $asm[] = 'KHEd:';
+            $asm[] = '    rts';
+            $asm[] = 'KHEbits:';
+            $asm[] = '    .byte 1,2,4,8,16,32';
+            $asm[] = '';
+            // Espelho do trampolim no banco 1
+            $asm[] = '    ORG $1FE0';
+            $asm[] = '    RORG $FFE0';
+            $asm[] = '    bit ' . $hs1;
+            $asm[] = '    jmp DoGameLogic';
+            $asm[] = '    bit ' . $hs0;
+            $asm[] = '    rts';
+            $asm[] = '';
+            if ($mapper === 'F8') {
+                $asm[] = '    ORG $1FF8';
+                $asm[] = '    RORG $FFF8';
+                $asm[] = '    .byte $00,$00';
+            } elseif ($mapper === 'F6') {
+                $asm[] = '    ORG $1FF6';
+                $asm[] = '    RORG $FFF6';
+                $asm[] = '    .byte $00,$00,$00,$00';
+            } else {
+                $asm[] = '    ORG $1FF4';
+                $asm[] = '    RORG $FFF4';
+                $asm[] = '    .byte $00,$00,$00,$00,$00,$00';
+            }
+            $asm[] = '    ORG $1FFA';
+            $asm[] = '    RORG $FFFA';
+            $asm[] = '    .word StartB1';
+            $asm[] = '    .word StartB1';
+            $asm[] = '    .word StartB1';
+            $asm[] = '';
+
+            for ($bi = 2; $bi < $bankCount; $bi++) {
                 $base = $bi * 0x1000;
                 $asm[] = '    ORG $' . sprintf('%04X', $base);
                 $asm[] = '    RORG $F000';
                 $asm[] = 'StartB' . $bi . ':';
-                $asm[] = '    bit ' . (($mapper === 'F8') ? '$FFF8' : (($mapper === 'F6') ? '$FFF6' : '$FFF4'));
+                $asm[] = '    bit ' . $hs0;
                 $asm[] = '    jmp Start';
-                if ($bi === 1) {
-                    $asm[] = 'KillHitEnemyReal:';
-                    $asm[] = '    lda M0Active';
-                    $asm[] = '    beq KHEd1';
-                    $asm[] = '    ldx #0';
-                    $asm[] = '    lda ColY2';
-                    $asm[] = '    beq KHEr11';
-                    $asm[] = '    sec';
-                    $asm[] = '    sbc #8';
-                    $asm[] = '    cmp M0Y';
-                    $asm[] = '    bcs KHEr11';
-                    $asm[] = '    ldx #1';
-                    $asm[] = 'KHEr11:';
-                    $asm[] = '    stx TmpB';
-                    $asm[] = '    lda RowX';
-                    $asm[] = '    cpx #0';
-                    $asm[] = '    beq KHEb1';
-                    $asm[] = '    lda RowX2';
-                    $asm[] = 'KHEb1:';
-                    $asm[] = '    sta TmpA';
-                    $asm[] = '    lda CXM0P';
-                    $asm[] = '    and #$C0';
-                    $asm[] = '    beq KHEd1';
-                    $asm[] = '    sta TmpLine';
-                    $asm[] = '    lda M0X';
-                    $asm[] = '    sec';
-                    $asm[] = '    sbc TmpA';
-                    $asm[] = '    bcc KHEi01';
-                    $asm[] = '    lsr';
-                    $asm[] = '    lsr';
-                    $asm[] = '    lsr';
-                    $asm[] = '    lsr';
-                    $asm[] = '    cmp #6';
-                    $asm[] = '    bcc KHEi1';
-                    $asm[] = '    lda #5';
-                    $asm[] = '    bne KHEi1';
-                    $asm[] = 'KHEi01:';
-                    $asm[] = '    lda #0';
-                    $asm[] = 'KHEi1:';
-                    $asm[] = '    tax';
-                    $asm[] = '    lda TmpLine';
-                    $asm[] = '    and #$C0';
-                    $asm[] = '    cmp #$C0';
-                    $asm[] = '    beq KHEm1';
-                    $asm[] = '    and #$40';
-                    $asm[] = '    beq KHEo1';
-                    $asm[] = '    txa';
-                    $asm[] = '    and #$FE';
-                    $asm[] = '    tax';
-                    $asm[] = '    jmp KHEm1';
-                    $asm[] = 'KHEo1:';
-                    $asm[] = '    txa';
-                    $asm[] = '    ora #1';
-                    $asm[] = '    cmp #6';
-                    $asm[] = '    bcc KHEo1b';
-                    $asm[] = '    lda #5';
-                    $asm[] = 'KHEo1b:';
-                    $asm[] = '    tax';
-                    $asm[] = 'KHEm1:';
-                    $asm[] = '    lda KHEbits1,x';
-                    $asm[] = '    eor #$FF';
-                    $asm[] = '    sta TmpA';
-                    $asm[] = '    lda TmpB';
-                    $asm[] = '    bne KHEr21';
-                    $asm[] = '    lda EnemyAlive';
-                    $asm[] = '    and TmpA';
-                    $asm[] = '    sta EnemyAlive';
-                    $asm[] = '    jmp KHEd1';
-                    $asm[] = 'KHEr21:';
-                    $asm[] = '    lda EnemyAlive2';
-                    $asm[] = '    and TmpA';
-                    $asm[] = '    sta EnemyAlive2';
-                    $asm[] = 'KHEd1:';
-                    $asm[] = '    bit ' . (($mapper === 'F8') ? '$FFF8' : (($mapper === 'F6') ? '$FFF6' : '$FFF4')) . ' ; volta banco 0';
-                    $asm[] = '    rts';
-                    $asm[] = 'KHEbits1:';
-                    $asm[] = '    .byte 1,2,4,8,16,32';
-                    $asm[] = '';
-                    // Espelho do trampolim em $FFE0
-                    $asm[] = '    ORG $' . sprintf('%04X', $base + 0xFE0);
-                    $asm[] = '    RORG $FFE0';
-                    $asm[] = '    bit ' . $hs1;
-                    $asm[] = '    jmp KillHitEnemyReal';
-                }
+                $asm[] = '    ORG $' . sprintf('%04X', $base + 0xFE0);
+                $asm[] = '    RORG $FFE0';
+                $asm[] = '    bit ' . $hs1;
+                $asm[] = '    jmp DoGameLogic';
+                $asm[] = '    bit ' . $hs0;
+                $asm[] = '    rts';
                 if ($mapper === 'F6') {
                     $asm[] = '    ORG $' . sprintf('%04X', $base + 0xFF6);
                     $asm[] = '    RORG $FFF6';
@@ -1609,7 +1670,7 @@ $asm[] = '    inx';
             'playLines' => $playLines,
             'spawns' => ['p0' => $p0, 'p1' => $p1],
             'meta' => [
-                'generator' => 'AgcBuilder/0.12.0-bankswitch',
+                'generator' => 'AgcBuilder/0.13.0-bank1-logic',
                 'org' => sprintf('$%04X', $org),
                 'mapper' => $mapper,
                 'banks' => $bankCount,
@@ -2845,7 +2906,9 @@ ASM;
         $outPf2r = [];
         $outCup = [];
         $outCub = [];
-        for ($y = 0; $y < $playLines; $y++) {
+        $tableH = $playLines;
+        // caller pode pedir track completa (scroll) passando playLines = height da PF
+        for ($y = 0; $y < $tableH; $y++) {
             $srcY = $y < $h ? $y : ($h - 1);
             $lineL = [];
             $lineR = [];
@@ -3671,4 +3734,545 @@ ASM;
         }
         return substr($s, 0, 32);
     }
+    /**
+     * Kernel scroll vertical (River Raid-like) — PF track + scrollY.
+     * Reusa placar/logo; play area = só playfield.
+     * @param array<string,mixed> $project
+     * @return array<string,mixed>
+     */
+    private static function buildRiverScroll(array $project): array
+    {
+        $name = self::safeLabel((string)($project['name'] ?? 'AGC_Scroll'));
+        $tv = strtoupper((string)($project['tv'] ?? 'NTSC'));
+        if ($tv !== 'PAL') {
+            $tv = 'NTSC';
+        }
+        $romSize = (int)($project['romSize'] ?? 32768);
+        if (!in_array($romSize, [4096, 8192, 16384, 32768], true)) {
+            $romSize = 32768;
+        }
+        $mapper = 'fixed';
+        $bankCount = 1;
+        if ($romSize === 8192) { $mapper = 'F8'; $bankCount = 2; }
+        elseif ($romSize === 16384) { $mapper = 'F6'; $bankCount = 4; }
+        elseif ($romSize === 32768) { $mapper = 'F4'; $bankCount = 8; }
+        $useBankswitch = $bankCount > 1;
+
+        $vblank = $tv === 'PAL' ? 45 : 37;
+        $overscan = $tv === 'PAL' ? 36 : 30;
+        $scoreBar = is_array($project['scoreBar'] ?? null) ? $project['scoreBar'] : [];
+        $scorePos = (string)($scoreBar['position'] ?? 'top');
+        // River: placar + logo sempre (mesmo esquema da plataforma)
+        if ($scorePos === 'none' || $scorePos === '') {
+            $scorePos = 'top';
+        }
+        $scoreEnabled = true;
+        $logoLines = max(6, min(16, (int)($scoreBar['logoLines'] ?? 10)));
+        $digits = max(2, min(3, (int)($scoreBar['digits'] ?? 2)));
+        $scorePlayers = max(1, min(2, (int)($scoreBar['players'] ?? 1)));
+        $scoreBg = !isset($scoreBar['background']) || !empty($scoreBar['background']);
+        $labelPlayers = !empty($scoreBar['labelPlayers']) && $digits === 3;
+        $scoreDelay = $digits >= 3 ? 7 : (int)($scoreBar['delay'] ?? 12);
+        if ($digits < 3 && !in_array($scoreDelay, [4, 8, 12], true)) {
+            $scoreDelay = 12;
+        }
+        $glyphH = self::digitGlyphHeight();
+        $scoreLines = $glyphH + 2; // folga
+        if ($scorePlayers >= 2) {
+            $scoreLines = $scoreLines * 2 + 2;
+        }
+        $scoreLines = min(24, max(8, $scoreLines));
+        // NTSC visible ~192; reserva VSYNC/VBLANK/overscan já fora
+        $totalVisible = $tv === 'PAL' ? 242 : 192;
+        $playLines = $totalVisible - $scoreLines - $logoLines;
+        if ($playLines < 32) {
+            $playLines = 32;
+        }
+        if ($playLines > 180) {
+            $playLines = 180;
+        }
+
+        // Track = altura completa da PF desenhada
+        $pfs = is_array($project['playfields'] ?? null) ? $project['playfields'] : [];
+        $pfH = 64;
+        if ($pfs !== [] && is_array($pfs[0])) {
+            $pfH = max(16, min(256, (int)($pfs[0]['height'] ?? 64)));
+        }
+        $pfTables = self::extractPlayfield($project, $pfH);
+        $trackH = max(1, min(256, count($pfTables['pf1'])));
+        $ctrlpf = ($pfTables['mode'] === 'reflect') ? 1 : 0;
+        $colupf0 = ((int)($pfTables['colupf'][0] ?? 0x64)) & 0xfe;
+        $colubk0 = ((int)($pfTables['colubk'][0] ?? 0x00)) & 0xfe;
+
+        $scrollSpeed = 1;
+        $heroXInit = 76;
+        $scoreInit = 0;
+        foreach (is_array($project['variables'] ?? null) ? $project['variables'] : [] as $v) {
+            if (!is_array($v)) continue;
+            $vn = strtolower((string)($v['name'] ?? ''));
+            if ($vn === 'scrollspeed') {
+                $sv = (int)($v['value'] ?? 2);
+                $scrollSpeed = $sv <= 1 ? 1 : ($sv >= 3 ? 2 : 1);
+            }
+            if ($vn === 'herox') {
+                $heroXInit = max(0, min(160, (int)($v['value'] ?? 76)));
+            }
+            if ($vn === 'scorep0' || $vn === 'score') {
+                $scoreInit = max(0, min(255, (int)($v['value'] ?? 0)));
+            }
+        }
+        $ruleCompiled = self::compileRules($project);
+
+        // Sprite do herói (editor) — bands role=hero, senão sprite player 0, senão placeholder
+        $sprites = is_array($project['sprites'] ?? null) ? $project['sprites'] : [];
+        $heroSpr = null;
+        foreach (is_array($project['bands'] ?? null) ? $project['bands'] : [] as $b) {
+            if (!is_array($b) || (string)($b['role'] ?? '') !== 'hero') {
+                continue;
+            }
+            $heroSpr = self::findSprite($sprites, (string)($b['spriteId'] ?? ''));
+            if ($heroSpr) {
+                break;
+            }
+        }
+        if (!$heroSpr) {
+            $heroSpr = self::findSpriteByPlayer($sprites, 0);
+        }
+        if (!$heroSpr && $sprites !== [] && is_array($sprites[0])) {
+            $heroSpr = $sprites[0];
+        }
+        $heroH = $heroSpr ? max(1, min(16, (int)($heroSpr['height'] ?? 8))) : 8;
+        $heroCol = $heroSpr ? ((int)($heroSpr['color'] ?? 0x88) & 0xfe) : 0x88;
+        $heroGfx = self::spriteRows($heroSpr, $heroH);
+        if ($heroSpr === null) {
+            // placeholder avião
+            $heroGfx = [0x18, 0x18, 0x3C, 0x7E, 0x18, 0x3C, 0x18, 0x00];
+            $heroH = 8;
+            $heroCol = 0x88;
+        }
+
+        // Objeto no rio (P1): sprite player 1, senão 2º sprite, senão diamante
+        $objSpr = self::findSpriteByPlayer($sprites, 1);
+        if (!$objSpr) {
+            foreach ($sprites as $s) {
+                if (!is_array($s)) continue;
+                if ($heroSpr && (string)($s['id'] ?? '') === (string)($heroSpr['id'] ?? '')) continue;
+                $objSpr = $s;
+                break;
+            }
+        }
+        $objH = $objSpr ? max(1, min(16, (int)($objSpr['height'] ?? 8))) : 8;
+        $objCol = $objSpr ? ((int)($objSpr['color'] ?? 0x1A) & 0xfe) : 0x1A;
+        $objGfx = self::spriteRows($objSpr, $objH);
+        if ($objSpr === null) {
+            $objGfx = [0x18, 0x3C, 0x7E, 0xFF, 0x7E, 0x3C, 0x18, 0x00];
+            $objH = 8;
+            $objCol = 0x1A;
+        }
+        $objXInit = 80;
+
+        $asm = [];
+        $asm[] = '; ============================================================';
+        $asm[] = '; AGC River Scroll — ' . $name;
+        $asm[] = '; TV=' . $tv . ' ROM=' . $romSize . ' trackH=' . $trackH . ' playLines=' . $playLines;
+        $asm[] = '; ============================================================';
+        $asm[] = '    processor 6502';
+        $asm[] = self::registerEquates();
+        $asm[] = '';
+        if ($useBankswitch) {
+            $asm[] = '    ORG $0000';
+            $asm[] = '    RORG $F000';
+        } else {
+            $asm[] = '    ORG $F000';
+        }
+        $asm[] = '';
+        $asm[] = 'Start:';
+        if ($useBankswitch) {
+            $hs0 = ($mapper === 'F8') ? '$FFF8' : (($mapper === 'F6') ? '$FFF6' : '$FFF4');
+            $asm[] = '    bit ' . $hs0;
+        }
+        $asm[] = '    sei';
+        $asm[] = '    cld';
+        $asm[] = '    ldx #$FF';
+        $asm[] = '    txs';
+        $asm[] = '    lda #0';
+        $asm[] = '    tax';
+        $asm[] = 'ClearMem:';
+        $asm[] = '    sta $00,x';
+        $asm[] = '    dex';
+        $asm[] = '    bne ClearMem';
+        foreach ($ruleCompiled['inits'] as $line) {
+            $asm[] = $line;
+        }
+        $asm[] = '    lda #0';
+        $asm[] = '    sta ScrollY';
+        $asm[] = '    sta FrameCnt';
+        $asm[] = '    sta WalkTick';
+        $asm[] = '    sta PrevSWCHA';
+        $asm[] = '    sta PrevINPT4';
+        $asm[] = '    lda #' . ($scoreInit & 0xff);
+        $asm[] = '    sta ScoreP0';
+        $asm[] = '    lda #0';
+        $asm[] = '    sta ScoreP1';
+        $asm[] = '    lda #' . ($scrollSpeed & 0xff);
+        $asm[] = '    sta ScrollSpd';
+        $asm[] = '    lda #' . ($heroXInit & 0xff);
+        $asm[] = '    sta HeroX';
+        $asm[] = '    lda #' . (max(0, $playLines - $heroH - 8) & 0xff);
+        $asm[] = '    sta HeroY                 ; perto da base do PF útil';
+        $asm[] = '    lda #' . ($objXInit & 0xff);
+        $asm[] = '    sta ObjX';
+        $asm[] = '    lda #0';
+        $asm[] = '    sta ObjY                  ; nasce no topo do PF útil';
+        $asm[] = '';
+        $asm[] = 'MainLoop:';
+        $asm[] = '    lda #2';
+        $asm[] = '    sta VSYNC';
+        $asm[] = '    sta WSYNC';
+        $asm[] = '    sta WSYNC';
+        $asm[] = '    sta WSYNC';
+        $asm[] = '    lda #0';
+        $asm[] = '    sta VSYNC';
+        $asm[] = '    lda #' . $vblank;
+        $asm[] = '    sta TIM64T';
+        $asm[] = '';
+        $asm[] = '    ; --- scroll para BAIXO: ScrollY = (ScrollY - speed) mod trackH ---';
+        $asm[] = '    lda ScrollY';
+        $asm[] = '    sec';
+        $asm[] = '    sbc ScrollSpd';
+        $asm[] = '    bcs ScrOk';
+        $asm[] = '    clc';
+        $asm[] = '    adc #' . ($trackH & 0xff);
+        $asm[] = 'ScrOk:';
+        $asm[] = '    sta ScrollY';
+        $asm[] = '    sta TrackIdx              ; índice da 1ª linha visível';
+        $asm[] = '';
+        $asm[] = '    ; --- objeto desce com o scroll ---';
+        $asm[] = '    lda ObjY';
+        $asm[] = '    clc';
+        $asm[] = '    adc ScrollSpd';
+        $asm[] = '    cmp #' . ($playLines & 0xff);
+        $asm[] = '    bcc ObjYOk';
+        $asm[] = '    lda #0                    ; reaparece no topo';
+        $asm[] = 'ObjYOk:';
+        $asm[] = '    sta ObjY';
+        $asm[] = '';
+        $asm[] = '    ; --- joystick P0: esquerda / direita ---';
+        $asm[] = '    lda SWCHA';
+        $asm[] = '    and #$40                  ; P0 LEFT';
+        $asm[] = '    bne JoyNotL';
+        $asm[] = '    lda HeroX';
+        $asm[] = '    cmp #8';
+        $asm[] = '    bcc JoyNotL';
+        $asm[] = '    dec HeroX';
+        $asm[] = 'JoyNotL:';
+        $asm[] = '    lda SWCHA';
+        $asm[] = '    and #$80                  ; P0 RIGHT';
+        $asm[] = '    bne JoyNotR';
+        $asm[] = '    lda HeroX';
+        $asm[] = '    cmp #149';
+        $asm[] = '    bcs JoyNotR';
+        $asm[] = '    inc HeroX';
+        $asm[] = 'JoyNotR:';
+        $asm[] = '';
+        $asm[] = '    jsr GameLogic              ; regras (colisão / score / etc.)';
+        $asm[] = '    jsr ScorePrep';
+        $asm[] = '    lda HeroX';
+        $asm[] = '    jsr PosObject              ; P0 herói';
+        $asm[] = '    lda ObjX';
+        $asm[] = '    jsr PosObject1             ; P1 objeto';
+        $asm[] = '';
+        $asm[] = 'WaitVBlank:';
+        $asm[] = '    lda INTIM';
+        $asm[] = '    bne WaitVBlank';
+        $asm[] = '    sta WSYNC';
+        $asm[] = '    sta VBLANK                 ; A=0';
+        $asm[] = '';
+        $asm[] = '    lda #' . $ctrlpf;
+        $asm[] = '    sta CTRLPF';
+        $asm[] = '    lda #$' . sprintf('%02X', $colupf0);
+        $asm[] = '    sta COLUPF';
+        $asm[] = '    lda #$' . sprintf('%02X', $colubk0);
+        $asm[] = '    sta COLUBK';
+        $asm[] = '    lda #0';
+        $asm[] = '    sta GRP0';
+        $asm[] = '    sta GRP1';
+        $asm[] = '    sta ENAM0';
+        $asm[] = '    sta ENAM1';
+        $asm[] = '    sta ENABL';
+        $asm[] = '';
+
+        if ($scoreEnabled && $scorePos === 'top') {
+            $asm[] = '    jsr DrawScoreBand';
+        }
+        $asm[] = '';
+        $asm[] = '    ; restaura PF + reposiciona herói (placar usou P0/P1)';
+        $asm[] = '    lda #' . $ctrlpf;
+        $asm[] = '    sta CTRLPF';
+        $asm[] = '    lda #$' . sprintf('%02X', $colupf0);
+        $asm[] = '    sta COLUPF';
+        $asm[] = '    lda #$' . sprintf('%02X', $colubk0);
+        $asm[] = '    sta COLUBK';
+        $asm[] = '    lda #$' . sprintf('%02X', $heroCol);
+        $asm[] = '    sta COLUP0';
+        $asm[] = '    lda #0';
+        $asm[] = '    sta NUSIZ0';
+        $asm[] = '    sta GRP1';
+        $asm[] = '    lda #$' . sprintf('%02X', $objCol);
+        $asm[] = '    sta COLUP1';
+        $asm[] = '    lda #0';
+        $asm[] = '    sta NUSIZ1';
+        $asm[] = '    lda HeroX';
+        $asm[] = '    jsr PosObject';
+        $asm[] = '    lda ObjX';
+        $asm[] = '    jsr PosObject1';
+        $asm[] = '';
+        $asm[] = '    ; ===== PF scroll + herói P0 + objeto P1 =====';
+        $asm[] = '    ldx #0                     ; linha visível';
+        $asm[] = '    ldy TrackIdx';
+        $asm[] = 'PlayLoop:';
+        $asm[] = '    sta WSYNC';
+        $asm[] = '    lda PF0Data,y';
+        $asm[] = '    sta PF0';
+        $asm[] = '    lda PF1Data,y';
+        $asm[] = '    sta PF1';
+        $asm[] = '    lda PF2Data,y';
+        $asm[] = '    sta PF2';
+        $asm[] = '    ; herói: se linha em [HeroY, HeroY+heroH)';
+        $asm[] = '    txa';
+        $asm[] = '    sec';
+        $asm[] = '    sbc HeroY';
+        $asm[] = '    cmp #' . ($heroH & 0xff);
+        $asm[] = '    bcs PL_NoHero';
+        $asm[] = '    stx TmpA';
+        $asm[] = '    tax';
+        $asm[] = '    lda HeroGfx,x';
+        $asm[] = '    sta GRP0';
+        $asm[] = '    ldx TmpA';
+        $asm[] = '    jmp PL_HeroDone';
+        $asm[] = 'PL_NoHero:';
+        $asm[] = '    lda #0';
+        $asm[] = '    sta GRP0';
+        $asm[] = 'PL_HeroDone:';
+        $asm[] = '    ; objeto P1';
+        $asm[] = '    txa';
+        $asm[] = '    sec';
+        $asm[] = '    sbc ObjY';
+        $asm[] = '    cmp #' . ($objH & 0xff);
+        $asm[] = '    bcs PL_NoObj';
+        $asm[] = '    stx TmpA';
+        $asm[] = '    tax';
+        $asm[] = '    lda ObjGfx,x';
+        $asm[] = '    sta GRP1';
+        $asm[] = '    ldx TmpA';
+        $asm[] = '    jmp PL_ObjDone';
+        $asm[] = 'PL_NoObj:';
+        $asm[] = '    lda #0';
+        $asm[] = '    sta GRP1';
+        $asm[] = 'PL_ObjDone:';
+        $asm[] = '    iny';
+        $asm[] = '    cpy #' . ($trackH & 0xff);
+        $asm[] = '    bcc PL_NoWrap';
+        $asm[] = '    ldy #0';
+        $asm[] = 'PL_NoWrap:';
+        $asm[] = '    inx';
+        $asm[] = '    cpx #' . ($playLines & 0xff);
+        $asm[] = '    bne PlayLoop';
+        $asm[] = '';
+        $asm[] = '    lda #0';
+        $asm[] = '    sta PF0';
+        $asm[] = '    sta PF1';
+        $asm[] = '    sta PF2';
+        $asm[] = '    sta GRP0';
+        $asm[] = '    sta GRP1';
+        $asm[] = '';
+        if ($scoreEnabled && $scorePos === 'bottom') {
+            $asm[] = '    jsr DrawScoreBand';
+        }
+        $asm[] = '    jsr DrawLogo              ; logo embaixo do PF';
+        $asm[] = '';
+        $asm[] = '    lda #2';
+        $asm[] = '    sta VBLANK';
+        $asm[] = '    lda #' . $overscan;
+        $asm[] = '    sta TIM64T';
+        $asm[] = 'WaitOverscan:';
+        $asm[] = '    lda INTIM';
+        $asm[] = '    bne WaitOverscan';
+        $asm[] = '    sta WSYNC';
+        $asm[] = '    jmp MainLoop';
+        $asm[] = '';
+
+        // Placar + logo reais (plataforma)
+        $asm[] = self::scoreBandRoutine($digits, $scoreBg, $scoreLines, $scoreDelay, $scorePlayers, $labelPlayers);
+        $asm[] = self::logoRoutine($logoLines);
+        $asm[] = self::digitGlyphs();
+        $asm[] = self::logoData();
+        $asm[] = '';
+        $asm[] = 'GameLogic:';
+        $asm[] = '    ; Regras do usuário (VBLANK)';
+        foreach ($ruleCompiled['frame'] as $line) {
+            $asm[] = $line;
+        }
+        $asm[] = '    sta CXCLR                  ; limpa latches de colisão';
+        $asm[] = '    rts';
+        $asm[] = '';
+        $asm[] = 'PosObject:';
+        $asm[] = '    sec';
+        $asm[] = '    sta WSYNC';
+        $asm[] = 'PosDiv:';
+        $asm[] = '    sbc #15';
+        $asm[] = '    bcs PosDiv';
+        $asm[] = '    eor #7';
+        $asm[] = '    asl';
+        $asm[] = '    asl';
+        $asm[] = '    asl';
+        $asm[] = '    asl';
+        $asm[] = '    sta RESP0';
+        $asm[] = '    sta HMP0';
+        $asm[] = '    sta WSYNC';
+        $asm[] = '    sta HMOVE';
+        $asm[] = '    rts';
+        $asm[] = '';
+        $asm[] = 'PosObject1:';
+        $asm[] = '    sec';
+        $asm[] = '    sta WSYNC';
+        $asm[] = 'PosDiv1:';
+        $asm[] = '    sbc #15';
+        $asm[] = '    bcs PosDiv1';
+        $asm[] = '    eor #7';
+        $asm[] = '    asl';
+        $asm[] = '    asl';
+        $asm[] = '    asl';
+        $asm[] = '    asl';
+        $asm[] = '    sta RESP1';
+        $asm[] = '    sta HMP1';
+        $asm[] = '    sta WSYNC';
+        $asm[] = '    sta HMOVE';
+        $asm[] = '    rts';
+        $asm[] = '';
+        $asm[] = 'HeroGfx:';
+        foreach ($heroGfx as $b) {
+            $asm[] = '    .byte $' . sprintf('%02X', $b & 0xff);
+        }
+        $asm[] = 'ObjGfx:';
+        foreach ($objGfx as $b) {
+            $asm[] = '    .byte $' . sprintf('%02X', $b & 0xff);
+        }
+        $asm[] = '';
+$asm[] = 'PF0Data:';
+        foreach ($pfTables['pf0'] as $b) {
+            $asm[] = '    .byte $' . sprintf('%02X', $b & 0xff);
+        }
+        $asm[] = 'PF1Data:';
+        foreach ($pfTables['pf1'] as $b) {
+            $asm[] = '    .byte $' . sprintf('%02X', $b & 0xff);
+        }
+        $asm[] = 'PF2Data:';
+        foreach ($pfTables['pf2'] as $b) {
+            $asm[] = '    .byte $' . sprintf('%02X', $b & 0xff);
+        }
+        $asm[] = '';
+        $asm[] = 'ScoreP0   equ $80';
+        $asm[] = 'ScoreP1   equ $81';
+        $asm[] = 'ScrollY   equ $90';
+        $asm[] = 'ScrollSpd equ $91';
+        $asm[] = 'TrackIdx  equ $92';
+        $asm[] = 'HeroX     equ $93';
+        $asm[] = 'HeroY     equ $94';
+        $asm[] = 'ObjX      equ $97';
+        $asm[] = 'ObjY      equ $98';
+        $asm[] = 'FrameCnt  equ $96';
+        $asm[] = 'WalkTick  equ $9D';
+        $asm[] = 'PrevSWCHA equ $9E';
+        $asm[] = 'PrevINPT4 equ $9F';
+        $asm[] = 'TmpA      equ $AE';
+        $asm[] = 'TmpB      equ $AF';
+        // Score aux (mesmo mapa do kernel principal)
+        $asm[] = 'Dig0      equ $A0';
+        $asm[] = 'Dig1      equ $A1';
+        $asm[] = 'Dig2      equ $A2';
+        $asm[] = 'Dig3      equ $A3';
+        $asm[] = 'Dig4      equ $A4';
+        $asm[] = 'Dig5      equ $A5';
+        $asm[] = 'Temp      equ $A6';
+        $asm[] = 'ScRow     equ $AC';
+        $asm[] = 'ScIdx     equ $AD';
+        $asm[] = 'ScStrip   equ $B2';
+        $asm[] = 'ScStrip2  equ $C4';
+        foreach ($ruleCompiled['equates'] as $line) {
+            $asm[] = $line;
+        }
+        $asm[] = '';
+
+        if (!$useBankswitch) {
+            $asm[] = '    ORG $FFFA';
+            $asm[] = '    .word Start';
+            $asm[] = '    .word Start';
+            $asm[] = '    .word Start';
+        } else {
+            $hs0 = ($mapper === 'F8') ? '$FFF8' : (($mapper === 'F6') ? '$FFF6' : '$FFF4');
+            if ($mapper === 'F8') {
+                $asm[] = '    ORG $0FF8';
+                $asm[] = '    RORG $FFF8';
+                $asm[] = '    .byte $00,$00';
+            } elseif ($mapper === 'F6') {
+                $asm[] = '    ORG $0FF6';
+                $asm[] = '    RORG $FFF6';
+                $asm[] = '    .byte $00,$00,$00,$00';
+            } else {
+                $asm[] = '    ORG $0FF4';
+                $asm[] = '    RORG $FFF4';
+                $asm[] = '    .byte $00,$00,$00,$00,$00,$00';
+            }
+            $asm[] = '    ORG $0FFA';
+            $asm[] = '    RORG $FFFA';
+            $asm[] = '    .word Start';
+            $asm[] = '    .word Start';
+            $asm[] = '    .word Start';
+            for ($bi = 1; $bi < $bankCount; $bi++) {
+                $base = $bi * 0x1000;
+                $asm[] = '    ORG $' . sprintf('%04X', $base);
+                $asm[] = '    RORG $F000';
+                $asm[] = 'StartB' . $bi . ':';
+                $asm[] = '    bit ' . $hs0;
+                $asm[] = '    jmp Start';
+                if ($mapper === 'F4') {
+                    $asm[] = '    ORG $' . sprintf('%04X', $base + 0xFF4);
+                    $asm[] = '    RORG $FFF4';
+                    $asm[] = '    .byte $00,$00,$00,$00,$00,$00';
+                } elseif ($mapper === 'F6') {
+                    $asm[] = '    ORG $' . sprintf('%04X', $base + 0xFF6);
+                    $asm[] = '    RORG $FFF6';
+                    $asm[] = '    .byte $00,$00,$00,$00';
+                } else {
+                    $asm[] = '    ORG $' . sprintf('%04X', $base + 0xFF8);
+                    $asm[] = '    RORG $FFF8';
+                    $asm[] = '    .byte $00,$00';
+                }
+                $asm[] = '    ORG $' . sprintf('%04X', $base + 0xFFA);
+                $asm[] = '    RORG $FFFA';
+                $asm[] = '    .word StartB' . $bi;
+                $asm[] = '    .word StartB' . $bi;
+                $asm[] = '    .word StartB' . $bi;
+            }
+        }
+
+        $source = implode("\n", $asm) . "\n";
+        return [
+            'asm' => $source,
+            'romSize' => $romSize,
+            'tv' => $tv,
+            'scoreEnabled' => $scoreEnabled,
+            'playLines' => $playLines,
+            'meta' => [
+                'generator' => 'AgcBuilder/0.16.0-river-score-logo',
+                'kernel' => 'vertical_scroll',
+                'trackH' => $trackH,
+                'mapper' => $mapper,
+                'banks' => $bankCount,
+            ],
+        ];
+    }
+
+
 }
