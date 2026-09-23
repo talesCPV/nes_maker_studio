@@ -30,8 +30,7 @@ const LEVEL_DESIGN = (() => {
           bgId: c.bgId,
           type: c.type || 'background',
           x: c.x,
-          y: c.y,
-          hardCut: !!c.hardCut
+          y: c.y
         };
       });
     } else if(Array.isArray(raw.cells)){
@@ -42,8 +41,7 @@ const LEVEL_DESIGN = (() => {
         cells[`${x},${y}`] = {
           bgId: c.bgId,
           type: c.type || 'background',
-          x, y,
-          hardCut: !!c.hardCut
+          x, y
         };
       });
     }
@@ -101,7 +99,6 @@ const LEVEL_DESIGN = (() => {
               <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">
                 <button class="btn-tool ld-tool-btn active" data-tool="place" onclick="LEVEL_DESIGN.setTool('place')">🧩 Posicionar</button>
                 <button class="btn-tool ld-tool-btn" data-tool="erase" onclick="LEVEL_DESIGN.setTool('erase')" style="background:#c0392b;color:#fff">🧹 Apagar</button>
-                <button class="btn-tool ld-tool-btn" data-tool="hardcut" onclick="LEVEL_DESIGN.setTool('hardcut')" style="background:#d35400;color:#fff" title="Marca/desmarca uma célula como corte seco, mesmo dentro de uma fase de scroll (splash, menu, cutscene...)">🔒 Hard-Cut</button>
                 <button class="btn-tool ld-tool-btn" data-tool="spawns" onclick="LEVEL_DESIGN.setTool('spawns')" style="background:#8e44ad;color:#fff" title="Clique numa tela do grid para editar spawns de inimigos">👾 Spawns</button>
               </div>
               <div id="ldHelpText" style="font-size:10px;color:#888;background:#000;border:1px solid #222;border-radius:3px;padding:4px 6px">Selecione um Asset e clique no grid.</div>
@@ -137,15 +134,15 @@ const LEVEL_DESIGN = (() => {
             </div>
 
             <!-- Lista de Backgrounds Desenhados -->
-            <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;display:flex;flex-direction:column;max-height:200px">
+            <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;display:flex;flex-direction:column">
               <h4 style="font-size:11px;color:#ffcc00;margin-bottom:8px">BACKGROUNDS DESENHADOS</h4>
               <div id="ldBackgroundList" style="display:flex;flex-direction:column;gap:6px;overflow:auto"></div>
             </div>
           </div>
 
           <!-- Centro: Grid do Mapa de Fases -->
-          <div style="flex:1;background:#111;padding:16px;overflow:auto;display:flex;flex-direction:column;align-items:center">
-            <div id="ldGridContainer" style="display:grid;gap:6px;background:#222;padding:10px;border:2px solid #444;border-radius:6px"></div>
+          <div style="flex:1;background:#111;padding:16px;overflow:auto;display:flex;flex-direction:column">
+            <div id="ldGridContainer" style="display:grid;gap:6px;background:#222;padding:10px;border:2px solid #444;border-radius:6px;width:fit-content"></div>
           </div>
         </div>
       </div>
@@ -164,7 +161,6 @@ const LEVEL_DESIGN = (() => {
     if (!help) return;
     if (t === 'place') help.textContent = 'Clique em uma célula do grid para encaixar o Asset.';
     else if (t === 'erase') help.textContent = 'Clique em uma célula preenchida para removê-la.';
-    else if (t === 'hardcut') help.textContent = 'Clique numa célula preenchida pra marcar/desmarcar como corte seco (ignora o eixo de scroll da fase).';
     else if (t === 'spawns') help.textContent = 'Clique numa tela do grid para editar spawns de inimigos (personagem + X,Y).';
     if (t !== 'spawns') {
       selectedCell = null;
@@ -482,14 +478,6 @@ const LEVEL_DESIGN = (() => {
           cellDiv.style.border = `2px solid ${borderColor}`;
           cellDiv.style.background = bgColor;
 
-          if (cellData.hardCut) {
-            cellDiv.style.boxShadow = 'inset 0 0 0 2px #e67e22';
-            const badge = document.createElement('span');
-            badge.textContent = '🔒 hard-cut';
-            badge.style.cssText = `position:absolute;top:2px;left:2px;font-size:8px;color:#fff;background:#d35400;padding:1px 4px;border-radius:3px;line-height:1.4`;
-            cellDiv.appendChild(badge);
-          }
-
           // badge de quantidade de spawns nesta tela
           const nSpawns = (Project.data?.hitboxInstances || []).filter(i => i.screenId === cellData.bgId).length;
           if (nSpawns > 0) {
@@ -546,10 +534,6 @@ const LEVEL_DESIGN = (() => {
       renderGrid(); persistLevelMap();
     } else if (activeTool === 'erase') {
       delete currentWorld.cells[key];
-      renderGrid(); persistLevelMap();
-    } else if (activeTool === 'hardcut') {
-      if (!currentWorld.cells[key]) { alert('A célula precisa ter uma tela alocada primeiro.'); return; }
-      currentWorld.cells[key].hardCut = !currentWorld.cells[key].hardCut;
       renderGrid(); persistLevelMap();
     } else if (activeTool === 'spawns') {
       if (!currentWorld.cells[key]) { alert('A célula precisa ter uma tela alocada primeiro.'); return; }

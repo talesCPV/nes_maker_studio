@@ -192,6 +192,28 @@ final class ProgramCompiler
                 'obj' => $hbObjNumericId[$oid],
             ];
         }
+        // Fase 2b: hitbox de Dano/Warp pintada em Backgrounds (tile 0-31/0-29,
+        // sparse, embutida em cada background/splash - ver assetFields em
+        // ProjectParser::collectGameScreens). Mesma tabela de triggers acima,
+        // só que em coordenada de tile (x8 -> pixel) e já com o indice global
+        // da tela resolvido (screenData já é por-tela).
+        foreach ($screenData as $gi => $sc) {
+            if (!is_array($sc) || !is_array($sc['hitboxInstances'] ?? null)) continue;
+            foreach ($sc['hitboxInstances'] as $inst) {
+                if (!is_array($inst)) continue;
+                $oid = (string)($inst['objectId'] ?? ($inst['hitboxObjectId'] ?? ''));
+                if ($oid === '') continue;
+                $obj = $objectById[$oid] ?? null;
+                if (!is_array($obj) || !in_array($obj['kind'] ?? '', ['dano', 'warp'], true)) continue;
+                if (!isset($hbObjNumericId[$oid])) $hbObjNumericId[$oid] = count($hbObjNumericId);
+                $triggers[] = [
+                    'scr' => (int)$gi,
+                    'x' => ((int)($inst['x'] ?? 0) * 8) & 0xFF,
+                    'y' => ((int)($inst['y'] ?? 0) * 8) & 0xFF,
+                    'obj' => $hbObjNumericId[$oid],
+                ];
+            }
+        }
         $jumpForceById = [];
         foreach ((is_array($project['jumpForces'] ?? null) ? $project['jumpForces'] : []) as $jf) {
             if (is_array($jf) && isset($jf['id'])) $jumpForceById[(string)$jf['id']] = max(0, min(255, (int)($jf['value'] ?? 0)));
@@ -1217,7 +1239,7 @@ final class ProgramCompiler
     private function compileGotoWarp(string $tag, string $targetId, array $hbCtx): array
     {
         $obj = $hbCtx['objectById'][$targetId] ?? null;
-        if (!is_array($obj) || ($obj['kind'] ?? '') !== 'warp' || empty($obj['targetScreenId'])) {
+        if (!is_array($obj) || ($obj['kind'] ?? '') !== 'warp_dest' || empty($obj['targetScreenId'])) {
             return ["  ; Acao: Ir para Warp - objeto sem destino configurado, ignorado"];
         }
         $key = (string)$obj['targetScreenId'];

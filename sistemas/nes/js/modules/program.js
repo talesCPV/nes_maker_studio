@@ -59,6 +59,7 @@ const PROGRAM = (() => {
       { value:'terrain:2', label:'🟩 Terreno: Plataforma' }
     ];
     (Project.data?.hitboxObjects||[]).forEach(o=>{
+      if(o.kind === 'warp_dest') return; // destino puro (Program>Objetos) - não é geometria, não "toca" nada
       const icon = o.kind==='dano' ? '🔻' : (o.kind==='warp' ? '🚪' : '🐣');
       refs.push({ value:`hbobj:${o.id}`, label:`${icon} ${o.name}` });
     });
@@ -114,7 +115,18 @@ const PROGRAM = (() => {
     return { list, instancePoolBytes, maxInstances, zpTotal, ramTotal };
   }
 
+  // Migração: antes desta sessão "warp" servia pra origem E destino no mesmo
+  // objeto. Qualquer objeto kind='warp' que já tenha destino configurado é,
+  // na prática, um destino - vira 'warp_dest' automaticamente (idempotente,
+  // roda toda vez que o módulo abre, sem precisar de flag de migração).
+  function migrateWarpKinds(){
+    (Project.data?.hitboxObjects || []).forEach(o => {
+      if(o && o.kind === 'warp' && o.targetScreenId) o.kind = 'warp_dest';
+    });
+  }
+
   function buildHTML(){
+    migrateWarpKinds();
     const root = document.getElementById('mod-program'); if(!root) return;
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
@@ -270,20 +282,22 @@ const PROGRAM = (() => {
 
   // ---------------- OBJETOS (hitbox) ----------------
   function screenLabel(o){
-    if(o.kind !== 'warp' || !o.targetScreenId) return '<span style="color:#666">sem destino</span>';
+    if(o.kind !== 'warp_dest' || !o.targetScreenId) return '<span style="color:#666">sem destino</span>';
     const arr = o.targetScreenType === 'splash' ? (Project.data?.splashScreens||[]) : (Project.data?.backgrounds||[]);
     const s = arr.find(s => s.id === o.targetScreenId);
     return s ? `${o.targetScreenType==='splash'?'🎬':'🗺'} ${s.name} (${o.spawnX ?? 0},${o.spawnY ?? 0})` : '<span style="color:#c0392b">tela removida</span>';
   }
   function renderObjectsTab(){
     const objs = Project.data?.hitboxObjects || [];
-    const kindLabel = k => k === 'dano' ? '🔻 Dano' : (k === 'warp' ? '🚪 Warp' : '🐣 Spawn');
+    const kindLabel = k => k === 'dano' ? '🔻 Dano' : (k === 'warp' ? '🚪 Origem de Warp' : (k === 'warp_dest' ? '🎯 Destino de Warp' : '🐣 Spawn'));
     const rows = objs.map(o => {
       let thirdCol;
       if(o.kind === 'dano'){
         thirdCol = `<input type="number" id="objDmg_${o.id}" value="${o.damage ?? 0}" min="0" max="255" style="width:60px;background:#000;color:#4ec9b0;border:1px solid #444;border-radius:3px;padding:3px;font-family:monospace">
              <button class="btn-tool" onclick="PROGRAM.saveObjectDamage('${o.id}')" style="font-size:9px;padding:2px 5px;background:#27ae60;color:#fff">💾</button>`;
       } else if(o.kind === 'warp'){
+        thirdCol = `<span style="color:#666">pintado em Backgrounds - use em "SE hitbox toca"</span>`;
+      } else if(o.kind === 'warp_dest'){
         thirdCol = `${screenLabel(o)} <button class="btn-tool" onclick="PROGRAM.toggleWarpDestEditor('${o.id}')" style="font-size:9px;padding:2px 5px;background:#16a085;color:#fff;margin-left:4px">🎯 ${selectedWarpEditId===o.id?'Fechar':'Editar destino'}</button>`;
       } else {
         thirdCol = spawnCharacterField(o);
@@ -295,7 +309,7 @@ const PROGRAM = (() => {
         <td style="padding:6px">${thirdCol}</td>
         <td style="padding:6px;text-align:right"><button class="btn-tool" onclick="PROGRAM.deleteHitboxObject('${o.id}')" style="background:#c0392b;color:#fff;font-size:10px">🗑</button></td>
       </tr>`;
-      if(o.kind === 'warp' && selectedWarpEditId === o.id) row += renderWarpDestinationEditor(o);
+      if(o.kind === 'warp_dest' && selectedWarpEditId === o.id) row += renderWarpDestinationEditor(o);
       return row;
     }).join('');
     return `
@@ -303,19 +317,20 @@ const PROGRAM = (() => {
         <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;margin-bottom:12px">
           <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">NOVO OBJETO DE HITBOX</h4>
           <div style="font-size:9px;color:#666;margin-bottom:8px;line-height:1.4">
-            Um objeto é a "identidade" de um gatilho (dano, warp ou spawn). O mesmo metatile pode ter
-            várias instâncias na tela, cada uma apontando pra um objeto diferente - ex: dois espinhos
-            iguais visualmente, um tira 10 e o outro 20; ou duas portas iguais que levam pra lugares
-            diferentes. Um warp sempre aponta pra outro warp (que já é o próprio ponto de spawn de
-            teleporte) - dá pra ter um warp que não é gatilho de porta nenhuma, só um ponto nomeado
-            (ex: spawn inicial do jogo). Um Spawn marca onde um personagem (inimigo, item, tiro...)
-            nasce - referenciado depois em Regras (Ação: Spawnar Personagem).
+            Um objeto é a "identidade" de um gatilho (dano, origem de warp, destino de warp ou spawn).
+            Dano e Origem de Warp são pintados como hitbox em Backgrounds (aqui só o nome é editado,
+            o mesmo nome aparece por lá) - servem só como evento em Regras ("SE hitbox toca").
+            Destino de Warp é criado aqui e só serve como alvo da ação "Ir para Warp" - não tem
+            geometria própria, é só uma posição (tela+X,Y) marcada com um clique no preview. As duas
+            pontas são independentes: a regra que liga uma origem a um destino é você quem faz
+            ("SE hitbox toca [origem] → Ir para Warp [destino]"). Um Spawn marca onde um personagem
+            (inimigo, item, tiro...) nasce - referenciado depois em Regras (Ação: Spawnar Personagem).
           </div>
           <div style="display:flex;gap:6px;align-items:center">
             <input id="objName" type="text" placeholder="nome_do_objeto" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
             <select id="objKind" onchange="PROGRAM.onObjKindChange()" style="background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
               <option value="dano">Dano</option>
-              <option value="warp">Warp</option>
+              <option value="warp_dest">Destino de Warp</option>
               <option value="spawn">Spawn</option>
             </select>
             <input id="objDamage" type="number" min="0" max="255" value="10" placeholder="dano" style="width:70px;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-size:11px">
@@ -362,8 +377,8 @@ const PROGRAM = (() => {
               <button class="btn-tool" onclick="PROGRAM.saveWarpDestination('${o.id}')" style="background:#27ae60;color:#fff;margin-top:4px">💾 Salvar destino</button>
             </div>
             <div>
-              <label style="font-size:10px;color:#888;display:block;margin-bottom:2px">Preview (ponto de spawn em vermelho)</label>
-              <canvas id="warpDestPreview_${o.id}" width="170" height="160" style="background:#000;border:1px solid #444;image-rendering:pixelated"></canvas>
+              <label style="font-size:10px;color:#888;display:block;margin-bottom:2px">Preview (clique pra definir X/Y • ponto de spawn em vermelho)</label>
+              <canvas id="warpDestPreview_${o.id}" width="170" height="160" onclick="PROGRAM.pickWarpDestFromPreview(event,'${o.id}')" style="background:#000;border:1px solid #444;image-rendering:pixelated;cursor:crosshair"></canvas>
             </div>
           </div>
         </td>
@@ -399,6 +414,24 @@ const PROGRAM = (() => {
     const yEl = document.getElementById('warpDestY_'+id);
     const [type, sid] = (screenSel?.value || '').split(':');
     drawWarpDestPreview({ ...o, targetScreenType: type||null, targetScreenId: sid||null, spawnX: parseInt(xEl?.value)||0, spawnY: parseInt(yEl?.value)||0 });
+  }
+
+  // Clique direto na miniatura do preview - converte o pixel clicado pra célula de tile
+  // (0-31,0-29) e joga nos inputs numéricos, sem precisar digitar. Mesma proporção usada
+  // em drawWarpDestPreview (sx/32 * width, sy/30 * height), só invertida.
+  function pickWarpDestFromPreview(evt, id){
+    const canvas = evt.currentTarget || document.getElementById('warpDestPreview_'+id);
+    if(!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const px = (evt.clientX - rect.left) * (canvas.width / rect.width);
+    const py = (evt.clientY - rect.top) * (canvas.height / rect.height);
+    const tx = Math.max(0, Math.min(31, Math.round((px / canvas.width) * 32)));
+    const ty = Math.max(0, Math.min(29, Math.round((py / canvas.height) * 30)));
+    const xEl = document.getElementById('warpDestX_'+id);
+    const yEl = document.getElementById('warpDestY_'+id);
+    if(xEl) xEl.value = tx;
+    if(yEl) yEl.value = ty;
+    updateWarpDestPreview(id);
   }
 
   function saveWarpDestination(id){
@@ -784,7 +817,7 @@ const PROGRAM = (() => {
       // Segundo select, populado de acordo com a ação escolhida - cada ação referencia um
       // catálogo diferente já existente no projeto (warps, sons, objetos de hitbox...).
       if(step.actionId === 'goto_warp'){
-        const warpObjs = (Project.data?.hitboxObjects || []).filter(o => o.kind === 'warp');
+        const warpObjs = (Project.data?.hitboxObjects || []).filter(o => o.kind === 'warp_dest');
         fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle}">
           <option value="">— warp —</option>${warpObjs.map(o=>`<option value="${o.id}" ${step.targetId===o.id?'selected':''}>🚪 ${o.name}</option>`).join('')}</select>`;
       } else if(step.actionId === 'load_phase'){
@@ -1017,7 +1050,7 @@ const PROGRAM = (() => {
     init: buildHTML, setTab,
     addVariable, deleteVariable, onVarTypeChange, saveVariableValue,
     addHitboxObject, deleteHitboxObject, onObjKindChange, saveObjectDamage, saveObjectCharacter,
-    toggleWarpDestEditor, updateWarpDestPreview, saveWarpDestination,
+    toggleWarpDestEditor, updateWarpDestPreview, pickWarpDestFromPreview, saveWarpDestination,
     addEvent, deleteEvent, onEvCategoryChange,
     addMenu, selectMenu, renameMenu, deleteMenu, updateMenuCursor, addMenuItem, updateMenuItem, moveMenuItem, deleteMenuItem,
     addRule, selectRule, renameRule, setRuleScope, deleteRule, addStep, updateStep, moveStep, deleteStep,

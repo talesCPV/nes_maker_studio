@@ -18,9 +18,9 @@ final class AgcBuilder
             $tv = 'NTSC';
         }
 
-        $romSize = (int)($project['romSize'] ?? 4096);
+        $romSize = (int)($project['romSize'] ?? 32768);
         if (!in_array($romSize, [2048, 4096, 8192, 16384, 32768], true)) {
-            $romSize = 4096;
+            $romSize = 32768;
         }
         $mapper = 'fixed';
         $bankCount = 1;
@@ -383,7 +383,14 @@ final class AgcBuilder
         $asm[] = '';
         $asm[] = 'Start:';
         if ($useBankswitch) {
-            $asm[] = '    bit $FFF8';
+            // F8 bank0=$FFF8 · F6 bank0=$FFF6 · F4 bank0=$FFF4
+            if ($mapper === 'F8') {
+                $asm[] = '    bit $FFF8';
+            } elseif ($mapper === 'F6') {
+                $asm[] = '    bit $FFF6';
+            } else {
+                $asm[] = '    bit $FFF4';
+            }
         }
         $asm[] = '    sei';
         $asm[] = '    cld';
@@ -444,6 +451,8 @@ final class AgcBuilder
         }
         $asm[] = '    lda #' . ($heroYInit & 0xff);
         $asm[] = '    sta HeroY                 ; Y herói (PF)';
+        $asm[] = '    lda #0';
+        $asm[] = '    sta M0Nusiz';
         $asm[] = '    lda #0';
         $asm[] = '    sta M0X';
         $asm[] = '    sta M0Y';
@@ -662,35 +671,30 @@ final class AgcBuilder
         $asm[] = '    ldx #0';
         if ($splitLine > 0) {
             // NUSIZ já veio de P0Nusiz/P1Nusiz (máscara fileira 1) — NÃO zerar
-            $asm[] = 'PlayLoopA:';
+                        $asm[] = 'PlayLoopA:';
             $asm[] = '    sta WSYNC';
-            $asm[] = '    lda GRP0Data,x';
-            $asm[] = '    and P0Alive';
-            $asm[] = '    sta GRP0';
-            $asm[] = '    lda GRP1Data,x';
-            $asm[] = '    and P1Alive';
-            $asm[] = '    sta GRP1';
             if ($useM0) {
                 $asm[] = '    lda #0';
                 $asm[] = '    sta ENAM0';
                 $asm[] = '    lda M0Active';
-                $asm[] = '    beq M0iA';
+                $asm[] = '    beq M0rowA';
                 $asm[] = '    cpx M0Y';
-                $asm[] = '    bcc M0iA';
+                $asm[] = '    bcc M0rowA';
                 $asm[] = '    txa';
                 $asm[] = '    sec';
                 $asm[] = '    sbc M0Y';
                 $asm[] = '    cmp #' . ($m0H & 0xff);
-                $asm[] = '    bcs M0iA';
-                $asm[] = '    lda #0';
-                $asm[] = '    sta NUSIZ0              ; 1 cópia até o fim da linha';
+                $asm[] = '    bcs M0rowA';
+                $asm[] = '    lda M0Nusiz            ; 0=1 · 1=2 close · 2=2 med · 6=3 med';
+                $asm[] = '    and #7';
+                $asm[] = '    sta NUSIZ0';
                 $asm[] = '    lda #2';
                 $asm[] = '    sta ENAM0';
-                $asm[] = '    bne M0nA             ; skip restore NUSIZ0';
-                $asm[] = 'M0iA:';
+                $asm[] = '    bne M0goA';
+                $asm[] = 'M0rowA:';
                 $asm[] = '    lda P0Nusiz';
                 $asm[] = '    sta NUSIZ0';
-                $asm[] = 'M0nA:';
+                $asm[] = 'M0goA:';
                 $asm[] = '    lda P1Nusiz';
                 $asm[] = '    sta NUSIZ1';
             } else {
@@ -701,7 +705,13 @@ final class AgcBuilder
                 $asm[] = '    lda P1Nusiz';
                 $asm[] = '    sta NUSIZ1';
             }
-            $asm[] = '    inx';
+            $asm[] = '    lda GRP0Data,x';
+            $asm[] = '    and P0Alive';
+            $asm[] = '    sta GRP0';
+            $asm[] = '    lda GRP1Data,x';
+            $asm[] = '    and P1Alive';
+            $asm[] = '    sta GRP1';
+$asm[] = '    inx';
             $asm[] = '    cpx #' . ($splitLine & 0xff);
             $asm[] = '    bne PlayLoopA';
             // Sync antes do mid — evita estouro de linha e flicker de tela inteira
@@ -739,35 +749,30 @@ final class AgcBuilder
             $asm[] = '    inx';
             $asm[] = '    inx                       ; +5 (sync+RESP)';
             $endB = ($heroSplit > 0) ? ($heroSplit & 0xff) : $playLines;
-            $asm[] = 'PlayLoopB:';
+                        $asm[] = 'PlayLoopB:';
             $asm[] = '    sta WSYNC';
-            $asm[] = '    lda GRP0Data,x';
-            $asm[] = '    and P0Alive';
-            $asm[] = '    sta GRP0';
-            $asm[] = '    lda GRP1Data,x';
-            $asm[] = '    and P1Alive';
-            $asm[] = '    sta GRP1';
             if ($useM0) {
                 $asm[] = '    lda #0';
                 $asm[] = '    sta ENAM0';
                 $asm[] = '    lda M0Active';
-                $asm[] = '    beq M0iB';
+                $asm[] = '    beq M0rowB';
                 $asm[] = '    cpx M0Y';
-                $asm[] = '    bcc M0iB';
+                $asm[] = '    bcc M0rowB';
                 $asm[] = '    txa';
                 $asm[] = '    sec';
                 $asm[] = '    sbc M0Y';
                 $asm[] = '    cmp #' . ($m0H & 0xff);
-                $asm[] = '    bcs M0iB';
-                $asm[] = '    lda #0';
-                $asm[] = '    sta NUSIZ0              ; 1 cópia até o fim da linha';
+                $asm[] = '    bcs M0rowB';
+                $asm[] = '    lda M0Nusiz            ; 0=1 · 1=2 close · 2=2 med · 6=3 med';
+                $asm[] = '    and #7';
+                $asm[] = '    sta NUSIZ0';
                 $asm[] = '    lda #2';
                 $asm[] = '    sta ENAM0';
-                $asm[] = '    bne M0nB             ; skip restore NUSIZ0';
-                $asm[] = 'M0iB:';
+                $asm[] = '    bne M0goB';
+                $asm[] = 'M0rowB:';
                 $asm[] = '    lda P0Nusiz2';
                 $asm[] = '    sta NUSIZ0';
-                $asm[] = 'M0nB:';
+                $asm[] = 'M0goB:';
                 $asm[] = '    lda P1Nusiz2';
                 $asm[] = '    sta NUSIZ1';
             } else {
@@ -778,7 +783,13 @@ final class AgcBuilder
                 $asm[] = '    lda P1Nusiz2';
                 $asm[] = '    sta NUSIZ1';
             }
-            $asm[] = '    inx';
+            $asm[] = '    lda GRP0Data,x';
+            $asm[] = '    and P0Alive';
+            $asm[] = '    sta GRP0';
+            $asm[] = '    lda GRP1Data,x';
+            $asm[] = '    and P1Alive';
+            $asm[] = '    sta GRP1';
+$asm[] = '    inx';
             $asm[] = '    cpx #' . $endB;
             $asm[] = '    bne PlayLoopB';
             if ($heroSplit > 0) {
@@ -815,34 +826,30 @@ final class AgcBuilder
                 $asm[] = '    inx';
                 $asm[] = '    inx';
                 $asm[] = '    inx';
-                $asm[] = 'PlayLoopC:';
+                                $asm[] = 'PlayLoopC:';
                 $asm[] = '    sta WSYNC';
-                $asm[] = '    lda GRP0Data,x';
-                $asm[] = '    and P0Alive';
-                $asm[] = '    sta GRP0';
-                $asm[] = '    lda #0';
-                $asm[] = '    sta GRP1';
                 if ($useM0) {
                     $asm[] = '    lda #0';
                     $asm[] = '    sta ENAM0';
                     $asm[] = '    lda M0Active';
-                    $asm[] = '    beq M0iC';
+                    $asm[] = '    beq M0rowC';
                     $asm[] = '    cpx M0Y';
-                    $asm[] = '    bcc M0iC';
+                    $asm[] = '    bcc M0rowC';
                     $asm[] = '    txa';
                     $asm[] = '    sec';
                     $asm[] = '    sbc M0Y';
                     $asm[] = '    cmp #' . ($m0H & 0xff);
-                    $asm[] = '    bcs M0iC';
-                    $asm[] = '    lda #0';
-                    $asm[] = '    sta NUSIZ0              ; 1 cópia até o fim da linha';
+                    $asm[] = '    bcs M0rowC';
+                    $asm[] = '    lda M0Nusiz            ; 0=1 · 1=2 close · 2=2 med · 6=3 med';
+                    $asm[] = '    and #7';
+                    $asm[] = '    sta NUSIZ0';
                     $asm[] = '    lda #2';
                     $asm[] = '    sta ENAM0';
-                    $asm[] = '    bne M0nC             ; skip restore NUSIZ0';
-                    $asm[] = 'M0iC:';
+                    $asm[] = '    bne M0goC';
+                    $asm[] = 'M0rowC:';
                     $asm[] = '    lda #0';
                     $asm[] = '    sta NUSIZ0';
-                    $asm[] = 'M0nC:';
+                    $asm[] = 'M0goC:';
                     $asm[] = '    lda #0';
                     $asm[] = '    sta NUSIZ1';
                 } else {
@@ -853,44 +860,40 @@ final class AgcBuilder
                     $asm[] = '    lda #0';
                     $asm[] = '    sta NUSIZ1';
                 }
+                $asm[] = '    lda GRP0Data,x';
+                $asm[] = '    and P0Alive';
+                $asm[] = '    sta GRP0';
                 $asm[] = '    lda #0';
-                $asm[] = '    sta NUSIZ0';
-                $asm[] = '    lda #0';
-                $asm[] = '    sta NUSIZ1';
-                $asm[] = '    inx';
+                $asm[] = '    sta GRP1';
+$asm[] = '    inx';
                 $asm[] = '    cpx #' . $playLines;
                 $asm[] = '    bne PlayLoopC';
             }
         } else {
-            $asm[] = 'PlayLoop:';
+                        $asm[] = 'PlayLoop:';
             $asm[] = '    sta WSYNC';
-            $asm[] = '    lda GRP0Data,x';
-            $asm[] = '    and P0Alive';
-            $asm[] = '    sta GRP0';
-            $asm[] = '    lda GRP1Data,x';
-            $asm[] = '    and P1Alive';
-            $asm[] = '    sta GRP1';
             if ($useM0) {
                 $asm[] = '    lda #0';
                 $asm[] = '    sta ENAM0';
                 $asm[] = '    lda M0Active';
-                $asm[] = '    beq M0iP';
+                $asm[] = '    beq M0rowP';
                 $asm[] = '    cpx M0Y';
-                $asm[] = '    bcc M0iP';
+                $asm[] = '    bcc M0rowP';
                 $asm[] = '    txa';
                 $asm[] = '    sec';
                 $asm[] = '    sbc M0Y';
                 $asm[] = '    cmp #' . ($m0H & 0xff);
-                $asm[] = '    bcs M0iP';
-                $asm[] = '    lda #0';
-                $asm[] = '    sta NUSIZ0              ; 1 cópia até o fim da linha';
+                $asm[] = '    bcs M0rowP';
+                $asm[] = '    lda M0Nusiz            ; 0=1 · 1=2 close · 2=2 med · 6=3 med';
+                $asm[] = '    and #7';
+                $asm[] = '    sta NUSIZ0';
                 $asm[] = '    lda #2';
                 $asm[] = '    sta ENAM0';
-                $asm[] = '    bne M0nP             ; skip restore NUSIZ0';
-                $asm[] = 'M0iP:';
+                $asm[] = '    bne M0goP';
+                $asm[] = 'M0rowP:';
                 $asm[] = '    lda P0Nusiz';
                 $asm[] = '    sta NUSIZ0';
-                $asm[] = 'M0nP:';
+                $asm[] = 'M0goP:';
                 $asm[] = '    lda P1Nusiz';
                 $asm[] = '    sta NUSIZ1';
             } else {
@@ -901,7 +904,13 @@ final class AgcBuilder
                 $asm[] = '    lda P1Nusiz';
                 $asm[] = '    sta NUSIZ1';
             }
-            $asm[] = '    inx';
+            $asm[] = '    lda GRP0Data,x';
+            $asm[] = '    and P0Alive';
+            $asm[] = '    sta GRP0';
+            $asm[] = '    lda GRP1Data,x';
+            $asm[] = '    and P1Alive';
+            $asm[] = '    sta GRP1';
+$asm[] = '    inx';
             $asm[] = '    cpx #' . $playLines;
             $asm[] = '    bne PlayLoop';
         }
@@ -927,6 +936,88 @@ final class AgcBuilder
         $asm[] = '    sta WSYNC';
         $asm[] = '    jmp MainLoop';
         $asm[] = '';
+
+
+
+
+        if (!$useBankswitch) {
+            $asm[] = 'KillHitEnemy:';
+            $asm[] = '    lda M0Active';
+            $asm[] = '    beq KHEd';
+            $asm[] = '    ldx #0';
+            $asm[] = '    lda ColY2';
+            $asm[] = '    beq KHEr1';
+            $asm[] = '    sec';
+            $asm[] = '    sbc #8';
+            $asm[] = '    cmp M0Y';
+            $asm[] = '    bcs KHEr1';
+            $asm[] = '    ldx #1';
+            $asm[] = 'KHEr1:';
+            $asm[] = '    stx TmpB';
+            $asm[] = '    lda RowX';
+            $asm[] = '    cpx #0';
+            $asm[] = '    beq KHEb';
+            $asm[] = '    lda RowX2';
+            $asm[] = 'KHEb:';
+            $asm[] = '    sta TmpA';
+            $asm[] = '    lda CXM0P';
+            $asm[] = '    and #$C0';
+            $asm[] = '    beq KHEd';
+            $asm[] = '    sta TmpLine';
+            $asm[] = '    lda M0X';
+            $asm[] = '    sec';
+            $asm[] = '    sbc TmpA';
+            $asm[] = '    bcc KHEi0';
+            $asm[] = '    lsr';
+            $asm[] = '    lsr';
+            $asm[] = '    lsr';
+            $asm[] = '    lsr';
+            $asm[] = '    cmp #6';
+            $asm[] = '    bcc KHEi';
+            $asm[] = '    lda #5';
+            $asm[] = '    bne KHEi';
+            $asm[] = 'KHEi0:';
+            $asm[] = '    lda #0';
+            $asm[] = 'KHEi:';
+            $asm[] = '    tax';
+            $asm[] = '    lda TmpLine';
+            $asm[] = '    and #$C0';
+            $asm[] = '    cmp #$C0';
+            $asm[] = '    beq KHEm';
+            $asm[] = '    and #$40';
+            $asm[] = '    beq KHEo';
+            $asm[] = '    txa';
+            $asm[] = '    and #$FE';
+            $asm[] = '    tax';
+            $asm[] = '    jmp KHEm';
+            $asm[] = 'KHEo:';
+            $asm[] = '    txa';
+            $asm[] = '    ora #1';
+            $asm[] = '    cmp #6';
+            $asm[] = '    bcc KHEo2';
+            $asm[] = '    lda #5';
+            $asm[] = 'KHEo2:';
+            $asm[] = '    tax';
+            $asm[] = 'KHEm:';
+            $asm[] = '    lda KHEbits,x';
+            $asm[] = '    eor #$FF';
+            $asm[] = '    sta TmpA';
+            $asm[] = '    lda TmpB';
+            $asm[] = '    bne KHEr2';
+            $asm[] = '    lda EnemyAlive';
+            $asm[] = '    and TmpA';
+            $asm[] = '    sta EnemyAlive';
+            $asm[] = '    rts';
+            $asm[] = 'KHEr2:';
+            $asm[] = '    lda EnemyAlive2';
+            $asm[] = '    and TmpA';
+            $asm[] = '    sta EnemyAlive2';
+            $asm[] = 'KHEd:';
+            $asm[] = '    rts';
+            $asm[] = 'KHEbits:';
+            $asm[] = '    .byte 1,2,4,8,16,32';
+            $asm[] = '';
+        }
         $asm[] = 'GameLogic:';
         $asm[] = '    ; Regras de frame — VBLANK/Overscan apenas (nunca no PlayLoop)';
         foreach ($ruleCompiled['frame'] as $line) {
@@ -1318,6 +1409,7 @@ final class AgcBuilder
         $asm[] = 'ColY2    equ $F0            ; Y scanline fileira 2 (PF)';
         $asm[] = 'HeroX    equ $F1            ; X do herói';
         $asm[] = 'HeroY    equ $FB            ; Y do herói';
+        $asm[] = 'M0Nusiz  equ $FC            ; 0=1 · 1=2close · 2=2med · 6=3med';
         $asm[] = 'M0X      equ $F2';
         $asm[] = 'M0Y      equ $F3';
         $asm[] = 'M0Active equ $F4';
@@ -1355,9 +1447,19 @@ final class AgcBuilder
             $asm[] = '    .word Start';
             $asm[] = '    .word Start';
             $asm[] = '';
+
         } else {
-            // F8/F6/F4: banco 0 = jogo completo; bancos extras = stub (sem troca no frame).
-            // Estável: mesmo código do 4K + padding. Partir regras/dados depois.
+            // Hotspot → banco 1 (F8=$FFF9 · F6=$FFF7 · F4=$FFF5)
+            $hs1 = ($mapper === 'F8') ? '$FFF9' : (($mapper === 'F6') ? '$FFF7' : '$FFF5');
+
+            // Trampolim FIXO $FFE0 — bytes espelhados no banco 1
+            $asm[] = '    ORG $0FE0';
+            $asm[] = '    RORG $FFE0';
+            $asm[] = 'KillHitEnemy:';
+            $asm[] = '    bit ' . $hs1;
+            $asm[] = '    jmp KillHitEnemyReal';
+            $asm[] = '';
+
             if ($mapper === 'F8') {
                 $asm[] = '    ORG $0FF8';
                 $asm[] = '    RORG $FFF8';
@@ -1377,13 +1479,98 @@ final class AgcBuilder
             $asm[] = '    .word Start';
             $asm[] = '    .word Start';
             $asm[] = '';
+
             for ($bi = 1; $bi < $bankCount; $bi++) {
                 $base = $bi * 0x1000;
                 $asm[] = '    ORG $' . sprintf('%04X', $base);
                 $asm[] = '    RORG $F000';
                 $asm[] = 'StartB' . $bi . ':';
-                $asm[] = '    bit $FFF8              ; garante banco 0';
+                $asm[] = '    bit ' . (($mapper === 'F8') ? '$FFF8' : (($mapper === 'F6') ? '$FFF6' : '$FFF4'));
                 $asm[] = '    jmp Start';
+                if ($bi === 1) {
+                    $asm[] = 'KillHitEnemyReal:';
+                    $asm[] = '    lda M0Active';
+                    $asm[] = '    beq KHEd1';
+                    $asm[] = '    ldx #0';
+                    $asm[] = '    lda ColY2';
+                    $asm[] = '    beq KHEr11';
+                    $asm[] = '    sec';
+                    $asm[] = '    sbc #8';
+                    $asm[] = '    cmp M0Y';
+                    $asm[] = '    bcs KHEr11';
+                    $asm[] = '    ldx #1';
+                    $asm[] = 'KHEr11:';
+                    $asm[] = '    stx TmpB';
+                    $asm[] = '    lda RowX';
+                    $asm[] = '    cpx #0';
+                    $asm[] = '    beq KHEb1';
+                    $asm[] = '    lda RowX2';
+                    $asm[] = 'KHEb1:';
+                    $asm[] = '    sta TmpA';
+                    $asm[] = '    lda CXM0P';
+                    $asm[] = '    and #$C0';
+                    $asm[] = '    beq KHEd1';
+                    $asm[] = '    sta TmpLine';
+                    $asm[] = '    lda M0X';
+                    $asm[] = '    sec';
+                    $asm[] = '    sbc TmpA';
+                    $asm[] = '    bcc KHEi01';
+                    $asm[] = '    lsr';
+                    $asm[] = '    lsr';
+                    $asm[] = '    lsr';
+                    $asm[] = '    lsr';
+                    $asm[] = '    cmp #6';
+                    $asm[] = '    bcc KHEi1';
+                    $asm[] = '    lda #5';
+                    $asm[] = '    bne KHEi1';
+                    $asm[] = 'KHEi01:';
+                    $asm[] = '    lda #0';
+                    $asm[] = 'KHEi1:';
+                    $asm[] = '    tax';
+                    $asm[] = '    lda TmpLine';
+                    $asm[] = '    and #$C0';
+                    $asm[] = '    cmp #$C0';
+                    $asm[] = '    beq KHEm1';
+                    $asm[] = '    and #$40';
+                    $asm[] = '    beq KHEo1';
+                    $asm[] = '    txa';
+                    $asm[] = '    and #$FE';
+                    $asm[] = '    tax';
+                    $asm[] = '    jmp KHEm1';
+                    $asm[] = 'KHEo1:';
+                    $asm[] = '    txa';
+                    $asm[] = '    ora #1';
+                    $asm[] = '    cmp #6';
+                    $asm[] = '    bcc KHEo1b';
+                    $asm[] = '    lda #5';
+                    $asm[] = 'KHEo1b:';
+                    $asm[] = '    tax';
+                    $asm[] = 'KHEm1:';
+                    $asm[] = '    lda KHEbits1,x';
+                    $asm[] = '    eor #$FF';
+                    $asm[] = '    sta TmpA';
+                    $asm[] = '    lda TmpB';
+                    $asm[] = '    bne KHEr21';
+                    $asm[] = '    lda EnemyAlive';
+                    $asm[] = '    and TmpA';
+                    $asm[] = '    sta EnemyAlive';
+                    $asm[] = '    jmp KHEd1';
+                    $asm[] = 'KHEr21:';
+                    $asm[] = '    lda EnemyAlive2';
+                    $asm[] = '    and TmpA';
+                    $asm[] = '    sta EnemyAlive2';
+                    $asm[] = 'KHEd1:';
+                    $asm[] = '    bit ' . (($mapper === 'F8') ? '$FFF8' : (($mapper === 'F6') ? '$FFF6' : '$FFF4')) . ' ; volta banco 0';
+                    $asm[] = '    rts';
+                    $asm[] = 'KHEbits1:';
+                    $asm[] = '    .byte 1,2,4,8,16,32';
+                    $asm[] = '';
+                    // Espelho do trampolim em $FFE0
+                    $asm[] = '    ORG $' . sprintf('%04X', $base + 0xFE0);
+                    $asm[] = '    RORG $FFE0';
+                    $asm[] = '    bit ' . $hs1;
+                    $asm[] = '    jmp KillHitEnemyReal';
+                }
                 if ($mapper === 'F6') {
                     $asm[] = '    ORG $' . sprintf('%04X', $base + 0xFF6);
                     $asm[] = '    RORG $FFF6';
@@ -2724,6 +2911,7 @@ ASM;
             'colY2' => ['addr' => 0xF0, 'label' => 'ColY2'],
             'heroX' => ['addr' => 0xF1, 'label' => 'HeroX'],
             'heroY' => ['addr' => 0xFB, 'label' => 'HeroY'],
+            'm0Nusiz' => ['addr' => 0xFC, 'label' => 'M0Nusiz'],
             'm0X' => ['addr' => 0xF2, 'label' => 'M0X'],
             'm0Y' => ['addr' => 0xF3, 'label' => 'M0Y'],
             'm0Active' => ['addr' => 0xF4, 'label' => 'M0Active'],
@@ -3267,6 +3455,9 @@ ASM;
                         }
                     }
                 }
+            } elseif ($aid === 'kill_hit_enemy' || $aid === 'matar_inimigo') {
+                // Estima slot 0–5 por m0X/m0Y vs rowX/colY e limpa bit em EnemyAlive
+                $asm[] = '    jsr KillHitEnemy';
             } elseif ($aid === 'asm' || $aid === 'custom') {
                 foreach (preg_split("/\r\n|\n|\r/", $arg) as $line) {
                     $line = trim($line);
@@ -3398,8 +3589,16 @@ ASM;
         $col = strtolower(str_replace(['–', '—', ' '], ['', '', ''], $col));
         $col = str_replace('-', '', $col);
         // Map to TIA registers (bit7 typically indicates collision)
+        // m0enemy = M0×P0 OU M0×P1 (fileira intercalada)
+        if ($col === 'm0enemy' || $col === 'm0inimigo' || $col === 'missile0enemy') {
+            return [
+                '    lda CXM0P',
+                '    and #$C0                ; bit7=M0×P1 · bit6=M0×P0',
+                '    beq ' . $fail,
+            ];
+        }
         $map = [
-            'm0p1' => ['CXM0P', 0x80], // M0-P1 is bit7 of CXM0P; M0-P0 is bit6
+            'm0p1' => ['CXM0P', 0x80],
             'm1p0' => ['CXM1P', 0x40],
             'p0pf' => ['CXP0FB', 0x80],
             'p1pf' => ['CXP1FB', 0x80],
@@ -3411,7 +3610,6 @@ ASM;
             'm1p1' => ['CXM1P', 0x80],
         ];
         if (!isset($map[$col])) {
-            // try hitbox style tia:P0 vs tia:PF
             return ['    ; collision desconhecida: ' . $col, '    jmp ' . $fail];
         }
         [$reg, $mask] = $map[$col];

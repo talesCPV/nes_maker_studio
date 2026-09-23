@@ -572,8 +572,10 @@ const CONFIG = (() => {
       if(selectedPhase===idx) div.style.borderColor='#ffcc00';
       div.onclick=()=>selectPhase(idx);
       const gravityIcon = { none:'🚀', down:'⬇' }[phase.gravity]||'⬇';
-      const scrollLabel = { static:'Static', scroll_h:'Scroll H', scroll_v:'Scroll V' }[phase.scroll] || phase.scroll;
-      const mirrorShort = { horizontal:'H-Mirror', vertical:'V-Mirror', four:'4-Screen' }[phase.mirroring] || phase.mirroring;
+      // Transição/scroll real vem do levelMap (level-design), não mais de phase.scroll
+      // (campo legado, não lido pelo backend - ver ProjectParser.php).
+      const transType = phase.levelMap?.transitionType || 'hard_cut';
+      const transLabel = { hard_cut:'Hard-Cut', scroll_h:'Scroll H', scroll_v:'Scroll V' }[transType] || transType;
       const isCnrom = (Project.data.mapper === 3);
       if(isCnrom) migratePhaseChrPages(phase);
       else { phase.sprite_page = 0; phase.bg_page = 1; phase.bank = 0; }
@@ -592,7 +594,7 @@ const CONFIG = (() => {
           </div>
           <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
             ${chrBadge}
-            <span style="font-size:9px;background:#1a1a2e;color:#8585ff;padding:2px 6px;border-radius:3px;border:1px solid #2a2a4a" title="Scroll → Mirroring">${scrollLabel} · ${mirrorShort}</span>
+            <span style="font-size:9px;background:#1a1a2e;color:#8585ff;padding:2px 6px;border-radius:3px;border:1px solid #2a2a4a" title="Transição desta fase (definida em Level Design)">${transLabel}</span>
             <span style="font-size:9px;background:#002a1a;color:#4ec9b0;padding:2px 6px;border-radius:3px;border:1px solid #004422">${phase.gravity} ${gravityIcon}</span>
           </div>
         </div>
@@ -734,19 +736,8 @@ const CONFIG = (() => {
           </div>
         </div>
 
-        <div>
-          <label style="font-size:10px;color:#888">Tipo de Scroll / Transição</label>
-          <select id="editPhaseScroll" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px" onchange="CONFIG.onScrollChange()">
-            <option value="static" ${phase.scroll==='static'?'selected':''}>Static (hard-cut entre telas)</option>
-            <option value="scroll_h" ${phase.scroll==='scroll_h'?'selected':''}>Scroll Horizontal → Mirroring Vertical</option>
-            <option value="scroll_v" ${phase.scroll==='scroll_v'?'selected':''}>Scroll Vertical → Mirroring Horizontal</option>
-          </select>
-          <div id="editPhaseMirrorInfo" style="font-size:9px;color:#888;margin-top:4px;line-height:1.4">
-            Mirroring desta fase: <b style="color:#ffcc00">${phase.mirroring}</b>
-            ${phase.scroll==='scroll_h' ? '(necessário para scroll horizontal)' :
-              phase.scroll==='scroll_v' ? '(necessário para scroll vertical)' :
-              '(padrão para hard-cut)'}
-          </div>
+        <div style="font-size:9px;color:#888;line-height:1.4">
+          Transição desta fase: definida em <b style="color:#ffcc00">Level Design</b> (dropdown "Transição" no topo do mapa de telas).
         </div>
 
         <div style="display:flex;gap:6px;margin-top:6px">
@@ -755,18 +746,6 @@ const CONFIG = (() => {
         </div>
       </div>
     `;
-  }
-
-  function onScrollChange(){
-    const scroll = document.getElementById('editPhaseScroll')?.value || 'static';
-    const mirror = mirroringFromScroll(scroll);
-    const info = document.getElementById('editPhaseMirrorInfo');
-    if(info){
-      const tip = scroll==='scroll_h' ? '(necessário para scroll horizontal)' :
-                  scroll==='scroll_v' ? '(necessário para scroll vertical)' :
-                  '(padrão para hard-cut)';
-      info.innerHTML = `Mirroring desta fase: <b style="color:#ffcc00">${mirror}</b> ${tip}`;
-    }
   }
 
   function savePhaseDetail(){
@@ -799,11 +778,6 @@ const CONFIG = (() => {
     }
     phase.gravity = document.getElementById('editPhaseGravity')?.value || 'down';
     phase.gravityStrength = parseInt(document.getElementById('editPhaseGravStr')?.value ?? 4);
-    phase.scroll = document.getElementById('editPhaseScroll')?.value || 'static';
-    if(phase.scroll === 'free') phase.scroll = 'static';
-
-    // Mirroring derivado automaticamente do scroll (regra de hardware)
-    phase.mirroring = mirroringFromScroll(phase.scroll);
 
     // Remove vínculos antigos de tela única (a fase agora é dona do banco inteiro)
     phase.splash = '';
@@ -814,7 +788,7 @@ const CONFIG = (() => {
 
     renderPhases();
     selectPhase(selectedPhase); // re-renderiza o painel com os valores salvos
-    Project.status(`Fase "${phase.name}" salva • SPR pág ${phase.sprite_page} • BG pág ${phase.bg_page} • ${phase.mirroring}`);
+    Project.status(`Fase "${phase.name}" salva • SPR pág ${phase.sprite_page} • BG pág ${phase.bg_page}`);
   }
 
   function editPhase(idx){ selectPhase(idx); }
@@ -834,7 +808,7 @@ const CONFIG = (() => {
       migratePhaseChrPages(p);
       const bankUI = `SPR${p.sprite_page}/BG${p.bg_page}`;
       txt += `Fase ${i+1}: ${p.name}\n`;
-      txt += `  Bank: ${bankUI} | Gravity: ${p.gravity} | Scroll: ${p.scroll} | Mirroring: ${p.mirroring||mirroringFromScroll(p.scroll)}\n\n`;
+      txt += `  Bank: ${bankUI} | Gravity: ${p.gravity} | Transição: ${p.levelMap?.transitionType || 'hard_cut'}\n\n`;
     });
     const blob=new Blob([txt],{type:'text/plain'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=(data.name||'projeto')+'_resumo.txt'; a.click();
   }
@@ -847,7 +821,6 @@ const CONFIG = (() => {
     deletePhase, 
     selectPhase, 
     savePhaseDetail,
-    onScrollChange,
     exportSummary, 
     getPhases(){ return Project.data?.phases||[]; }, 
     loadPhases(arr){ if(Project.data){ Project.data.phases=arr||[]; migratePhasesMirroring(); } renderPhases(); }, 

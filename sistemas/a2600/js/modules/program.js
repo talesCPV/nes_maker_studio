@@ -34,6 +34,9 @@ const PROGRAM = (() => {
     { value: 'collision_p0p1', label: 'Player 1 × Player 2' },
     { value: 'collision_blp0', label: 'Player 1 × Tiro' },
     { value: 'collision_blp1', label: 'Player 2 × Tiro' },
+    { value: 'collision_m0enemy', label: 'Míssil 0 × Inimigos' },
+    { value: 'collision_m0p0', label: 'Míssil 0 × P0' },
+    { value: 'collision_m0p1', label: 'Míssil 0 × P1' },
   ];
 
   // Passos de regra (mesmo esquema do NES): SE… + DEFINIR/AÇÃO
@@ -67,6 +70,7 @@ const PROGRAM = (() => {
     toggle_bool: { label: 'Inverter bool' },
     asm: { label: 'Bloco ASM livre' },
     custom: { label: 'Personalizada (livre)' },
+    kill_hit_enemy: { label: 'Matar inimigo atingido (M0)' },
   };
 
   // Unidades de movimento (2600):
@@ -132,6 +136,9 @@ const PROGRAM = (() => {
       { id: 'ev_col_p0p1', name: 'Player 1 × Player 2', category: 'collision', collision: 'p0p1', builtin: true },
       { id: 'ev_col_blp0', name: 'Player 1 × Tiro', category: 'collision', collision: 'blp0', builtin: true },
       { id: 'ev_col_blp1', name: 'Player 2 × Tiro', category: 'collision', collision: 'blp1', builtin: true },
+      { id: 'ev_col_m0enemy', name: 'Míssil 0 × Inimigos', category: 'collision', collision: 'm0enemy', builtin: true },
+      { id: 'ev_col_m0p0', name: 'Míssil 0 × P0 (fileira)', category: 'collision', collision: 'm0p0', builtin: true },
+      { id: 'ev_col_m0p1', name: 'Míssil 0 × P1 (fileira)', category: 'collision', collision: 'm0p1', builtin: true },
     ];
     const byId = {};
     Project.data.events.forEach((e) => {
@@ -149,10 +156,9 @@ const PROGRAM = (() => {
     const keep = new Set(builtins.map((b) => b.id));
     Project.data.events = Project.data.events.filter((e) => {
       if (!e.builtin) return true;
-      if (e.id === 'ev_col_m0p1') return false;
+      // mantém ev_col_m0*
       if (String(e.id || '').startsWith('ev_') && e.category === 'collision' && !keep.has(e.id)) {
         // só remove se for id nativo antigo conhecido
-        if (['ev_col_m0p1'].includes(e.id)) return false;
       }
       return true;
     });

@@ -890,11 +890,11 @@ const CONFIG = (() => {
           <div class="cfg-grid">
             <label>Tamanho da ROM / mapper
               <select id="cfgRomSize">
-                <option value="2048" ${d.romSize == 2048 ? 'selected' : ''}>2 KB — fixed</option>
-                <option value="4096" ${d.romSize == 4096 || !d.romSize ? 'selected' : ''}>4 KB — fixed</option>
+                <option value="32768" ${d.romSize == 32768 || !d.romSize ? 'selected' : ''}>32 KB — F4 (recomendado)</option>
                 <option value="8192" ${d.romSize == 8192 ? 'selected' : ''}>8 KB — F8</option>
                 <option value="16384" ${d.romSize == 16384 ? 'selected' : ''}>16 KB — F6</option>
-                <option value="32768" ${d.romSize == 32768 ? 'selected' : ''}>32 KB — F4</option>
+                <option value="4096" ${d.romSize == 4096 ? 'selected' : ''}>4 KB — fixed (experimental)</option>
+                <option value="2048" ${d.romSize == 2048 ? 'selected' : ''}>2 KB — fixed (experimental)</option>
               </select>
             </label>
             <label>Padrão de TV
@@ -980,7 +980,7 @@ const CONFIG = (() => {
       dirty();
     });
     document.getElementById('cfgRomSize')?.addEventListener('change', (e) => {
-      d.romSize = parseInt(e.target.value, 10) || 4096;
+      d.romSize = parseInt(e.target.value, 10) || 32768;
       dirty();
     });
     document.getElementById('cfgTv')?.addEventListener('change', (e) => {
@@ -1172,7 +1172,7 @@ const CONFIG = (() => {
     if (name) d.name = name.value;
     if (author) d.author = author.value;
     if (desc) d.description = desc.value;
-    if (rom) d.romSize = parseInt(rom.value, 10) || 4096;
+    if (rom) d.romSize = parseInt(rom.value, 10) || 32768;
     if (tv) d.tv = tv.value;
     if (style) {
       // estilo manda: recalcula profile + defaults se mudou

@@ -84,7 +84,6 @@ const BG = (() => {
           <button type="button" class="icon-btn tool-btn" data-bg-tool="flood" onclick="BG.setTool('flood')" title="Flood Fill">🌊</button>
           <button type="button" class="icon-btn tool-btn" data-bg-tool="attr" onclick="BG.setTool('attr')" title="Pincel de Paleta">🖌</button>
           <button type="button" class="icon-btn tool-btn" data-bg-tool="hitbox" onclick="BG.setTool('hitbox')" title="Hitbox Manual">🛡</button>
-          <button type="button" class="icon-btn tool-btn" data-bg-tool="assign" onclick="BG.setTool('assign')" title="Atribuir objeto (Dano/Warp)">🎯</button>
           <button type="button" class="icon-btn tool-btn" data-bg-tool="erase" onclick="BG.setTool('erase')" title="Borracha">🧽</button>
           <button type="button" class="icon-btn tool-btn" data-bg-tool="text" onclick="BG.setTool('text')" title="Texto">🔤</button>
           <button type="button" class="icon-btn tool-btn" data-bg-tool="fill" onclick="BG.setTool('fill')" title="Auto-Fill">🪣</button>
@@ -135,6 +134,13 @@ const BG = (() => {
                   <button class="btn-tool collision-btn" data-col-type="3" onclick="BG.setCollisionType(3)" style="font-size:10px;background:#8e44ad;color:#fff">🟪 3: Dano</button>
                   <button class="btn-tool collision-btn" data-col-type="4" onclick="BG.setCollisionType(4)" style="font-size:10px;background:#d35400;color:#fff">🚪 4: Warp</button>
                 </div>
+                <div style="font-size:9px;color:#888;margin-top:6px;line-height:1.3">Tiles de Dano/Warp vizinhos viram 1 objeto só automaticamente - dê nome a ele na lista abaixo.</div>
+              </div>
+
+              <div id="bgHitboxObjPanel" style="display:none;background:#111;border:1px solid #333;border-radius:6px;padding:8px">
+                <h4 style="font-size:10px;color:#ffcc00;margin-bottom:6px">🚪 OBJETOS DE DANO/WARP NESTA TELA</h4>
+                <div id="bgHitboxObjList" style="display:flex;flex-direction:column;gap:4px"></div>
+                <div style="font-size:9px;color:#666;margin-top:6px;line-height:1.3">Destino do warp (tela+posição) continua em Programação &gt; Objetos.</div>
               </div>
 
               <div id="bgFillPanel" style="display:none;background:#1a1a00;border:1px solid #665500;border-radius:6px;padding:8px">
@@ -331,7 +337,6 @@ const BG = (() => {
     if(t === 'flood') { label.textContent = 'Modo: Flood Fill'; help.textContent = 'Preenche área contígua com o metatile selecionado.'; }
     else if(t === 'attr') { label.textContent = 'Modo: Pincel de Atributo'; help.textContent = 'Pinta a paleta mantendo as estampas.'; }
     else if(t === 'hitbox') { label.textContent = 'Modo: Hitbox Manual'; help.textContent = 'Pinta colisão individualmente (inclui Warp). Shift+clique apaga.'; }
-    else if(t === 'assign') { label.textContent = 'Modo: Atribuir Objeto'; help.textContent = 'Clique num tile de Dano/Warp - todos os vizinhos conectados do mesmo tipo são atribuídos juntos.'; }
     else if(t === 'fill') { label.textContent = 'Modo: Auto-Fill'; help.textContent = 'Botões = massa. Clique no canvas = flood: troca região conectada pelo metatile selecionado.'; }
     else if(t === 'erase') { label.textContent = 'Modo: Borracha'; help.textContent = 'Clique (ou arraste) num tile para apagá-lo, tile por tile.'; }
     else if(t === 'text') { 
@@ -589,6 +594,9 @@ const BG = (() => {
     if(colType === 3 || colType === 4){
       if(idx >= 0) hitboxInstances[idx].hitboxObjectId = defaultObjId || null;
       else hitboxInstances.push({ x, y, hitboxObjectId: defaultObjId || null });
+      // Sem objeto explícito (ex: metatile sem "objeto padrão" configurado, ou pintura manual
+      // com a ferramenta Hitbox) - agrupa/cria automaticamente com os vizinhos conectados.
+      if(!defaultObjId) autoAssignRegion(x, y, colType);
     } else if(idx >= 0){
       hitboxInstances.splice(idx, 1);
     }
@@ -620,29 +628,62 @@ const BG = (() => {
     }
     return result;
   }
-  // Abre uma escolha simples (por número, por enquanto) dos objetos compatíveis com o tipo
-  // de colisão clicado, e reatribui TODOS os tiles vizinhos conectados do mesmo tipo de uma
-  // vez (flood por padrão) - não precisa mais clicar tile por tile.
-  function assignHitboxObjectAt(tx, ty){
-    const colType = collisionMap[ty*32+tx];
-    if(colType !== 3 && colType !== 4){ alert('Não há hitbox de Dano/Warp nesse tile. Pinte um primeiro (ferramenta Hitbox ou um metatile compatível).'); return; }
+  // Cria um objeto novo de Dano/Warp com nome padrão sequencial ("Warp 1", "Warp 2"...),
+  // já persistido em Project.data.hitboxObjects (mesmo array que Programação > Objetos usa -
+  // por isso não precisa de passo de "linkar" separado, o objeto já nasce pronto lá também).
+  function createHitboxObject(kind){
+    if(!Array.isArray(Project.data.hitboxObjects)) Project.data.hitboxObjects = [];
+    const n = Project.data.hitboxObjects.filter(o => o.kind === kind).length + 1;
+    const name = (kind === 'warp' ? 'Warp ' : 'Dano ') + n;
+    const obj = { id: 'hb_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6), kind, name };
+    Project.data.hitboxObjects.push(obj);
+    return obj.id;
+  }
+  // Tiles de Dano/Warp vizinhos (conectados por flood) sempre viram 1 objeto só,
+  // automaticamente - sem precisar de uma ferramenta separada pra "linkar" depois de pintar.
+  // Se o grupo já toca um tile que já tem objeto (ex: crescendo uma warp já existente),
+  // reaproveita o mesmo id; senão cria um novo (createHitboxObject).
+  function autoAssignRegion(tx, ty, colType){
     const kind = colType === 4 ? 'warp' : 'dano';
-    const kindLabel = kind === 'warp' ? 'Warp' : 'Dano';
-    const objs = (Project.data?.hitboxObjects || []).filter(o => o.kind === kind);
-    if(objs.length === 0){ alert(`Nenhum objeto de ${kindLabel} cadastrado ainda. Crie um em Programação > Objetos.`); return; }
     const region = floodCollectSameCollisionType(tx, ty, colType);
-    const listStr = objs.map((o,i) => `${i+1}. ${o.name}`).join('\n');
-    const answer = prompt(`${region.length} tile(s) conectado(s) - escolha o objeto de ${kindLabel}:\n${listStr}\n\nDigite o número:`, '');
-    if(answer === null) return;
-    const n = parseInt(answer);
-    if(isNaN(n) || n < 1 || n > objs.length) return;
+    let objId = null;
+    for(const {x, y} of region){
+      const idx = hitboxInstances.findIndex(h => h.x === x && h.y === y);
+      if(idx >= 0 && hitboxInstances[idx].hitboxObjectId){ objId = hitboxInstances[idx].hitboxObjectId; break; }
+    }
+    if(!objId) objId = createHitboxObject(kind);
     region.forEach(({x, y}) => {
       const idx = hitboxInstances.findIndex(h => h.x === x && h.y === y);
-      if(idx >= 0) hitboxInstances[idx].hitboxObjectId = objs[n-1].id;
-      else hitboxInstances.push({ x, y, hitboxObjectId: objs[n-1].id });
+      if(idx >= 0) hitboxInstances[idx].hitboxObjectId = objId;
+      else hitboxInstances.push({ x, y, hitboxObjectId: objId });
     });
-    render();
-    Project.status(`${region.length} tile(s) agora usa(m) "${objs[n-1].name}"`);
+  }
+  // Lista, no bgSidePane, os objetos de Dano/Warp presentes NESTA tela, com nome editável
+  // direto ali (edita o mesmo Project.data.hitboxObjects que Programação > Objetos usa).
+  function renderHitboxObjectList(){
+    const panel = document.getElementById('bgHitboxObjPanel');
+    const list = document.getElementById('bgHitboxObjList');
+    if(!panel || !list) return;
+    const ids = new Set();
+    hitboxInstances.forEach(h => { if(h.hitboxObjectId) ids.add(h.hitboxObjectId); });
+    const objs = (Project.data?.hitboxObjects || []).filter(o => ids.has(o.id) && (o.kind === 'warp' || o.kind === 'dano'));
+    if(objs.length === 0){ panel.style.display = 'none'; list.innerHTML = ''; return; }
+    panel.style.display = 'block';
+    list.innerHTML = objs.map(o => {
+      const count = hitboxInstances.filter(h => h.hitboxObjectId === o.id).length;
+      const icon = o.kind === 'warp' ? '🚪' : '🔻';
+      return `<div style="display:flex;align-items:center;gap:4px">
+        <span style="font-size:11px">${icon}</span>
+        <input type="text" value="${o.name}" onchange="BG.renameHitboxObject('${o.id}', this.value)" style="flex:1;min-width:0;background:#000;color:#fff;border:1px solid #444;border-radius:3px;padding:3px;font-size:10px">
+        <span style="font-size:9px;color:#666" title="tiles nesta tela">${count}</span>
+      </div>`;
+    }).join('');
+  }
+  function renameHitboxObject(id, newName){
+    const o = (Project.data?.hitboxObjects || []).find(o => o.id === id);
+    if(!o) return;
+    o.name = (newName || '').trim() || o.name;
+    renderHitboxObjectList();
   }
 
   function paintAt(mx, my, erasing = false, isAlt = false, isInitialClick = false) {
@@ -681,7 +722,6 @@ const BG = (() => {
 
     if(isAlt) { if(isInitialClick) pickMetatileAt(tx, ty); return; }
 
-    if(currentTool === 'assign') { if(isInitialClick) assignHitboxObjectAt(tx, ty); return; }
     if(currentTool === 'hitbox') {
       const isHitboxFlood = document.getElementById('chkHitboxFlood')?.checked;
       if(isHitboxFlood) { if(isInitialClick) floodFillHitbox(tx, ty, erasing ? 0 : selectedCollisionType); }
@@ -799,6 +839,7 @@ const BG = (() => {
     if (targetType === newColType) return;
     const queue = [{x: tx, y: ty}];
     const visited = new Set();
+    const touched = [];
     while(queue.length > 0) {
       const {x, y} = queue.shift();
       const key = `${x},${y}`;
@@ -807,11 +848,16 @@ const BG = (() => {
       if(collisionMap[y * 32 + x] !== targetType) continue;
       visited.add(key);
       collisionMap[y * 32 + x] = newColType;
+      touched.push({x, y});
       queue.push({x: x + 1, y: y});
       queue.push({x: x - 1, y: y});
       queue.push({x: x, y: y + 1});
       queue.push({x: x, y: y - 1});
     }
+    // Antes essa função só pintava collisionMap e nunca tocava hitboxInstances (gap
+    // pré-existente - flood de Dano/Warp nunca virava objeto de verdade). Agora cada tile
+    // passa por setHitboxInstanceAt, que já agrupa/cria automaticamente (autoAssignRegion).
+    touched.forEach(({x, y}) => setHitboxInstanceAt(x, y, newColType, null));
     render();
   }
 
@@ -1338,6 +1384,7 @@ const BG = (() => {
     const el = document.getElementById('bgStats'); if(el) el.textContent = `${nametable.filter(t=>t!==0).length}/960`;
     const sol = document.getElementById('solidStats'); if(sol) sol.textContent = `${collisionMap.filter(c=>c!==0).length}`;
     const tc = document.getElementById('textCount'); if(tc) tc.textContent = textLayers.length;
+    renderHitboxObjectList();
   }
 
   function fillAllEmpty(){
@@ -1864,7 +1911,7 @@ const BG = (() => {
   }
 
   return {
-    init: buildHTML, setTool, setTextToolEnabled, setCollisionType, setAllSubTilesCollision, applyMetatileHitboxToCanvas, setMetatileDefaultObject,
+    init: buildHTML, setTool, setTextToolEnabled, setCollisionType, setAllSubTilesCollision, applyMetatileHitboxToCanvas, setMetatileDefaultObject, renameHitboxObject,
     insertText, fillAllEmpty, fillEntireScreen, migrateLegacyScreen, applyAttrToAll, setTextOffsetMode,
     newCanvas, clearBackground, saveEntryAs, saveCurrentEntry, saveAsClone, deleteCurrentEntry, renameCurrentEntry, loadEntry,
     zoomIn, zoomOut,

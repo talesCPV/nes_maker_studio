@@ -1236,6 +1236,11 @@ final class ProjectParser
                 // que a tela normal (via metatile) já foi desenhada. Ver
                 // buildTextOverlays().
                 'textLayers' => is_array($asset['textLayers'] ?? null) ? $asset['textLayers'] : [],
+                // Camada 6 Fase 2b: hitbox de Dano/Warp pintada em Backgrounds (tile
+                // 0-31/0-29, sparse, {x,y,hitboxObjectId}) - convertida em trigger
+                // point (pixel) por ProgramCompiler::buildHbCtx, junto com os pontos
+                // de spawn que já vinham de project.hitboxInstances (global).
+                'hitboxInstances' => is_array($asset['hitboxInstances'] ?? null) ? $asset['hitboxInstances'] : [],
             ];
         };
 

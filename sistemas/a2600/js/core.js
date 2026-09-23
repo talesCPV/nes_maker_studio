@@ -13,7 +13,7 @@ const Project = {
       name: 'Novo Jogo Atari',
       author: '',
       description: '',
-      romSize: 4096,
+      romSize: 32768,
       tv: 'NTSC',
       kernel: 'single_screen',
       gameStyle: 'advanced',
@@ -217,6 +217,14 @@ const Project = {
           note: m.label + ' ativo (0=off, ≠0=on)',
           value: 0,
         });
+        if (s === 'm0') {
+          want.push({
+            name: 'm0Nusiz',
+            type: 'byte',
+            note: 'Míssil NUSIZ: 0=1 tiro · 1=2 juntos (close) · 2=2 médios · 6=3 médios',
+            value: 0,
+          });
+        }
       });
     }
 
