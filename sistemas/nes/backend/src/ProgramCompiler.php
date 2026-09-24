@@ -56,17 +56,22 @@
  *
  * Fase 8 (Som v2): "Tocar Som" agora cobre música E efeitos sonoros de
  * verdade. Todas as músicas/SFX do projeto (não só a 1ª) são embedados na
- * ROM; trocar de música é só trocar o ponteiro de despacho pra rotina da
- * nova (music_dispatch), sem indirect-indexed addressing nem código
- * auto-modificável (CODE roda direto da ROM). Cada SFX toca no(s) canal(is)
- * que ele mesmo usa no editor de som (igual uma música) - ao ativar, ele
- * "rouba" temporariamente só o REGISTRADOR DE ÁUDIO desse(s) canal(is) da
- * música (guarda sfx_active_ch<N> checada bem em cima de cada escrita no
- * hardware, dentro da rotina da música); o tempo/posição da música nesse
+ * ROM. Cada SFX toca no(s) canal(is) que ele mesmo usa no editor de som
+ * (igual uma música) - ao ativar, ele "rouba" temporariamente só o
+ * REGISTRADOR DE ÁUDIO desse(s) canal(is) da música (guarda sfx_active_ch<N>
+ * checada bem em cima de cada escrita no hardware, dentro da rotina
+ * genérica de canal - ver Fase 11 abaixo); o tempo/posição da música nesse
  * canal continua avançando normalmente por baixo, então quando o SFX
  * termina a música retoma exatamente na nota programada pro tempo real
  * daquele instante - sem desincronizar dos outros canais. Ver
  * ProgramCompiler::compilePlaySound e backend/templates/music.php.
+ *
+ * Fase 11 (player genérico): trocar de música/SFX não troca mais de
+ * rotina (não existe mais music_dispatch nem indirect addressing) - existem
+ * só 4 rotinas FIXAS (chan_update_0..3, uma por canal físico), compartilhadas
+ * por toda música e todo SFX. "Tocar Som" agora só escreve o endereço de
+ * início/reinício de loop numa tabela por slot (loop_scale/time_lo/hi) e um
+ * bitmask (music_chan_mask) dizendo quais canais a música atual usa.
  *
  * Ainda fora do escopo (sempre-falso/no-op, não quebra a build): Spawnar
  * Personagem, Aplicar Força de Pulo/Nível de Velocidade (valores fixos no
@@ -1087,10 +1092,11 @@ final class ProgramCompiler
 
     /**
      * Ação "Tocar Som": alvo é sempre um literal (id escolhido na UI), nunca
-     * resolvido em runtime. Se for música: troca o ponteiro de despacho
-     * (music_dispatch) pra rotina dessa música, zera a posição dos canais
-     * que ela usa e silencia explicitamente os que ela NÃO usa (senão o som
-     * da música anterior ficaria preso nesse canal). Se for SFX: ativa cada
+     * resolvido em runtime. Se for música: seta music_chan_mask (quais canais
+     * ela usa) e o endereço de início/loop de cada canal (scale/time_ptr +
+     * loop_scale/time, ver Fase 11 no topo do arquivo), e silencia
+     * explicitamente os canais que ela NÃO usa (senão o som da música
+     * anterior ficaria preso nesse canal). Se for SFX: ativa cada
      * canal que ele usa (sfx_active_ch<N>) apontando pra rotina dele - a
      * partir do próximo frame aquele(s) canal(is) ficam sob controle do SFX
      * até ele terminar, e a música volta sozinha (ver music.php).
@@ -1131,29 +1137,35 @@ final class ProgramCompiler
                 $lines[] = '  LDA UoromBankSelect,X';
                 $lines[] = '  STA UoromBankSelect,X';
             }
-            $lines[] = "  LDA #<music_update_{$lbl}";
-            $lines[] = '  STA music_dispatch';
-            $lines[] = "  LDA #>music_update_{$lbl}";
-            $lines[] = '  STA music_dispatch+1';
+            $mask = 0;
+            foreach ($chIdx as $type => $i) if (in_array($type, $used, true)) $mask |= (1 << $i);
+            $lines[] = "  LDA #{$mask}";
+            $lines[] = '  STA music_chan_mask';
             foreach ($chIdx as $type => $i) {
                 if (in_array($type, $used, true)) {
-                    // Camada 10: reseta os ponteiros de decodificacao RLE pro
+                    // Camada 10/11: reseta os ponteiros de decodificacao RLE pro
                     // inicio dos dados desta musica/canal (slot = indice do
-                    // canal fisico, 0-3) - equivalente ao antigo "STA ch{i}_pos"
-                    // zerando a posicao, so que agora sao 2 streams independentes
-                    // (Scale e Time podem comprimir em tamanhos diferentes).
+                    // canal fisico, 0-3), e grava o MESMO endereco em
+                    // loop_scale/time_lo/hi - e' pra onde chan_update_i (rotina
+                    // generica, ver music.php) volta quando o stream sinaliza
+                    // loop ($FF). Antes esse endereco vinha cravado como
+                    // imediato dentro da rotina de cada musica (Camada 10).
                     $lines[] = '  LDA #0';
-                    $lines[] = "  STA ch{$i}_timer";
+                    $lines[] = "  STA chan_timer+{$i}";
                     $lines[] = "  LDA #<Scale_{$lbl}_ch{$i}";
                     $lines[] = "  STA scale_ptr_lo+{$i}";
+                    $lines[] = "  STA loop_scale_lo+{$i}";
                     $lines[] = "  LDA #>Scale_{$lbl}_ch{$i}";
                     $lines[] = "  STA scale_ptr_hi+{$i}";
+                    $lines[] = "  STA loop_scale_hi+{$i}";
                     $lines[] = '  LDA #0';
                     $lines[] = "  STA scale_run_left+{$i}";
                     $lines[] = "  LDA #<Time_{$lbl}_ch{$i}";
                     $lines[] = "  STA time_ptr_lo+{$i}";
+                    $lines[] = "  STA loop_time_lo+{$i}";
                     $lines[] = "  LDA #>Time_{$lbl}_ch{$i}";
                     $lines[] = "  STA time_ptr_hi+{$i}";
+                    $lines[] = "  STA loop_time_hi+{$i}";
                     $lines[] = '  LDA #0';
                     $lines[] = "  STA time_run_left+{$i}";
                 } else {
@@ -1172,22 +1184,22 @@ final class ProgramCompiler
             $i = $chIdx[$type];
             $r = "sfx_r_{$lbl}_ch{$i}";
             $slot = $i + 4; // Camada 10: slots 4-7 = canais tomados por SFX
-            $lines[] = "  LDA #<{$r}";
-            $lines[] = "  STA sfx_dispatch_ch{$i}";
-            $lines[] = "  LDA #>{$r}";
-            $lines[] = "  STA sfx_dispatch_ch{$i}+1";
             $lines[] = '  LDA #0';
-            $lines[] = "  STA sfx_timer_ch{$i}";
+            $lines[] = "  STA chan_timer+{$slot}";
             $lines[] = "  LDA #<Scale_{$r}";
             $lines[] = "  STA scale_ptr_lo+{$slot}";
+            $lines[] = "  STA loop_scale_lo+{$slot}";
             $lines[] = "  LDA #>Scale_{$r}";
             $lines[] = "  STA scale_ptr_hi+{$slot}";
+            $lines[] = "  STA loop_scale_hi+{$slot}";
             $lines[] = '  LDA #0';
             $lines[] = "  STA scale_run_left+{$slot}";
             $lines[] = "  LDA #<Time_{$r}";
             $lines[] = "  STA time_ptr_lo+{$slot}";
+            $lines[] = "  STA loop_time_lo+{$slot}";
             $lines[] = "  LDA #>Time_{$r}";
             $lines[] = "  STA time_ptr_hi+{$slot}";
+            $lines[] = "  STA loop_time_hi+{$slot}";
             $lines[] = '  LDA #0';
             $lines[] = "  STA time_run_left+{$slot}";
             $lines[] = '  LDA #1';

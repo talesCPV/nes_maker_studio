@@ -10,18 +10,21 @@
  *
  * Arquitetura (evita indirect-indexed addressing e self-modifying code -
  * o CODE roda direto da ROM, nao pode se auto-modificar):
- *  - Cada musica gera sua PROPRIA rotina music_update_<id> com enderecos
- *    absolutos fixos pras suas tabelas (sem indirecao). Trocar de musica e
- *    so trocar o PONTEIRO de despacho (music_dispatch) pra rotina da nova
- *    musica - JMP (ptr) via trampolim, ver music_call_dispatch.
- *  - Cada SFX gera 1 rotina por canal que ele usa (sfx_r_<id>_ch<N>).
- *    Ativar o SFX seta sfx_dispatch_ch<N> pra essa rotina e liga
- *    sfx_active_ch<N> - a partir dai aquele canal FISICO fica sob controle
- *    do SFX pro OUVIDO (registrador de audio), mas o TEMPO da musica nesse
- *    canal NUNCA para: ch<N>_timer/ch<N>_pos continuam avancando nota a
- *    nota, frame a frame, exatamente como se o SFX nao existisse - so a
- *    ESCRITA no registrador fica muda (guarda "sfx_active_ch<N>" bem em
- *    cima de cada STA no hardware, nunca no topo do bloco do canal). Isso
+ *  - Fase 11 (player generico): existem so' 4 rotinas FIXAS (chan_update_0..3,
+ *    uma por canal FISICO 0-3), COMPARTILHADAS por toda musica e todo SFX -
+ *    nao existe mais 1 rotina por musica nem 1 rotina por (SFX,canal).
+ *    "Tocar Som" so' escreve, por slot (0-3=musica 4-7=SFX), o endereco de
+ *    inicio/reinicio de loop (loop_scale/time_lo/hi) e, pra musica, um
+ *    bitmask (music_chan_mask) dizendo quais canais fisicos ela usa - nao
+ *    ha mais ponteiro de despacho nem JMP indireto de nenhum tipo, so'
+ *    JSR/RTS direto pra chan_update_i (X = slot escolhe o estado, o
+ *    ENDERECO da rotina e' sempre o mesmo pro mesmo canal fisico).
+ *  - Ativar um SFX liga sfx_active_ch<N> - a partir dai aquele canal FISICO
+ *    fica sob controle do SFX pro OUVIDO (registrador de audio), mas o
+ *    TEMPO da musica nesse canal NUNCA para: chan_timer do slot de musica
+ *    (0-3) continua avancando nota a nota, frame a frame, exatamente como
+ *    se o SFX nao existisse - so a ESCRITA no registrador fica muda (checada
+ *    dentro de chan_update_i, bem em cima de cada STA no hardware). Isso
  *    garante sincronismo: quando o SFX termina (scale hit $FE) e desliga
  *    sfx_active_ch<N>, a musica retoma exatamente na nota que esta
  *    programada pro tempo REAL daquele instante - nunca uma nota atrasada
@@ -154,17 +157,6 @@ return [
         $D = []; // data (vem numa posicao distante do arquivo)
         $L[] = '; ---- NGC SOM (musica + SFX) ----';
 
-        // ---- trampolins de despacho indireto (permitem "chamar" um endereco
-        // guardado numa variavel e ainda assim voltar via RTS - JMP nao
-        // empilha retorno, entao o RTS da rotina-alvo devolve pra quem deu
-        // JSR no trampolim, nao pro JMP em si) ----
-        $L[] = 'music_call_dispatch:';
-        $L[] = '  JMP (music_dispatch)';
-        foreach (range(0, 3) as $i) {
-            $L[] = "sfx_call_dispatch_ch{$i}:";
-            $L[] = "  JMP (sfx_dispatch_ch{$i})";
-        }
-
         // ---- liga o APU (idempotente) - chamada pela propria acao "Tocar
         // Som" na 1a vez que uma regra dispara som; sem isso nada soa mesmo
         // com os dados certos, e sem nenhum callsite isso nunca roda sozinho ----
@@ -270,26 +262,124 @@ return [
         $L[] = '  RTS';
 
         // ---- chamada 1x por frame a partir da NMI ----
+        // Camada 11 (player genérico): antes existia 1 rotina music_update_<musica>
+        // por MÚSICA (todos os canais dela desenrolados juntos) + 1 rotina
+        // sfx_r_<sfx>_ch<N> por (SFX, canal) - cada uma com os enderecos de
+        // Scale_/Time_ cravados como imediato (~117 bytes de codigo por canal
+        // usado, duplicado por musica/SFX). Isso agora e' 4 rotinas FIXAS
+        // (chan_update_0..3, uma por canal FISICO, ~200 bytes ao todo) que leem
+        // o endereco de reinicio de loop de uma tabela (loop_scale_lo/hi,
+        // loop_time_lo/hi - 8 slots, escrita 1x quando a musica/SFX comeca a
+        // tocar, ver ProgramCompiler::compilePlaySound) em vez de ter o
+        // endereco cravado no codigo. music_chan_mask (1 bit por canal fisico)
+        // diz quais canais a musica ATUAL usa - sfx_active_ch<N> (ja existia)
+        // continua dizendo se o canal esta emprestado a um SFX. O tempo da
+        // musica num canal roubado por SFX continua andando (slot 0-3 sempre
+        // chamado se a musica usa aquele canal, independente de sfx_active) -
+        // so' a ESCRITA no registrador fica muda (checada DENTRO de
+        // chan_update_i, mesma logica de antes).
         $L[] = 'music_update:';
-        foreach (range(0, 3) as $i) $L[] = "  JSR sfx_update_ch{$i}";
+        foreach (range(0, 3) as $i) {
+            $L[] = "  LDA sfx_active_ch{$i}";
+            $L[] = "  BEQ mu_nosfx{$i}";
+            $L[] = "  LDX #" . ($i + 4);
+            $L[] = "  JSR chan_update_{$i}";
+            $L[] = "mu_nosfx{$i}:";
+        }
         $L[] = '  LDA music_on';
         $L[] = '  BEQ mu_end';
-        $L[] = '  JSR music_call_dispatch';
+        foreach (range(0, 3) as $i) {
+            $L[] = '  LDA music_chan_mask';
+            $L[] = "  AND #" . (1 << $i);
+            $L[] = "  BEQ mu_nomus{$i}";
+            $L[] = "  LDX #{$i}";
+            $L[] = "  JSR chan_update_{$i}";
+            $L[] = "mu_nomus{$i}:";
+        }
         $L[] = 'mu_end:';
         $L[] = '  RTS';
 
+        // ---- 1 rotina por canal FISICO (0-3), compartilhada por TODA musica
+        // e TODO SFX que passa por aquele canal - X = slot (0-3 tocando
+        // musica, 4-7 tomado por SFX). $FF no stream = reinicia do inicio
+        // (loop_scale/time_lo/hi); $FE = fim de verdade (SFX devolve o canal
+        // pra musica via sfx_active_ch<N>=0; musica so' fica muda, sem efeito
+        // colateral - ela e' a "atual" ate outra "Tocar Musica" trocar). ----
         foreach (range(0, 3) as $i) {
-            $L[] = "sfx_update_ch{$i}:";
+            $m = $chMeta[$order[$i]];
+            $L[] = "chan_update_{$i}:";
+            $L[] = '  LDA chan_timer,X';
+            $L[] = "  BEQ cu{$i}_next";
+            $L[] = '  DEC chan_timer,X';
+            $L[] = '  RTS';
+            $L[] = "cu{$i}_next:";
+            $L[] = '  JSR rle_decode_scale';
+            $L[] = '  CMP #$FF';
+            $L[] = "  BNE cu{$i}_nof";
+            $L[] = '  LDA loop_scale_lo,X';
+            $L[] = '  STA scale_ptr_lo,X';
+            $L[] = '  LDA loop_scale_hi,X';
+            $L[] = '  STA scale_ptr_hi,X';
+            $L[] = '  LDA #0';
+            $L[] = '  STA scale_run_left,X';
+            $L[] = '  LDA loop_time_lo,X';
+            $L[] = '  STA time_ptr_lo,X';
+            $L[] = '  LDA loop_time_hi,X';
+            $L[] = '  STA time_ptr_hi,X';
+            $L[] = '  LDA #0';
+            $L[] = '  STA time_run_left,X';
+            $L[] = '  JSR rle_decode_scale';
+            $L[] = "cu{$i}_nof:";
+            $L[] = '  CMP #$FE';
+            $L[] = "  BNE cu{$i}_play";
+            $L[] = "  CPX #{$i}";
+            $L[] = "  BEQ cu{$i}_endmus   ; X=slot musica deste canal - SFX nao esta terminando aqui";
+            $L[] = "  LDA #0";
+            $L[] = "  STA sfx_active_ch{$i}   ; SFX terminou - devolve o canal pra musica";
+            $L[] = "  LDA {$m['sil']}";
+            $L[] = "  STA {$m['vol']}";
+            $L[] = '  RTS';
+            $L[] = "cu{$i}_endmus:";
             $L[] = "  LDA sfx_active_ch{$i}";
-            $L[] = "  BEQ sfx{$i}_upd_end";
-            $L[] = "  JSR sfx_call_dispatch_ch{$i}";
-            $L[] = "sfx{$i}_upd_end:";
+            $L[] = "  BNE cu{$i}_rts1   ; canal ocupado pelo SFX - so nao escreve, tempo ja avancou normal";
+            $L[] = "  LDA {$m['sil']}";
+            $L[] = "  STA {$m['vol']}";
+            $L[] = "cu{$i}_rts1:";
+            $L[] = '  RTS';
+            $L[] = "cu{$i}_play:";
+            $L[] = '  STA rle_pitch_scratch  ; guarda indice global de pitch NA MEMORIA - rle_decode_time usa Y internamente, nao da pra confiar em registrador aqui';
+            $L[] = '  JSR rle_decode_time';
+            $L[] = '  STA chan_timer,X';
+            $L[] = '  LDA rle_pitch_scratch';
+            $L[] = "  BNE cu{$i}_tone";
+            $L[] = "  CPX #{$i}";
+            $L[] = "  BNE cu{$i}_silrest   ; slot SFX - sempre escreve, e' dono do canal";
+            $L[] = "  LDA sfx_active_ch{$i}";
+            $L[] = "  BNE cu{$i}_rts2";
+            $L[] = "cu{$i}_silrest:";
+            $L[] = "  LDA {$m['sil']}";
+            $L[] = "  STA {$m['vol']}";
+            $L[] = "cu{$i}_rts2:";
+            $L[] = '  RTS';
+            $L[] = "cu{$i}_tone:";
+            $L[] = "  CPX #{$i}";
+            $L[] = "  BNE cu{$i}_dotone   ; slot SFX - sempre escreve, e' dono do canal";
+            $L[] = "  LDA sfx_active_ch{$i}";
+            $L[] = "  BNE cu{$i}_rts3";
+            $L[] = "cu{$i}_dotone:";
+            $L[] = "  LDA {$m['duty']}";
+            $L[] = "  STA {$m['vol']}";
+            $L[] = '  LDY rle_pitch_scratch';
+            $L[] = '  LDA PitchLoGlobal,Y';
+            $L[] = "  STA {$m['lo']}";
+            $L[] = '  LDA PitchHiGlobal,Y';
+            $L[] = "  STA {$m['hi']}";
+            $L[] = "cu{$i}_rts3:";
             $L[] = '  RTS';
         }
 
-        // ---- 1 rotina por musica (so mexe nos canais que ela usa; um canal
-        // "roubado" por SFX no momento e simplesmente pulado, o SFX quem
-        // escreve nos registradores dele naquele frame) ----
+        // ---- dados de cada musica (so a tabela Scale_/Time_ - a rotina que
+        // as consome agora e' a generica chan_update_i acima) ----
         foreach ($songs as $song) {
             $sid = (string)$song['id'];
             $used = $resolveUsed($song);
@@ -297,75 +387,6 @@ return [
             $baseFrames = max(1, min(255, (int)($song['baseFrames'] ?? 30)));
             $loop = ($song['loop'] ?? true) !== false;
             $lbl = $label('ms_', $sid);
-
-            $L[] = "music_update_{$lbl}:";
-            foreach ($used as $u) {
-                $m = $chMeta[$u['type']]; $i = $m['idx']; $p = "{$lbl}_ch{$i}"; $slot = $i;
-                // Fase 9 (sincronismo): o contador de tempo/posicao deste canal
-                // NUNCA para, mesmo com o canal "roubado" por um SFX - so a
-                // ESCRITA no registrador de audio e' que fica muda enquanto
-                // sfx_active_ch{i} estiver ligado (guarda logo antes de cada
-                // STA no hardware, nao no topo do bloco). Assim, quando o SFX
-                // devolve o canal, a nota que volta a soar e' sempre a que
-                // esta programada pro tempo REAL - nunca uma nota atrasada.
-                $L[] = "  LDA ch{$i}_timer";
-                $L[] = "  BEQ {$p}_next";
-                $L[] = "  DEC ch{$i}_timer";
-                $L[] = "  JMP {$p}_end";
-                $L[] = "{$p}_next:";
-                $L[] = "  LDX #{$slot}";
-                $L[] = '  JSR rle_decode_scale';
-                $L[] = '  CMP #$FF';
-                $L[] = "  BNE {$p}_nof";
-                // loop: reseta os ponteiros de decodificacao pro inicio desta
-                // musica/canal (enderecos fixos, conhecidos em tempo de build).
-                $L[] = "  LDA #<Scale_{$lbl}_ch{$i}";
-                $L[] = "  STA scale_ptr_lo+{$slot}";
-                $L[] = "  LDA #>Scale_{$lbl}_ch{$i}";
-                $L[] = "  STA scale_ptr_hi+{$slot}";
-                $L[] = '  LDA #0';
-                $L[] = "  STA scale_run_left+{$slot}";
-                $L[] = "  LDA #<Time_{$lbl}_ch{$i}";
-                $L[] = "  STA time_ptr_lo+{$slot}";
-                $L[] = "  LDA #>Time_{$lbl}_ch{$i}";
-                $L[] = "  STA time_ptr_hi+{$slot}";
-                $L[] = '  LDA #0';
-                $L[] = "  STA time_run_left+{$slot}";
-                $L[] = "  LDX #{$slot}";
-                $L[] = '  JSR rle_decode_scale';
-                $L[] = "{$p}_nof:";
-                $L[] = '  CMP #$FE';
-                $L[] = "  BNE {$p}_play";
-                $L[] = "  LDA sfx_active_ch{$i}";
-                $L[] = "  BNE {$p}_end   ; canal ocupado pelo SFX - so nao escreve, tempo/posicao ja avancaram normal";
-                $L[] = "  LDA {$m['sil']}";
-                $L[] = "  STA {$m['vol']}";
-                $L[] = "  JMP {$p}_end";
-                $L[] = "{$p}_play:";
-                $L[] = '  STA rle_pitch_scratch  ; guarda indice global de pitch NA MEMORIA - rle_decode_time usa Y internamente (LDY #0), nao da pra confiar em registrador aqui';
-                $L[] = "  LDX #{$slot}";
-                $L[] = '  JSR rle_decode_time';
-                $L[] = "  STA ch{$i}_timer";
-                $L[] = '  LDA rle_pitch_scratch';
-                $L[] = "  BNE {$p}_tone";
-                $L[] = "  LDA sfx_active_ch{$i}";
-                $L[] = "  BNE {$p}_end   ; canal ocupado pelo SFX - so nao escreve, tempo/posicao ja avancaram normal";
-                $L[] = "  LDA {$m['sil']}";
-                $L[] = "  STA {$m['vol']}";
-                $L[] = "  JMP {$p}_end";
-                $L[] = "{$p}_tone:";
-                $L[] = "  LDA sfx_active_ch{$i}";
-                $L[] = "  BNE {$p}_end   ; canal ocupado pelo SFX - so nao escreve, tempo/posicao ja avancaram normal";
-                $L[] = "  LDA {$m['duty']}";
-                $L[] = "  STA {$m['vol']}";
-                $L[] = '  LDY rle_pitch_scratch';
-                $L[] = '  LDA PitchLoGlobal,Y';
-                $L[] = "  STA {$m['lo']}";
-                $L[] = '  LDA PitchHiGlobal,Y';
-                $L[] = "  STA {$m['hi']}";
-                $L[] = "{$p}_end:";
-            }
-            $L[] = '  RTS';
 
             foreach ($used as $u) {
                 $m = $chMeta[$u['type']]; $i = $m['idx'];
@@ -389,7 +410,8 @@ return [
             }
         }
 
-        // ---- 1 rotina por (SFX, canal que ele usa) ----
+        // ---- dados de cada SFX (so a tabela Scale_/Time_ - a rotina que as
+        // consome agora e' a generica chan_update_i acima, slot = canal+4) ----
         foreach ($sfxs as $sfx) {
             $sid = (string)$sfx['id'];
             $used = $resolveUsed($sfx);
@@ -400,59 +422,7 @@ return [
 
             foreach ($used as $u) {
                 $m = $chMeta[$u['type']]; $i = $m['idx'];
-                $r = "sfx_r_{$lbl}_ch{$i}"; $slot = $i + 4; // Camada 10: slots 4-7 = canais tomados por SFX
-                $L[] = "{$r}:";
-                $L[] = "  LDA sfx_timer_ch{$i}";
-                $L[] = "  BEQ {$r}_next";
-                $L[] = "  DEC sfx_timer_ch{$i}";
-                $L[] = '  RTS';
-                $L[] = "{$r}_next:";
-                $L[] = "  LDX #{$slot}";
-                $L[] = '  JSR rle_decode_scale';
-                $L[] = '  CMP #$FF';
-                $L[] = "  BNE {$r}_nof";
-                $L[] = "  LDA #<Scale_{$r}";
-                $L[] = "  STA scale_ptr_lo+{$slot}";
-                $L[] = "  LDA #>Scale_{$r}";
-                $L[] = "  STA scale_ptr_hi+{$slot}";
-                $L[] = '  LDA #0';
-                $L[] = "  STA scale_run_left+{$slot}";
-                $L[] = "  LDA #<Time_{$r}";
-                $L[] = "  STA time_ptr_lo+{$slot}";
-                $L[] = "  LDA #>Time_{$r}";
-                $L[] = "  STA time_ptr_hi+{$slot}";
-                $L[] = '  LDA #0';
-                $L[] = "  STA time_run_left+{$slot}";
-                $L[] = "  LDX #{$slot}";
-                $L[] = '  JSR rle_decode_scale';
-                $L[] = "{$r}_nof:";
-                $L[] = '  CMP #$FE';
-                $L[] = "  BNE {$r}_play";
-                $L[] = '  LDA #0';
-                $L[] = "  STA sfx_active_ch{$i}   ; SFX terminou - devolve o canal pra musica";
-                $L[] = "  LDA {$m['sil']}";
-                $L[] = "  STA {$m['vol']}";
-                $L[] = '  RTS';
-                $L[] = "{$r}_play:";
-                $L[] = '  STA rle_pitch_scratch  ; guarda indice global de pitch NA MEMORIA - rle_decode_time usa Y internamente';
-                $L[] = "  LDX #{$slot}";
-                $L[] = '  JSR rle_decode_time';
-                $L[] = "  STA sfx_timer_ch{$i}";
-                $L[] = '  LDA rle_pitch_scratch';
-                $L[] = "  BNE {$r}_tone";
-                $L[] = "  LDA {$m['sil']}";
-                $L[] = "  STA {$m['vol']}";
-                $L[] = '  RTS';
-                $L[] = "{$r}_tone:";
-                $L[] = "  LDA {$m['duty']}";
-                $L[] = "  STA {$m['vol']}";
-                $L[] = '  LDY rle_pitch_scratch';
-                $L[] = '  LDA PitchLoGlobal,Y';
-                $L[] = "  STA {$m['lo']}";
-                $L[] = '  LDA PitchHiGlobal,Y';
-                $L[] = "  STA {$m['hi']}";
-                $L[] = '  RTS';
-
+                $r = "sfx_r_{$lbl}_ch{$i}";
                 $enc = $encodeChannel($u['ch'], $baseFrames, $loop);
                 $D[] = "Scale_{$r}:"; $D[] = $fmt($enc['scale']);
                 $D[] = "Time_{$r}:";  $D[] = $fmt($enc['time']);

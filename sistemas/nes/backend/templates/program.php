@@ -110,6 +110,21 @@ return [
             $lines[] = 'time_run_val:   .res 8';
             $lines[] = 'time_run_left:  .res 8';
             $lines[] = 'rle_pitch_scratch: .res 1  ; guarda o pitch decodificado ENQUANTO rle_decode_time roda (ela usa Y internamente - nao dava pra confiar em registrador aqui, achado num teste de execucao real)';
+            // Camada 11 (player generico): chan_timer substitui os antigos
+            // ch{i}_timer (musica, 4 bytes) + sfx_timer_ch{i} (SFX, 4 bytes) -
+            // agora e' 1 array so' de 8 slots (0-3 musica, 4-7 SFX), acessado
+            // por indice (,X) igual os arrays acima, entao nao precisa ser
+            // zeropage (so' rle_ptr_lo/hi, que sofrem enderecamento indireto,
+            // continuam la). loop_scale/time_lo/hi guardam o endereco de
+            // REINICIO (inicio do Scale_/Time_ da musica/SFX daquele slot),
+            // escrito 1x quando a acao "Tocar Som" comeca a tocar - antes esse
+            // endereco vinha cravado como imediato dentro da rotina de cada
+            // musica/SFX (dai a duplicacao de codigo que este item elimina).
+            $lines[] = 'chan_timer:    .res 8';
+            $lines[] = 'loop_scale_lo: .res 8';
+            $lines[] = 'loop_scale_hi: .res 8';
+            $lines[] = 'loop_time_lo:  .res 8';
+            $lines[] = 'loop_time_hi:  .res 8';
         }
         $seen = [];
         foreach ($alloc['vars'] as $v) {
