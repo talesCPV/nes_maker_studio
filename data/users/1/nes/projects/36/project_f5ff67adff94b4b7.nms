@@ -23808,17 +23808,10 @@
             "background": "",
             "splash": "",
             "levelMap": {
-                "cols": 1,
-                "rows": 1,
+                "cols": 4,
+                "rows": 4,
                 "transitionType": "hard_cut",
-                "cells": {
-                    "0,0": {
-                        "bgId": "scr_1790338836944",
-                        "type": "background",
-                        "x": 0,
-                        "y": 0
-                    }
-                }
+                "cells": []
             },
             "created": 1787790793518,
             "sprite_page": 0,
@@ -23939,57 +23932,112 @@
             "created": 1790338110665
         }
     ],
-    "characters": [],
+    "characters": [
+        {
+            "id": "char_1790346097102",
+            "name": "nave",
+            "type": "player",
+            "origin": {
+                "x": 0,
+                "y": 0
+            },
+            "hitbox": {
+                "x": 0,
+                "y": 0,
+                "w": 8,
+                "h": 16
+            },
+            "hitboxes": [
+                {
+                    "id": "hb_body",
+                    "name": "Corpo",
+                    "type": "body",
+                    "x": 4,
+                    "y": 2,
+                    "w": 8,
+                    "h": 15
+                }
+            ],
+            "jumpForceId": null,
+            "speedId": null,
+            "animations": [
+                {
+                    "id": "idle",
+                    "name": "Idle",
+                    "fps": 8,
+                    "loop": true,
+                    "frames": [
+                        {
+                            "metatileId": "mt_1790338230180",
+                            "duration": 8,
+                            "offsetX": 0,
+                            "offsetY": 0
+                        }
+                    ]
+                }
+            ],
+            "created": 1790346097102
+        }
+    ],
     "cheats": [],
-    "variables": [],
+    "variables": [
+        {
+            "id": "var_auto_scroll_drift",
+            "name": "Auto-Scroll Arrasta Jogador",
+            "type": "byte",
+            "zeroPage": false,
+            "initialValue": 0,
+            "reserved": "auto_scroll_drift"
+        },
+        {
+            "id": "var_jump_force",
+            "name": "Força de Pulo",
+            "type": "byte",
+            "zeroPage": false,
+            "initialValue": 0,
+            "reserved": "pv_jump_force"
+        }
+    ],
     "events": [
         {
-            "id": "ev_up",
-            "name": "Cima",
+            "id": "ev_1790346208441",
+            "name": "left",
             "category": "input",
-            "builtin": true
+            "builtin": false,
+            "button": "P1-LEFT",
+            "trigger": "hold"
         },
         {
-            "id": "ev_down",
-            "name": "Baixo",
+            "id": "ev_1790346223961",
+            "name": "right",
             "category": "input",
-            "builtin": true
+            "builtin": false,
+            "button": "P1-RIGHT",
+            "trigger": "hold"
         },
         {
-            "id": "ev_left",
-            "name": "Esquerda",
+            "id": "ev_1790346230016",
+            "name": "up",
             "category": "input",
-            "builtin": true
+            "builtin": false,
+            "button": "P1-UP",
+            "trigger": "hold"
         },
         {
-            "id": "ev_right",
-            "name": "Direita",
+            "id": "ev_1790346236865",
+            "name": "down",
             "category": "input",
-            "builtin": true
+            "builtin": false,
+            "button": "P1-DOWN",
+            "trigger": "hold"
         },
         {
-            "id": "ev_a",
-            "name": "Botão A",
+            "id": "ev_1790346248017",
+            "name": "fire",
             "category": "input",
-            "builtin": true
-        },
-        {
-            "id": "ev_b",
-            "name": "Botão B",
-            "category": "input",
-            "builtin": true
-        },
-        {
-            "id": "ev_start",
-            "name": "Start",
-            "category": "input",
-            "builtin": true
-        },
-        {
-            "id": "ev_select",
-            "name": "Select",
-            "category": "input",
-            "builtin": true
+            "builtin": false,
+            "button": "P1-A",
+            "trigger": "press"
         },
         {
             "id": "ev_p1_idle",
@@ -24006,7 +24054,88 @@
             "builtin": true
         }
     ],
-    "rules": [],
+    "rules": [
+        {
+            "id": "rule_1790346256028",
+            "name": "left",
+            "scope": "global",
+            "steps": [
+                {
+                    "type": "if_event",
+                    "eventId": "ev_1790346208441"
+                },
+                {
+                    "type": "action",
+                    "eventId": "",
+                    "actionId": "move_character",
+                    "charId": "char_1790346097102",
+                    "animId": "idle",
+                    "direction": "left"
+                }
+            ],
+            "uiTabId": "main"
+        },
+        {
+            "id": "rule_1790346291745",
+            "name": "right",
+            "scope": "global",
+            "steps": [
+                {
+                    "type": "if_event",
+                    "eventId": "ev_1790346223961"
+                },
+                {
+                    "type": "action",
+                    "eventId": "",
+                    "actionId": "move_character",
+                    "charId": "char_1790346097102",
+                    "animId": "idle",
+                    "direction": "right"
+                }
+            ],
+            "uiTabId": "main"
+        },
+        {
+            "id": "rule_1790346720529",
+            "name": "up",
+            "scope": "global",
+            "steps": [
+                {
+                    "type": "if_event",
+                    "eventId": "ev_1790346230016"
+                },
+                {
+                    "type": "action",
+                    "eventId": "",
+                    "actionId": "move_character",
+                    "charId": "char_1790346097102",
+                    "animId": "idle",
+                    "direction": "up"
+                }
+            ],
+            "uiTabId": "main"
+        },
+        {
+            "id": "rule_1790346724615",
+            "name": "down",
+            "scope": "global",
+            "steps": [
+                {
+                    "type": "if_event",
+                    "eventId": "ev_1790346236865"
+                },
+                {
+                    "type": "action",
+                    "eventId": "",
+                    "actionId": "move_character",
+                    "charId": "char_1790346097102",
+                    "animId": "idle",
+                    "direction": "down"
+                }
+            ],
+            "uiTabId": "main"
+        }
+    ],
     "hitboxObjects": [],
     "hitboxInstances": [],
     "menus": [],
@@ -24047,7 +24176,7 @@
         ],
         "asm": ""
     },
-    "savedAt": 1790340371345,
+    "savedAt": 1790347850069,
     "chrPages": [
         {
             "name": "Sprites",
@@ -24059,7 +24188,7 @@
         }
     ],
     "scrollOrientation": "vertical",
-    "textFontMode": "ascii",
+    "textFontMode": "none",
     "paletteBank": [
         {
             "id": "pal_1",
@@ -24151,5 +24280,11 @@
         "pal_6",
         "pal_7",
         "pal_8"
+    ],
+    "ruleTabs": [
+        {
+            "id": "main",
+            "name": "main"
+        }
     ]
 }

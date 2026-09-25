@@ -85,11 +85,19 @@ ASM;
         }
         $lines[] = 'scroll_x:   .res 1  ; Camada 5: fine scroll (0-255) dentro do par de telas visivel';
         $lines[] = 'nt_page:    .res 1  ; Camada 5: 0/1 - qual nametable fisica ($2000/$2400) tem a tela esquerda';
+        // Item scroll vertical: mesma ideia de scroll_x/nt_page, so' que pro
+        // eixo Y (mirroring horizontal da PPU - nametables empilhadas em
+        // vez de lado a lado). So' um dos dois pares e' realmente usado por
+        // ROM (Project.data.scrollOrientation, ver header) - ficam os dois
+        // sempre declarados por simplicidade (RAM comum sobra), so' o NMI
+        // e' que decide qual escrever de verdade.
+        $lines[] = 'scroll_y:     .res 1  ; fine scroll vertical (0-255) dentro do par de telas visivel';
+        $lines[] = 'nt_row_page:  .res 1  ; 0/1 - qual nametable fisica ($2000/$2800) tem a tela de CIMA';
         $lines[] = 'gcw_col:    .res 1  ; scratch: coluna de pixel mundial pro check de parede durante scroll';
         $lines[] = 'gcw_sel:    .res 1  ; scratch: 0=tela esquerda(play_idx) 1=tela direita(play_idx+1)';
         $lines[] = 'gcw_screen: .res 1  ; scratch: indice global de tela resolvido p/ get_collision2';
         $lines[] = 'psn_screen:  .res 1  ; scratch: indice global de tela p/ preload_screen_nt';
-        $lines[] = 'psn_base_hi:.res 1  ; scratch: $20 ou $24 - pagina fisica alvo do preload_screen_nt';
+        $lines[] = 'psn_base_hi:.res 1  ; scratch: $20/$24 (scroll horizontal) ou $20/$28 (scroll vertical) - pagina fisica alvo do preload_screen_nt';
         $lines[] = 'nmi_flag:   .res 1';
         $lines[] = 'tmp0:       .res 1';
         $lines[] = 'tmp1:       .res 1';
@@ -277,14 +285,34 @@ ASM;
         $lines[] = '  LDA game_state';
         $lines[] = '  CMP #1';
         $lines[] = '  BNE nmi_scroll_static';
-        $lines[] = '  LDA #%10010000';
-        $lines[] = '  ORA nt_page          ; bit0 = pagina nametable esquerda atual';
-        $lines[] = '  STA $2000';
-        $lines[] = '  BIT $2002';
-        $lines[] = '  LDA scroll_x';
-        $lines[] = '  STA $2005';
-        $lines[] = '  LDA #0';
-        $lines[] = '  STA $2005';
+        if (($ctx['scrollOrientation'] ?? 'horizontal') === 'vertical') {
+            // Item scroll vertical: mirroring HORIZONTAL da PPU - nametables
+            // empilhadas ($2000=topo, $2800=baixo, mirror em $2400/$2C00).
+            // Bit1 de $2000 escolhe qual das duas e' a "de cima" (bit0 fica
+            // sempre 0 aqui - so' existem 2 paginas fisicas distintas nesse
+            // mirroring, nao 4). $2005 escreve Y primeiro? NAO - $2005
+            // SEMPRE recebe X primeiro depois Y, essa ordem e' fixa no
+            // hardware (nao inverte por orientacao) - so' o VALOR de cada
+            // um e' que muda (X fica 0 fixo aqui, sem scroll horizontal).
+            $lines[] = '  LDA nt_row_page';
+            $lines[] = '  ASL A                 ; bit1 = pagina nametable de cima atual (0 ou 2)';
+            $lines[] = '  ORA #%10010000';
+            $lines[] = '  STA $2000';
+            $lines[] = '  BIT $2002';
+            $lines[] = '  LDA #0';
+            $lines[] = '  STA $2005';
+            $lines[] = '  LDA scroll_y';
+            $lines[] = '  STA $2005';
+        } else {
+            $lines[] = '  LDA #%10010000';
+            $lines[] = '  ORA nt_page          ; bit0 = pagina nametable esquerda atual';
+            $lines[] = '  STA $2000';
+            $lines[] = '  BIT $2002';
+            $lines[] = '  LDA scroll_x';
+            $lines[] = '  STA $2005';
+            $lines[] = '  LDA #0';
+            $lines[] = '  STA $2005';
+        }
         $lines[] = '  JMP nmi_scroll_done';
         $lines[] = 'nmi_scroll_static:';
         $lines[] = '  LDA #%10010000';
@@ -1009,6 +1037,20 @@ ASM;
 
     'player' => static function(array $ctx): string {
         $lastPlayIdx = (int)($ctx['lastPlayIdx'] ?? 0);
+        // Item scroll vertical: mv_hero_up/mv_hero_down (chamadas tanto pela
+        // acao "Mover" quanto pelo D-pad automatico em gravidade "None" -
+        // ver up_grav_on mais abaixo, JSR mv_hero_up/down direto) ganham um
+        // 3o comportamento na borda quando NAO e hard-cut: rola o mundo
+        // (scroll_y) em vez de nao fazer nada ("backlog" antigo). So' existe
+        // quando a ROM inteira e' de orientacao vertical (mutuamente
+        // exclusivo com scroll horizontal, mesma logica de header/mirroring).
+        if (($ctx['scrollOrientation'] ?? 'horizontal') === 'vertical') {
+            $mvhuScrollBranch = "  LDA scroll_y\n  SEC\n  SBC pv_move_speed\n  STA scroll_y\n  BCS mvhu_noscroll\n  JSR advance_screen_up\nmvhu_noscroll:\n  RTS\n";
+            $mvhdScrollBranch = "  LDA scroll_y\n  CLC\n  ADC pv_move_speed\n  STA scroll_y\n  BCC mvhd_noscroll\n  JSR advance_screen_down\nmvhd_noscroll:\n  RTS\n";
+        } else {
+            $mvhuScrollBranch = "  RTS\n";
+            $mvhdScrollBranch = "  RTS\n";
+        }
         $asm = <<<'ASM'
 update_player:
   LDA player_on
@@ -1325,7 +1367,8 @@ mv_hero_up:
   BCS mvhu_try
   LDX play_idx
   LDA PlayScreenHardCut,X
-  BEQ mvhu_done          ; nao e hard-cut - sem saida por cima ainda (scroll vertical: backlog)
+  BNE mvhu_hardcut_edge
+{{MVHU_SCROLL_BRANCH}}mvhu_hardcut_edge:
   JSR try_screen_up
   RTS
 mvhu_try:
@@ -1360,7 +1403,8 @@ mv_hero_down:
   BCC mvhd_try
   LDX play_idx
   LDA PlayScreenHardCut,X
-  BEQ mvhd_done          ; nao e hard-cut - sem saida por baixo ainda (scroll vertical: backlog)
+  BNE mvhd_hardcut_edge
+{{MVHD_SCROLL_BRANCH}}mvhd_hardcut_edge:
   JSR try_screen_down
   RTS
 mvhd_try:
@@ -1411,7 +1455,11 @@ ASM;
                 $asm
             );
         }
-        return str_replace('{{LAST_PLAY_IDX}}', (string)$lastPlayIdx, $asm);
+        return str_replace(
+            ['{{LAST_PLAY_IDX}}', '{{MVHU_SCROLL_BRANCH}}', '{{MVHD_SCROLL_BRANCH}}'],
+            [(string)$lastPlayIdx, $mvhuScrollBranch, $mvhdScrollBranch],
+            $asm
+        );
     },
 
     'scroll' => static function(array $ctx): string {
@@ -1595,6 +1643,92 @@ asl_noload:
   STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela" (pulso de 1 frame)
   RTS
 ASM;
+        // Item scroll vertical: mesma ideia de advance_screen_right/left,
+        // espelhada pro eixo Y - reaproveita preload_screen_nt de verdade
+        // (ela só escreve "a tela inteira na página X" a partir de A+
+        // psn_base_hi, não sabe nem precisa saber se é a vizinha de cima,
+        // baixo, esquerda ou direita). $28 é a página física "de baixo" no
+        // mirroring horizontal (mesma lógica de $24 ser "direita" no
+        // mirroring vertical) - só existe/faz sentido quando
+        // scrollOrientation==='vertical' (mutuamente exclusivo com
+        // advance_screen_right/left, nunca as duas famílias coexistem numa
+        // ROM de verdade).
+        if (($ctx['scrollOrientation'] ?? 'horizontal') === 'vertical') {
+            $asm .= <<<'ASM'
+
+advance_screen_down:
+  LDA nt_row_page
+  EOR #1
+  STA nt_row_page
+  LDA play_idx
+  CLC
+  ADC #2
+  CMP #{{PLAY_COUNT}}
+  BCS asd_noload
+  TAX
+  LDA PlayScreenTable,X
+  PHA
+  LDA nt_row_page
+  EOR #1
+  BEQ asd_base0
+  LDA #$28
+  JMP asd_baseok
+asd_base0:
+  LDA #$20
+asd_baseok:
+  STA psn_base_hi
+  PLA
+  JSR preload_screen_nt
+asd_noload:
+  INC play_idx
+  LDA play_idx
+  TAX
+  LDA PlayScreenTable,X
+  STA cur_screen
+  LDA play_idx
+  CLC
+  ADC #1
+  CMP #{{PLAY_COUNT}}
+  BCS asd_no_append
+  JSR spawn_append_screen
+asd_no_append:
+  LDA #1
+  STA pv_ev_enter
+  RTS
+
+advance_screen_up:
+  LDA nt_row_page
+  EOR #1
+  STA nt_row_page
+  LDA play_idx
+  SEC
+  SBC #1
+  BMI asu2_noload
+  TAX
+  LDA PlayScreenTable,X
+  PHA
+  LDA nt_row_page
+  BEQ asu2_base0
+  LDA #$28
+  JMP asu2_baseok
+asu2_base0:
+  LDA #$20
+asu2_baseok:
+  STA psn_base_hi
+  PLA
+  JSR preload_screen_nt
+asu2_noload:
+  DEC play_idx
+  LDA play_idx
+  TAX
+  LDA PlayScreenTable,X
+  STA cur_screen
+  JSR spawn_enemies
+  LDA #1
+  STA pv_ev_enter
+  RTS
+ASM;
+        }
         // Item auto-scroll horizontal: motor novo, isolado do resto do
         // arquivo (só existe se algum play_idx tiver PlayScreenAutoH=1).
         // auto_scroll_speed (variável reservada, ver ProgramCompiler::

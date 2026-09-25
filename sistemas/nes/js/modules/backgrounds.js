@@ -66,6 +66,36 @@ const BG = (() => {
     }
   }
 
+  // Item "célula sem metatile válido": toda tela nova nascia com
+  // metatileGrid preenchida de null (240 posições) - build só quebrava
+  // quando alguém esquecia de pintar uma célula (ou apagava com a
+  // ferramenta de tile cru) e nunca repintava. Agora toda tela nova já
+  // nasce com um metatile "Vazio" (4 tiles = tile 0 da PÁGINA atual, cor 0
+  // da paleta, sem colisão) em toda célula - reaproveita a mesma convenção
+  // que já existia (tile 0 = nada, nametable já nascia fill(0)). 1 metatile
+  // "Vazio" por página de CHR (tile 0 é local à página - id determinístico
+  // mt_empty_pg<N>, então nunca duplica, e ele PRECISA usar o tile 0 DESSA
+  // página pra passar no filtro de "pertence a esta página" que a
+  // compressão por banco já faz). Ressalva: assume que o tile 0 de cada
+  // página está mesmo em branco na CHR - convenção comum, mas se o usuário
+  // já tiver desenhado algo ali, esse metatile "Vazio" mostra aquilo em vez
+  // de branco (raro, e ainda assim válido pro build - só não fica bonito).
+  function getOrCreateEmptyMetatile(page){
+    if(!Project.data.metatiles) Project.data.metatiles = [];
+    const id = 'mt_empty_pg' + page;
+    let mt = Project.data.metatiles.find(m => m.id === id);
+    if(!mt){
+      const t0 = page * 256;
+      mt = { id, name: 'Vazio', w:2, h:2, tiles:[t0,t0,t0,t0], palette:0, collisionType:0, collisions:[0,0,0,0], isEmptyDefault:true };
+      Project.data.metatiles.push(mt);
+    }
+    return mt.id;
+  }
+  function blankMetatileGrid(page){
+    const id = getOrCreateEmptyMetatile(page);
+    return new Array(240).fill(id);
+  }
+
   // Item cutscene: migração 1x - telas que ainda estão em splashScreens (do
   // modelo antigo, tipo por-tela) viram backgrounds normais. Tipo agora é
   // propriedade da FASE (config.js), não da tela - ver ProjectParser.php.
@@ -963,7 +993,7 @@ const BG = (() => {
   // quanto automaticamente pelo bgChrPageSelect quando nenhuma tela salva usa a página escolhida.
   function promptNewCanvasForCurrentPage(){
     const name = prompt("Nome da nova tela:", `tela_pg${currentChrPage}`);
-    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0); metatileGrid = new Array(240).fill(null);
+    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0); metatileGrid = blankMetatileGrid(currentChrPage);
     textLayers = []; hitboxInstances = [];
     if(name){ currentEntryId = 'scr_'+Date.now(); currentEntryName = name.trim(); currentEntryType = null; }
     else { currentEntryId = null; currentEntryName = ''; currentEntryType = null; }
@@ -1002,7 +1032,7 @@ const BG = (() => {
     const draft = pageDrafts[newPage];
     if(draft){
       nametable = [...draft.nametable]; attributes = [...draft.attributes]; collisionMap = [...draft.collisionMap];
-      metatileGrid = draft.metatileGrid ? [...draft.metatileGrid] : new Array(240).fill(null);
+      metatileGrid = draft.metatileGrid ? [...draft.metatileGrid] : blankMetatileGrid(newPage);
       textLayers = JSON.parse(JSON.stringify(draft.textLayers));
       hitboxInstances = JSON.parse(JSON.stringify(draft.hitboxInstances || []));
       currentEntryId = null; currentEntryName = ''; currentEntryType = null;
@@ -1042,7 +1072,16 @@ const BG = (() => {
     const textNote = hasText
       ? ` <span style="color:#888">(reduzido de 64 — esta página tem tela com texto, a fonte reserva ${fontTiles} tiles)</span>`
       : '';
-    el.innerHTML = `<span style="color:${color}">${count} / ${cap} metatiles</span>${textNote}`;
+    // Item "célula sem metatile válido": o metatile "Vazio" auto-criado pra
+    // tela nova (ver blankMetatileGrid) conta pro limite igual qualquer
+    // outro - 1 metatile de verdade, 4 tiles físicos no banco final (mesmo
+    // repetindo o mesmo tile 4x). Avisa aqui pelo mesmo motivo que o aviso
+    // de fonte já existe: custo que não é óbvio olhando só a arte da tela.
+    const hasEmptyMt = (Project.data?.metatiles || []).some(m => m.id === 'mt_empty_pg' + currentChrPage);
+    const emptyNote = hasEmptyMt
+      ? ` <span style="color:#888">(inclui 1 "Vazio" reservado automaticamente pra célula nova/apagada)</span>`
+      : '';
+    el.innerHTML = `<span style="color:${color}">${count} / ${cap} metatiles</span>${textNote}${emptyNote}`;
   }
 
   function refreshMetatileList(){
@@ -1763,7 +1802,7 @@ const BG = (() => {
   }
 
   function clearBackground(){
-    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0); metatileGrid = new Array(240).fill(null); textLayers = []; hitboxInstances = []; selectedTextIdx = null; render();
+    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0); metatileGrid = blankMetatileGrid(currentChrPage); textLayers = []; hitboxInstances = []; selectedTextIdx = null; render();
   }
 
   // Carrega uma tela salva (background ou splash) e sincroniza a página do CHR trabalhada
@@ -1784,8 +1823,11 @@ const BG = (() => {
     nametable = b.nametable ? [...b.nametable] : new Array(960).fill(0);
     attributes = b.attributes ? [...b.attributes] : new Array(64).fill(0);
     collisionMap = b.collisionMap ? [...b.collisionMap] : new Array(960).fill(0);
-    // Camada 8: telas salvas antes dessa funcionalidade não têm grade -
-    // fica null (fallback cru no build, igual telas com edição manual).
+    // Camada 8: telas SALVAS antes dessa funcionalidade não têm grade - fica
+    // null de propósito (diferente de tela NOVA, que já nasce com metatile
+    // "Vazio" - ver blankMetatileGrid). Aqui é dado legado de verdade, sem
+    // conversão automática segura possível - o erro de build "repinte essa
+    // célula" ainda é o sinal certo pra esse caso específico.
     metatileGrid = b.metatileGrid ? [...b.metatileGrid] : new Array(240).fill(null);
     textLayers = b.textLayers ? [...b.textLayers] : [];
     hitboxInstances = b.hitboxInstances ? JSON.parse(JSON.stringify(b.hitboxInstances)) : [];
@@ -1875,7 +1917,7 @@ const BG = (() => {
       if(bgs.length > 0){ loadEntry('bg', bgs[0].id); return; }
     }
     currentEntryId = null; currentEntryName = ''; currentEntryType = null;
-    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0); metatileGrid = new Array(240).fill(null);
+    nametable = new Array(960).fill(0); attributes = new Array(64).fill(0); collisionMap = new Array(960).fill(0); metatileGrid = blankMetatileGrid(currentChrPage);
     textLayers = []; hitboxInstances = []; updateTextLayersUI(); updateBGSelect(); render();
   }
 
