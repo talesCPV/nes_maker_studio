@@ -76,13 +76,33 @@ final class ProjectParser
             }
         }
         $playScreenHardCut = [];
-        foreach ($playIdxs as $gi) {
+        $playScreenAutoH = [];
+        $playScreenLastInPhase = [];
+        $autoScrollHEnabled = false;
+        foreach ($playIdxs as $k => $gi) {
             $sc = $screenData[$gi] ?? null;
             $pid = is_array($sc) ? ($sc['phaseId'] ?? null) : null;
             $tt = ($pid !== null && isset($phaseTransitionById[(string)$pid])) ? $phaseTransitionById[(string)$pid] : 'scroll_h';
             $playScreenHardCut[] = ($tt === 'hard_cut') ? 1 : 0;
+            $isAutoH = ($tt === 'scroll_h_auto');
+            $playScreenAutoH[] = $isAutoH ? 1 : 0;
+            if ($isAutoH) $autoScrollHEnabled = true;
+            // Item auto-scroll (fix real - achado testando com projeto de 2
+            // fases): "ultima tela" tem que ser por FASE, nao pelo total de
+            // telas do projeto - senao o auto-scroll atravessa direto pra
+            // tela da PROXIMA fase (mesmo ela sendo hard_cut) em vez de parar.
+            // 1 = essa e' a ultima tela da sua fase (proxima tela nao existe
+            // ou pertence a outra fase).
+            $nextPid = null;
+            if ($k + 1 < count($playIdxs)) {
+                $nextSc = $screenData[$playIdxs[$k + 1]] ?? null;
+                $nextPid = is_array($nextSc) ? ($nextSc['phaseId'] ?? null) : null;
+            }
+            $playScreenLastInPhase[] = ((string)$pid !== (string)$nextPid) ? 1 : 0;
         }
         if (!$playScreenHardCut) $playScreenHardCut[] = 0;
+        if (!$playScreenAutoH) $playScreenAutoH[] = 0;
+        if (!$playScreenLastInPhase) $playScreenLastInPhase[] = 1;
 
         // Fase 9 (gravidade por fase): phase.gravity ('none'/'down'/'up'/
         // 'left'/'right') e phase.gravityStrength eram 100% ignorados - a
@@ -153,6 +173,31 @@ final class ProjectParser
                 }
             }
             $neighborRight[] = $nR; $neighborLeft[] = $nL; $neighborUp[] = $nU; $neighborDown[] = $nD;
+        }
+
+        // Item cutscene: tabela PARALELA à de cima, mas indexada por índice
+        // GLOBAL de tela (cur_screen) em vez de play_idx - cobre TODA tela
+        // (inclusive role='splash'/cutscene, que nunca entram em playIdxs).
+        // Existe só pra ação "Avançar Página" ter vizinho de verdade em
+        // fases de cutscene (achado num teste de build real: reaproveitar a
+        // tabela de cima simplesmente não funciona pra cutscene, já que ela
+        // só cobre telas jogáveis).
+        $bgIdToGlobalIdx = [];
+        foreach ($screenData as $gi => $sc) {
+            if (is_array($sc) && isset($sc['id'])) $bgIdToGlobalIdx[(string)$sc['id']] = (int)$gi;
+        }
+        $screenCutRight = [];
+        foreach ($screenData as $gi => $sc) {
+            $nR = 255;
+            if (is_array($sc) && isset($sc['gridX'], $sc['gridY'], $sc['phaseId'])) {
+                $cells = $cellByPhaseXY[(string)$sc['phaseId']] ?? null;
+                if (is_array($cells)) {
+                    $cell = $cells[((int)$sc['gridX'] + 1) . ',' . (int)$sc['gridY']] ?? null;
+                    $bgId = is_array($cell) ? (string)($cell['bgId'] ?? '') : '';
+                    if ($bgId !== '' && isset($bgIdToGlobalIdx[$bgId])) $nR = $bgIdToGlobalIdx[$bgId];
+                }
+            }
+            $screenCutRight[$gi] = $nR;
         }
 
         // Camada 7 (mappers plugaveis): decide de uma vez, pra ROM inteira,
@@ -331,9 +376,13 @@ final class ProjectParser
             'playCount' => count($playIdxs),
             'lastPlayIdx' => count($playIdxs) ? count($playIdxs) - 1 : 0,
             'playScreenHardCut' => $playScreenHardCut,
+            'playScreenAutoH' => $playScreenAutoH,
+            'playScreenLastInPhase' => $playScreenLastInPhase,
+            'autoScrollHEnabled' => $autoScrollHEnabled,
             'playScreenGravityOff' => $playScreenGravityOff,
             'playScreenGravityStrength' => $playScreenGravityStrength,
             'screenNeighborRight' => $neighborRight,
+            'screenCutRight' => $screenCutRight,
             'screenNeighborLeft' => $neighborLeft,
             'screenNeighborUp' => $neighborUp,
             'screenNeighborDown' => $neighborDown,
@@ -1216,9 +1265,12 @@ final class ProjectParser
         $bgs = is_array($project['backgrounds'] ?? null) ? $project['backgrounds'] : [];
         $splashes = is_array($project['splashScreens'] ?? null) ? $project['splashScreens'] : [];
         $bgById = [];
-        $splashById = [];
+        // Item cutscene: unificado - tipo agora é da FASE, não da tela (ver
+        // abaixo). splashScreens só é lido aqui por compat com projetos
+        // salvos antes dessa mudança (o editor já migra tudo pra
+        // backgrounds ao abrir - ver backgrounds.js migrateSplashScreensToBackgrounds).
         foreach ($bgs as $bg) if (is_array($bg) && isset($bg['id'])) $bgById[(string)$bg['id']] = $bg;
-        foreach ($splashes as $sp) if (is_array($sp) && isset($sp['id'])) $splashById[(string)$sp['id']] = $sp;
+        foreach ($splashes as $sp) if (is_array($sp) && isset($sp['id']) && !isset($bgById[(string)$sp['id']])) $bgById[(string)$sp['id']] = $sp;
 
         $assetFields = static function (?array $asset, string $id, string $name): array {
             return [
@@ -1251,18 +1303,21 @@ final class ProjectParser
             if (!is_array($lm) || !is_array($lm['cells'] ?? null)) continue;
             $cols = max(1, (int)($lm['cols'] ?? 1));
             $rows = max(1, (int)($lm['rows'] ?? 1));
+            // Item cutscene: tipo agora é da FASE inteira (nunca por-célula) -
+            // impossível misturar Gameplay com Cutscene dentro da mesma fase,
+            // por construção (não é mais uma regra de validação, é assim que
+            // o dado é lido). Isso é a causa raiz do bug de colisão fantasma
+            // ficar impossível de acontecer de novo.
+            $isSplash = (($ph['type'] ?? 'gameplay') === 'cutscene');
             for ($y = 0; $y < $rows; $y++) {
                 for ($x = 0; $x < $cols; $x++) {
                     $cell = $lm['cells'][$x . ',' . $y] ?? null;
                     if (!is_array($cell) || empty($cell['bgId'])) continue;
                     $id = (string)$cell['bgId'];
                     if (isset($seen[$id])) continue;
-                    $asset = (($cell['type'] ?? '') === 'splash')
-                        ? ($splashById[$id] ?? null)
-                        : ($bgById[$id] ?? null);
+                    $asset = $bgById[$id] ?? null;
                     if (!is_array($asset)) continue;
                     $seen[$id] = true;
-                    $isSplash = (($cell['type'] ?? '') === 'splash');
                     $screens[] = array_merge($assetFields($asset, $id, $id), [
                         'type' => $isSplash ? 'splash' : 'background',
                         'phaseId' => $ph['id'] ?? null,

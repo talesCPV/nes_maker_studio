@@ -66,7 +66,22 @@ const BG = (() => {
     }
   }
 
+  // Item cutscene: migração 1x - telas que ainda estão em splashScreens (do
+  // modelo antigo, tipo por-tela) viram backgrounds normais. Tipo agora é
+  // propriedade da FASE (config.js), não da tela - ver ProjectParser.php.
+  // Idempotente (splashScreens fica vazio depois, não roda de novo à toa).
+  function migrateSplashScreensToBackgrounds(){
+    if(!Project.data) return;
+    const sp = Project.data.splashScreens;
+    if(!Array.isArray(sp) || sp.length === 0) return;
+    if(!Array.isArray(Project.data.backgrounds)) Project.data.backgrounds = [];
+    const existingIds = new Set(Project.data.backgrounds.map(b => b.id));
+    sp.forEach(s => { if(!existingIds.has(s.id)) Project.data.backgrounds.push(s); });
+    Project.data.splashScreens = [];
+  }
+
   function buildHTML(){
+    migrateSplashScreensToBackgrounds();
     const root = document.getElementById('mod-bg');
     if(!root) return;
     root.innerHTML = `
@@ -102,12 +117,6 @@ const BG = (() => {
             <div id="bgGridPane" style="flex:1 1 auto;padding:12px;overflow:auto;display:flex;flex-direction:column;align-items:center;gap:8px;box-sizing:border-box">
               <div style="display:flex;gap:12px;align-items:center;font-size:11px;color:#888;flex-wrap:wrap">
                 <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="chkShowHitbox" checked> Hitbox</label>
-                <label style="display:flex;align-items:center;gap:4px">Tipo:
-                  <select id="bgEntryTypeSelect" title="Tipo da tela (Background ou Splash)" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:2px 4px;font-size:11px">
-                    <option value="bg">Background</option>
-                    <option value="splash">Splash</option>
-                  </select>
-                </label>
                 <label style="display:flex;align-items:center;gap:4px">Grid:
                   <select id="bgGridSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:2px 4px;font-size:11px">
                     <option value="none">Sem grid</option>
@@ -1793,40 +1802,32 @@ const BG = (() => {
 
   function getSelectedEntryType(){
     const sel = document.getElementById('bgEntryTypeSelect');
-    const v = sel?.value;
-    return v === 'splash' ? 'splash' : 'bg';
+    // Item cutscene: tipo de tela não é mais escolhido aqui - virou
+    // propriedade da FASE (Gameplay/Cutscene, ver config.js). Toda tela
+    // salva em Backgrounds é só "uma tela", ponto.
+    return 'bg';
   }
 
   function syncEntryTypeSelect(){
-    const sel = document.getElementById('bgEntryTypeSelect');
-    if(!sel) return;
-    if(currentEntryType === 'splash' || currentEntryType === 'bg'){
-      sel.value = currentEntryType;
-    }
+    // no-op - seletor de tipo removido (ver getSelectedEntryType).
   }
 
-  // Salva a tela atual como Background ou Splash (tipo do select acima do grid).
-  // Se já existia com outro tipo, remove do array antigo e grava no novo.
+  // Salva a tela atual (sempre em Project.data.backgrounds - ver
+  // getSelectedEntryType). Mantém o parâmetro por compatibilidade com quem
+  // ainda chama saveEntryAs('splash') em código antigo/callbacks salvos.
   function saveEntryAs(type){
     if(!Project.data) return;
     if(!Project.data.backgrounds) Project.data.backgrounds = [];
-    if(!Project.data.splashScreens) Project.data.splashScreens = [];
     if(!currentEntryId){ currentEntryId = 'scr_'+Date.now(); if(!currentEntryName) currentEntryName = `tela_${Date.now()}`; }
 
-    const targetArr = type === 'splash' ? Project.data.splashScreens : Project.data.backgrounds;
-    const otherArr = type === 'splash' ? Project.data.backgrounds : Project.data.splashScreens;
-    if(currentEntryType && currentEntryType !== type){
-      const oi = otherArr.findIndex(e => e.id === currentEntryId);
-      if(oi >= 0) otherArr.splice(oi, 1);
-    }
+    const targetArr = Project.data.backgrounds;
     const payload = { id: currentEntryId, name: currentEntryName, nametable:[...nametable], attributes:[...attributes], metatileGrid:[...metatileGrid], textLayers:[...textLayers], hitboxInstances: JSON.parse(JSON.stringify(hitboxInstances)), chrPage: currentChrPage, created: Date.now() };
-    if(type === 'bg') payload.collisionMap = [...collisionMap];
     const idx = targetArr.findIndex(e => e.id === currentEntryId);
     if(idx >= 0) targetArr[idx] = { ...targetArr[idx], ...payload };
     else targetArr.push(payload);
 
-    const wasConverted = currentEntryType && currentEntryType !== type;
-    currentEntryType = type;
+    const wasConverted = false;
+    currentEntryType = 'bg';
     pruneEmptyEntries(); updateBGSelect(); syncEntryTypeSelect();
     Project.status(wasConverted
       ? `"${currentEntryName}" convertido pra ${type === 'splash' ? 'Splash' : 'Background'}`

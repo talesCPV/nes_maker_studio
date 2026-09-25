@@ -75,6 +75,7 @@ return [
         $lines[] = '  LDA pv_game_paused';
         $lines[] = '  BNE st_play_paused';
         $lines[] = '  JSR update_player';
+        if (!empty($ctx['autoScrollHEnabled'])) $lines[] = '  JSR auto_scroll_update';
         $lines[] = '  JSR update_enemies';
         $lines[] = 'st_play_paused:';
         $lines[] = '  JSR run_rules';

@@ -69,17 +69,13 @@ const CONFIG = (() => {
               </div>
 
               <div style="margin:10px 0;padding:10px;background:#111;border:1px solid #333;border-radius:6px">
-                <label style="font-size:10px;color:#888;display:block;margin-bottom:6px">Tabela de Força de Pulo</label>
+                <label style="font-size:10px;color:#888;display:block;margin-bottom:6px">Força de Pulo</label>
                 <div style="font-size:9px;color:#666;margin-bottom:6px;line-height:1.4">
-                  Níveis nomeados de força de pulo (0-255). Vincule um nível padrão a cada personagem em
-                  Personagens; Programação pode trocar o nível em tempo real via Ação (ex: power-up).
+                  Byte único (0-255) - é a variável reservada "Força de Pulo" (também em Programação &gt;
+                  Variáveis, editável em tempo real por uma Regra, ex: power-up). Substituiu a tabela de
+                  níveis nomeados - a ação "Aplicar Força de Pulo" agora recebe o valor direto.
                 </div>
-                <div id="dashJumpForcesList" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px"></div>
-                <div style="display:flex;gap:5px">
-                  <input id="dashJumpForceName" type="text" placeholder="nome (ex: Pulo Fraco)" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px">
-                  <input id="dashJumpForceValue" type="number" min="0" max="255" value="20" placeholder="valor" style="width:70px;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px">
-                  <button class="btn-tool" onclick="CONFIG.addJumpForce()" style="background:#27ae60;color:#fff">+ Adicionar</button>
-                </div>
+                <input id="dashJumpForce" type="number" min="0" max="255" value="15" style="width:80px;background:#000;color:#4ec9b0;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px;font-family:monospace">
               </div>
 
               <div style="margin:10px 0;padding:10px;background:#111;border:1px solid #333;border-radius:6px">
@@ -97,6 +93,28 @@ const CONFIG = (() => {
                   <input id="dashSpeedLevelName" type="text" placeholder="nome (ex: Andando)" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px">
                   <input id="dashSpeedLevelValue" type="number" min="0" max="255" value="1" placeholder="valor" style="width:70px;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px">
                   <button class="btn-tool" onclick="CONFIG.addSpeedLevel()" style="background:#27ae60;color:#fff">+ Adicionar</button>
+                </div>
+              </div>
+
+              <div style="margin:10px 0;padding:10px;background:#111;border:1px solid #333;border-radius:6px">
+                <label style="font-size:10px;color:#888;display:block;margin-bottom:6px">Velocidade do Auto-Scroll (Scroll Horizontal Automático)</label>
+                <div style="font-size:9px;color:#666;margin-bottom:6px;line-height:1.4">
+                  Byte único (0-255), sem casas decimais mas cobrindo velocidades bem altas e bem
+                  baixas: acima do meio anda vários px por frame; abaixo do meio anda 1px a cada N
+                  frames (movimento "lento" de verdade, sem precisar de sub-pixel). É uma variável
+                  reservada do motor - também aparece em Programação &gt; Variáveis, e pode ser trocada
+                  em runtime por uma Regra (ex: acelerar o scroll aos poucos).
+                </div>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input id="dashAutoScrollSpeed" type="number" min="0" max="255" value="128" style="width:80px;background:#000;color:#4ec9b0;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px;font-family:monospace">
+                  <span id="dashAutoScrollSpeedLegend" style="font-size:10px;color:#ffcc00"></span>
+                </div>
+                <div style="margin-top:8px">
+                  <label style="font-size:10px;color:#888;display:block;margin-bottom:4px">Comportamento do jogador</label>
+                  <select id="dashAutoScrollDrift" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px">
+                    <option value="1">Plataforma — fica parado no mundo se não andar (é arrastado ao bater na borda esquerda)</option>
+                    <option value="0">Nave — anda junto com a tela sozinho, sem recuar</option>
+                  </select>
                 </div>
               </div>
 
@@ -265,6 +283,38 @@ const CONFIG = (() => {
     });
     if(controlModeEl) controlModeEl.addEventListener('change', e=>{ if(Project.data) Project.data.controlMode=e.target.value; });
 
+    const autoScrollEl = document.getElementById('dashAutoScrollSpeed');
+    const autoScrollLegendEl = document.getElementById('dashAutoScrollSpeedLegend');
+    const updateAutoScrollLegend = (val) => {
+      if(!autoScrollLegendEl) return;
+      if(val === 0){ autoScrollLegendEl.textContent = '= parado (0 é um valor especial)'; return; }
+      const n = val - 128;
+      autoScrollLegendEl.textContent = n >= 0 ? `= ${n+1}px/frame` : `= 1px a cada ${1-n} frames`;
+    };
+    if(autoScrollEl){
+      updateAutoScrollLegend(parseInt(autoScrollEl.value) || 128);
+      autoScrollEl.addEventListener('input', () => {
+        let v = parseInt(autoScrollEl.value); if(isNaN(v)) v = 128;
+        v = Math.max(0, Math.min(255, v));
+        updateAutoScrollLegend(v);
+        ensureAutoScrollSpeedVar().initialValue = v;
+      });
+    }
+    const autoScrollDriftEl = document.getElementById('dashAutoScrollDrift');
+    if(autoScrollDriftEl){
+      autoScrollDriftEl.addEventListener('change', () => {
+        ensureAutoScrollDriftVar().initialValue = parseInt(autoScrollDriftEl.value) || 0;
+      });
+    }
+    const jfInputEl = document.getElementById('dashJumpForce');
+    if(jfInputEl){
+      jfInputEl.addEventListener('input', () => {
+        let v = parseInt(jfInputEl.value); if(isNaN(v)) v = 15;
+        v = Math.max(0, Math.min(255, v));
+        ensureJumpForceVar().initialValue = v;
+      });
+    }
+
     const updateConfig = () => {
       if(!Project.data) return;
       if(!Project.data.gameConfig) Project.data.gameConfig = {};
@@ -287,47 +337,44 @@ const CONFIG = (() => {
     });
   }
 
-  // Tabelas de força de pulo/velocidade - mesmo padrão simples de lista+add usado em outros
-  // lugares do projeto (Programação: Variáveis, Objetos...).
-  function renderJumpForces(){
-    const el = document.getElementById('dashJumpForcesList'); if(!el || !Project.data) return;
-    const list = Project.data.jumpForces || [];
-    el.innerHTML = list.map((f,i) => `
-      <div style="display:flex;gap:6px;align-items:center;background:#000;border:1px solid #333;border-radius:4px;padding:4px 6px">
-        <div style="display:flex;flex-direction:column;gap:1px">
-          <button class="btn-tool" onclick="CONFIG.moveJumpForce('${f.id}',-1)" ${i===0?'disabled':''} style="padding:0 4px;font-size:8px;line-height:1.4">▲</button>
-          <button class="btn-tool" onclick="CONFIG.moveJumpForce('${f.id}',1)" ${i===list.length-1?'disabled':''} style="padding:0 4px;font-size:8px;line-height:1.4">▼</button>
-        </div>
-        <input value="${esc(f.name)}" oninput="CONFIG.updateJumpForceProp('${f.id}','name',this.value)" style="flex:1;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px;min-width:0">
-        <input type="number" min="0" max="255" value="${f.value}" onchange="CONFIG.updateJumpForceProp('${f.id}','value',this.value)" style="width:56px;background:#000;color:#4ec9b0;border:1px solid #444;border-radius:4px;padding:4px;font-size:10px;font-family:monospace">
-        <button class="btn-tool" onclick="CONFIG.deleteJumpForce('${f.id}')" style="background:#7d2525;color:#fff;font-size:9px;padding:2px 5px">🗑</button>
-      </div>`).join('') || '<div style="color:#666;font-size:10px">Nenhum nível ainda.</div>';
+  // Variável reservada (mesma ideia de level-design.js) - criada preguiçosamente
+  // (só quando o campo de Auto-Scroll é mexido ou uma fase usa Scroll Horizontal
+  // Automático), nunca duplicada.
+  function ensureAutoScrollSpeedVar(){
+    if(!Project.data.variables) Project.data.variables = [];
+    let v = Project.data.variables.find(v => v.reserved === 'auto_scroll_speed');
+    if(!v){
+      v = { id:'var_auto_scroll_speed', name:'Velocidade do Auto-Scroll', type:'byte', zeroPage:false, initialValue:128, reserved:'auto_scroll_speed' };
+      Project.data.variables.push(v);
+    }
+    return v;
   }
-  function addJumpForce(){
-    const nameEl = document.getElementById('dashJumpForceName'); const valEl = document.getElementById('dashJumpForceValue');
-    const name = nameEl.value.trim(); if(!name || !Project.data) return;
-    if(!Project.data.jumpForces) Project.data.jumpForces = [];
-    let v = parseInt(valEl.value); if(isNaN(v)) v = 0; v = Math.max(0, Math.min(255, v));
-    Project.data.jumpForces.push({ id:'jf_'+Date.now(), name, value: v });
-    nameEl.value = ''; renderJumpForces();
+
+  // Bit de controle pedido pelo usuário: modo Plataforma (arrasta o jogador
+  // se ele não andar) vs modo Nave (ele anda junto com a tela sozinho).
+  // Default 1 (Plataforma) - mesmo default do fallback de boot em system.php.
+  function ensureAutoScrollDriftVar(){
+    if(!Project.data.variables) Project.data.variables = [];
+    let v = Project.data.variables.find(v => v.reserved === 'auto_scroll_drift');
+    if(!v){
+      v = { id:'var_auto_scroll_drift', name:'Auto-Scroll Arrasta Jogador', type:'byte', zeroPage:false, initialValue:1, reserved:'auto_scroll_drift' };
+      Project.data.variables.push(v);
+    }
+    return v;
   }
-  function updateJumpForceProp(id, prop, val){
-    const f = (Project.data?.jumpForces||[]).find(x=>x.id===id); if(!f) return;
-    if(prop==='name') f.name = val;
-    else { let v = parseInt(val); if(isNaN(v)) v = 0; f.value = Math.max(0, Math.min(255, v)); }
-    renderJumpForces();
-  }
-  function moveJumpForce(id, dir){
-    const list = Project.data?.jumpForces||[]; const i = list.findIndex(x=>x.id===id);
-    const j = i+dir; if(i<0||j<0||j>=list.length) return;
-    [list[i], list[j]] = [list[j], list[i]];
-    renderJumpForces();
-  }
-  function deleteJumpForce(id){
-    if(!Project.data?.jumpForces) return;
-    if(!confirm('Remover esse nível de pulo? Personagens/Regras que o usam ficam com referência quebrada.')) return;
-    Project.data.jumpForces = Project.data.jumpForces.filter(f=>f.id!==id);
-    renderJumpForces();
+
+  // Força de pulo virou variável reservada (mesmo mecanismo do auto-scroll,
+  // ver program.js ensureJumpForceVar - duplicada aqui pelo mesmo motivo das
+  // outras: cada módulo cria a variável sob demanda, idempotente, procura
+  // por reserved antes de criar).
+  function ensureJumpForceVar(){
+    if(!Project.data.variables) Project.data.variables = [];
+    let v = Project.data.variables.find(v => v.reserved === 'pv_jump_force');
+    if(!v){
+      v = { id:'var_jump_force', name:'Força de Pulo', type:'byte', zeroPage:false, initialValue:15, reserved:'pv_jump_force' };
+      Project.data.variables.push(v);
+    }
+    return v;
   }
 
   function renderSpeedLevels(){
@@ -410,12 +457,29 @@ const CONFIG = (() => {
       if(energyEl) energyEl.value = Project.data.gameConfig.energy || 16;
     }
 
+    const asVar = (Project.data.variables || []).find(v => v.reserved === 'auto_scroll_speed');
+    const asEl = document.getElementById('dashAutoScrollSpeed');
+    if(asEl){
+      const v = asVar ? (asVar.initialValue ?? 128) : 128;
+      asEl.value = v;
+      const legendEl = document.getElementById('dashAutoScrollSpeedLegend');
+      if(legendEl){
+        if(v === 0){ legendEl.textContent = '= parado (0 é um valor especial)'; }
+        else { const n = v - 128; legendEl.textContent = n >= 0 ? `= ${n+1}px/frame` : `= 1px a cada ${1-n} frames`; }
+      }
+    }
+    const adVar = (Project.data.variables || []).find(v => v.reserved === 'auto_scroll_drift');
+    const adEl = document.getElementById('dashAutoScrollDrift');
+    if(adEl) adEl.value = adVar ? String(adVar.initialValue ?? 1) : '1';
+
     const maxInst = Project.data.maxInstances || 10;
     if(maxInstEl) maxInstEl.value = maxInst;
     const bytesEl = document.getElementById('dashMaxInstancesBytes');
     if(bytesEl) bytesEl.textContent = maxInst*2;
 
-    renderJumpForces();
+    const jfVar = (Project.data.variables || []).find(v => v.reserved === 'pv_jump_force');
+    const jfEl = document.getElementById('dashJumpForce');
+    if(jfEl) jfEl.value = jfVar ? (jfVar.initialValue ?? 15) : 15;
     renderSpeedLevels();
 
     // Migração: .nms antigos tinham mirroring no nível do projeto.
@@ -587,6 +651,10 @@ const CONFIG = (() => {
 
       div.innerHTML=`
         <div style="display:flex;align-items:center;gap:10px">
+          <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
+            <button onclick="event.stopPropagation();CONFIG.movePhase(${idx},-1)" ${idx===0?'disabled':''} class="btn-tool" style="padding:1px 5px;font-size:9px;${idx===0?'opacity:0.3;cursor:default':''}" title="Mover pra cima">▲</button>
+            <button onclick="event.stopPropagation();CONFIG.movePhase(${idx},1)" ${idx===phases.length-1?'disabled':''} class="btn-tool" style="padding:1px 5px;font-size:9px;${idx===phases.length-1?'opacity:0.3;cursor:default':''}" title="Mover pra baixo">▼</button>
+          </div>
           <div style="width:32px;height:32px;background:#111;border:1px solid #333;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px">${gravityIcon}</div>
           <div style="flex:1">
             <div style="font-size:12px;color:#fff;font-weight:bold">${phase.name||'Fase '+(idx+1)} <span style="font-size:10px;color:#888">#${idx+1}</span></div>
@@ -594,6 +662,7 @@ const CONFIG = (() => {
           </div>
           <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
             ${chrBadge}
+            <span style="font-size:9px;background:${phase.type==='cutscene'?'#2a1a00':'#1a1a2e'};color:${phase.type==='cutscene'?'#ffb84d':'#8585ff'};padding:2px 6px;border-radius:3px;border:1px solid ${phase.type==='cutscene'?'#5a3a00':'#2a2a4a'}" title="Tipo da fase">${phase.type==='cutscene'?'🎬 Cutscene':'🕹 Gameplay'}</span>
             <span style="font-size:9px;background:#1a1a2e;color:#8585ff;padding:2px 6px;border-radius:3px;border:1px solid #2a2a4a" title="Transição desta fase (definida em Level Design)">${transLabel}</span>
             <span style="font-size:9px;background:#002a1a;color:#4ec9b0;padding:2px 6px;border-radius:3px;border:1px solid #004422">${phase.gravity} ${gravityIcon}</span>
           </div>
@@ -602,6 +671,21 @@ const CONFIG = (() => {
       list.appendChild(div);
     });
     updateStats();
+  }
+
+  // Item cutscene: reordena fases (troca com a vizinha). A 1ª fase do tipo
+  // Cutscene na ordem final vira a splash de abertura do jogo (ver
+  // ProjectParser::findRoleIndex) - por isso reordenar importa de verdade,
+  // não é só cosmético.
+  function movePhase(idx, dir){
+    const phases = Project.data?.phases; if(!phases) return;
+    const j = idx + dir;
+    if(j < 0 || j >= phases.length) return;
+    [phases[idx], phases[j]] = [phases[j], phases[idx]];
+    if(selectedPhase === idx) selectedPhase = j;
+    else if(selectedPhase === j) selectedPhase = idx;
+    renderPhases();
+    if(selectedPhase != null) selectPhase(selectedPhase);
   }
 
   function addPhase(){
@@ -722,6 +806,19 @@ const CONFIG = (() => {
 
         ${mapperWarning}
 
+        <div>
+          <label style="font-size:10px;color:#888">Tipo de Fase</label>
+          <select id="editPhaseType" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px">
+            <option value="gameplay" ${(phase.type||'gameplay')==='gameplay'?'selected':''}>🕹 Gameplay (jogável)</option>
+            <option value="cutscene" ${phase.type==='cutscene'?'selected':''}>🎬 Cutscene/Apresentação (não-jogável)</option>
+          </select>
+          <div style="font-size:9px;color:#666;margin-top:3px;line-height:1.4">
+            Cutscene: telas só exibidas, sem colisão/spawn de inimigo/jogador. Todas as telas desta fase
+            têm que ser do mesmo tipo (isso evita o bug de colisão fantasma que já corrigimos). A 1ª fase
+            Cutscene na ordem (setas ▲▼ na lista) vira a splash de abertura do jogo.
+          </div>
+        </div>
+
         <div style="display:flex;gap:8px">
           <div style="flex:1">
             <label style="font-size:10px;color:#888">Gravidade</label>
@@ -776,6 +873,7 @@ const CONFIG = (() => {
       phase.bg_page = 1;
       phase.bank = 0;
     }
+    phase.type = document.getElementById('editPhaseType')?.value === 'cutscene' ? 'cutscene' : 'gameplay';
     phase.gravity = document.getElementById('editPhaseGravity')?.value || 'down';
     phase.gravityStrength = parseInt(document.getElementById('editPhaseGravStr')?.value ?? 4);
 
@@ -816,7 +914,7 @@ const CONFIG = (() => {
   return { 
     init(){ buildHTML(); }, 
     renderPhases, 
-    addPhase, 
+    addPhase, movePhase,
     editPhase, 
     deletePhase, 
     selectPhase, 
@@ -827,7 +925,6 @@ const CONFIG = (() => {
     get selectedPhase(){ return selectedPhase; },
     getAvailableBanks,
     mirroringFromScroll,
-    addJumpForce, deleteJumpForce, updateJumpForceProp, moveJumpForce,
     addSpeedLevel, deleteSpeedLevel, updateSpeedLevelProp, moveSpeedLevel
   };
 })();

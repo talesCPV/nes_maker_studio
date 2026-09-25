@@ -80,6 +80,20 @@ return [
         if (!$hc) $hc = [0];
         $lines[] = 'PlayScreenHardCut:';
         $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => ((int)$v) ? '1' : '0', $hc));
+        // Item auto-scroll: 1 = fase dessa tela e' Scroll Horizontal
+        // Automático - motor avanca scroll_x sozinho (auto_scroll_update em
+        // system.php) em vez de esperar o D-pad bater na deadzone.
+        $ah = is_array($ctx['playScreenAutoH'] ?? null) ? $ctx['playScreenAutoH'] : [0];
+        if (!$ah) $ah = [0];
+        $lines[] = 'PlayScreenAutoH:';
+        $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => ((int)$v) ? '1' : '0', $ah));
+        // Item auto-scroll: 1 = proxima tela pertence a outra fase (ou nao ha
+        // proxima) - auto_scroll_update para de avancar aqui, mesmo que ainda
+        // faltem telas no PROJETO (so' nao pode atravessar fronteira de fase).
+        $lp = is_array($ctx['playScreenLastInPhase'] ?? null) ? $ctx['playScreenLastInPhase'] : [1];
+        if (!$lp) $lp = [1];
+        $lines[] = 'PlayScreenLastInPhase:';
+        $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => ((int)$v) ? '1' : '0', $lp));
         // Fase 9 fix (grade real): vizinho de verdade na grade 2D da fase,
         // indexado por play_idx - 255 = nao ha sala ali (bloqueado).
         foreach (['Right' => 'screenNeighborRight', 'Left' => 'screenNeighborLeft', 'Up' => 'screenNeighborUp', 'Down' => 'screenNeighborDown'] as $label => $key) {
@@ -88,6 +102,13 @@ return [
             $lines[] = "ScreenNeighbor{$label}:";
             $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => (string)max(0, min(255, (int)$v)), $vals));
         }
+        // Item cutscene: mesma ideia, mas indexada por tela GLOBAL (cur_screen)
+        // e cobrindo TODA tela do jogo (inclusive cutscene/splash, que nunca
+        // entram nas tabelas acima) - usada só pela ação "Avançar Página".
+        $cutR = is_array($ctx['screenCutRight'] ?? null) ? array_values($ctx['screenCutRight']) : [255];
+        if (!$cutR) $cutR = [255];
+        $lines[] = 'ScreenCutRight:';
+        $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => (string)max(0, min(255, (int)$v)), $cutR));
         // Fase 9 (gravidade por fase): 1 = "None" (Dashboard, sem queda/pulo).
         $go = is_array($ctx['playScreenGravityOff'] ?? null) ? $ctx['playScreenGravityOff'] : [0];
         if (!$go) $go = [0];

@@ -24,6 +24,7 @@ const PROGRAM = (() => {
   // Catálogo pequeno de ações primitivas (cresce com o tempo, não é por gênero de jogo).
   const ACTION_CATALOG = {
     goto_warp:   { label: 'Ir para Warp' },
+    advance_page:{ label: 'Avançar Página (Cutscene)' },
     load_phase:  { label: 'Carregar Fase' },
     spawn_character: { label: 'Spawnar Personagem' },
     set_on_ground: { label: 'Definir On Ground' },
@@ -86,6 +87,12 @@ const PROGRAM = (() => {
     let ramByte = 0, ramBit = 0, ramBoolOpen = false;
     const list = [];
     for(const v of vars){
+      if(v.reserved){
+        // Variável reservada: NÃO consome espaço da alocação normal - aponta
+        // pra um endereço fixo do motor (ver ProgramCompiler::allocateVariables).
+        list.push({ ...v, byteIndex: null, bitIndex: null, sizeBytes: v.type==='word'?2:1 });
+        continue;
+      }
       const isZP = !!v.zeroPage;
       if(v.type === 'bool'){
         if(isZP){
@@ -125,8 +132,41 @@ const PROGRAM = (() => {
     });
   }
 
+  // Item força de pulo virou variável reservada: aponta pro pv_jump_force que
+  // já existe sempre no motor (não é condicional como o do auto-scroll) -
+  // só precisa existir 1x em Project.data.variables pra aparecer em
+  // Programação>Variáveis. Criada automaticamente sempre que o módulo abre.
+  function ensureJumpForceVar(){
+    if(!Project.data.variables) Project.data.variables = [];
+    let v = Project.data.variables.find(v => v.reserved === 'pv_jump_force');
+    if(!v){
+      v = { id:'var_jump_force', name:'Força de Pulo', type:'byte', zeroPage:false, initialValue:0, reserved:'pv_jump_force' };
+      Project.data.variables.push(v);
+    }
+    return v;
+  }
+
+  // Migração de regras salvas ANTES da força de pulo virar valor literal:
+  // ações "Aplicar Força de Pulo" só tinham targetId (apontando pra tabela
+  // jumpForces) - resolve pro valor numérico 1x e grava em step.value, pra
+  // o campo novo (input numérico) já nascer preenchido certo. Idempotente
+  // (só mexe em steps sem 'value' ainda).
+  function migrateJumpForceSteps(){
+    const forces = Project.data?.jumpForces || [];
+    (Project.data?.rules || []).forEach(r => {
+      (r.steps || []).forEach(st => {
+        if(st && st.actionId === 'apply_jump_force' && st.value === undefined && st.targetId){
+          const f = forces.find(f => f.id === st.targetId);
+          st.value = f ? (f.value|0) : 0;
+        }
+      });
+    });
+  }
+
   function buildHTML(){
     migrateWarpKinds();
+    migrateJumpForceSteps();
+    ensureJumpForceVar();
     const root = document.getElementById('mod-program'); if(!root) return;
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
@@ -195,19 +235,23 @@ const PROGRAM = (() => {
     const vars = Project.data?.variables || [];
     const { list, instancePoolBytes, maxInstances, zpTotal, ramTotal } = computeAllocation(vars);
     const rows = list.map(v => {
-      const addr = v.byteIndex.toString(16).padStart(2,'0').toUpperCase();
-      const location = v.zeroPage ? `$00${addr} (zp)` : `$${(0x0300+v.byteIndex).toString(16).toUpperCase()} (ram)`;
+      const addr = v.byteIndex !== null ? v.byteIndex.toString(16).padStart(2,'0').toUpperCase() : null;
+      const location = v.reserved ? `<span title="Endereço fixo do motor - não conta na alocação normal">${v.reserved} (fixo)</span>`
+        : v.zeroPage ? `$00${addr} (zp)` : `$${(0x0300+v.byteIndex).toString(16).toUpperCase()} (ram)`;
       const bitPart = v.type==='bool' ? ` bit ${v.bitIndex}` : ` (${v.sizeBytes} byte${v.sizeBytes>1?'s':''})`;
+      const delBtn = v.reserved
+        ? `<span style="font-size:9px;color:#666" title="Variável reservada do motor - não pode ser removida">🔒</span>`
+        : `<button class="btn-tool" onclick="PROGRAM.deleteVariable('${v.id}')" style="background:#c0392b;color:#fff;font-size:10px">🗑</button>`;
       return `
       <tr style="border-bottom:1px solid #222">
-        <td style="padding:6px;color:#fff">${v.name}</td>
+        <td style="padding:6px;color:#fff">${v.name}${v.reserved?' <span style="font-size:9px;color:#ffcc00" title="Variável reservada do motor">⚙️</span>':''}</td>
         <td style="padding:6px;color:#888">${v.type}${v.zeroPage?' <span style="color:#4ec9b0">(zero page)</span>':''}</td>
-        <td style="padding:6px;color:#ffcc00;font-family:monospace">${location}${bitPart}</td>
+        <td style="padding:6px;color:#ffcc00;font-family:monospace">${location}${v.reserved?'':bitPart}</td>
         <td style="padding:6px">
           <input type="number" id="varVal_${v.id}" value="${v.initialValue ?? 0}" min="0" max="${maxForType(v.type)}" style="width:65px;background:#000;color:#4ec9b0;border:1px solid #444;border-radius:3px;padding:3px;font-family:monospace">
           <button class="btn-tool" onclick="PROGRAM.saveVariableValue('${v.id}')" style="font-size:9px;padding:2px 5px;background:#27ae60;color:#fff">💾</button>
         </td>
-        <td style="padding:6px;text-align:right"><button class="btn-tool" onclick="PROGRAM.deleteVariable('${v.id}')" style="background:#c0392b;color:#fff;font-size:10px">🗑</button></td>
+        <td style="padding:6px;text-align:right">${delBtn}</td>
       </tr>`;
     }).join('');
     return `
@@ -263,6 +307,8 @@ const PROGRAM = (() => {
   }
   function deleteVariable(id){
     if(!Project.data?.variables) return;
+    const v = Project.data.variables.find(v => v.id === id);
+    if(v?.reserved){ alert('Essa é uma variável reservada do motor - não pode ser removida.'); return; }
     if(!confirm('Remover essa variável? Qualquer Regra que a use vai ficar com referência quebrada.')) return;
     Project.data.variables = Project.data.variables.filter(v => v.id !== id);
     renderTab();
@@ -837,9 +883,11 @@ const PROGRAM = (() => {
             <option value="0" ${step.value=='0'?'selected':''}>Desativar (no ar)</option>
           </select>`;
       } else if(step.actionId === 'apply_jump_force'){
-        const forces = Project.data?.jumpForces || []; const chars = Project.data?.characters || [];
-        fields += `<select onchange="PROGRAM.updateStep('${rule.id}',${idx},'targetId',this.value)" style="${selStyle}">
-          <option value="">— força —</option>${forces.map(f=>`<option value="${f.id}" ${step.targetId===f.id?'selected':''}>${f.name} (${f.value})</option>`).join('')}</select>
+        // Item variável reservada: valor agora é digitado direto (0-255) -
+        // não passa mais pela tabela jumpForces (ficou como legado, ainda
+        // editável em Config mas não é mais lida por essa ação).
+        const chars = Project.data?.characters || [];
+        fields += `<input type="number" min="0" max="255" value="${step.value ?? 0}" placeholder="frames de impulso" onchange="PROGRAM.updateStep('${rule.id}',${idx},'value',parseInt(this.value)||0)" style="width:90px;background:#000;color:#4ec9b0;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px;font-family:monospace">
           <select onchange="PROGRAM.updateStep('${rule.id}',${idx},'charId',this.value)" style="${selStyle}">
             <option value="">— personagem —</option>${chars.map(c=>`<option value="${c.id}" ${step.charId===c.id?'selected':''}>${c.name}</option>`).join('')}</select>`;
       } else if(step.actionId === 'apply_speed_level'){

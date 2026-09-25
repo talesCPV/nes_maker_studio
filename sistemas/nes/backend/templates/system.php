@@ -354,6 +354,17 @@ ASM;
         }
         $lines[] = '  INX';
         $lines[] = '  BNE clrram';
+        if (!empty($ctx['autoScrollHEnabled'])) {
+            // Default de seguranca ANTES do program_init_vars, que sobrescreve
+            // com o valor de verdade escolhido pelo usuario (se a variavel
+            // reservada existir - ver allocateVariables). Sem isso, clrram
+            // deixaria os bytes em 0 (speed=quase parado, drift=modo nave)
+            // se por algum motivo a variavel nao tiver sido criada.
+            $lines[] = '  LDA #128';    // 1px/frame
+            $lines[] = '  STA auto_scroll_speed';
+            $lines[] = '  LDA #1';      // modo plataforma (arrasta o jogador)
+            $lines[] = '  STA auto_scroll_drift';
+        }
         $lines[] = '  JSR program_init_vars   ; Camada 6: valores iniciais != 0 das variaveis do usuario';
         $lines[] = 'vblankwait2:';
         $lines[] = '  BIT $2002';
@@ -589,15 +600,28 @@ world_col_from:
 wcf_sel_ok:
   STA gcw_sel
   BEQ wcf_use_cur
+  ; cruzou pra tela SEGUINTE do par de scroll - so' faz sentido em termos de
+  ; sequencia (play_idx+1), cur_screen ainda nao sabe dela.
   LDA play_idx
   CLC
   ADC #1
-  JMP wcf_have
-wcf_use_cur:
-  LDA play_idx
-wcf_have:
   TAX
   LDA PlayScreenTable,X
+  JMP wcf_store
+wcf_use_cur:
+  ; Item warp (fix real - achado testando com o usuario): usa cur_screen
+  ; DIRETO em vez de PlayScreenTable[play_idx]. Nos casos normais os dois
+  ; sao sempre iguais (cur_screen e' mantido em sincronia com play_idx em
+  ; todo load_screen/advance_screen_*), mas "Ir para Warp" so' garante
+  ; cur_screen certo (load_screen sempre atualiza) - play_idx so' e'
+  ; realinhado quando o destino esta na sequencia principal de telas da
+  ; fase (ver ProgramCompiler::compileGotoWarp). Destino fora dessa
+  ; sequencia (ex: uma tela marcada como splash no grid, mas usada como
+  ; alvo de warp de verdade) deixava play_idx apontando pra tela ANTERIOR,
+  ; e a colisao (que so' olhava play_idx) ficava lendo o mapa errado ate a
+  ; proxima rolagem de tela recalcular tudo.
+  LDA cur_screen
+wcf_store:
   STA gcw_screen
   LDA gcw_col
   LSR A
@@ -759,6 +783,9 @@ ASM;
         // extra; em modo Via Programação são o ÚNICO jeito do herói andar/pular.
         $asm = <<<'ASM'
 mv_hero_left:
+  LDX play_idx
+  LDA PlayScreenAutoH,X
+  BNE mvhl_move       ; tela em auto-scroll: jogador sempre livre - quem rola o mundo e' auto_scroll_update, nao esta acao
   LDA player_x
   CMP #96
   BCC mvhl_deadzone
@@ -801,12 +828,14 @@ mvhl_sel_ok:
   LDA play_idx
   CLC
   ADC #1
-  JMP mvhl_have
-mvhl_use_cur:
-  LDA play_idx
-mvhl_have:
   TAX
   LDA PlayScreenTable,X
+  JMP mvhl_store
+mvhl_use_cur:
+  ; Item warp (fix real, ver comentário completo em world_col_from) - usa
+  ; cur_screen direto em vez de PlayScreenTable[play_idx].
+  LDA cur_screen
+mvhl_store:
   STA gcw_screen
   LDA gcw_col
   LSR A
@@ -829,6 +858,12 @@ mvhl_no_cross:
 mvhl_blocked:
   RTS
 mvhl_move:
+  ; Item auto-scroll (fix real): mesma borda absoluta de up_left_move.
+  LDA player_x
+  CMP pv_move_speed
+  BCS mvhlm_edge_ok
+  JMP mvhl_move_blocked
+mvhlm_edge_ok:
   LDA player_x
   SEC
   SBC pv_move_speed
@@ -848,6 +883,9 @@ mvhl_move_blocked:
   RTS
 
 mv_hero_right:
+  LDX play_idx
+  LDA PlayScreenAutoH,X
+  BNE mvhr_move       ; tela em auto-scroll: jogador sempre livre - quem rola o mundo e' auto_scroll_update, nao esta acao
   LDA player_x
   CMP #152
   BCS mvhr_deadzone
@@ -887,12 +925,13 @@ mvhr_sel_ok:
   LDA play_idx
   CLC
   ADC #1
-  JMP mvhr_have
-mvhr_use_cur:
-  LDA play_idx
-mvhr_have:
   TAX
   LDA PlayScreenTable,X
+  JMP mvhr_store
+mvhr_use_cur:
+  ; Item warp (fix real, ver comentário completo em world_col_from).
+  LDA cur_screen
+mvhr_store:
   STA gcw_screen
   LDA gcw_col
   LSR A
@@ -915,6 +954,14 @@ mvhr_no_cross:
 mvhr_blocked:
   RTS
 mvhr_move:
+  ; Item auto-scroll (fix real): mesma borda absoluta de up_right_move,
+  ; com a mesma folga de 1 tile (ver comentário lá).
+  LDA player_x
+  CLC
+  ADC pv_move_speed
+  BCS mvhr_move_blocked
+  CMP #248
+  BCS mvhr_move_blocked
   LDA player_x
   CLC
   ADC pv_move_speed
@@ -961,6 +1008,9 @@ up_go:
   BNE up_left_check
   JMP up_right
 up_left_check:
+  LDX play_idx
+  LDA PlayScreenAutoH,X
+  BNE up_left_move    ; tela em auto-scroll: jogador sempre livre na tela - quem rola o mundo e' auto_scroll_update, nao o D-pad
   LDA player_x
   CMP #96             ; DEADZONE_LEFT
   BCC uls_deadzone    ; player_x < 96 -> tenta rolar em vez de mover o sprite
@@ -1018,12 +1068,13 @@ uls_sel_ok:
   LDA play_idx
   CLC
   ADC #1
-  JMP uls_have
-uls_use_cur:
-  LDA play_idx
-uls_have:
   TAX
   LDA PlayScreenTable,X
+  JMP uls_store
+uls_use_cur:
+  ; Item warp (fix real, ver comentário completo em world_col_from).
+  LDA cur_screen
+uls_store:
   STA gcw_screen
   LDA gcw_col
   LSR A
@@ -1046,6 +1097,15 @@ uls_no_cross:
   JMP up_jump          ; NAO cair em up_left_move - senao o player anda De novo por
   ; cima do que o scroll ja moveu (dobra a velocidade percebida - bug reportado)
 up_left_move:
+  ; Item auto-scroll (fix real): sem a deadzone, nada mais impedia o
+  ; jogador de estourar x<0 (virava 255 - "atravessar" pro lado errado da
+  ; tela). Trata a borda absoluta como parede, mesmo esquema de bloqueio
+  ; que ja existe pra colisao normal.
+  LDA player_x
+  CMP pv_move_speed
+  BCS ulm_edge_ok
+  JMP up_right          ; bloqueado - borda esquerda absoluta (x-velocidade < 0)
+ulm_edge_ok:
   ; tile X na borda esquerda proposta (x-velocidade+hb_left) - movimento livre dentro da deadzone
   LDA player_x
   SEC
@@ -1068,6 +1128,9 @@ up_right:
   BNE up_right_check
   JMP up_jump
 up_right_check:
+  LDX play_idx
+  LDA PlayScreenAutoH,X
+  BNE up_right_move   ; tela em auto-scroll: jogador sempre livre na tela - quem rola o mundo e' auto_scroll_update, nao o D-pad
   LDA player_x
   CMP #152            ; DEADZONE_RIGHT
   BCS urs_deadzone    ; player_x >= 152 -> tenta rolar em vez de mover o sprite
@@ -1113,12 +1176,13 @@ urs_sel_ok:
   LDA play_idx
   CLC
   ADC #1
-  JMP urs_have
-urs_use_cur:
-  LDA play_idx
-urs_have:
   TAX
   LDA PlayScreenTable,X
+  JMP urs_store
+urs_use_cur:
+  ; Item warp (fix real, ver comentário completo em world_col_from).
+  LDA cur_screen
+urs_store:
   STA gcw_screen
   LDA gcw_col
   LSR A
@@ -1140,6 +1204,16 @@ urs_no_cross:
   STA player_flip
   JMP up_jump
 up_right_move:
+  ; Item auto-scroll (fix real): borda direita absoluta, com 1 tile (8px) de
+  ; folga de propósito - sem essa folga o sprite (mais largo que 1px) ficava
+  ; parcialmente exibido do lado ESQUERDO da tela por wraparound de OAM
+  ; quando colado bem em x=255 (achado pelo usuário testando).
+  LDA player_x
+  CLC
+  ADC pv_move_speed
+  BCS up_jump            ; overflow de verdade (soma >= 256) - sempre bloqueado
+  CMP #248
+  BCS up_jump             ; soma >= 248 - bloqueado (guarda 1 tile de folga da borda)
   ; tile X na borda direita proposta (x+velocidade+hb_right) - movimento livre dentro da deadzone
   LDA player_x
   CLC
@@ -1251,8 +1325,9 @@ mvhu_try:
   LSR A
   LSR A
   STA col_y
-  LDX play_idx
-  LDA PlayScreenTable,X
+  ; Item warp (fix real, ver comentário completo em world_col_from) - usa
+  ; cur_screen direto (movimento vertical nunca cruza pra outra tela).
+  LDA cur_screen
   STA gcw_screen
   JSR check_wall_at_vert
   LDA col_result
@@ -1285,8 +1360,8 @@ mvhd_try:
   LSR A
   LSR A
   STA col_y
-  LDX play_idx
-  LDA PlayScreenTable,X
+  ; Item warp (fix real, ver comentário completo em world_col_from).
+  LDA cur_screen
   STA gcw_screen
   JSR check_wall_at_vert
   LDA col_result
@@ -1338,6 +1413,24 @@ goto_play_screen:
   TAX
   LDA PlayScreenTable,X
   JSR load_screen
+  RTS
+
+; Item cutscene: "Avançar Página" - igual try_screen_right em espírito, mas
+; indexada por cur_screen (tela GLOBAL) via ScreenCutRight em vez de play_idx
+; via ScreenNeighborRight, porque telas de cutscene nunca entram em playIdxs
+; (achado num teste de build real - reaproveitar try_screen_right direto não
+; funcionava). Sem reset de player_x/spawn_enemies (cutscene não tem jogador
+; andando por ela) - só troca de tela mesmo, ou não faz nada se não houver
+; próxima página (255 = fim da fase/cutscene).
+advance_page_screen:
+  LDX cur_screen
+  LDA ScreenCutRight,X
+  CMP #255
+  BEQ aps_done
+  JSR load_screen
+  LDA #1
+  STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela"
+aps_done:
   RTS
 
 ; Fase 9 fix (grade real): usa o vizinho de verdade da grade 2D da fase
@@ -1489,6 +1582,84 @@ asl_noload:
   STA pv_ev_enter   ; Camada 6: flag nativa "Entrou na tela" (pulso de 1 frame)
   RTS
 ASM;
+        // Item auto-scroll horizontal: motor novo, isolado do resto do
+        // arquivo (só existe se algum play_idx tiver PlayScreenAutoH=1).
+        // auto_scroll_speed (variável reservada, ver ProgramCompiler::
+        // allocateVariables) codifica velocidade num único byte sem
+        // sub-pixel: n = valor-128; n>=0 -> (n+1) px/frame; n<0 -> 1px a
+        // cada (1-n) frames (contador auto_scroll_acc, puramente interno).
+        // NÃO faz checagem de parede (Camada de colisão do level design é
+        // responsabilidade do usuário aqui - o scroll nunca para sozinho);
+        // o jogador pode ficar preso contra uma hitbox e isso é
+        // intencional (evento pra Regras tratarem, decidido com o
+        // usuário). Para de avançar na última tela da fase (mesmo clamp
+        // que o scroll manual já tem).
+        if (!empty($ctx['autoScrollHEnabled'])) {
+            $asm .= <<<'ASM'
+
+auto_scroll_update:
+  LDA player_on
+  BEQ asu_end
+  LDX play_idx
+  LDA PlayScreenAutoH,X
+  BEQ asu_end
+  LDA auto_scroll_speed
+  BEQ asu_end            ; byte=0 -> parado de vez (nao arrasta o jogador tambem)
+  LDA PlayScreenLastInPhase,X
+  BNE asu_end            ; ultima tela DESTA FASE - nao ha mais scroll (nao pode atravessar pra fase seguinte)
+  LDA auto_scroll_speed
+  SEC
+  SBC #128
+  STA mv_calc            ; n com sinal (-127..127, 0 ja' foi tratado acima)
+  BMI asu_slow
+  ; modo rapido: anda (n+1) px/frame direto
+  LDA mv_calc
+  CLC
+  ADC #1
+  STA auto_scroll_step
+  JMP asu_advance
+asu_slow:
+  ; modo lento: anda 1px so' quando o contador bate o limiar (1-n = 1+|n| frames)
+  LDA #1
+  SEC
+  SBC mv_calc
+  STA auto_scroll_step   ; reaproveitado como limiar por enquanto
+  INC auto_scroll_acc
+  LDA auto_scroll_acc
+  CMP auto_scroll_step
+  BCC asu_end             ; contador ainda nao chegou no limiar - nao mexe no scroll este frame
+  LDA #0
+  STA auto_scroll_acc
+  LDA #1
+  STA auto_scroll_step    ; passo real deste frame = 1px
+asu_advance:
+  ; "modo plataforma" (auto_scroll_drift!=0): jogador fica parado no
+  ; cenario se nao andar por conta propria - o mundo avanca por baixo dele
+  ; (player_x recua o mesmo tanto que o scroll avanca), ate' bater na borda
+  ; esquerda (0), onde passa a ser arrastado junto. "modo nave"
+  ; (auto_scroll_drift==0): player_x nunca recua sozinho - anda junto com a
+  ; tela automaticamente, so' o input do jogador move o sprite.
+  LDA auto_scroll_drift
+  BEQ asu_noplayer_drift
+  LDA player_x
+  SEC
+  SBC auto_scroll_step
+  BCS asu_px_ok
+  LDA #0
+asu_px_ok:
+  STA player_x
+asu_noplayer_drift:
+  LDA scroll_x
+  CLC
+  ADC auto_scroll_step
+  STA scroll_x
+  BCC asu_no_cross
+  JSR advance_screen_right
+asu_no_cross:
+asu_end:
+  RTS
+ASM;
+        }
         // Keep the same limits used by the current frontend generator.
         return str_replace(
             ['{{LAST_PLAY_IDX}}', '{{PLAY_COUNT}}'],

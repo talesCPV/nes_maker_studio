@@ -77,11 +77,45 @@ return [
     'program_vars_ram' => static function (array $ctx): string {
         $alloc = $ctx['program']['alloc'] ?? ['vars' => [], 'groupInitial' => []];
         $anyRam = false;
-        foreach ($alloc['vars'] as $v) if (!($v['zeroPage'] ?? false)) { $anyRam = true; break; }
+        foreach ($alloc['vars'] as $v) if (!($v['zeroPage'] ?? false) && empty($v['reserved'])) { $anyRam = true; break; }
         $paletteSwap = !empty($ctx['paletteSwapEnabled']);
         $musicEnabled = !empty($ctx['musicEnabled']);
-        if (!$anyRam && !$paletteSwap && !$musicEnabled) return '';
+        // O byte precisa existir sempre que HOUVER a variável reservada em
+        // Project.data.variables (porque program_init_vars, mais abaixo,
+        // escreve nela incondicionalmente pra QUALQUER variável existente -
+        // sem essa checagem, criar a variável em Config sem nenhuma fase
+        // ainda usando scroll_h_auto de verdade gerava "Symbol auto_scroll_speed
+        // is undefined" no ca65: bug real reportado pelo usuário) OU sempre
+        // que autoScrollHEnabled (alguma fase usa de verdade) - qualquer um
+        // dos dois basta, nunca precisam ser exatamente iguais.
+        $hasAutoScrollVar = false;
+        $hasAutoScrollDriftVar = false;
+        foreach ($alloc['vars'] as $v) {
+            if (($v['reserved'] ?? null) === 'auto_scroll_speed') $hasAutoScrollVar = true;
+            if (($v['reserved'] ?? null) === 'auto_scroll_drift') $hasAutoScrollDriftVar = true;
+        }
+        $autoScrollH = !empty($ctx['autoScrollHEnabled']) || $hasAutoScrollVar || $hasAutoScrollDriftVar;
+        if (!$anyRam && !$paletteSwap && !$musicEnabled && !$autoScrollH) return '';
         $lines = ['.segment "RAM"'];
+        if ($autoScrollH) {
+            // Item auto-scroll horizontal: auto_scroll_speed e' a variavel
+            // RESERVADA (aparece em Programacao > Variaveis, mas aponta pra
+            // ESTE endereco fixo em vez de gerar um pv_r_ novo - ver
+            // ProgramCompiler::allocateVariables) que codifica a velocidade
+            // num unico byte, sem sub-pixel: n = valor-128; n>=0 -> (n+1)
+            // px/frame; n<0 -> 1px a cada (|n|+1) frames. auto_scroll_acc e'
+            // so' o contador de frames do modo lento (n<0) - nunca exposto
+            // ao usuario, puramente interno de auto_scroll_update (system.php).
+            // auto_scroll_drift e' a 2a variavel reservada (bit de controle
+            // pedido pelo usuario): 1 = "modo plataforma" (jogador fica
+            // parado no mundo se nao andar - e' arrastado ao bater na borda
+            // esquerda); 0 = "modo nave" (jogador anda junto com a tela
+            // automaticamente, sem recuar - like era antes desse ajuste).
+            $lines[] = 'auto_scroll_speed: .res 1  ; variavel reservada - ver templates/program.php program_init_vars pro valor inicial (config do usuario)';
+            $lines[] = 'auto_scroll_drift: .res 1  ; variavel reservada - 1=modo plataforma (arrasta), 0=modo nave (anda junto)';
+            $lines[] = 'auto_scroll_acc:   .res 1  ; contador de frames interno (so usado no modo "1px a cada N frames")';
+            $lines[] = 'auto_scroll_step:  .res 1  ; scratch interno (quantos px avancar NESTE frame)';
+        }
         if ($paletteSwap) {
             // Camada 6 (acao "Trocar Paleta"): 1 bit por slot da PPU (0-3 BG,
             // 4-7 SPR) - a NMI varre esses 8 bits todo frame (custa quase
@@ -129,6 +163,7 @@ return [
         $seen = [];
         foreach ($alloc['vars'] as $v) {
             if ($v['zeroPage'] ?? false) continue;
+            if (!empty($v['reserved'])) continue; // já declarado pela feature dona (ex: auto_scroll_speed em system.php)
             if ($v['type'] === 'bool') {
                 if (isset($seen[$v['label']])) continue;
                 $seen[$v['label']] = true;

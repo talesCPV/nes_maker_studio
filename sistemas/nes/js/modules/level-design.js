@@ -3,6 +3,32 @@ const LEVEL_DESIGN = (() => {
   function defaultWorld(){
     return { cols: 4, rows: 4, transitionType: "hard_cut", cells: {} };
   }
+
+  // Variável reservada (aparece em Programação > Variáveis, mas aponta pro
+  // endereço fixo do motor auto_scroll_speed em vez de gerar um novo -
+  // permite trocar a velocidade do auto-scroll em runtime via Regras).
+  // Criada automaticamente na 1ª vez que uma fase usa "Scroll Horizontal
+  // Automático" - nunca duplicada (procura por reserved antes de criar).
+  function ensureAutoScrollSpeedVar(){
+    if(!Project.data.variables) Project.data.variables = [];
+    let v = Project.data.variables.find(v => v.reserved === 'auto_scroll_speed');
+    if(!v){
+      v = { id:'var_auto_scroll_speed', name:'Velocidade do Auto-Scroll', type:'byte', zeroPage:false, initialValue:128, reserved:'auto_scroll_speed' };
+      Project.data.variables.push(v);
+    }
+    return v;
+  }
+  // 2ª variável reservada (bit de controle): modo Plataforma (arrasta o
+  // jogador se ele não andar) vs modo Nave (anda junto com a tela sozinho).
+  function ensureAutoScrollDriftVar(){
+    if(!Project.data.variables) Project.data.variables = [];
+    let v = Project.data.variables.find(v => v.reserved === 'auto_scroll_drift');
+    if(!v){
+      v = { id:'var_auto_scroll_drift', name:'Auto-Scroll Arrasta Jogador', type:'byte', zeroPage:false, initialValue:1, reserved:'auto_scroll_drift' };
+      Project.data.variables.push(v);
+    }
+    return v;
+  }
   let currentPhaseId = null;
   let currentWorld = defaultWorld();
   let selectedAsset = { id: null, type: null }; 
@@ -67,43 +93,38 @@ const LEVEL_DESIGN = (() => {
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <!-- Topbar -->
-        <div style="display:flex;gap:8px;align-items:center;padding:8px 12px;background:#252526;border-bottom:1px solid #333;flex-wrap:wrap">
-          <h3 style="font-size:12px;color:#ffcc00;margin:0">🗺️ LEVEL DESIGN (MAPAS DE FASES)</h3>
-          <div style="display:flex;gap:6px;align-items:center;margin-left:12px">
-            <span style="font-size:11px;color:#888">Fase:</span>
-            <select id="ldPhaseSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 6px;font-size:11px;min-width:140px">
-              ${phases.length===0 ? '<option value="">Nenhuma fase criada</option>' : phases.map(p => `<option value="${p.id}" ${p.id===currentPhaseId?'selected':''}>${p.name}</option>`).join('')}
-            </select>
-            <span style="font-size:11px;color:#888">Transição:</span>
-            <select id="ldTransitionType" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 6px;font-size:11px">
-              <option value="hard_cut" ${currentWorld.transitionType==='hard_cut'?'selected':''}>Hard-Cut (Zelda)</option>
-              <option value="scroll_h" ${currentWorld.transitionType==='scroll_h'?'selected':''}>Scroll Horizontal (SMB1)</option>
-              <option value="scroll_v" ${currentWorld.transitionType==='scroll_v'?'selected':''}>Scroll Vertical</option>
-            </select>
-            <span style="font-size:11px;color:#888">Cols:</span>
-            <input id="ldCols" type="number" min="1" max="16" value="${currentWorld.cols}" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px;width:45px">
-            <span style="font-size:11px;color:#888">Rows:</span>
-            <input id="ldRows" type="number" min="1" max="16" value="${currentWorld.rows}" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px;width:45px">
-            <button class="btn-tool" onclick="LEVEL_DESIGN.resizeGrid()" style="padding:4px 8px">🔄 Redimensionar</button>
-          </div>
-          <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
-            <span style="font-size:10px;color:#666">💾 salva sozinho a cada edição - use o Salvar Projeto (topo) pra gravar o .nms</span>
-          </div>
+        <div id="ldToolsToolbar" style="display:flex;gap:6px;align-items:center;padding:6px 10px;background:#252526;border-bottom:1px solid #333;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;white-space:nowrap">
+          <h3 style="font-size:12px;color:#ffcc00;margin:0;flex-shrink:0">🗺️ LEVEL DESIGN</h3>
+          <span style="width:1px;height:24px;background:#444;margin:0 2px;flex-shrink:0"></span>
+          <span style="font-size:11px;color:#888;flex-shrink:0">Fase:</span>
+          <select id="ldPhaseSelect" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 6px;font-size:11px;min-width:140px">
+            ${phases.length===0 ? '<option value="">Nenhuma fase criada</option>' : phases.map(p => `<option value="${p.id}" ${p.id===currentPhaseId?'selected':''}>${p.name}</option>`).join('')}
+          </select>
+          <span style="font-size:11px;color:#888;flex-shrink:0">Transição:</span>
+          <select id="ldTransitionType" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 6px;font-size:11px">
+            <option value="hard_cut" ${currentWorld.transitionType==='hard_cut'?'selected':''}>Hard-Cut (Zelda)</option>
+            <option value="scroll_h" ${currentWorld.transitionType==='scroll_h'?'selected':''}>Scroll Horizontal (SMB1)</option>
+            <option value="scroll_h_auto" ${currentWorld.transitionType==='scroll_h_auto'?'selected':''}>Scroll Horizontal Automático</option>
+            <option value="scroll_v" ${currentWorld.transitionType==='scroll_v'?'selected':''}>Scroll Vertical (ainda não implementado - hoje se comporta igual Scroll Horizontal)</option>
+          </select>
+          <span style="font-size:11px;color:#888;flex-shrink:0">Cols:</span>
+          <input id="ldCols" type="number" min="1" max="16" value="${currentWorld.cols}" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px;width:45px">
+          <span style="font-size:11px;color:#888;flex-shrink:0">Rows:</span>
+          <input id="ldRows" type="number" min="1" max="16" value="${currentWorld.rows}" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px;width:45px">
+          <button class="btn-tool" onclick="LEVEL_DESIGN.resizeGrid()" style="padding:4px 8px;flex-shrink:0">🔄 Redimensionar</button>
+          <span style="width:1px;height:24px;background:#444;margin:0 2px;flex-shrink:0"></span>
+          <span style="font-size:10px;color:#888;margin-right:2px;flex-shrink:0">TOOLS</span>
+          <button type="button" class="icon-btn ld-tool-btn active" data-tool="place" onclick="LEVEL_DESIGN.setTool('place')" title="Posicionar">🧩</button>
+          <button type="button" class="icon-btn ld-tool-btn" data-tool="erase" onclick="LEVEL_DESIGN.setTool('erase')" title="Apagar">🧹</button>
+          <button type="button" class="icon-btn ld-tool-btn" data-tool="spawns" onclick="LEVEL_DESIGN.setTool('spawns')" title="Spawns - clique numa tela do grid para editar spawns de inimigos">👾</button>
+          <span style="width:1px;height:24px;background:#444;margin:0 2px;flex-shrink:0"></span>
+          <span id="ldHelpText" style="font-size:10px;color:#888;white-space:normal;max-width:min(360px,28vw);line-height:1.3;flex-shrink:0">Selecione um Asset e clique no grid.</span>
+          <span style="margin-left:auto;font-size:10px;color:#666;flex-shrink:0">💾 salva sozinho a cada edição - use o Salvar Projeto (topo) pra gravar o .nms</span>
         </div>
 
         <div style="display:flex;flex:1;overflow:hidden;min-height:0">
           <!-- Painel Esquerdo: Assets com Miniaturas -->
           <div style="width:300px;min-width:300px;background:#181818;border-right:1px solid #333;padding:12px;overflow:auto;display:flex;flex-direction:column;gap:12px">
-            <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">
-              <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">FERRAMENTAS</h4>
-              <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">
-                <button class="btn-tool ld-tool-btn active" data-tool="place" onclick="LEVEL_DESIGN.setTool('place')">🧩 Posicionar</button>
-                <button class="btn-tool ld-tool-btn" data-tool="erase" onclick="LEVEL_DESIGN.setTool('erase')" style="background:#c0392b;color:#fff">🧹 Apagar</button>
-                <button class="btn-tool ld-tool-btn" data-tool="spawns" onclick="LEVEL_DESIGN.setTool('spawns')" style="background:#8e44ad;color:#fff" title="Clique numa tela do grid para editar spawns de inimigos">👾 Spawns</button>
-              </div>
-              <div id="ldHelpText" style="font-size:10px;color:#888;background:#000;border:1px solid #222;border-radius:3px;padding:4px 6px">Selecione um Asset e clique no grid.</div>
-            </div>
-
             <!-- Painel de spawns: preview em cima, lista + form embaixo (vertical) -->
             <div id="ldSpawnPanel" style="background:#111;border:1px solid #5a2d82;border-radius:6px;padding:10px;display:none;flex-direction:column;gap:8px">
               <h4 style="font-size:11px;color:#c39bd3;margin:0">👾 SPAWNS DA TELA</h4>
@@ -127,12 +148,6 @@ const LEVEL_DESIGN = (() => {
               </div>
             </div>
 
-            <!-- Lista de Splash Screens -->
-            <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;display:flex;flex-direction:column;max-height:180px">
-              <h4 style="font-size:11px;color:#4ec9b0;margin-bottom:8px">SPLASH SCREENS</h4>
-              <div id="ldSplashList" style="display:flex;flex-direction:column;gap:6px;overflow:auto"></div>
-            </div>
-
             <!-- Lista de Backgrounds Desenhados -->
             <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;display:flex;flex-direction:column">
               <h4 style="font-size:11px;color:#ffcc00;margin-bottom:8px">BACKGROUNDS DESENHADOS</h4>
@@ -148,15 +163,23 @@ const LEVEL_DESIGN = (() => {
       </div>
     `;
     document.getElementById('ldPhaseSelect')?.addEventListener('change', e => loadPhaseMap(e.target.value));
-    document.getElementById('ldTransitionType')?.addEventListener('change', e => { currentWorld.transitionType = e.target.value; persistLevelMap(); });
+    document.getElementById('ldTransitionType')?.addEventListener('change', e => {
+      currentWorld.transitionType = e.target.value;
+      if (e.target.value === 'scroll_h_auto') { ensureAutoScrollSpeedVar(); ensureAutoScrollDriftVar(); }
+      persistLevelMap();
+    });
     refreshAssetLists();
     renderGrid();
   }
 
   function setTool(t) {
     activeTool = t;
-    document.querySelectorAll('.ld-tool-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector(`[data-tool="${t}"]`)?.classList.add('active');
+    document.querySelectorAll('#mod-world .ld-tool-btn[data-tool]').forEach(b => {
+      const on = b.getAttribute('data-tool') === t;
+      b.classList.toggle('active', on);
+      if(on){ b.style.background = '#007acc'; b.style.borderColor = '#007acc'; }
+      else { b.style.background = ''; b.style.borderColor = ''; }
+    });
     const help = document.getElementById('ldHelpText');
     if (!help) return;
     if (t === 'place') help.textContent = 'Clique em uma célula do grid para encaixar o Asset.';
@@ -222,10 +245,7 @@ const LEVEL_DESIGN = (() => {
   function getSelectedScreenAsset(){
     if (!selectedCell?.bgId) return null;
     const bgs = Project.data?.backgrounds || [];
-    const sps = Project.data?.splashScreens || [];
-    return selectedCell.type === 'splash'
-      ? sps.find(s => s.id === selectedCell.bgId)
-      : bgs.find(b => b.id === selectedCell.bgId);
+    return bgs.find(b => b.id === selectedCell.bgId);
   }
 
   function drawSpawnPreview(){
@@ -376,39 +396,9 @@ const LEVEL_DESIGN = (() => {
   }
 
   function refreshAssetLists() {
-    // 1. Splash Screens
-    const splashContainer = document.getElementById('ldSplashList');
-    if (splashContainer) {
-      splashContainer.innerHTML = '';
-      const splashes = (typeof BG !== 'undefined' && BG.getSplashScreens) ? BG.getSplashScreens() : (Project.data?.splashScreens || []);
-      
-      if (splashes.length === 0) {
-        splashContainer.innerHTML = `<div style="font-size:10px;color:#666">Nenhuma Splash Screen criada.</div>`;
-      } else {
-        splashes.forEach((s, idx) => {
-          const isSelected = selectedAsset.id === s.id && selectedAsset.type === 'splash';
-          const div = document.createElement('div');
-          div.style.cssText = `background:${isSelected?'#332a00':'#181818'};border:1px solid ${isSelected?'#ffcc00':'#444'};border-radius:4px;padding:6px;cursor:pointer;display:flex;gap:8px;align-items:center`;
-          
-          const canvas = document.createElement('canvas');
-          canvas.width = 64;
-          canvas.height = 48;
-          canvas.style.cssText = `background:#000;border:1px solid #333;border-radius:2px;flex-shrink:0`;
-          renderThumbnailToCanvas(canvas, s);
-
-          const info = document.createElement('div');
-          info.style.cssText = `font-size:11px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
-          info.textContent = s.name || `Splash ${idx}`;
-
-          div.appendChild(canvas);
-          div.appendChild(info);
-          div.onclick = () => { selectedAsset = { id: s.id, type: 'splash' }; refreshAssetLists(); };
-          splashContainer.appendChild(div);
-        });
-      }
-    }
-
-    // 2. Backgrounds Desenhados
+    // Item cutscene: não existe mais lista separada de Splash Screens aqui -
+    // telas splash antigas já foram migradas pra Project.data.backgrounds
+    // (ver BG.migrateSplashScreensToBackgrounds). Tipo agora é da FASE.
     const bgContainer = document.getElementById('ldBackgroundList');
     if (bgContainer) {
       bgContainer.innerHTML = '';
@@ -422,7 +412,13 @@ const LEVEL_DESIGN = (() => {
           const isSelected = selectedAsset.id === assetId && selectedAsset.type === 'background';
           const div = document.createElement('div');
           div.style.cssText = `background:${isSelected?'#333300':'#181818'};border:1px solid ${isSelected?'#ffcc00':'#444'};border-radius:4px;padding:6px;cursor:pointer;display:flex;gap:8px;align-items:center`;
-          
+          div.draggable = true;
+
+          const handle = document.createElement('span');
+          handle.textContent = '⋮⋮';
+          handle.title = 'Arraste para reordenar';
+          handle.style.cssText = `color:#666;cursor:grab;flex-shrink:0;font-size:12px;line-height:1`;
+
           const canvas = document.createElement('canvas');
           canvas.width = 64;
           canvas.height = 48;
@@ -433,9 +429,36 @@ const LEVEL_DESIGN = (() => {
           info.style.cssText = `font-size:11px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
           info.textContent = b.name || `Background ${idx}`;
 
+          div.appendChild(handle);
           div.appendChild(canvas);
           div.appendChild(info);
           div.onclick = () => { selectedAsset = { id: assetId, type: 'background' }; refreshAssetLists(); };
+
+          // Drag'n'drop pra reordenar - a ordem do array Project.data.backgrounds
+          // (via BG.getBackgrounds(), mesma referência) já é a ordem persistida no .nms.
+          div.addEventListener('dragstart', e => {
+            e.dataTransfer.setData('text/plain', String(idx));
+            e.dataTransfer.effectAllowed = 'move';
+            div.style.opacity = '0.4';
+          });
+          div.addEventListener('dragend', () => { div.style.opacity = '1'; });
+          div.addEventListener('dragover', e => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            div.style.boxShadow = 'inset 0 2px 0 #ffcc00';
+          });
+          div.addEventListener('dragleave', () => { div.style.boxShadow = ''; });
+          div.addEventListener('drop', e => {
+            e.preventDefault();
+            div.style.boxShadow = '';
+            const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
+            if (isNaN(fromIdx) || fromIdx === idx) return;
+            const [moved] = backgrounds.splice(fromIdx, 1);
+            backgrounds.splice(idx, 0, moved);
+            refreshAssetLists();
+            Project.status('Ordem dos backgrounds atualizada');
+          });
+
           bgContainer.appendChild(div);
         });
       }
@@ -463,11 +486,7 @@ const LEVEL_DESIGN = (() => {
           let borderColor = '#4ec9b0';
           let bgColor = '#0a221f';
 
-          if (cellData.type === 'splash') {
-            const splashes = (typeof BG !== 'undefined' && BG.getSplashScreens) ? BG.getSplashScreens() : (Project.data?.splashScreens || []);
-            assetObj = splashes.find(s => s.id === cellData.bgId);
-            if (assetObj) assetName = assetObj.name;
-          } else if (cellData.type === 'background') {
+          if (cellData.bgId) {
             const backgrounds = (typeof BG !== 'undefined' && BG.getBackgrounds) ? BG.getBackgrounds() : (Project.data?.backgrounds || []);
             assetObj = backgrounds.find((b, idx) => (b.id || idx) === cellData.bgId);
             if (assetObj) assetName = assetObj.name;
@@ -530,7 +549,7 @@ const LEVEL_DESIGN = (() => {
         alert('Selecione uma Splash Screen ou um Background na lista lateral esquerda primeiro.');
         return;
       }
-      currentWorld.cells[key] = { bgId: selectedAsset.id, type: selectedAsset.type, x, y };
+      currentWorld.cells[key] = { bgId: selectedAsset.id, x, y };
       renderGrid(); persistLevelMap();
     } else if (activeTool === 'erase') {
       delete currentWorld.cells[key];

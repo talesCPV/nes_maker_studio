@@ -344,10 +344,21 @@ final class ProgramCompiler
         foreach ($vars as $v) {
             if (!is_array($v) || empty($v['id']) || empty($v['name'])) continue;
             $id = (string)$v['id'];
+            $safeName = preg_replace('/[^a-zA-Z0-9_]/', '_', (string)$v['name']);
+            // Variável reservada: aponta pra um endereço FIXO do motor (ver
+            // templates/system.php ou program.php, onde esse label já é
+            // declarado condicionalmente pela feature dona dele) em vez de
+            // gerar um pv_r_/pv_z_ novo. Não participa da contagem de bytes
+            // da alocação normal - o espaço dela já é reservado à parte.
+            $reserved = is_string($v['reserved'] ?? null) && $v['reserved'] !== '' ? $v['reserved'] : null;
+            if ($reserved !== null) {
+                $initial = max(0, min(255, (int)($v['initialValue'] ?? 0)));
+                $list[$id] = ['id' => $id, 'name' => $safeName, 'type' => 'byte', 'zeroPage' => false, 'label' => $reserved, 'sizeBytes' => 1, 'initial' => $initial, 'reserved' => $reserved];
+                continue;
+            }
             $type = in_array($v['type'] ?? '', ['bool', 'byte', 'word'], true) ? $v['type'] : 'byte';
             $zp = !empty($v['zeroPage']);
             $initial = (int)($v['initialValue'] ?? 0);
-            $safeName = preg_replace('/[^a-zA-Z0-9_]/', '_', (string)$v['name']);
             if ($type === 'bool') {
                 $initial = $initial ? 1 : 0;
                 if ($zp) {
@@ -845,15 +856,29 @@ final class ProgramCompiler
                 return ["  ; Acao: Matar - alvo nao encontrado, ignorado"];
             case 'goto_warp':
                 return $this->compileGotoWarp($tag, $targetId, $hbCtx);
+            case 'advance_page':
+                // Item cutscene: chama a rotina dedicada (ScreenCutRight,
+                // indexada por cur_screen) - NÃO reaproveita try_screen_right
+                // (aquela é indexada por play_idx/ScreenNeighborRight, que só
+                // cobre telas jogáveis - telas de cutscene nunca entram lá).
+                return ["  ; Acao: Avancar Pagina", "  JSR advance_page_screen"];
             case 'apply_jump_force':
                 $charId = (string)($step['charId'] ?? '');
                 if ($charId !== '' && !isset($heroIds[$charId])) {
                     return ["  ; Acao: Aplicar Forca de Pulo - so suportado pro heroi por enquanto (alvo nao e o heroi)"];
                 }
-                if (!isset($hbCtx['jumpForceById'][$targetId])) {
-                    return ["  ; Acao: Aplicar Forca de Pulo - entrada '{$targetId}' nao encontrada na tabela, ignorado"];
+                // Item variavel reservada: valor agora vem direto do step (0-255).
+                // Compat com regras salvas ANTES dessa mudanca (so tinham
+                // targetId apontando pra tabela jumpForces, sem 'value'
+                // nenhum) - nesse caso cai pro lookup antigo, pra nao
+                // silenciosamente zerar a forca de pulo de projetos existentes.
+                if (array_key_exists('value', $step)) {
+                    $val = max(0, min(255, (int)($step['value'] ?? 0)));
+                } elseif (isset($hbCtx['jumpForceById'][$targetId])) {
+                    $val = $hbCtx['jumpForceById'][$targetId];
+                } else {
+                    $val = 0;
                 }
-                $val = $hbCtx['jumpForceById'][$targetId];
                 return ["  ; Acao: Aplicar Forca de Pulo ({$val} frames de impulso)", "  LDA #{$val}", "  STA pv_jump_force"];
             case 'apply_speed_level':
                 $charId = (string)($step['charId'] ?? '');
