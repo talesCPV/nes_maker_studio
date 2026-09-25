@@ -14,6 +14,99 @@ const CHR = (() => {
   let activePal = 0, activeSlot = 1;
   let colorSwap = null; // null | { step:0|1, a:0-3 }
 
+  // Item fonte-no-CHR: tile 0 de toda página é reservado pro metatile
+  // "Vazio" automático (ver backgrounds.js getOrCreateEmptyMetatile) e,
+  // quando a página tem fonte carimbada, os últimos N tiles (256-N..255,
+  // N=96 ascii/40 smb) são reservados pros glifos - travados por padrão,
+  // com destrava explícita por página (chrPages[i].emptyUnlocked/
+  // fontUnlocked). O MAPA de caractere->índice relativo aqui precisa bater
+  // EXATO com FontAsset.php::charMap() no backend - um não pode mudar sem
+  // o outro.
+  function computeFontCodeList(mode){
+    if(mode === 'smb'){
+      const codes = [];
+      for(let d=0; d<=9; d++) codes.push(48+d);
+      for(let l=0; l<26; l++) codes.push(65+l);
+      codes.push(32);
+      while(codes.length % 4 !== 0) codes.push(-1);
+      return codes;
+    }
+    const codes = [];
+    for(let c=32; c<=127; c++) codes.push(c);
+    return codes;
+  }
+  let _fontGlyphsPromise = null;
+  function fetchFontGlyphs(){
+    if(!_fontGlyphsPromise){
+      _fontGlyphsPromise = fetch('assets/novo.chr').then(r => r.arrayBuffer()).then(buf => new Uint8Array(buf).slice(0, 4096));
+    }
+    return _fontGlyphsPromise;
+  }
+  // Carimba o alfabeto de verdade (bytes de novo.chr) nos últimos N tiles da
+  // página, registra em chrPages[page].fontStamp. NUNCA roda sozinha de
+  // novo depois da 1ª vez (mudar o modo em Config não recarimba páginas já
+  // carimbadas - preserva customização do usuário) - quem decide QUANDO
+  // chamar isso é quem detecta a necessidade (backgrounds.js, ao adicionar
+  // texto numa página sem fontStamp ainda).
+  function stampFontIntoPage(page, mode){
+    return fetchFontGlyphs().then(glyphs => {
+      const codes = computeFontCodeList(mode);
+      const fontTiles = codes.length;
+      const base = page*256 + (256 - fontTiles);
+      for(let i=0;i<fontTiles;i++){
+        const code = codes[i];
+        const dstOff = (base+i)*16;
+        if(code < 0){ for(let k=0;k<16;k++) chrBuffer[dstOff+k] = 0; continue; }
+        const srcOff = code*16;
+        for(let k=0;k<16;k++) chrBuffer[dstOff+k] = glyphs[srcOff+k] || 0;
+      }
+      if(!chrPages[page]) chrPages[page] = { name:'Página '+page, role:'background' };
+      chrPages[page].fontStamp = { mode, tiles: fontTiles };
+      chrPages[page].fontUnlocked = false;
+      if(typeof renderAll === 'function') renderAll();
+      if(typeof Project !== 'undefined' && Project.status)
+        Project.status(`Fonte "${mode}" carimbada na página ${page} (últimos ${fontTiles} tiles)`);
+    });
+  }
+  function isTileLocked(absIdx){
+    const page = Math.floor(absIdx/256);
+    const local = absIdx % 256;
+    const pg = chrPages[page];
+    if(!pg) return false;
+    if(local === 0 && !pg.emptyUnlocked) return true;
+    if(pg.fontStamp && local >= (256 - pg.fontStamp.tiles) && !pg.fontUnlocked) return true;
+    return false;
+  }
+  function setEmptyUnlocked(page, v){
+    if(!chrPages[page]) return;
+    if(v && !chrPages[page].emptyUnlocked && typeof confirm === 'function'){
+      if(!confirm('O tile 0 desta página é usado por TODA célula "Vazio" (telas novas/apagadas) que usa esta página. Editar ele muda a aparência de todas de uma vez. Destravar mesmo assim?')) return;
+    }
+    chrPages[page].emptyUnlocked = !!v;
+    if(typeof renderSheet === 'function') renderSheet();
+  }
+  function setFontUnlocked(page, v){
+    if(!chrPages[page]) return;
+    if(v && !chrPages[page].fontUnlocked && typeof confirm === 'function'){
+      if(!confirm('Estes tiles são o alfabeto usado por todo texto sobreposto desta página. Editar/apagar uma letra muda como ela aparece em toda tela que a usa. Destravar mesmo assim?')) return;
+    }
+    chrPages[page].fontUnlocked = !!v;
+    if(typeof renderSheet === 'function') renderSheet();
+  }
+  // Recarimba a fonte PADRÃO na página atual, de propósito (nunca acontece
+  // sozinho) - único jeito de desfazer customização e voltar ao alfabeto
+  // original, ou trocar o modo (ascii/smb) de uma página já carimbada.
+  function restampFontPrompt(){
+    const page = currentBank;
+    const mode = (typeof Project !== 'undefined' && Project.data?.textFontMode && Project.data.textFontMode !== 'none') ? Project.data.textFontMode : 'ascii';
+    const already = chrPages[page]?.fontStamp;
+    const msg = already
+      ? `Recarimbar a fonte padrão (modo "${mode}") na página ${page}? Isso APAGA qualquer edição que você tenha feito nos tiles da fonte atual.`
+      : `Carimbar a fonte padrão (modo "${mode}") na página ${page}?`;
+    if(typeof confirm === 'function' && !confirm(msg)) return;
+    stampFontIntoPage(page, mode);
+  }
+
   /**
    * Aplica uma cor num slot de paleta. Slot 0 de QUALQUER paleta - fundo
    * (0-3) OU sprite (4-7) - é o MESMO byte físico na PPU ($3F00/$3F04/
@@ -147,6 +240,9 @@ const CHR = (() => {
                 <option value="background">Backgrounds</option>
               </select>
               <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ccc;cursor:pointer"><input type="checkbox" id="chkShowGrid" checked> grid</label>
+              <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ff8888;cursor:pointer" title="Tile 0 desta página é reservado pro metatile 'Vazio' automático"><input type="checkbox" id="chkUnlockEmpty"> 🔓 Vazio</label>
+              <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ff8888;cursor:pointer" title="Últimos tiles desta página são reservados pro alfabeto do texto sobreposto (só aparece se a página tiver fonte carimbada)"><input type="checkbox" id="chkUnlockFont"> 🔓 Fonte</label>
+              <button class="btn-tool" style="background:#333;color:#fff" onclick="CHR.restampFontPrompt()" title="Recarimba o alfabeto padrão nesta página (sobrescreve qualquer edição feita nos tiles da fonte)">🔄 Recarimbar fonte</button>
             </div>
             <canvas id="sheetCanvas" width="512" height="512" style="border:2px solid #333;background:#000;image-rendering:pixelated;cursor:crosshair;display:block"></canvas>
           </div>
@@ -568,13 +664,15 @@ const CHR = (() => {
       else chrPages.push({ name:'Página '+i, role:(i%2===0?'sprite':'background') });
     }
     if(chrPages.length > total) chrPages = chrPages.slice(0, total);
-    // Págs 0 e 1: tipo imutável
-    chrPages[0] = { name:(chrPages[0]?.name||'Sprites').toString().slice(0,32)||'Sprites', role:'sprite' };
-    chrPages[1] = { name:(chrPages[1]?.name||'Backgrounds').toString().slice(0,32)||'Backgrounds', role:'background' };
+    // Págs 0 e 1: tipo imutável (mas preserva fontStamp/travas - item
+    // fonte-no-CHR, senão toda vez que essa normalização roda perde o
+    // carimbo e o usuário teria que refazer).
+    chrPages[0] = { name:(chrPages[0]?.name||'Sprites').toString().slice(0,32)||'Sprites', role:'sprite', fontStamp:chrPages[0]?.fontStamp||null, emptyUnlocked:!!chrPages[0]?.emptyUnlocked, fontUnlocked:!!chrPages[0]?.fontUnlocked };
+    chrPages[1] = { name:(chrPages[1]?.name||'Backgrounds').toString().slice(0,32)||'Backgrounds', role:'background', fontStamp:chrPages[1]?.fontStamp||null, emptyUnlocked:!!chrPages[1]?.emptyUnlocked, fontUnlocked:!!chrPages[1]?.fontUnlocked };
     for(let i=2;i<chrPages.length;i++){
       const e = chrPages[i] || {};
       const role = (e.role==='background'||e.role==='sprite') ? e.role : (i%2===0?'sprite':'background');
-      chrPages[i] = { name:(e.name||('Página '+i)).toString().slice(0,32)||('Página '+i), role };
+      chrPages[i] = { name:(e.name||('Página '+i)).toString().slice(0,32)||('Página '+i), role, fontStamp:e.fontStamp||null, emptyUnlocked:!!e.emptyUnlocked, fontUnlocked:!!e.fontUnlocked };
     }
     return total;
   }
@@ -1045,7 +1143,54 @@ const CHR = (() => {
     flips[activeSlotIdx] = (flips[activeSlotIdx]|0) ^ 2;
     updateLabels(); renderAll();
   }
-  function renderSheet(){ if(!sheetCtx) return; sheetCtx.fillStyle="#000"; sheetCtx.fillRect(0,0,512,512); const base=currentBank*256; for(let ty=0;ty<16;ty++) for(let tx=0;tx<16;tx++) drawTile(sheetCtx, base+ty*16+tx, tx*32, ty*32, 4); if(document.getElementById('chkShowGrid')?.checked){ sheetCtx.save(); sheetCtx.strokeStyle="#888"; sheetCtx.setLineDash([2,2]); for(let x=32;x<512;x+=32){ sheetCtx.beginPath(); sheetCtx.moveTo(x+.5,0); sheetCtx.lineTo(x+.5,512); sheetCtx.stroke(); } for(let y=32;y<512;y+=32){ sheetCtx.beginPath(); sheetCtx.moveTo(0,y+.5); sheetCtx.lineTo(512,y+.5); sheetCtx.stroke(); } sheetCtx.restore(); } selectedTiles.forEach((ti,slot)=>{ const local=ti%256; if(Math.floor(ti/256)!==currentBank) return; const tx=local%16, ty=Math.floor(local/16), cur=slot===activeSlotIdx; sheetCtx.strokeStyle=cur?'#ffcc00':'#007acc'; sheetCtx.lineWidth=cur?3:2; sheetCtx.strokeRect(tx*32+1,ty*32+1,30,30); }); }
+  function renderSheet(){
+    if(!sheetCtx) return;
+    sheetCtx.fillStyle="#000"; sheetCtx.fillRect(0,0,512,512);
+    const base=currentBank*256;
+    for(let ty=0;ty<16;ty++) for(let tx=0;tx<16;tx++) drawTile(sheetCtx, base+ty*16+tx, tx*32, ty*32, 4);
+    // Item fonte-no-CHR: marca visualmente os tiles reservados (tile 0 =
+    // "Vazio", faixa da fonte = a letra/dígito que cada um representa) -
+    // cadeado quando travado, aberto quando destravado (ainda reservado,
+    // só editável de propósito).
+    const pg = chrPages[currentBank];
+    const locked0 = isTileLocked(base+0);
+    sheetCtx.save();
+    sheetCtx.font = '10px monospace';
+    sheetCtx.textBaseline = 'top';
+    sheetCtx.fillStyle = locked0 ? '#ff5555' : '#88ff88';
+    sheetCtx.fillText(locked0 ? '🔒' : '🔓', 1, 1);
+    sheetCtx.fillStyle = '#000'; sheetCtx.fillText('∅', 11, 12);
+    sheetCtx.fillStyle = '#ffcc00'; sheetCtx.fillText('∅', 10, 11);
+    if(pg && pg.fontStamp){
+      const codes = computeFontCodeList(pg.fontStamp.mode);
+      const fontStart = 256 - pg.fontStamp.tiles;
+      const fontLocked = isTileLocked(base+fontStart);
+      for(let i=0;i<codes.length;i++){
+        const local = fontStart+i, tx=local%16, ty=Math.floor(local/16);
+        const code = codes[i];
+        const ch = code >= 0 ? String.fromCharCode(code).trim() || '␣' : '';
+        sheetCtx.fillStyle = fontLocked ? '#ff5555' : '#88ff88';
+        if(i===0) sheetCtx.fillText(fontLocked ? '🔒' : '🔓', tx*32+1, ty*32+1);
+        if(ch){
+          sheetCtx.fillStyle = '#000'; sheetCtx.fillText(ch, tx*32+11, ty*32+20);
+          sheetCtx.fillStyle = '#ffcc00'; sheetCtx.fillText(ch, tx*32+10, ty*32+19);
+        }
+      }
+    }
+    sheetCtx.restore();
+    if(document.getElementById('chkShowGrid')?.checked){
+      sheetCtx.save(); sheetCtx.strokeStyle="#888"; sheetCtx.setLineDash([2,2]);
+      for(let x=32;x<512;x+=32){ sheetCtx.beginPath(); sheetCtx.moveTo(x+.5,0); sheetCtx.lineTo(x+.5,512); sheetCtx.stroke(); }
+      for(let y=32;y<512;y+=32){ sheetCtx.beginPath(); sheetCtx.moveTo(0,y+.5); sheetCtx.lineTo(512,y+.5); sheetCtx.stroke(); }
+      sheetCtx.restore();
+    }
+    selectedTiles.forEach((ti,slot)=>{
+      const local=ti%256; if(Math.floor(ti/256)!==currentBank) return;
+      const tx=local%16, ty=Math.floor(local/16), cur=slot===activeSlotIdx;
+      sheetCtx.strokeStyle=cur?'#ffcc00':'#007acc'; sheetCtx.lineWidth=cur?3:2;
+      sheetCtx.strokeRect(tx*32+1,ty*32+1,30,30);
+    });
+  }
   function bresenham(x0,y0,x1,y1){ const pts=[]; let dx=Math.abs(x1-x0), dy=Math.abs(y1-y0); let sx=x0<x1?1:-1, sy=y0<y1?1:-1, err=dx-dy; while(true){ pts.push({x:x0,y:y0}); if(x0===x1&&y0===y1) break; let e2=2*err; if(e2>-dy){ err-=dy; x0+=sx; } if(e2<dx){ err+=dx; y0+=sy; } } return pts; }
   function getRectPoints(x0,y0,x1,y1){ const pts=[]; const minX=Math.min(x0,x1), maxX=Math.max(x0,x1), minY=Math.min(y0,y1), maxY=Math.max(y0,y1); for(let x=minX;x<=maxX;x++){ pts.push({x,y:minY}); pts.push({x,y:maxY}); } for(let y=minY+1;y<=maxY-1;y++){ pts.push({x:minX,y}); pts.push({x:maxX,y}); } return pts; }
   function getCirclePoints(cx,cy,r){ const pts=[]; let x=r, y=0, err=0; while(x>=y){ pts.push({x:cx+x,y:cy+y},{x:cx+y,y:cy+x},{x:cx-y,y:cy+x},{x:cx-x,y:cy+y},{x:cx-x,y:cy-y},{x:cx-y,y:cy-x},{x:cx+y,y:cy-x},{x:cx+x,y:cy-y}); y++; if(err<=0){ err+=2*y+1; } if(err>0){ x--; err-=2*x+1; } } return pts; }
@@ -1078,7 +1223,7 @@ const CHR = (() => {
     for(let gy=0; gy<gridH; gy++){
       for(let gx=0; gx<gridW; gx++){
         const ti = tiles[gy * gridW + gx];
-        if(ti == null) continue;
+        if(ti == null || isTileLocked(ti)) continue;
         const off = ti * 16;
         if(off + 16 > chrBuffer.length) continue;
         for(let py=0; py<8; py++){
@@ -1411,6 +1556,7 @@ const CHR = (() => {
       Project.status(`Tile PT${Math.floor(absIdx/256)}:$${(absIdx%256).toString(16).padStart(2,'0').toUpperCase()} adicionado à fila (${tileQueue.length})`);
   }
   function pasteSheetTile(absIdx){
+    if(isTileLocked(absIdx)){ if(typeof Project !== 'undefined' && Project.status) Project.status('Tile reservado (Vazio/fonte) - destrave em CHR Editor pra editar'); return; }
     if(!tileQueue.length){
       if(typeof Project !== 'undefined' && Project.status) Project.status('Fila vazia — use Copiar Tile primeiro');
       return;
@@ -1435,6 +1581,7 @@ const CHR = (() => {
       Project.status(`Colado #${usedIdx+1} → PT${Math.floor(absIdx/256)}:$${(absIdx%256).toString(16).padStart(2,'0').toUpperCase()} · próximo: #${tileQueueActive+1}`);
   }
   function clearSheetTile(absIdx){
+    if(isTileLocked(absIdx)){ if(typeof Project !== 'undefined' && Project.status) Project.status('Tile reservado (Vazio/fonte) - destrave em CHR Editor pra editar'); return; }
     const off = absIdx*16;
     if(off+16 > chrBuffer.length) return;
     pushUndo();
@@ -1682,6 +1829,7 @@ function paintZoomPixel(px, py, colorSlot){
     const tiles=currentTiles();
     const gx=Math.floor(px/8), gy=Math.floor(py/8), slot=gy*gridW+gx, ti=tiles[slot];
     if(ti===undefined) return;
+    if(isTileLocked(ti)){ if(typeof Project !== 'undefined' && Project.status) Project.status('Tile reservado (Vazio/fonte) - destrave em CHR Editor pra editar'); return; }
     const lx=px%8, ly=py%8, off=ti*16, sh=7-lx;
     const c = colorSlot & 3;
     if(c & 1) chrBuffer[off+ly] |= (1<<sh); else chrBuffer[off+ly] &= ~(1<<sh);
@@ -1695,6 +1843,8 @@ function paintZoomPixel(px, py, colorSlot){
       importInput.onchange = handleCHRImport;
     }
     document.getElementById('chkShowGrid')?.addEventListener('change', ()=> renderSheet());
+    document.getElementById('chkUnlockEmpty')?.addEventListener('change', e=>{ setEmptyUnlocked(currentBank, e.target.checked); e.target.checked = !!chrPages[currentBank]?.emptyUnlocked; });
+    document.getElementById('chkUnlockFont')?.addEventListener('change', e=>{ setFontUnlocked(currentBank, e.target.checked); e.target.checked = !!chrPages[currentBank]?.fontUnlocked; });
     sheetCanvas?.addEventListener('click', e=>{
       const r=sheetCanvas.getBoundingClientRect();
       const x=Math.floor((e.clientX-r.left)/32), y=Math.floor((e.clientY-r.top)/32);
@@ -3762,15 +3912,16 @@ function paintZoomPixel(px, py, colorSlot){
     },
     getChrPages(){
       ensureChrPages();
-      return chrPages.map(e=>({ name:e.name, role:e.role }));
+      return chrPages.map(e=>({ name:e.name, role:e.role, fontStamp:e.fontStamp||null, emptyUnlocked:!!e.emptyUnlocked, fontUnlocked:!!e.fontUnlocked }));
     },
     loadChrPages(arr){
       if(Array.isArray(arr) && arr.length){
         chrPages = arr.map((e,i)=>{
-          if(i===0) return { name:(e?.name||'Sprites').toString().slice(0,32)||'Sprites', role:'sprite' };
-          if(i===1) return { name:(e?.name||'Backgrounds').toString().slice(0,32)||'Backgrounds', role:'background' };
+          const extra = { fontStamp: (e?.fontStamp && typeof e.fontStamp.tiles==='number') ? { mode:e.fontStamp.mode==='smb'?'smb':'ascii', tiles:e.fontStamp.tiles } : null, emptyUnlocked: !!e?.emptyUnlocked, fontUnlocked: !!e?.fontUnlocked };
+          if(i===0) return { name:(e?.name||'Sprites').toString().slice(0,32)||'Sprites', role:'sprite', ...extra };
+          if(i===1) return { name:(e?.name||'Backgrounds').toString().slice(0,32)||'Backgrounds', role:'background', ...extra };
           const role = (e?.role==='background'||e?.role==='sprite') ? e.role : (i%2===0?'sprite':'background');
-          return { name:(e?.name||('Página '+i)).toString().slice(0,32)||('Página '+i), role };
+          return { name:(e?.name||('Página '+i)).toString().slice(0,32)||('Página '+i), role, ...extra };
         });
       } else {
         chrPages = defaultChrPages(Math.max(2, Math.ceil(chrBuffer.length/4096)));
@@ -3778,6 +3929,14 @@ function paintZoomPixel(px, py, colorSlot){
       ensureChrPages();
       updateBankSelect();
     },
+
+    // Item fonte-no-CHR: carimbo + trava, ver bloco no topo do módulo.
+    stampFontIntoPage,
+    isTileLocked,
+    setEmptyUnlocked,
+    setFontUnlocked,
+    restampFontPrompt,
+    getFontStamp(page){ return chrPages[page]?.fontStamp || null; },
 
     applyGridResize,
     autoFill(){ const s=selectedTiles[0]||currentBank*256; for(let i=0;i<selectedTiles.length;i++) selectedTiles[i]=s+i; ensureFlipsLen(); activeSlotIdx=0; renderAll(); updateLabels(); },

@@ -62,6 +62,26 @@ final class FontAsset
         return ['tiles' => count($tiles), 'bytes' => $bytes, 'map' => $map];
     }
 
+    /** Só o mapa caractere->índice relativo (sem ler novo.chr - layout puro).
+     * Item fonte-no-CHR: usada pelo build agora, já que os PIXELS vêm de
+     * project.chr (carimbados pelo editor), não mais lidos aqui. load()
+     * continua existindo pro editor buscar os bytes originais na hora de
+     * carimbar/restaurar (ver chr-editor.js).
+     * @return array<int,int> */
+    public static function charMap(string $mode): array
+    {
+        if ($mode === 'smb') {
+            $map = [];
+            for ($d = 0; $d <= 9; $d++) $map[48 + $d] = $d;
+            for ($l = 0; $l < 26; $l++) $map[65 + $l] = 10 + $l;
+            $map[32] = 36;
+            return $map;
+        }
+        $map = [];
+        for ($c = self::ASCII_FIRST; $c <= self::ASCII_LAST; $c++) $map[$c] = $c - self::ASCII_FIRST;
+        return $map;
+    }
+
     /** Código ASCII -> índice de tile relativo (dentro do próprio bloco de fonte), ou null se não suportado. */
     public static function mapChar(string $ch, array $map): ?int
     {

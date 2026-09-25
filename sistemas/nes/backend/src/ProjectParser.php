@@ -240,17 +240,15 @@ final class ProjectParser
             }
         }
 
-        // Texto sobreposto (pós-compressão): fonte pronta (não desenhada
-        // pelo usuário - ver FontAsset.php) só é carregada/reservada nos
-        // bancos de CHR que TÊM pelo menos 1 tela com textLayers - os
-        // outros bancos continuam com os 64 metatiles inteiros disponíveis,
-        // sem custo nenhum. Precisa ser calculado ANTES de
-        // buildMetatileCompression() porque muda o limite de metatiles
-        // desse banco (reserva espaço pros tiles da fonte).
-        // "none" = usuário desligou texto no Config (trava a ferramenta no
-        // editor também) - nem verifica se sobrou textLayers de uma
-        // mudança anterior, ignora tudo de propósito, sem gastar 1 tile
-        // sequer nem rodar a varredura.
+        // Item fonte-no-CHR (substituiu o esquema "pós-compressão" antigo,
+        // que colava bytes de sistemas/nes/assets/novo.chr direto no banco
+        // em tempo de build): a fonte agora é "carimbada" pelo PRÓPRIO
+        // EDITOR dentro de project.chr, nos ÚLTIMOS N tiles de cada página
+        // que precisa dela (N=96 ascii/40 smb, ver chr-editor.js) - o
+        // backend só precisa saber QUANTOS tiles reservar (fontTiles, pra
+        // calcular o teto de metatiles) e o MAPA caractere->índice relativo
+        // (FontAsset::charMap - layout puro, não lê mais novo.chr aqui).
+        // Pixel de verdade agora vem de project.chr igual qualquer tile.
         $textFontModeRaw = (string)($project['textFontMode'] ?? 'ascii');
         $textDisabled = $textFontModeRaw === 'none';
         $textFontMode = $textFontModeRaw === 'smb' ? 'smb' : 'ascii';
@@ -266,14 +264,17 @@ final class ProjectParser
             }
         }
         $anyBankNeedsFont = in_array(true, $bankNeedsFont, true);
-        $font = $anyBankNeedsFont ? FontAsset::load($textFontMode) : null;
+        $fontTiles = $anyBankNeedsFont ? ($textFontMode === 'smb' ? 40 : 96) : 0;
+        $fontMap = $anyBankNeedsFont ? FontAsset::charMap($textFontMode) : [];
 
         // Camada 9 (limpeza pré-áudio): telas sempre viram MetatileIndex_<tela>
         // (240 bytes) - não existe mais fallback cru/tela suja. Precisa rodar
         // ANTES do empacotamento de CHR porque os tiles dos metatiles ocupam
         // SEMPRE os slots 4*idLocal..4*idLocal+3 do banco (posição fixa, sem
-        // tabela de índice) - ver buildMetatileCompression().
-        $metatileCompression = $this->buildMetatileCompression($project, $screenData, $screensByBank, $bankNeedsFont, $font['tiles'] ?? 0);
+        // tabela de índice) - ver buildMetatileCompression(). Também valida
+        // que nenhum metatile "normal" pisa no tile 0 (reservado pro
+        // metatile "Vazio" automático) nem na faixa reservada da fonte.
+        $metatileCompression = $this->buildMetatileCompression($project, $screenData, $screensByBank, $bankNeedsFont, $fontTiles);
 
         // Stage 15: o empacotamento CHR dos sprites passa a ser responsabilidade do NGC.
         // O backend usa diretamente project.chr + project.metatiles + project.characters.
@@ -292,20 +293,23 @@ final class ProjectParser
         $chrRaw = is_array($project['chr'] ?? null) ? $project['chr'] : [];
         $bgChrBanks = [];
         $spriteChrBanks = [];
-        $fontBaseTileByBank = [];
         foreach ($mapperInfo['banks'] as $bi => $bank) {
             $mtBank = $metatileCompression['banks'][$bi] ?? ['tileRefs' => [0, 0, 0, 0]];
-            $packed = $this->packChrBytesForTiles($mtBank['tileRefs'], $chrRaw, $bank['bgPage'], 256);
-            $fontBaseTileByBank[$bi] = (int)(count($mtBank['tileRefs']) / 4) * 4; // = metatileCount*4
-            if (!empty($bankNeedsFont[$bi]) && $font) {
-                // packChrBytesForTiles devolve sempre 4096 bytes (256 tiles,
-                // slots não usados zerados) - corta pro tamanho REAL (só os
-                // tiles que os metatiles usam) antes de grudar a fonte,
-                // senão ela ia parar 256 tiles depois do que devia (todo o
-                // preenchimento zerado do meio entraria no upload também).
-                $packed = array_slice($packed, 0, count($mtBank['tileRefs']) * 16);
-                $packed = array_merge($packed, $font['bytes']);
+            $tileRefs = $mtBank['tileRefs'];
+            if (!empty($bankNeedsFont[$bi]) && $fontTiles > 0) {
+                // Item fonte-no-CHR: a faixa reservada é SEMPRE os últimos
+                // fontTiles tiles do banco (256-fontTiles..255), relativo à
+                // própria página - preenche o vão entre o que os metatiles
+                // realmente usaram e essa fronteira fixa com tile 0 (em
+                // branco, sem custo real - é só padding não usado de
+                // qualquer forma), depois grava os índices relativos da
+                // fonte em sequência. packChrBytesForTiles lê tudo isso
+                // direto de project.chr (mesma origem de qualquer tile -
+                // a fonte já está carimbada lá pelo editor).
+                while (count($tileRefs) < 256 - $fontTiles) $tileRefs[] = 0;
+                for ($i = 256 - $fontTiles; $i < 256; $i++) $tileRefs[] = $i;
             }
+            $packed = $this->packChrBytesForTiles($tileRefs, $chrRaw, $bank['bgPage'], 256);
             $bgChrBanks[$bi] = $packed;
 
             $spriteChrBanks[$bi] = ($bi === $mapperInfo['defaultBankIndex'])
@@ -313,10 +317,11 @@ final class ProjectParser
                 : $this->packChrBytesForTiles($sprite['usedTiles'] ?? [], $chrRaw, $bank['spritePage'], 256);
         }
 
-        // Texto sobreposto: agora que sabemos onde a fonte de cada banco
-        // começa (fontBaseTileByBank), monta os dados de runtime (posição +
-        // tiles + bytes de atributo já mesclados) por tela.
-        $textOverlayByScreen = $this->buildTextOverlays($screenData, $screensByBank, $fontBaseTileByBank, $font, $textFontMode);
+        // Texto sobreposto: base da fonte é sempre 256-fontTiles (fixo,
+        // relativo ao próprio banco - não depende mais de quantos metatiles
+        // foram usados, ver bloco acima) - monta os dados de runtime
+        // (posição + tiles) por tela.
+        $textOverlayByScreen = $this->buildTextOverlays($screenData, $screensByBank, $fontTiles, $fontMap);
 
 
         // Stage 19: PaletteData (as 8 paletas de 4 cores + a cor de fundo universal,
@@ -1130,6 +1135,24 @@ final class ProjectParser
                         }
                         $mt = $metatilesById[$key];
                         $tiles = is_array($mt['tiles'] ?? null) ? $mt['tiles'] : [0, 0, 0, 0];
+                        $isEmptyDefault = !empty($mt['isEmptyDefault']);
+                        foreach ($tiles as $t) {
+                            $localTile = ((int)$t) % 256;
+                            if ($localTile === 0 && !$isEmptyDefault) {
+                                throw new RuntimeException(
+                                    "O metatile \"" . ($mt['name'] ?? $key) . "\" (usado na tela \"{$screenName}\") usa o tile 0 " .
+                                    "dessa página - tile 0 é reservado pro metatile \"Vazio\" automático (ver Backgrounds/CHR Editor). " .
+                                    "Redesenhe esse metatile usando outro tile."
+                                );
+                            }
+                            if (!empty($bankNeedsFont[$bi]) && $fontTiles > 0 && $localTile >= (256 - $fontTiles)) {
+                                throw new RuntimeException(
+                                    "O metatile \"" . ($mt['name'] ?? $key) . "\" (usado na tela \"{$screenName}\") usa um tile dentro " .
+                                    "da faixa reservada pra fonte desse banco (últimos {$fontTiles} tiles) - abra o CHR Editor, destrave " .
+                                    "a faixa da fonte se precisar mexer nela, ou redesenhe esse metatile usando outro tile."
+                                );
+                            }
+                        }
                         for ($k = 0; $k < 4; $k++) $tileRefs[] = (int)($tiles[$k] ?? 0);
                         $collisionBytes[] = $this->packMetatileCollisionByte(is_array($mt['collisions'] ?? null) ? $mt['collisions'] : []);
                         $localIndexByMtId[$key] = count($localIndexByMtId);
@@ -1166,13 +1189,13 @@ final class ProjectParser
      * não existe mais em lugar nenhum desde que nametable cru parou de ser
      * lido (Camada 9).
      */
-    private function buildTextOverlays(array $screenData, array $screensByBank, array $fontBaseTileByBank, ?array $font, string $textFontMode): array
+    private function buildTextOverlays(array $screenData, array $screensByBank, int $fontTiles, array $fontMap): array
     {
         $out = [];
-        if (!$font) return $out;
-        $spaceRel = $font['map'][32] ?? 0;
+        if ($fontTiles <= 0 || !$fontMap) return $out;
+        $base = 256 - $fontTiles; // fixo - ver bloco de montagem de $bgChrBanks acima
+        $spaceRel = $fontMap[32] ?? 0;
         foreach ($screensByBank as $bi => $idxList) {
-            $base = $fontBaseTileByBank[$bi] ?? 0;
             foreach ($idxList as $si) {
                 $layers = is_array($screenData[$si]['textLayers'] ?? null) ? $screenData[$si]['textLayers'] : [];
                 if (!$layers) continue;
@@ -1186,7 +1209,7 @@ final class ProjectParser
                     $tiles = [];
                     $len = strlen($text);
                     for ($i = 0; $i < $len && ($x + $i) < 32; $i++) {
-                        $rel = FontAsset::mapChar($text[$i], $font['map']);
+                        $rel = FontAsset::mapChar($text[$i], $fontMap);
                         $tiles[] = $base + ($rel ?? $spaceRel);
                     }
                     if ($tiles) $entries[] = ['x' => $x, 'y' => $y, 'tiles' => $tiles];

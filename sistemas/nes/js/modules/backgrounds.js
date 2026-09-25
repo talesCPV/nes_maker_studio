@@ -1629,6 +1629,13 @@ const BG = (() => {
     const mode = selectEl ? selectEl.value : textOffsetMode;
     textOffsetMode = mode;
     const page = currentChrPage;
+    // Item fonte-no-CHR: 1ª vez que ESSA página ganha texto, carimba o
+    // alfabeto de verdade nela (só 1x - CHR.stampFontIntoPage nunca
+    // recarimba sozinho depois, mesmo trocando o modo em Config).
+    const fontMode = Project.data?.textFontMode;
+    if(fontMode && fontMode !== 'none' && typeof CHR !== 'undefined' && CHR.getFontStamp && CHR.stampFontIntoPage){
+      if(!CHR.getFontStamp(page)) CHR.stampFontIntoPage(page, fontMode);
+    }
     const startX = Math.max(0, Math.min(32 - text.length, textCursor.x)), startY = textCursor.y;
     const layer = { text, x: startX, y: startY, pal: textPalette, offset: mode, chrPage: page, id: Date.now() };
     captureUnderText(layer, positionsForRow(startX, startY, text.length));
