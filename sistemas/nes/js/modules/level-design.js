@@ -90,6 +90,7 @@ const LEVEL_DESIGN = (() => {
     if (!root) return;
     const phases = Project.data?.phases || [];
     if(!currentPhaseId && phases.length > 0) currentPhaseId = phases[0].id;
+    const scrollOrientation = Project.data?.scrollOrientation === 'vertical' ? 'vertical' : 'horizontal';
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;background:#1e1e1e;overflow:hidden">
         <!-- Topbar -->
@@ -103,28 +104,38 @@ const LEVEL_DESIGN = (() => {
           <span style="font-size:11px;color:#888;flex-shrink:0">Transição:</span>
           <select id="ldTransitionType" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 6px;font-size:11px">
             <option value="hard_cut" ${currentWorld.transitionType==='hard_cut'?'selected':''}>Hard-Cut (Zelda)</option>
+            ${scrollOrientation === 'vertical' ? `
+            <option value="scroll_v" ${currentWorld.transitionType==='scroll_v'?'selected':''}>Scroll Vertical (ainda não implementado)</option>
+            ` : `
             <option value="scroll_h" ${currentWorld.transitionType==='scroll_h'?'selected':''}>Scroll Horizontal (SMB1)</option>
             <option value="scroll_h_auto" ${currentWorld.transitionType==='scroll_h_auto'?'selected':''}>Scroll Horizontal Automático</option>
-            <option value="scroll_v" ${currentWorld.transitionType==='scroll_v'?'selected':''}>Scroll Vertical (ainda não implementado - hoje se comporta igual Scroll Horizontal)</option>
+            `}
           </select>
+          <span style="font-size:9px;color:#666;flex-shrink:0" title="A direção suave é travada pra ROM inteira em Configurações > Orientação de Scroll (é uma escolha de hardware do cartucho)">ℹ️ orientação: ${scrollOrientation === 'vertical' ? 'Vertical' : 'Horizontal'}</span>
           <span style="font-size:11px;color:#888;flex-shrink:0">Cols:</span>
           <input id="ldCols" type="number" min="1" max="16" value="${currentWorld.cols}" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px;width:45px">
           <span style="font-size:11px;color:#888;flex-shrink:0">Rows:</span>
           <input id="ldRows" type="number" min="1" max="16" value="${currentWorld.rows}" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px;width:45px">
           <button class="btn-tool" onclick="LEVEL_DESIGN.resizeGrid()" style="padding:4px 8px;flex-shrink:0">🔄 Redimensionar</button>
-          <span style="width:1px;height:24px;background:#444;margin:0 2px;flex-shrink:0"></span>
-          <span style="font-size:10px;color:#888;margin-right:2px;flex-shrink:0">TOOLS</span>
-          <button type="button" class="icon-btn ld-tool-btn active" data-tool="place" onclick="LEVEL_DESIGN.setTool('place')" title="Posicionar">🧩</button>
-          <button type="button" class="icon-btn ld-tool-btn" data-tool="erase" onclick="LEVEL_DESIGN.setTool('erase')" title="Apagar">🧹</button>
-          <button type="button" class="icon-btn ld-tool-btn" data-tool="spawns" onclick="LEVEL_DESIGN.setTool('spawns')" title="Spawns - clique numa tela do grid para editar spawns de inimigos">👾</button>
-          <span style="width:1px;height:24px;background:#444;margin:0 2px;flex-shrink:0"></span>
-          <span id="ldHelpText" style="font-size:10px;color:#888;white-space:normal;max-width:min(360px,28vw);line-height:1.3;flex-shrink:0">Selecione um Asset e clique no grid.</span>
           <span style="margin-left:auto;font-size:10px;color:#666;flex-shrink:0">💾 salva sozinho a cada edição - use o Salvar Projeto (topo) pra gravar o .nms</span>
         </div>
 
         <div style="display:flex;flex:1;overflow:hidden;min-height:0">
-          <!-- Painel Esquerdo: Assets com Miniaturas -->
-          <div style="width:300px;min-width:300px;background:#181818;border-right:1px solid #333;padding:12px;overflow:auto;display:flex;flex-direction:column;gap:12px">
+          <!-- Painel Esquerdo: barra de ferramentas FIXA no topo (nunca rola) + conteúdo rolável embaixo -->
+          <div style="width:300px;min-width:300px;background:#181818;border-right:1px solid #333;display:flex;flex-direction:column;overflow:hidden">
+            <div style="flex-shrink:0;padding:8px 10px;border-bottom:1px solid #333;background:#1c1c1c;display:flex;flex-direction:column;gap:6px">
+              <span style="font-size:10px;color:#888">FERRAMENTAS</span>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+                <button type="button" class="icon-btn ld-tool-btn active" data-tool="place" onclick="LEVEL_DESIGN.setTool('place')" title="Posicionar">🧩</button>
+                <button type="button" class="icon-btn ld-tool-btn" data-tool="erase" onclick="LEVEL_DESIGN.setTool('erase')" title="Apagar">🧹</button>
+                <button type="button" class="icon-btn ld-tool-btn" data-tool="spawns" onclick="LEVEL_DESIGN.setTool('spawns')" title="Spawns - clique numa tela do grid para editar spawns de inimigos">👾</button>
+                <span style="width:1px;height:24px;background:#444;margin:0 2px;flex-shrink:0"></span>
+                <button type="button" class="icon-btn ld-tool-btn" data-tool="delete_cell" onclick="LEVEL_DESIGN.setTool('delete_cell')" title="Deletar Célula - remove e puxa as seguintes (da mesma linha) uma casa pra trás">➖</button>
+                <button type="button" class="icon-btn ld-tool-btn" data-tool="insert_cell" onclick="LEVEL_DESIGN.setTool('insert_cell')" title="Inserir Célula - abre uma casa vazia aqui, empurrando as seguintes (da mesma linha) uma casa pra frente">➕</button>
+              </div>
+              <div id="ldHelpText" style="font-size:10px;color:#888;line-height:1.3">Selecione um Asset e clique no grid.</div>
+            </div>
+            <div style="flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:12px">
             <!-- Painel de spawns: preview em cima, lista + form embaixo (vertical) -->
             <div id="ldSpawnPanel" style="background:#111;border:1px solid #5a2d82;border-radius:6px;padding:10px;display:none;flex-direction:column;gap:8px">
               <h4 style="font-size:11px;color:#c39bd3;margin:0">👾 SPAWNS DA TELA</h4>
@@ -152,6 +163,7 @@ const LEVEL_DESIGN = (() => {
             <div style="background:#111;border:1px solid #333;border-radius:6px;padding:10px;display:flex;flex-direction:column">
               <h4 style="font-size:11px;color:#ffcc00;margin-bottom:8px">BACKGROUNDS DESENHADOS</h4>
               <div id="ldBackgroundList" style="display:flex;flex-direction:column;gap:6px;overflow:auto"></div>
+            </div>
             </div>
           </div>
 
@@ -185,6 +197,8 @@ const LEVEL_DESIGN = (() => {
     if (t === 'place') help.textContent = 'Clique em uma célula do grid para encaixar o Asset.';
     else if (t === 'erase') help.textContent = 'Clique em uma célula preenchida para removê-la.';
     else if (t === 'spawns') help.textContent = 'Clique numa tela do grid para editar spawns de inimigos (personagem + X,Y).';
+    else if (t === 'delete_cell') help.textContent = 'Clique numa célula pra removê-la - as seguintes da MESMA LINHA andam uma casa pra trás.';
+    else if (t === 'insert_cell') help.textContent = 'Clique numa célula pra abrir espaço ali - as seguintes da MESMA LINHA andam uma casa pra frente.';
     if (t !== 'spawns') {
       selectedCell = null;
       renderSpawnPanel();
@@ -536,9 +550,50 @@ const LEVEL_DESIGN = (() => {
         }
 
         cellDiv.onclick = () => handleCellClick(x, y);
+
+        // Drag'n'drop pra trocar telas de lugar no grid - mesmo padrão da
+        // lista de Backgrounds Desenhados (dragstart/dragover/drop nativos).
+        // Só célula com conteúdo pode ser ARRASTADA (célula vazia não tem o
+        // que mover), mas qualquer célula aceita ser ALVO do drop (troca com
+        // vazia = só move; troca com preenchida = troca as duas de lugar).
+        cellDiv.draggable = !!cellData;
+        cellDiv.addEventListener('dragstart', e => {
+          e.dataTransfer.setData('text/plain', JSON.stringify({ x, y }));
+          e.dataTransfer.effectAllowed = 'move';
+          cellDiv.style.opacity = '0.4';
+        });
+        cellDiv.addEventListener('dragend', () => { cellDiv.style.opacity = '1'; });
+        cellDiv.addEventListener('dragover', e => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          cellDiv.style.boxShadow = 'inset 0 0 0 3px #ffcc00';
+        });
+        cellDiv.addEventListener('dragleave', () => { cellDiv.style.boxShadow = ''; });
+        cellDiv.addEventListener('drop', e => {
+          e.preventDefault();
+          cellDiv.style.boxShadow = '';
+          let src;
+          try { src = JSON.parse(e.dataTransfer.getData('text/plain')); } catch { return; }
+          if (!src || (src.x === x && src.y === y)) return;
+          swapCells(src.x, src.y, x, y);
+        });
+
         container.appendChild(cellDiv);
       }
     }
+  }
+
+  // Troca o conteúdo de duas células de lugar (ou move, se uma delas estiver
+  // vazia) - usado pelo drag'n'drop do grid. Não mexe em cols/rows.
+  function swapCells(x1, y1, x2, y2){
+    if (!currentWorld.cells) currentWorld.cells = {};
+    const key1 = `${x1},${y1}`, key2 = `${x2},${y2}`;
+    const a = currentWorld.cells[key1];
+    const b = currentWorld.cells[key2];
+    if (a) currentWorld.cells[key2] = { ...a, x: x2, y: y2 }; else delete currentWorld.cells[key2];
+    if (b) currentWorld.cells[key1] = { ...b, x: x1, y: y1 }; else delete currentWorld.cells[key1];
+    renderGrid(); persistLevelMap();
+    Project.status('Telas trocadas de lugar.');
   }
 
   function handleCellClick(x, y) {
@@ -560,7 +615,49 @@ const LEVEL_DESIGN = (() => {
       selectedCell = { x, y, bgId: cell.bgId, type: cell.type };
       renderGrid();
       renderSpawnPanel();
+    } else if (activeTool === 'delete_cell') {
+      deleteCellShift(x, y);
+    } else if (activeTool === 'insert_cell') {
+      insertCellShift(x, y);
     }
+  }
+
+  // Deleta a célula (x,y) e puxa toda célula À DIREITA dela NA MESMA LINHA
+  // uma casa pra trás (estilo planilha) - a última coluna da linha fica
+  // vazia. Não encolhe "cols" sozinho (usuário pode usar Redimensionar
+  // depois se quiser recuperar o espaço - não fazemos isso automático pra
+  // não mexer sem avisar em outras linhas que ainda usem aquela coluna).
+  function deleteCellShift(x, y){
+    if(!currentWorld.cells) return;
+    for(let c = x; c < currentWorld.cols - 1; c++){
+      const next = currentWorld.cells[`${c+1},${y}`];
+      if(next) currentWorld.cells[`${c},${y}`] = { ...next, x: c, y };
+      else delete currentWorld.cells[`${c},${y}`];
+    }
+    delete currentWorld.cells[`${currentWorld.cols-1},${y}`];
+    renderGrid(); persistLevelMap();
+    Project.status('Célula removida - as seguintes desta linha andaram uma casa pra trás.');
+  }
+
+  // Abre uma célula vazia em (x,y), empurrando toda célula À DIREITA dela NA
+  // MESMA LINHA uma casa pra frente. Só cresce "cols" (afeta todas as
+  // linhas, igual "inserir coluna" numa planilha) se a última coluna desta
+  // linha já estiver ocupada - senão já tem espaço sobrando, não precisa.
+  function insertCellShift(x, y){
+    if(!currentWorld.cells) currentWorld.cells = {};
+    if(currentWorld.cells[`${currentWorld.cols-1},${y}`]){
+      currentWorld.cols += 1;
+      const colsEl = document.getElementById('ldCols');
+      if(colsEl) colsEl.value = currentWorld.cols;
+    }
+    for(let c = currentWorld.cols - 1; c > x; c--){
+      const prev = currentWorld.cells[`${c-1},${y}`];
+      if(prev) currentWorld.cells[`${c},${y}`] = { ...prev, x: c, y };
+      else delete currentWorld.cells[`${c},${y}`];
+    }
+    delete currentWorld.cells[`${x},${y}`];
+    renderGrid(); persistLevelMap();
+    Project.status('Célula vazia aberta - as seguintes desta linha andaram uma casa pra frente.');
   }
 
   // Grava currentWorld em phase.levelMap a cada edição, sem precisar de um clique manual em

@@ -129,8 +129,22 @@ const CONFIG = (() => {
                   <option value="3">CNROM (3) — CHR por fase (páginas)</option>
                   <option value="2">UOROM (2) — CHR-RAM fixo, PRG 32KB (etapa 1)</option>
                 </select>
+              </div>
+
+              <div style="margin-top:8px">
+                <label style="font-size:10px;color:#666">Orientação de Scroll</label>
+                <select id="dashScrollOrientation" style="width:100%;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:5px;font-size:11px">
+                  <option value="horizontal">Horizontal — mundo rola pros lados (plataforma, corredor)</option>
+                  <option value="vertical">Vertical — mundo rola pra cima/baixo (visão de cima, nave vertical)</option>
+                </select>
                 <div style="font-size:9px;color:#666;margin-top:4px;line-height:1.4">
-                  Mirroring agora é definido <b style="color:#aaa">por fase</b>, conforme o tipo de scroll.
+                  Isso é uma escolha de <b style="color:#aaa">hardware do cartucho</b> (mirroring), travada
+                  pra ROM inteira — os mappers de hoje (NROM/CNROM/UOROM) não têm como trocar isso durante
+                  o jogo. Só a direção escolhida aqui rola suave; a outra só funciona em corte seco entre
+                  telas (jogo estilo Zelda). Em Level Design, só aparecem as transições válidas pra essa
+                  escolha. Quando o mapper MMC1 chegar, ele terá um 3º valor "Ambas" aqui (é o único que
+                  tem registrador de mirroring de verdade — assim que jogos tipo Salamander misturam fase
+                  horizontal com vertical na mesma ROM).
                 </div>
               </div>
 
@@ -282,6 +296,17 @@ const CONFIG = (() => {
       }
     });
     if(controlModeEl) controlModeEl.addEventListener('change', e=>{ if(Project.data) Project.data.controlMode=e.target.value; });
+
+    const scrollOrientEl = document.getElementById('dashScrollOrientation');
+    if(scrollOrientEl) scrollOrientEl.addEventListener('change', e=>{
+      if(!Project.data) return;
+      Project.data.scrollOrientation = e.target.value === 'vertical' ? 'vertical' : 'horizontal';
+      if(typeof Project.status === 'function'){
+        Project.status(Project.data.scrollOrientation === 'vertical'
+          ? 'Orientação: Vertical — mirroring horizontal, scroll suave pra cima/baixo'
+          : 'Orientação: Horizontal — mirroring vertical, scroll suave pros lados');
+      }
+    });
 
     const autoScrollEl = document.getElementById('dashAutoScrollSpeed');
     const autoScrollLegendEl = document.getElementById('dashAutoScrollSpeedLegend');
@@ -439,6 +464,12 @@ const CONFIG = (() => {
       if(m !== 0 && m !== 2 && m !== 3) m = 0;
       Project.data.mapper = m;
       mapperEl.value = String(m);
+    }
+    const scrollOrientEl = document.getElementById('dashScrollOrientation');
+    if(scrollOrientEl){
+      const so = Project.data.scrollOrientation === 'vertical' ? 'vertical' : 'horizontal';
+      Project.data.scrollOrientation = so;
+      scrollOrientEl.value = so;
     }
     const textFontModeEl=document.getElementById('dashTextFontMode');
     if(textFontModeEl){

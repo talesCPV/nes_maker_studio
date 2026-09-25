@@ -14,7 +14,17 @@ return [
         // vez de 1 - ver CnromCfg::generate(), sempre gera os 4 mesmo que o
         // projeto use menos combinacoes) e o nibble alto do byte 6 (numero
         // do mapper, baixo nibble aqui - mapper 3 cabe inteiro nele, entao o
-        // byte 7 nao muda). Mirroring continua fixo vertical, como sempre foi.
+        // byte 7 nao muda).
+        // Item scroll vertical: mirroring deixou de ser fixo em "vertical" -
+        // NROM/CNROM/UOROM nao tem registrador de mirroring (isso e' fiacao
+        // soldada na placa do cartucho, so mapper mais avancado tipo MMC1
+        // consegue trocar em runtime - e' assim que jogos tipo Salamander
+        // misturam fase horizontal com vertical, temos que esperar chegar
+        // no MMC1 pra isso). Por enquanto e' escolha de ROM INTEIRA
+        // (Project.data.scrollOrientation, Config.js) - mirroring VERTICAL
+        // da PPU = scroll HORIZONTAL suave (bit0=1, como sempre foi ate
+        // aqui); mirroring HORIZONTAL da PPU = scroll VERTICAL suave
+        // (bit0=0, novo).
         $mapper = (int)($ctx['mapperInfo']['mapper'] ?? 0);
         // UOROM (mapper 2, etapa 2 - bankswitch de PRG por FASE): chrBanks=0
         // sinaliza CHR-RAM pro header iNES (CHR-RAM nunca banca, fixa desde
@@ -27,12 +37,15 @@ return [
         // header declara um tamanho que nao bate com o .cfg de verdade).
         $chrBanks = ($mapper === 3) ? 4 : (($mapper === 2) ? 0 : 1);
         $prgUnits = ($mapper === 2) ? (max(1, (int)($ctx['prgBankCount'] ?? 0)) + 1) : 2;
-        $flags6 = ((($mapper) & 0x0F) << 4) | 0x01;
+        $vertical = (($ctx['scrollOrientation'] ?? 'horizontal') !== 'vertical');
+        $mirrorBit = $vertical ? 1 : 0;
+        $mirrorLabel = $vertical ? 'vertical mirroring (scroll horizontal)' : 'horizontal mirroring (scroll vertical)';
+        $flags6 = ((($mapper) & 0x0F) << 4) | $mirrorBit;
         $comment = ($mapper === 3)
-            ? 'CNROM (32KB PRG fixa + CHR em 4 bancos de 8KB, trocados em runtime), vertical mirroring'
+            ? "CNROM (32KB PRG fixa + CHR em 4 bancos de 8KB, trocados em runtime), {$mirrorLabel}"
             : (($mapper === 2)
-                ? "UOROM etapa 2 ({$prgUnits}x16KB PRG - 1 fixo + " . ($prgUnits - 1) . " por fase + CHR-RAM 8KB carregada no boot), vertical mirroring"
-                : 'NROM-256 (32KB PRG), vertical mirroring');
+                ? "UOROM etapa 2 ({$prgUnits}x16KB PRG - 1 fixo + " . ($prgUnits - 1) . " por fase + CHR-RAM 8KB carregada no boot), {$mirrorLabel}"
+                : "NROM-256 (32KB PRG), {$mirrorLabel}");
         $b6 = sprintf('$%02X', $flags6);
         return ".segment \"HEADER\"\n  .byte \$4E,\$45,\$53,\$1A,{$prgUnits},{$chrBanks},{$b6},0,0,0,0,0,0,0,0,0  ; {$comment}";
     },

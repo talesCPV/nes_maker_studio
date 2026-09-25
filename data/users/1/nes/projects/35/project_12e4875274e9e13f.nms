@@ -76002,7 +76002,7 @@
         ],
         "asm": ""
     },
-    "savedAt": 1790306042339,
+    "savedAt": 1790337763053,
     "chrPages": [
         {
             "name": "Sprites",
@@ -76134,5 +76134,6 @@
         }
     ],
     "controlMode": "programmed",
-    "textFontMode": "ascii"
+    "textFontMode": "ascii",
+    "scrollOrientation": "horizontal"
 }

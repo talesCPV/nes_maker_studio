@@ -355,6 +355,7 @@ final class ProjectParser
             'palette' => $paletteBytes,
             'paletteBankBytes' => $paletteBankBytes,
             'mapperInfo' => $mapperInfo,
+            'scrollOrientation' => (($project['scrollOrientation'] ?? 'horizontal') === 'vertical') ? 'vertical' : 'horizontal',
             'bgChrBanks' => $bgChrBanks,
             'spriteChrBanks' => $spriteChrBanks,
             'chrUploadTrim' => $this->computeChrUploadTrim($mapperInfo, $spriteChrBanks, $bgChrBanks),
