@@ -78,7 +78,10 @@ final class ProjectParser
         $playScreenHardCut = [];
         $playScreenAutoH = [];
         $playScreenAutoV = [];
+        $playScreenAutoHDir = [];
+        $playScreenAutoVDir = [];
         $playScreenLastInPhase = [];
+        $playScreenFirstInPhase = [];
         $autoScrollHEnabled = false;
         $autoScrollVEnabled = false;
         foreach ($playIdxs as $k => $gi) {
@@ -86,34 +89,50 @@ final class ProjectParser
             $pid = is_array($sc) ? ($sc['phaseId'] ?? null) : null;
             $tt = ($pid !== null && isset($phaseTransitionById[(string)$pid])) ? $phaseTransitionById[(string)$pid] : 'scroll_h';
             $playScreenHardCut[] = ($tt === 'hard_cut') ? 1 : 0;
-            $isAutoH = ($tt === 'scroll_h_auto');
+            // Item auto-scroll com direção (pedido do usuário testando -
+            // "a tela subindo" mostrou que só 1 sentido não serve pra todo
+            // jogo): cada eixo agora tem uma variante "_rev" (direita->
+            // esquerda / baixo->cima). PlayScreenAutoH/V continuam só
+            // "auto-scroll ligado nessa tela" (0/1 - usado pelo bypass de
+            // deadzone em mv_hero_*, não muda com a direção). A DIREÇÃO
+            // vira tabela PARALELA nova (0=sentido padrão,1=reverso), só
+            // consultada pela rotina de auto-scroll em si.
+            $isAutoH = ($tt === 'scroll_h_auto' || $tt === 'scroll_h_auto_rev');
             $playScreenAutoH[] = $isAutoH ? 1 : 0;
+            $playScreenAutoHDir[] = ($tt === 'scroll_h_auto_rev') ? 1 : 0;
             if ($isAutoH) $autoScrollHEnabled = true;
-            // Item auto-scroll VERTICAL: mesma ideia de playScreenAutoH,
-            // espelhada pro eixo Y - mutuamente exclusivo com AutoH na
-            // prática (scrollOrientation é global), mas cada fase ainda
-            // escolhe seu próprio transitionType, então mantém a tabela
-            // separada por clareza (mesmo padrão de PlayScreenHardCut).
-            $isAutoV = ($tt === 'scroll_v_auto');
+            $isAutoV = ($tt === 'scroll_v_auto' || $tt === 'scroll_v_auto_rev');
             $playScreenAutoV[] = $isAutoV ? 1 : 0;
+            $playScreenAutoVDir[] = ($tt === 'scroll_v_auto_rev') ? 1 : 0;
             if ($isAutoV) $autoScrollVEnabled = true;
             // Item auto-scroll (fix real - achado testando com projeto de 2
             // fases): "ultima tela" tem que ser por FASE, nao pelo total de
             // telas do projeto - senao o auto-scroll atravessa direto pra
             // tela da PROXIMA fase (mesmo ela sendo hard_cut) em vez de parar.
             // 1 = essa e' a ultima tela da sua fase (proxima tela nao existe
-            // ou pertence a outra fase).
+            // ou pertence a outra fase). PlayScreenFirstInPhase e' o espelho
+            // disso pro sentido reverso (checa a tela ANTERIOR em vez da
+            // seguinte) - mesmo raciocinio, direção oposta.
             $nextPid = null;
             if ($k + 1 < count($playIdxs)) {
                 $nextSc = $screenData[$playIdxs[$k + 1]] ?? null;
                 $nextPid = is_array($nextSc) ? ($nextSc['phaseId'] ?? null) : null;
             }
             $playScreenLastInPhase[] = ((string)$pid !== (string)$nextPid) ? 1 : 0;
+            $prevPid = null;
+            if ($k - 1 >= 0) {
+                $prevSc = $screenData[$playIdxs[$k - 1]] ?? null;
+                $prevPid = is_array($prevSc) ? ($prevSc['phaseId'] ?? null) : null;
+            }
+            $playScreenFirstInPhase[] = ((string)$pid !== (string)$prevPid) ? 1 : 0;
         }
         if (!$playScreenHardCut) $playScreenHardCut[] = 0;
         if (!$playScreenAutoH) $playScreenAutoH[] = 0;
         if (!$playScreenAutoV) $playScreenAutoV[] = 0;
+        if (!$playScreenAutoHDir) $playScreenAutoHDir[] = 0;
+        if (!$playScreenAutoVDir) $playScreenAutoVDir[] = 0;
         if (!$playScreenLastInPhase) $playScreenLastInPhase[] = 1;
+        if (!$playScreenFirstInPhase) $playScreenFirstInPhase[] = 1;
 
         // Fase 9 (gravidade por fase): phase.gravity ('none'/'down'/'up'/
         // 'left'/'right') e phase.gravityStrength eram 100% ignorados - a
@@ -395,7 +414,10 @@ final class ProjectParser
             'playScreenHardCut' => $playScreenHardCut,
             'playScreenAutoH' => $playScreenAutoH,
             'playScreenAutoV' => $playScreenAutoV,
+            'playScreenAutoHDir' => $playScreenAutoHDir,
+            'playScreenAutoVDir' => $playScreenAutoVDir,
             'playScreenLastInPhase' => $playScreenLastInPhase,
+            'playScreenFirstInPhase' => $playScreenFirstInPhase,
             'autoScrollHEnabled' => $autoScrollHEnabled,
             'autoScrollVEnabled' => $autoScrollVEnabled,
             'playScreenGravityOff' => $playScreenGravityOff,

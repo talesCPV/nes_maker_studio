@@ -246,10 +246,24 @@ final class ProgramCompiler
         // encontrada, então uma cutscene com várias páginas sempre entrava
         // pela ÚLTIMA página, não a primeira. Agora é sempre a PRIMEIRA
         // tela da fase na ordem do grid (que já é a ordem de screenData).
+        // Item scroll reverso (pedido do usuário - a entrada de fase sempre
+        // caía na PRIMEIRA célula do grid, o que trava na hora pra uma fase
+        // de auto-scroll reverso, já que ela para de avançar assim que
+        // chega na primeira tela - o jogador nasceria já no limite). Fases
+        // com transitionType "_rev" entram pela ÚLTIMA tela da fase, não a
+        // primeira - só isso muda, o resto do raciocínio continua igual.
+        $phaseRevById = [];
+        foreach ((is_array($project['phases'] ?? null) ? $project['phases'] : []) as $ph) {
+            if (!is_array($ph) || !isset($ph['id'])) continue;
+            $tt = (string)($ph['levelMap']['transitionType'] ?? '');
+            $phaseRevById[(string)$ph['id']] = (substr($tt, -4) === '_rev');
+        }
         $phaseEntryScreen = [];
         foreach ($screenData as $gi => $sc) {
             if (!is_array($sc) || empty($sc['phaseId'])) continue;
             $pid = (string)$sc['phaseId'];
+            $rev = !empty($phaseRevById[$pid]);
+            if ($rev) { $phaseEntryScreen[$pid] = (int)$gi; continue; } // reverso: sempre sobrescreve -> fica a ULTIMA
             if (!isset($phaseEntryScreen[$pid])) { $phaseEntryScreen[$pid] = (int)$gi; }
         }
 
@@ -1030,9 +1044,33 @@ final class ProgramCompiler
                     $lines[] = "  STA game_state";
                 } else {
                     // Entrada direto num background - pula a splash e ja entra jogando.
+                    // Item bug real (achado pelo usuário testando - Mario não
+                    // spawnava, só o inimigo): faltava JSR spawn_player aqui.
+                    // spawn_player por sua vez assume "primeira tela da fase"
+                    // (zera play_idx sozinho) - por isso roda ANTES de
+                    // corrigir play_idx pra posição de verdade desse alvo,
+                    // senão o valor certo seria sobrescrito de volta pra 0.
                     $lines[] = "  LDA #1";
                     $lines[] = "  STA game_state";
                     $pos = array_search($gi, $hbCtx['playIdxs'], true);
+                    // Item bug real (achado pelo usuário testando - 2ª tela
+                    // da fase ficava em branco só na 1ª vez, sumia sozinho
+                    // depois de andar até o fim e voltar): faltava
+                    // pré-carregar a tela SEGUINTE na metade off-screen da
+                    // nametable, mesma coisa que o boot padrão já fazia
+                    // (secondPlayScreenIdx em gameflow.php) - sem isso o
+                    // scroll pra frente mostra a metade off-screen
+                    // literalmente vazia (nunca foi escrita) na primeira
+                    // travessia; advance_screen_right/left corrigem sozinhos
+                    // a partir da 2ª travessia em diante, por isso "sumia".
+                    if ($pos !== false && isset($hbCtx['playIdxs'][$pos + 1])) {
+                        $nextGi = $hbCtx['playIdxs'][$pos + 1];
+                        $lines[] = "  LDA #{$nextGi}";
+                        $lines[] = "  LDX #\$24";
+                        $lines[] = "  STX psn_base_hi";
+                        $lines[] = "  JSR preload_screen_nt";
+                    }
+                    $lines[] = "  JSR spawn_player";
                     if ($pos !== false) {
                         $lines[] = "  LDA #{$pos}";
                         $lines[] = "  STA play_idx";

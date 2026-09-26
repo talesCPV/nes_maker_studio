@@ -106,18 +106,24 @@ const LEVEL_DESIGN = (() => {
             <option value="hard_cut" ${currentWorld.transitionType==='hard_cut'?'selected':''}>Hard-Cut (Zelda)</option>
             ${scrollOrientation === 'vertical' ? `
             <option value="scroll_v" ${currentWorld.transitionType==='scroll_v'?'selected':''}>Scroll Vertical</option>
-            <option value="scroll_v_auto" ${currentWorld.transitionType==='scroll_v_auto'?'selected':''}>Scroll Vertical Automático</option>
+            <option value="scroll_v_auto" ${currentWorld.transitionType==='scroll_v_auto'?'selected':''}>Scroll Vertical Automático (Cima→Baixo)</option>
+            <option value="scroll_v_auto_rev" ${currentWorld.transitionType==='scroll_v_auto_rev'?'selected':''}>Scroll Vertical Automático (Baixo→Cima)</option>
             ` : `
             <option value="scroll_h" ${currentWorld.transitionType==='scroll_h'?'selected':''}>Scroll Horizontal (SMB1)</option>
-            <option value="scroll_h_auto" ${currentWorld.transitionType==='scroll_h_auto'?'selected':''}>Scroll Horizontal Automático</option>
+            <option value="scroll_h_auto" ${currentWorld.transitionType==='scroll_h_auto'?'selected':''}>Scroll Horizontal Automático (Esquerda→Direita)</option>
+            <option value="scroll_h_auto_rev" ${currentWorld.transitionType==='scroll_h_auto_rev'?'selected':''}>Scroll Horizontal Automático (Direita→Esquerda)</option>
             `}
           </select>
           <span style="font-size:9px;color:#666;flex-shrink:0" title="A direção suave é travada pra ROM inteira em Configurações > Orientação de Scroll (é uma escolha de hardware do cartucho)">ℹ️ orientação: ${scrollOrientation === 'vertical' ? 'Vertical' : 'Horizontal'}</span>
+          ${isScrollTransition(currentWorld.transitionType) ? `
+          <span style="font-size:10px;color:#888;flex-shrink:0">📋 lista de ${scrollAxisIsHorizontal(currentWorld.transitionType) ? currentWorld.cols : currentWorld.rows} tela(s) - use "+" no fim, ou as ferramentas Deletar/Inserir Célula</span>
+          ` : `
           <span style="font-size:11px;color:#888;flex-shrink:0">Cols:</span>
           <input id="ldCols" type="number" min="1" max="16" value="${currentWorld.cols}" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px;width:45px">
           <span style="font-size:11px;color:#888;flex-shrink:0">Rows:</span>
           <input id="ldRows" type="number" min="1" max="16" value="${currentWorld.rows}" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px;font-size:11px;width:45px">
           <button class="btn-tool" onclick="LEVEL_DESIGN.resizeGrid()" style="padding:4px 8px;flex-shrink:0">🔄 Redimensionar</button>
+          `}
           <span style="margin-left:auto;font-size:10px;color:#666;flex-shrink:0">💾 salva sozinho a cada edição - use o Salvar Projeto (topo) pra gravar o .nms</span>
         </div>
 
@@ -178,8 +184,9 @@ const LEVEL_DESIGN = (() => {
     document.getElementById('ldPhaseSelect')?.addEventListener('change', e => loadPhaseMap(e.target.value));
     document.getElementById('ldTransitionType')?.addEventListener('change', e => {
       currentWorld.transitionType = e.target.value;
-      if (e.target.value === 'scroll_h_auto' || e.target.value === 'scroll_v_auto') { ensureAutoScrollSpeedVar(); ensureAutoScrollDriftVar(); }
+      if (['scroll_h_auto','scroll_h_auto_rev','scroll_v_auto','scroll_v_auto_rev'].includes(e.target.value)) { ensureAutoScrollSpeedVar(); ensureAutoScrollDriftVar(); }
       persistLevelMap();
+      buildHTML();   // grid<->lista e Cols/Rows aparecem/somem conforme a Transição
     });
     refreshAssetLists();
     renderGrid();
@@ -480,16 +487,83 @@ const LEVEL_DESIGN = (() => {
     }
   }
 
+  // Item lista de scroll (pedido do usuário): hard-cut continua grid de
+  // verdade (navegação 2D), mas qualquer variação de Scroll (normal,
+  // automático, automático reverso - H ou V) é sequência linear mesmo pro
+  // motor (play_idx++/--) - vira lista, sem mudar NADA nos dados (cells
+  // continua a mesma estrutura x,y; a lista só lê/escreve ao longo do
+  // eixo único: linha 0 pra horizontal, coluna 0 pra vertical). Trocar de
+  // volta pra Hard-Cut mostra o grid de novo, com QUALQUER outra
+  // linha/coluna que já existisse intacta (nunca é apagada só por trocar
+  // de visualização).
+  function isScrollTransition(tt){
+    return tt === 'scroll_h' || tt === 'scroll_h_auto' || tt === 'scroll_h_auto_rev' ||
+           tt === 'scroll_v' || tt === 'scroll_v_auto' || tt === 'scroll_v_auto_rev';
+  }
+  function scrollAxisIsHorizontal(tt){
+    return tt === 'scroll_h' || tt === 'scroll_h_auto' || tt === 'scroll_h_auto_rev';
+  }
+
   function renderGrid() {
     const container = document.getElementById('ldGridContainer');
     if (!container) return;
-    
+    if (isScrollTransition(currentWorld.transitionType)) { renderScrollList(container); return; }
+
+    container.style.display = 'grid';
     container.style.gridTemplateColumns = `repeat(${currentWorld.cols}, 120px)`;
     container.style.gridTemplateRows = `repeat(${currentWorld.rows}, 105px)`;
     container.innerHTML = '';
 
     for (let y = 0; y < currentWorld.rows; y++) {
       for (let x = 0; x < currentWorld.cols; x++) {
+        container.appendChild(buildCellDiv(x, y));
+      }
+    }
+  }
+
+  // Mesma lista de cells, só que percorrida ao longo de UM eixo só (linha 0
+  // ou coluna 0, conforme a Transição) e desenhada em fila em vez de grade.
+  // As ferramentas (Posicionar/Apagar/Spawns/Deletar Célula/Inserir Célula)
+  // continuam idênticas - reaproveita buildCellDiv/handleCellClick sem
+  // mudar a lógica de clique nenhuma, só o layout visual.
+  function renderScrollList(container){
+    const horiz = scrollAxisIsHorizontal(currentWorld.transitionType);
+    const len = horiz ? currentWorld.cols : currentWorld.rows;
+    container.style.display = 'flex';
+    container.style.flexDirection = horiz ? 'row' : 'column';
+    container.style.flexWrap = 'nowrap';
+    container.style.gap = '6px';
+    container.style.overflow = 'auto';
+    container.innerHTML = '';
+    for (let i = 0; i < len; i++) {
+      const x = horiz ? i : 0, y = horiz ? 0 : i;
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'position:relative;flex-shrink:0';
+      const idx = document.createElement('span');
+      idx.textContent = `#${i + 1}`;
+      idx.style.cssText = 'position:absolute;top:-2px;left:-2px;font-size:8px;color:#000;background:#ffcc00;padding:0 4px;border-radius:3px;z-index:1;font-weight:bold';
+      wrap.appendChild(buildCellDiv(x, y));
+      wrap.appendChild(idx);
+      container.appendChild(wrap);
+    }
+    // "+ Adicionar": cresce a sequência em 1 (sempre no fim - nunca precisa
+    // deslocar nada, diferente da ferramenta Inserir Célula que abre espaço
+    // NO MEIO). Substitui "Redimensionar" pra fases de scroll.
+    const addCard = document.createElement('div');
+    addCard.style.cssText = `width:120px;height:105px;flex-shrink:0;background:#0f1f14;border:2px dashed #27ae60;border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#27ae60;font-size:24px`;
+    addCard.textContent = '+';
+    addCard.title = 'Adicionar tela no fim da sequência';
+    addCard.onclick = () => appendScrollSlot();
+    container.appendChild(addCard);
+  }
+
+  function appendScrollSlot(){
+    const horiz = scrollAxisIsHorizontal(currentWorld.transitionType);
+    if (horiz) currentWorld.cols += 1; else currentWorld.rows += 1;
+    renderGrid(); persistLevelMap();
+  }
+
+  function buildCellDiv(x, y) {
         const key = `${x},${y}`;
         const cellData = currentWorld.cells[key];
         const cellDiv = document.createElement('div');
@@ -579,9 +653,7 @@ const LEVEL_DESIGN = (() => {
           swapCells(src.x, src.y, x, y);
         });
 
-        container.appendChild(cellDiv);
-      }
-    }
+        return cellDiv;
   }
 
   // Troca o conteúdo de duas células de lugar (ou move, se uma delas estiver
@@ -628,37 +700,68 @@ const LEVEL_DESIGN = (() => {
   // vazia. Não encolhe "cols" sozinho (usuário pode usar Redimensionar
   // depois se quiser recuperar o espaço - não fazemos isso automático pra
   // não mexer sem avisar em outras linhas que ainda usem aquela coluna).
+  // Item lista de scroll: essas duas ferramentas precisam saber ao longo de
+  // QUAL EIXO deslocar - grid normal (hard-cut) e lista horizontal sempre
+  // foram ao longo de X (cols, linha fixa); lista vertical desloca ao
+  // longo de Y (rows, coluna fixa). Resto do raciocínio (abrir/fechar
+  // espaço, só cresce a dimensão se a ponta já estava ocupada) é o mesmo
+  // dos dois lados, só troca qual variável é "a que anda".
   function deleteCellShift(x, y){
     if(!currentWorld.cells) return;
-    for(let c = x; c < currentWorld.cols - 1; c++){
-      const next = currentWorld.cells[`${c+1},${y}`];
-      if(next) currentWorld.cells[`${c},${y}`] = { ...next, x: c, y };
-      else delete currentWorld.cells[`${c},${y}`];
+    const vertical = isScrollTransition(currentWorld.transitionType) && !scrollAxisIsHorizontal(currentWorld.transitionType);
+    if (vertical) {
+      for(let r = y; r < currentWorld.rows - 1; r++){
+        const next = currentWorld.cells[`${x},${r+1}`];
+        if(next) currentWorld.cells[`${x},${r}`] = { ...next, x, y: r };
+        else delete currentWorld.cells[`${x},${r}`];
+      }
+      delete currentWorld.cells[`${x},${currentWorld.rows-1}`];
+    } else {
+      for(let c = x; c < currentWorld.cols - 1; c++){
+        const next = currentWorld.cells[`${c+1},${y}`];
+        if(next) currentWorld.cells[`${c},${y}`] = { ...next, x: c, y };
+        else delete currentWorld.cells[`${c},${y}`];
+      }
+      delete currentWorld.cells[`${currentWorld.cols-1},${y}`];
     }
-    delete currentWorld.cells[`${currentWorld.cols-1},${y}`];
     renderGrid(); persistLevelMap();
-    Project.status('Célula removida - as seguintes desta linha andaram uma casa pra trás.');
+    Project.status('Célula removida - as seguintes andaram uma casa pra trás.');
   }
 
-  // Abre uma célula vazia em (x,y), empurrando toda célula À DIREITA dela NA
-  // MESMA LINHA uma casa pra frente. Só cresce "cols" (afeta todas as
-  // linhas, igual "inserir coluna" numa planilha) se a última coluna desta
-  // linha já estiver ocupada - senão já tem espaço sobrando, não precisa.
+  // Abre uma célula vazia em (x,y), empurrando toda célula seguinte (na
+  // mesma linha, ou na mesma coluna em lista vertical) uma casa pra frente.
+  // Só cresce cols/rows se a ponta já estiver ocupada - senão já tem
+  // espaço sobrando, não precisa.
   function insertCellShift(x, y){
     if(!currentWorld.cells) currentWorld.cells = {};
-    if(currentWorld.cells[`${currentWorld.cols-1},${y}`]){
-      currentWorld.cols += 1;
-      const colsEl = document.getElementById('ldCols');
-      if(colsEl) colsEl.value = currentWorld.cols;
+    const vertical = isScrollTransition(currentWorld.transitionType) && !scrollAxisIsHorizontal(currentWorld.transitionType);
+    if (vertical) {
+      if(currentWorld.cells[`${x},${currentWorld.rows-1}`]){
+        currentWorld.rows += 1;
+        const rowsEl = document.getElementById('ldRows');
+        if(rowsEl) rowsEl.value = currentWorld.rows;
+      }
+      for(let r = currentWorld.rows - 1; r > y; r--){
+        const prev = currentWorld.cells[`${x},${r-1}`];
+        if(prev) currentWorld.cells[`${x},${r}`] = { ...prev, x, y: r };
+        else delete currentWorld.cells[`${x},${r}`];
+      }
+      delete currentWorld.cells[`${x},${y}`];
+    } else {
+      if(currentWorld.cells[`${currentWorld.cols-1},${y}`]){
+        currentWorld.cols += 1;
+        const colsEl = document.getElementById('ldCols');
+        if(colsEl) colsEl.value = currentWorld.cols;
+      }
+      for(let c = currentWorld.cols - 1; c > x; c--){
+        const prev = currentWorld.cells[`${c-1},${y}`];
+        if(prev) currentWorld.cells[`${c},${y}`] = { ...prev, x: c, y };
+        else delete currentWorld.cells[`${c},${y}`];
+      }
+      delete currentWorld.cells[`${x},${y}`];
     }
-    for(let c = currentWorld.cols - 1; c > x; c--){
-      const prev = currentWorld.cells[`${c-1},${y}`];
-      if(prev) currentWorld.cells[`${c},${y}`] = { ...prev, x: c, y };
-      else delete currentWorld.cells[`${c},${y}`];
-    }
-    delete currentWorld.cells[`${x},${y}`];
     renderGrid(); persistLevelMap();
-    Project.status('Célula vazia aberta - as seguintes desta linha andaram uma casa pra frente.');
+    Project.status('Célula vazia aberta - as seguintes andaram uma casa pra frente.');
   }
 
   // Grava currentWorld em phase.levelMap a cada edição, sem precisar de um clique manual em

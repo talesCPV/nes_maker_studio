@@ -1,8 +1,8 @@
 #!/bin/bash
-# Upload files to Github - git@github.com:talesCPV/nes_maker_studio.git
+# Upload files to Github - git@github.com:talesCPV/retrocompiler.git
 # Teste de debug no sistema user: teste@Xspider0.com pass: #Master26!
 
-read -p "Are you sure to commit nes_maker_studio Project to GitHub ? (Y/n)" -n 1 -r
+read -p "Are you sure to commit retrocompiler Project to GitHub ? (Y/n)" -n 1 -r
 echo 
 if [[ $REPLY =~ ^[Yy]$ ]]
 then
@@ -16,7 +16,7 @@ then
     sed -i -E 's/(const DB_PASSWORD = ")[^"]*(")/\1*******\2/g' "$ARQUIVO_PHP"
 
 
-    cp ~/Documentos/SQL/nes_maker_studio/*.sql sql/
+    cp ~/Documentos/SQL/retrocompiler/*.sql sql/
 
     git init
 
@@ -36,8 +36,8 @@ then
     git commit -m "by_script"
 
     #git branch -M main
-    #git remote add origin git@github.com:talesCPV/nes_maker_studio.git
-    git remote set-url origin git@github.com:talesCPV/nes_maker_studio.git
+    #git remote add origin git@github.com:talesCPV/retrocompiler.git
+    git remote set-url origin git@github.com:talesCPV/retrocompiler.git
 
     git push -u -f origin main
 

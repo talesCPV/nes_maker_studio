@@ -1771,15 +1771,35 @@ ASM;
             $asm .= <<<'ASM'
 
 auto_scroll_update:
+  ; Item auto-scroll com direção (fix real - a rotina cresceu demais com a
+  ; lógica de direção nova e alguns saltos curtos pra asu_end pararam de
+  ; alcançar, "branch too far" no ca65). Convertidos pra salto longo
+  ; (condição invertida + JMP) - mesmo problema clássico do 6502 já
+  ; resolvido em outro lugar do compilador, aqui é feito na mão porque é
+  ; ASM cru, não passa pelo helper de regras.
   LDA player_on
-  BEQ asu_end
+  BNE asu_go
+  JMP asu_end
+asu_go:
   LDX play_idx
   LDA PlayScreenAutoH,X
-  BEQ asu_end
+  BNE asu_go2
+  JMP asu_end
+asu_go2:
   LDA auto_scroll_speed
-  BEQ asu_end            ; byte=0 -> parado de vez (nao arrasta o jogador tambem)
+  BNE asu_go3            ; byte=0 -> parado de vez (nao arrasta o jogador tambem)
+  JMP asu_end
+asu_go3:
+  LDA PlayScreenAutoHDir,X
+  BNE asu_check_first    ; 1 = sentido reverso (esquerda)
   LDA PlayScreenLastInPhase,X
-  BNE asu_end            ; ultima tela DESTA FASE - nao ha mais scroll (nao pode atravessar pra fase seguinte)
+  BEQ asu_speed           ; ultima tela DESTA FASE - nao ha mais scroll (nao pode atravessar pra fase seguinte)
+  JMP asu_end
+asu_check_first:
+  LDA PlayScreenFirstInPhase,X
+  BEQ asu_speed           ; primeira tela DESTA FASE (indo pra esquerda) - nao ha mais scroll
+  JMP asu_end
+asu_speed:
   LDA auto_scroll_speed
   SEC
   SBC #128
@@ -1806,6 +1826,10 @@ asu_slow:
   LDA #1
   STA auto_scroll_step    ; passo real deste frame = 1px
 asu_advance:
+  LDX play_idx
+  LDA PlayScreenAutoHDir,X
+  BNE asu_advance_left
+  ; ---- sentido padrao: direita ----
   ; "modo plataforma" (auto_scroll_drift!=0): jogador fica parado no
   ; cenario se nao andar por conta propria - o mundo avanca por baixo dele
   ; (player_x recua o mesmo tanto que o scroll avanca), ate' bater na borda
@@ -1826,9 +1850,28 @@ asu_noplayer_drift:
   CLC
   ADC auto_scroll_step
   STA scroll_x
-  BCC asu_no_cross
+  BCC asu_end
   JSR advance_screen_right
-asu_no_cross:
+  JMP asu_end
+asu_advance_left:
+  ; ---- sentido reverso: esquerda - mesma ideia, tudo espelhado ----
+  LDA auto_scroll_drift
+  BEQ asuL_noplayer_drift
+  LDA player_x
+  CLC
+  ADC auto_scroll_step
+  CMP #255
+  BCC asuL_px_ok
+  LDA #255
+asuL_px_ok:
+  STA player_x
+asuL_noplayer_drift:
+  LDA scroll_x
+  SEC
+  SBC auto_scroll_step
+  STA scroll_x
+  BCS asu_end
+  JSR advance_screen_left
 asu_end:
   RTS
 ASM;
@@ -1843,14 +1886,28 @@ ASM;
 
 auto_scroll_update_v:
   LDA player_on
-  BEQ asuv_end
+  BNE asuv_go
+  JMP asuv_end
+asuv_go:
   LDX play_idx
   LDA PlayScreenAutoV,X
-  BEQ asuv_end
+  BNE asuv_go2
+  JMP asuv_end
+asuv_go2:
   LDA auto_scroll_speed
-  BEQ asuv_end            ; byte=0 -> parado de vez (nao arrasta o jogador tambem)
+  BNE asuv_go3            ; byte=0 -> parado de vez (nao arrasta o jogador tambem)
+  JMP asuv_end
+asuv_go3:
+  LDA PlayScreenAutoVDir,X
+  BNE asuv_check_first    ; 1 = sentido reverso (pra cima)
   LDA PlayScreenLastInPhase,X
-  BNE asuv_end            ; ultima tela DESTA FASE - nao ha mais scroll
+  BEQ asuv_speed           ; ultima tela DESTA FASE - nao ha mais scroll
+  JMP asuv_end
+asuv_check_first:
+  LDA PlayScreenFirstInPhase,X
+  BEQ asuv_speed           ; primeira tela DESTA FASE (indo pra cima) - nao ha mais scroll
+  JMP asuv_end
+asuv_speed:
   LDA auto_scroll_speed
   SEC
   SBC #128
@@ -1877,6 +1934,10 @@ asuv_slow:
   LDA #1
   STA auto_scroll_step
 asuv_advance:
+  LDX play_idx
+  LDA PlayScreenAutoVDir,X
+  BNE asuv_advance_up
+  ; ---- sentido padrao: baixo ----
   ; mesma logica de "modo plataforma/nave" da versao horizontal, so' que em
   ; player_y/scroll_y em vez de player_x/scroll_x.
   LDA auto_scroll_drift
@@ -1893,9 +1954,28 @@ asuv_noplayer_drift:
   CLC
   ADC auto_scroll_step
   STA scroll_y
-  BCC asuv_no_cross
+  BCC asuv_end
   JSR advance_screen_down
-asuv_no_cross:
+  JMP asuv_end
+asuv_advance_up:
+  ; ---- sentido reverso: pra cima - mesma ideia, tudo espelhado ----
+  LDA auto_scroll_drift
+  BEQ asuvU_noplayer_drift
+  LDA player_y
+  CLC
+  ADC auto_scroll_step
+  CMP #255
+  BCC asuvU_py_ok
+  LDA #255
+asuvU_py_ok:
+  STA player_y
+asuvU_noplayer_drift:
+  LDA scroll_y
+  SEC
+  SBC auto_scroll_step
+  STA scroll_y
+  BCS asuv_end
+  JSR advance_screen_up
 asuv_end:
   RTS
 ASM;

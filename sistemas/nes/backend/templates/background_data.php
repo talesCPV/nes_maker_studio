@@ -92,6 +92,16 @@ return [
         if (!$av) $av = [0];
         $lines[] = 'PlayScreenAutoV:';
         $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => ((int)$v) ? '1' : '0', $av));
+        // Item auto-scroll com direção: 0=sentido padrão (direita/baixo),
+        // 1=reverso (esquerda/cima) - só importa quando AutoH/AutoV=1.
+        $ahd = is_array($ctx['playScreenAutoHDir'] ?? null) ? $ctx['playScreenAutoHDir'] : [0];
+        if (!$ahd) $ahd = [0];
+        $lines[] = 'PlayScreenAutoHDir:';
+        $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => ((int)$v) ? '1' : '0', $ahd));
+        $avd = is_array($ctx['playScreenAutoVDir'] ?? null) ? $ctx['playScreenAutoVDir'] : [0];
+        if (!$avd) $avd = [0];
+        $lines[] = 'PlayScreenAutoVDir:';
+        $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => ((int)$v) ? '1' : '0', $avd));
         // Item auto-scroll: 1 = proxima tela pertence a outra fase (ou nao ha
         // proxima) - auto_scroll_update para de avancar aqui, mesmo que ainda
         // faltem telas no PROJETO (so' nao pode atravessar fronteira de fase).
@@ -99,6 +109,12 @@ return [
         if (!$lp) $lp = [1];
         $lines[] = 'PlayScreenLastInPhase:';
         $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => ((int)$v) ? '1' : '0', $lp));
+        // Item auto-scroll reverso: espelho de PlayScreenLastInPhase, checa
+        // a tela ANTERIOR em vez da seguinte.
+        $fp = is_array($ctx['playScreenFirstInPhase'] ?? null) ? $ctx['playScreenFirstInPhase'] : [1];
+        if (!$fp) $fp = [1];
+        $lines[] = 'PlayScreenFirstInPhase:';
+        $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => ((int)$v) ? '1' : '0', $fp));
         // Fase 9 fix (grade real): vizinho de verdade na grade 2D da fase,
         // indexado por play_idx - 255 = nao ha sala ali (bloqueado).
         foreach (['Right' => 'screenNeighborRight', 'Left' => 'screenNeighborLeft', 'Up' => 'screenNeighborUp', 'Down' => 'screenNeighborDown'] as $label => $key) {

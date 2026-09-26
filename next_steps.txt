@@ -17,7 +17,7 @@ Pendências que já discutimos mas não começamos:
 
 Lista de BUGS e melhorias
 
-1- Ao entrar em um novo canvas em backgrounds, a tela deve estar coberta por um tile vazio 2x2 na cor 0 da paleta.
+1- 
 2- * As vezes, mexendo em outros modulos, editando o projeto, os grids criados em level-design somem,(volta ao zero). Ainda estou tentando descobrir onde
 3- No editor chr, ao entrar na pag de backgrounds com o grid de edição selecionado em uma medida diferente de 2x2, ele mantem esta medida ao invés de converter imediatamente para 2x2
 4- Em config.js existe uam opção "controle do heroi", tem as opções automático e via programação, mas sinceramente eu não vi diferença nenhuma nelas, quero saber o que existe por baixo do capô destas opções
