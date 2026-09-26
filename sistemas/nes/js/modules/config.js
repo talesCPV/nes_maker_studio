@@ -259,13 +259,32 @@ const CONFIG = (() => {
     if(descEl) descEl.addEventListener('input', e=>{ if(Project.data) Project.data.description=e.target.value; });
     if(textFontModeEl) textFontModeEl.addEventListener('change', e=>{
       if(!Project.data) return;
-      const v = e.target.value;
-      Project.data.textFontMode = (v === 'none' || v === 'smb') ? v : 'ascii';
+      const prev = Project.data.textFontMode === 'none' ? 'none' : (Project.data.textFontMode === 'smb' ? 'smb' : 'ascii');
+      const v = (e.target.value === 'none' || e.target.value === 'smb') ? e.target.value : 'ascii';
+      // Item fonte-no-CHR (pedido do usuário): ligar um modo de texto
+      // reserva de verdade as últimas posições de tile de cada página de
+      // Backgrounds - avisa e pede confirmação antes de aplicar (só ao
+      // LIGAR, ou trocar entre ascii/smb - "sem texto" nunca pede).
+      if(v !== 'none'){
+        const label = v === 'smb' ? 'Compacta (estilo SMB1, 40 tiles)' : 'Completa (ASCII, 96 tiles)';
+        const msg = `Para usar esse padrão de texto (${label}) precisamos reservar as últimas posições de tile em cada página de Backgrounds. Concorda?`;
+        if(typeof confirm === 'function' && !confirm(msg)){
+          e.target.value = prev;
+          return;
+        }
+      }
+      Project.data.textFontMode = v;
       // "Sem texto": desliga a ferramenta de texto no editor de background
       // e ativa a trava (BG.setTextToolEnabled), se o módulo já estiver
       // carregado nesta sessão.
       if(typeof BG !== 'undefined' && BG.setTextToolEnabled){
         BG.setTextToolEnabled(Project.data.textFontMode !== 'none');
+      }
+      // Concordou: já carimba de verdade a página padrão de Backgrounds
+      // (pág 1) - o usuário já pode salvar com a fonte pronta, sem
+      // precisar digitar um texto primeiro só pra disparar o carimbo.
+      if(v !== 'none' && typeof CHR !== 'undefined' && CHR.stampFontIntoPage){
+        CHR.stampFontIntoPage(1, v);
       }
     });
     if(mapperEl) mapperEl.addEventListener('change', e=>{
@@ -473,9 +492,16 @@ const CONFIG = (() => {
     }
     const textFontModeEl=document.getElementById('dashTextFontMode');
     if(textFontModeEl){
+      // Item fonte-no-CHR: só reflete o valor no <select> - NÃO escreve
+      // mais Project.data.textFontMode aqui (era um efeito colateral do
+      // render, escrevia 'ascii' sozinho em qualquer projeto sem o campo
+      // definido, sem o usuário nunca ter confirmado nada). Undefined
+      // continua significando "ascii" pro build (compat com projeto
+      // antigo, ProjectParser mantém esse default) e pro CHR Editor
+      // (currentFontConfig) - só não é mais GRAVADO até o usuário mexer
+      // de propósito no seletor (aí sim passa pela confirmação).
       const stored = Project.data.textFontMode;
       const tfm = (stored === 'none' || stored === 'smb') ? stored : 'ascii';
-      Project.data.textFontMode = tfm;
       textFontModeEl.value = tfm;
       if(typeof BG !== 'undefined' && BG.setTextToolEnabled) BG.setTextToolEnabled(tfm !== 'none');
     }

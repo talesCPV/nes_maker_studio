@@ -40,6 +40,11 @@ const Project = {
       author: "",
       description: "",
       genre: "platformer",
+      // Item fonte-no-CHR (pedido do usuário): projeto novo já nasce SEM
+      // reserva de texto (não estampa nada sozinho) - só quando o usuário
+      // escolhe um modo em Config (com o aviso explicando o que isso
+      // reserva) é que a fonte é carimbada de verdade.
+      textFontMode: "none",
       mapper: 0,
       // mirroring global legado — nao e mais a fonte da verdade
       // (mirroring agora vive em cada fase, derivado do scroll)

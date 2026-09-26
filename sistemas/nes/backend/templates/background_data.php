@@ -87,6 +87,11 @@ return [
         if (!$ah) $ah = [0];
         $lines[] = 'PlayScreenAutoH:';
         $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => ((int)$v) ? '1' : '0', $ah));
+        // Item auto-scroll VERTICAL: mesma tabela, eixo Y.
+        $av = is_array($ctx['playScreenAutoV'] ?? null) ? $ctx['playScreenAutoV'] : [0];
+        if (!$av) $av = [0];
+        $lines[] = 'PlayScreenAutoV:';
+        $lines[] = '  .byte ' . implode(', ', array_map(static fn($v) => ((int)$v) ? '1' : '0', $av));
         // Item auto-scroll: 1 = proxima tela pertence a outra fase (ou nao ha
         // proxima) - auto_scroll_update para de avancar aqui, mesmo que ainda
         // faltem telas no PROJETO (so' nao pode atravessar fronteira de fase).

@@ -105,7 +105,8 @@ const LEVEL_DESIGN = (() => {
           <select id="ldTransitionType" style="background:#111;color:#fff;border:1px solid #444;border-radius:4px;padding:4px 6px;font-size:11px">
             <option value="hard_cut" ${currentWorld.transitionType==='hard_cut'?'selected':''}>Hard-Cut (Zelda)</option>
             ${scrollOrientation === 'vertical' ? `
-            <option value="scroll_v" ${currentWorld.transitionType==='scroll_v'?'selected':''}>Scroll Vertical (ainda não implementado)</option>
+            <option value="scroll_v" ${currentWorld.transitionType==='scroll_v'?'selected':''}>Scroll Vertical</option>
+            <option value="scroll_v_auto" ${currentWorld.transitionType==='scroll_v_auto'?'selected':''}>Scroll Vertical Automático</option>
             ` : `
             <option value="scroll_h" ${currentWorld.transitionType==='scroll_h'?'selected':''}>Scroll Horizontal (SMB1)</option>
             <option value="scroll_h_auto" ${currentWorld.transitionType==='scroll_h_auto'?'selected':''}>Scroll Horizontal Automático</option>
@@ -177,7 +178,7 @@ const LEVEL_DESIGN = (() => {
     document.getElementById('ldPhaseSelect')?.addEventListener('change', e => loadPhaseMap(e.target.value));
     document.getElementById('ldTransitionType')?.addEventListener('change', e => {
       currentWorld.transitionType = e.target.value;
-      if (e.target.value === 'scroll_h_auto') { ensureAutoScrollSpeedVar(); ensureAutoScrollDriftVar(); }
+      if (e.target.value === 'scroll_h_auto' || e.target.value === 'scroll_v_auto') { ensureAutoScrollSpeedVar(); ensureAutoScrollDriftVar(); }
       persistLevelMap();
     });
     refreshAssetLists();

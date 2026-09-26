@@ -193,10 +193,17 @@ const BUILD = (() => {
   }
 
   async function fetchCFGFromBackend(){
-    const project = {
-      name: Project?.data?.name || "projeto",
-      mapper: Project?.data?.mapper != null ? Project.data.mapper : 0
-    };
+    // Item bug real (achado pelo usuário testando UOROM+scroll vertical):
+    // isso mandava só {name, mapper} pro cfg.php - UoromCfg::generate()
+    // precisa do PROJETO INTEIRO (fases/telas) pra saber quantos bancos de
+    // PRG existem de verdade (getUoromPrgBanks). Com o payload manco, o cfg
+    // sempre saía com só 1 banco comutável (BANK0), não importa quantas
+    // fases o projeto realmente tivesse - daí "Missing memory area
+    // assignment for segment 'BANK1'" no ld65 assim que o NGC (que recebe
+    // o projeto completo) gerava ASM referenciando um banco que o cfg
+    // nunca declarou. Agora usa a MESMA fonte fresca que o NGC já usa.
+    const synced = (typeof Project.collectProjectData === 'function') ? Project.collectProjectData() : null;
+    const project = JSON.parse(JSON.stringify(synced || Project?.data || {}));
     const response = await fetch(CFG_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Accept": "application/json" },

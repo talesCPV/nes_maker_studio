@@ -77,8 +77,10 @@ final class ProjectParser
         }
         $playScreenHardCut = [];
         $playScreenAutoH = [];
+        $playScreenAutoV = [];
         $playScreenLastInPhase = [];
         $autoScrollHEnabled = false;
+        $autoScrollVEnabled = false;
         foreach ($playIdxs as $k => $gi) {
             $sc = $screenData[$gi] ?? null;
             $pid = is_array($sc) ? ($sc['phaseId'] ?? null) : null;
@@ -87,6 +89,14 @@ final class ProjectParser
             $isAutoH = ($tt === 'scroll_h_auto');
             $playScreenAutoH[] = $isAutoH ? 1 : 0;
             if ($isAutoH) $autoScrollHEnabled = true;
+            // Item auto-scroll VERTICAL: mesma ideia de playScreenAutoH,
+            // espelhada pro eixo Y - mutuamente exclusivo com AutoH na
+            // prática (scrollOrientation é global), mas cada fase ainda
+            // escolhe seu próprio transitionType, então mantém a tabela
+            // separada por clareza (mesmo padrão de PlayScreenHardCut).
+            $isAutoV = ($tt === 'scroll_v_auto');
+            $playScreenAutoV[] = $isAutoV ? 1 : 0;
+            if ($isAutoV) $autoScrollVEnabled = true;
             // Item auto-scroll (fix real - achado testando com projeto de 2
             // fases): "ultima tela" tem que ser por FASE, nao pelo total de
             // telas do projeto - senao o auto-scroll atravessa direto pra
@@ -102,6 +112,7 @@ final class ProjectParser
         }
         if (!$playScreenHardCut) $playScreenHardCut[] = 0;
         if (!$playScreenAutoH) $playScreenAutoH[] = 0;
+        if (!$playScreenAutoV) $playScreenAutoV[] = 0;
         if (!$playScreenLastInPhase) $playScreenLastInPhase[] = 1;
 
         // Fase 9 (gravidade por fase): phase.gravity ('none'/'down'/'up'/
@@ -274,7 +285,7 @@ final class ProjectParser
         // tabela de índice) - ver buildMetatileCompression(). Também valida
         // que nenhum metatile "normal" pisa no tile 0 (reservado pro
         // metatile "Vazio" automático) nem na faixa reservada da fonte.
-        $metatileCompression = $this->buildMetatileCompression($project, $screenData, $screensByBank, $bankNeedsFont, $fontTiles);
+        $metatileCompression = $this->buildMetatileCompression($project, $screenData, $screensByBank, $bankNeedsFont, $fontTiles, $mapperInfo['banks']);
 
         // Stage 15: o empacotamento CHR dos sprites passa a ser responsabilidade do NGC.
         // O backend usa diretamente project.chr + project.metatiles + project.characters.
@@ -321,7 +332,7 @@ final class ProjectParser
         // relativo ao próprio banco - não depende mais de quantos metatiles
         // foram usados, ver bloco acima) - monta os dados de runtime
         // (posição + tiles) por tela.
-        $textOverlayByScreen = $this->buildTextOverlays($screenData, $screensByBank, $fontTiles, $fontMap);
+        $textOverlayByScreen = $this->buildTextOverlays($screenData, $screensByBank, $fontTiles, $fontMap, $textFontMode);
 
 
         // Stage 19: PaletteData (as 8 paletas de 4 cores + a cor de fundo universal,
@@ -383,8 +394,10 @@ final class ProjectParser
             'lastPlayIdx' => count($playIdxs) ? count($playIdxs) - 1 : 0,
             'playScreenHardCut' => $playScreenHardCut,
             'playScreenAutoH' => $playScreenAutoH,
+            'playScreenAutoV' => $playScreenAutoV,
             'playScreenLastInPhase' => $playScreenLastInPhase,
             'autoScrollHEnabled' => $autoScrollHEnabled,
+            'autoScrollVEnabled' => $autoScrollVEnabled,
             'playScreenGravityOff' => $playScreenGravityOff,
             'playScreenGravityStrength' => $playScreenGravityStrength,
             'screenNeighborRight' => $neighborRight,
@@ -1082,7 +1095,7 @@ final class ProjectParser
      * compacto inteiro) - estoura vira erro claro, igual o limite de 4
      * bancos do CNROM.
      */
-    private function buildMetatileCompression(array $project, array $screenData, array $screensByBank, array $bankNeedsFont = [], int $fontTiles = 0): array
+    private function buildMetatileCompression(array $project, array $screenData, array $screensByBank, array $bankNeedsFont = [], int $fontTiles = 0, array $mapperBanks = []): array
     {
         $metatilesById = [];
         foreach ((is_array($project['metatiles'] ?? null) ? $project['metatiles'] : []) as $mt) {
@@ -1096,6 +1109,20 @@ final class ProjectParser
             $localIndexByMtId = [];
             $tileRefs = [];
             $collisionBytes = [];
+            // Item "célula sem metatile válido" (pedido real do usuário -
+            // isso nunca mais deve aparecer como erro): se a página desse
+            // banco já tem o metatile "Vazio" (mt_empty_pg<N>, criado pelo
+            // editor - ver backgrounds.js getOrCreateEmptyMetatile) usa ele
+            // de verdade; senão SINTETIZA um equivalente aqui na hora
+            // (4 tiles = tile 0 da página, sem colisão) - mesma convenção,
+            // só não depende do projeto já ter esse metatile salvo (cobre
+            // telas antigas, de antes dessa peça existir no editor).
+            $emptyPage = (int)($mapperBanks[$bi]['bgPage'] ?? 0);
+            $emptyKey = 'mt_empty_pg' . $emptyPage;
+            if (!isset($metatilesById[$emptyKey])) {
+                $t0 = $emptyPage * 256;
+                $metatilesById[$emptyKey] = ['id' => $emptyKey, 'name' => 'Vazio', 'w' => 2, 'h' => 2, 'tiles' => [$t0, $t0, $t0, $t0], 'collisionType' => 0, 'collisions' => [0, 0, 0, 0], 'isEmptyDefault' => true];
+            }
 
             foreach ($idxList as $si) {
                 $sc = is_array($screenData[$si] ?? null) ? $screenData[$si] : [];
@@ -1110,12 +1137,10 @@ final class ProjectParser
                 }
                 foreach ($grid as $cellIdx => $mtId) {
                     if ($mtId === null || $mtId === '' || !isset($metatilesById[(string)$mtId])) {
-                        throw new RuntimeException(
-                            "A tela \"{$screenName}\" tem uma célula sem metatile válido (posição {$cellIdx}) - provavelmente " .
-                            "apagada com a borracha de tile cru ou nunca pintada. Repinte essa célula com um metatile no editor."
-                        );
+                        $grid[$cellIdx] = $emptyKey;
                     }
                 }
+                $sc['metatileGrid'] = $grid;
 
                 $localIds = [];
                 $mtCap = (!empty($bankNeedsFont[$bi]) && $fontTiles > 0) ? (int)floor((256 - $fontTiles) / 4) : 64;
@@ -1135,24 +1160,16 @@ final class ProjectParser
                         }
                         $mt = $metatilesById[$key];
                         $tiles = is_array($mt['tiles'] ?? null) ? $mt['tiles'] : [0, 0, 0, 0];
-                        $isEmptyDefault = !empty($mt['isEmptyDefault']);
-                        foreach ($tiles as $t) {
-                            $localTile = ((int)$t) % 256;
-                            if ($localTile === 0 && !$isEmptyDefault) {
-                                throw new RuntimeException(
-                                    "O metatile \"" . ($mt['name'] ?? $key) . "\" (usado na tela \"{$screenName}\") usa o tile 0 " .
-                                    "dessa página - tile 0 é reservado pro metatile \"Vazio\" automático (ver Backgrounds/CHR Editor). " .
-                                    "Redesenhe esse metatile usando outro tile."
-                                );
-                            }
-                            if (!empty($bankNeedsFont[$bi]) && $fontTiles > 0 && $localTile >= (256 - $fontTiles)) {
-                                throw new RuntimeException(
-                                    "O metatile \"" . ($mt['name'] ?? $key) . "\" (usado na tela \"{$screenName}\") usa um tile dentro " .
-                                    "da faixa reservada pra fonte desse banco (últimos {$fontTiles} tiles) - abra o CHR Editor, destrave " .
-                                    "a faixa da fonte se precisar mexer nela, ou redesenhe esse metatile usando outro tile."
-                                );
-                            }
-                        }
+                        // Item "posso usar o tile 0 num metatile normal?"
+                        // (pedido do usuário, mesma lógica da faixa da fonte
+                        // já liberada antes): removida a validação que
+                        // bloqueava qualquer metatile diferente do "Vazio"
+                        // de usar tile 0. Quem protege o conteúdo do tile 0
+                        // de mudar sem querer é a TRAVA do CHR Editor, não
+                        // uma regra de build - travado, qualquer metatile
+                        // que o use (Vazio ou não, ex: um "céu" quase todo
+                        // em branco) mostra sempre o mesmo conteúdo, sem
+                        // conflito (colisão é por-metatile, não por-tile).
                         for ($k = 0; $k < 4; $k++) $tileRefs[] = (int)($tiles[$k] ?? 0);
                         $collisionBytes[] = $this->packMetatileCollisionByte(is_array($mt['collisions'] ?? null) ? $mt['collisions'] : []);
                         $localIndexByMtId[$key] = count($localIndexByMtId);
@@ -1189,12 +1206,19 @@ final class ProjectParser
      * não existe mais em lugar nenhum desde que nametable cru parou de ser
      * lido (Camada 9).
      */
-    private function buildTextOverlays(array $screenData, array $screensByBank, int $fontTiles, array $fontMap): array
+    private function buildTextOverlays(array $screenData, array $screensByBank, int $fontTiles, array $fontMap, string $textFontMode = 'ascii'): array
     {
         $out = [];
         if ($fontTiles <= 0 || !$fontMap) return $out;
         $base = 256 - $fontTiles; // fixo - ver bloco de montagem de $bgChrBanks acima
         $spaceRel = $fontMap[32] ?? 0;
+        // Item texto SMB maiúsculo (pedido do usuário): a fonte "smb" só tem
+        // dígitos+MAIÚSCULAS+espaço (ver FontAsset::charMap) - minúscula
+        // digitada nessa fonte não existe no mapa e virava espaço em branco
+        // silenciosamente. Força maiúscula ANTES do mapeamento, só na
+        // compilação (o editor continua mostrando o texto como o usuário
+        // digitou - não mexe em $tl['text']).
+        $forceUpper = ($textFontMode === 'smb');
         foreach ($screensByBank as $bi => $idxList) {
             foreach ($idxList as $si) {
                 $layers = is_array($screenData[$si]['textLayers'] ?? null) ? $screenData[$si]['textLayers'] : [];
@@ -1204,6 +1228,7 @@ final class ProjectParser
                     if (!is_array($tl)) continue;
                     $text = (string)($tl['text'] ?? '');
                     if ($text === '') continue;
+                    if ($forceUpper) $text = strtoupper($text);
                     $x = max(0, min(31, (int)($tl['x'] ?? 0)));
                     $y = max(0, min(29, (int)($tl['y'] ?? 0)));
                     $tiles = [];

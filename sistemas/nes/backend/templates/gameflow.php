@@ -19,6 +19,19 @@ return [
         $lines[] = '; 0=splash 1=play 2=gameover';
         $lines[] = 'st_splash:';
         $lines[] = '  JSR run_rules';
+        // Item cutscene (bug real achado pelo usuário testando): antes,
+        // este bloco SEMPRE tratava START durante a splash como "vai pra
+        // Fase 1" (playStartIdx), IGNORANDO se uma regra (via run_rules,
+        // logo acima - regras JÁ rodam durante a splash) tivesse acabado
+        // de fazer sua PRÓPRIA transição nesse mesmo frame (ex: "Carregar
+        // Fase" pra uma cutscene). As duas coisas reagiam ao MESMO toque de
+        // START, e o comportamento padrão sempre vencia por rodar depois -
+        // a regra parecia não fazer nada. Agora só faz a transição padrão
+        // se NENHUMA regra mudou game_state este frame (ainda em splash).
+        $lines[] = '  LDA game_state';
+        $lines[] = '  BEQ st_splash_still_splash';
+        $lines[] = '  JMP MainLoop';
+        $lines[] = 'st_splash_still_splash:';
         $lines[] = '  LDA #0';
         $lines[] = '  STA pv_ev_oob';
         $lines[] = '  STA pv_ev_enter';
@@ -76,6 +89,7 @@ return [
         $lines[] = '  BNE st_play_paused';
         $lines[] = '  JSR update_player';
         if (!empty($ctx['autoScrollHEnabled'])) $lines[] = '  JSR auto_scroll_update';
+        if (!empty($ctx['autoScrollVEnabled'])) $lines[] = '  JSR auto_scroll_update_v';
         $lines[] = '  JSR update_enemies';
         $lines[] = 'st_play_paused:';
         $lines[] = '  JSR run_rules';

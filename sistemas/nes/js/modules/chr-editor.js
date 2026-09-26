@@ -35,6 +35,23 @@ const CHR = (() => {
     for(let c=32; c<=127; c++) codes.push(c);
     return codes;
   }
+  // Item fonte-no-CHR (ajuste real pedido pelo usuário testando): o que
+  // fica RESERVADO (badge no grid + trava de edição) sempre segue a
+  // ESCOLHA ATUAL de Config (Project.data.textFontMode), nunca depende de
+  // já ter carimbado de verdade (chrPages[page].fontStamp) - o badge é
+  // "isso vai ser usado pela fonte quando você carimbar/buildar", não
+  // "isso já foi carimbado". Mostra em TODA página de Backgrounds, mesmo
+  // sem nenhuma tela com texto ainda, mesmo em projeto antigo com outra
+  // coisa desenhada ali (o badge não some por causa disso). 'none' = nada
+  // reservado, nada de badge. Sem valor setado (projeto salvo antes dessa
+  // opção existir) cai em 'ascii', igual o backend sempre assumiu
+  // (ProjectParser::parse, $project['textFontMode'] ?? 'ascii').
+  function currentFontConfig(){
+    const raw = (typeof Project !== 'undefined') ? Project.data?.textFontMode : undefined;
+    if(raw === 'none') return { mode:null, tiles:0 };
+    const mode = raw === 'smb' ? 'smb' : 'ascii';
+    return { mode, tiles: mode==='smb' ? 40 : 96 };
+  }
   let _fontGlyphsPromise = null;
   function fetchFontGlyphs(){
     if(!_fontGlyphsPromise){
@@ -50,6 +67,11 @@ const CHR = (() => {
   // texto numa página sem fontStamp ainda).
   function stampFontIntoPage(page, mode){
     return fetchFontGlyphs().then(glyphs => {
+      if(!chrPages[page]) chrPages[page] = { name:'Página '+page, role:'background' };
+      if(chrPages[page].role !== 'background'){
+        if(typeof Project !== 'undefined' && Project.status) Project.status('Fonte só pode ser carimbada em página de Backgrounds.');
+        return;
+      }
       const codes = computeFontCodeList(mode);
       const fontTiles = codes.length;
       const base = page*256 + (256 - fontTiles);
@@ -60,7 +82,6 @@ const CHR = (() => {
         const srcOff = code*16;
         for(let k=0;k<16;k++) chrBuffer[dstOff+k] = glyphs[srcOff+k] || 0;
       }
-      if(!chrPages[page]) chrPages[page] = { name:'Página '+page, role:'background' };
       chrPages[page].fontStamp = { mode, tiles: fontTiles };
       chrPages[page].fontUnlocked = false;
       if(typeof renderAll === 'function') renderAll();
@@ -72,9 +93,18 @@ const CHR = (() => {
     const page = Math.floor(absIdx/256);
     const local = absIdx % 256;
     const pg = chrPages[page];
-    if(!pg) return false;
+    // Item fonte-no-CHR (fix real pedido pelo usuário testando): reserva de
+    // tile 0 (Vazio) e da faixa de fonte só faz sentido em página de
+    // BACKGROUND - metatile/texto sobreposto nunca existem numa página de
+    // Sprites. Sem essa checagem a página 0 (Sprites) ficava com tile 0
+    // travado à toa, sem motivo nenhum pra estar assim.
+    if(!pg || pg.role !== 'background') return false;
     if(local === 0 && !pg.emptyUnlocked) return true;
     if(pg.fontStamp && local >= (256 - pg.fontStamp.tiles) && !pg.fontUnlocked) return true;
+    // Reserva "prevista" segue a escolha ATUAL de Config, independente de já
+    // ter sido carimbada de verdade (ver comentário de currentFontConfig).
+    const fc = currentFontConfig();
+    if(fc.tiles > 0 && local >= (256 - fc.tiles) && !pg.fontUnlocked) return true;
     return false;
   }
   function setEmptyUnlocked(page, v){
@@ -97,11 +127,16 @@ const CHR = (() => {
   // sozinho) - único jeito de desfazer customização e voltar ao alfabeto
   // original, ou trocar o modo (ascii/smb) de uma página já carimbada.
   function restampFontPrompt(){
+    const fc = currentFontConfig();
+    if(fc.tiles === 0){
+      if(typeof Project !== 'undefined' && Project.status) Project.status('Texto sobreposto está desligado em Configurações - nada pra carimbar.');
+      return;
+    }
     const page = currentBank;
-    const mode = (typeof Project !== 'undefined' && Project.data?.textFontMode && Project.data.textFontMode !== 'none') ? Project.data.textFontMode : 'ascii';
+    const mode = fc.mode;
     const already = chrPages[page]?.fontStamp;
     const msg = already
-      ? `Recarimbar a fonte padrão (modo "${mode}") na página ${page}? Isso APAGA qualquer edição que você tenha feito nos tiles da fonte atual.`
+      ? `Restaurar a fonte padrão (modo "${mode}") na página ${page}? Tudo que estiver nos tiles reservados da fonte é apagado e volta o alfabeto padrão nos tiles corretos.`
       : `Carimbar a fonte padrão (modo "${mode}") na página ${page}?`;
     if(typeof confirm === 'function' && !confirm(msg)) return;
     stampFontIntoPage(page, mode);
@@ -240,9 +275,9 @@ const CHR = (() => {
                 <option value="background">Backgrounds</option>
               </select>
               <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ccc;cursor:pointer"><input type="checkbox" id="chkShowGrid" checked> grid</label>
-              <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ff8888;cursor:pointer" title="Tile 0 desta página é reservado pro metatile 'Vazio' automático"><input type="checkbox" id="chkUnlockEmpty"> 🔓 Vazio</label>
-              <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ff8888;cursor:pointer" title="Últimos tiles desta página são reservados pro alfabeto do texto sobreposto (só aparece se a página tiver fonte carimbada)"><input type="checkbox" id="chkUnlockFont"> 🔓 Fonte</label>
-              <button class="btn-tool" style="background:#333;color:#fff" onclick="CHR.restampFontPrompt()" title="Recarimba o alfabeto padrão nesta página (sobrescreve qualquer edição feita nos tiles da fonte)">🔄 Recarimbar fonte</button>
+              <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ff8888;cursor:pointer" title="Tile 0 desta página é reservado pro metatile 'Vazio' automático"><input type="checkbox" id="chkLockEmpty" checked> 🔒 Travar Vazio</label>
+              <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#ff8888;cursor:pointer" title="Últimos tiles desta página são reservados pro alfabeto do texto sobreposto (só aparece se a página tiver fonte carimbada)"><input type="checkbox" id="chkLockFont" checked> 🔒 Travar Fonte</label>
+              <button id="btnRestampFont" class="btn-tool" style="background:#333;color:#fff" onclick="CHR.restampFontPrompt()" title="Restaura o alfabeto padrão nesta página (apaga qualquer edição feita nos tiles da fonte)">🔄 Restaurar fonte padrão</button>
             </div>
             <canvas id="sheetCanvas" width="512" height="512" style="border:2px solid #333;background:#000;image-rendering:pixelated;cursor:crosshair;display:block"></canvas>
           </div>
@@ -1145,39 +1180,64 @@ const CHR = (() => {
   }
   function renderSheet(){
     if(!sheetCtx) return;
+    // Sincroniza os checkboxes de trava com o estado real da página atual
+    // (currentBank muda em vários lugares - mais simples garantir aqui,
+    // toda vez que a folha é redesenhada, do que em cada ponto de troca).
+    const pgSync = chrPages[currentBank];
+    const lockEmptyEl = document.getElementById('chkLockEmpty');
+    if(lockEmptyEl) lockEmptyEl.checked = !(pgSync && pgSync.emptyUnlocked);
+    const lockFontEl = document.getElementById('chkLockFont');
+    if(lockFontEl) lockFontEl.checked = !(pgSync && pgSync.fontUnlocked);
+    // "desabilita o botão carimbar" quando o modo de texto está 'none' -
+    // não faz sentido restaurar fonte se ela nem está reservada agora.
+    const restampBtn = document.getElementById('btnRestampFont');
+    if(restampBtn){
+      const disabled = currentFontConfig().tiles === 0;
+      restampBtn.disabled = disabled;
+      restampBtn.style.opacity = disabled ? '0.4' : '1';
+      restampBtn.style.cursor = disabled ? 'default' : 'pointer';
+    }
     sheetCtx.fillStyle="#000"; sheetCtx.fillRect(0,0,512,512);
     const base=currentBank*256;
     for(let ty=0;ty<16;ty++) for(let tx=0;tx<16;tx++) drawTile(sheetCtx, base+ty*16+tx, tx*32, ty*32, 4);
-    // Item fonte-no-CHR: marca visualmente os tiles reservados (tile 0 =
-    // "Vazio", faixa da fonte = a letra/dígito que cada um representa) -
-    // cadeado quando travado, aberto quando destravado (ainda reservado,
-    // só editável de propósito).
+    // Item fonte-no-CHR (ajuste real pedido pelo usuário testando): badge
+    // do caractere vai no canto SUPERIOR DIREITO de cada tile reservado da
+    // fonte, sempre desenhado (nunca some, mesmo que o usuário edite o
+    // tile - é só uma referência de "esse slot representa esse caractere",
+    // não depende do pixel de verdade estar lá). Cor comunica o estado de
+    // trava (vermelho=travado, verde=destravado) em vez de um ícone extra
+    // por tile - o cadeado grande fica só no tile 0 (Vazio) e no checkbox
+    // da barra de ferramentas.
     const pg = chrPages[currentBank];
-    const locked0 = isTileLocked(base+0);
-    sheetCtx.save();
-    sheetCtx.font = '10px monospace';
-    sheetCtx.textBaseline = 'top';
-    sheetCtx.fillStyle = locked0 ? '#ff5555' : '#88ff88';
-    sheetCtx.fillText(locked0 ? '🔒' : '🔓', 1, 1);
-    sheetCtx.fillStyle = '#000'; sheetCtx.fillText('∅', 11, 12);
-    sheetCtx.fillStyle = '#ffcc00'; sheetCtx.fillText('∅', 10, 11);
-    if(pg && pg.fontStamp){
-      const codes = computeFontCodeList(pg.fontStamp.mode);
-      const fontStart = 256 - pg.fontStamp.tiles;
-      const fontLocked = isTileLocked(base+fontStart);
-      for(let i=0;i<codes.length;i++){
-        const local = fontStart+i, tx=local%16, ty=Math.floor(local/16);
-        const code = codes[i];
-        const ch = code >= 0 ? String.fromCharCode(code).trim() || '␣' : '';
-        sheetCtx.fillStyle = fontLocked ? '#ff5555' : '#88ff88';
-        if(i===0) sheetCtx.fillText(fontLocked ? '🔒' : '🔓', tx*32+1, ty*32+1);
-        if(ch){
-          sheetCtx.fillStyle = '#000'; sheetCtx.fillText(ch, tx*32+11, ty*32+20);
-          sheetCtx.fillStyle = '#ffcc00'; sheetCtx.fillText(ch, tx*32+10, ty*32+19);
+    if(pg && pg.role === 'background'){
+      const locked0 = isTileLocked(base+0);
+      sheetCtx.save();
+      sheetCtx.font = 'bold 11px monospace';
+      sheetCtx.textBaseline = 'top';
+      sheetCtx.fillStyle = locked0 ? '#ff5555' : '#88ff88';
+      sheetCtx.fillText(locked0 ? '🔒' : '🔓', 1, 1);
+      sheetCtx.fillStyle = '#000'; sheetCtx.fillText('∅', 11, 12);
+      sheetCtx.fillStyle = '#ffcc00'; sheetCtx.fillText('∅', 10, 11);
+      const fc = currentFontConfig();
+      if(fc.tiles > 0){
+        const codes = computeFontCodeList(fc.mode);
+        const fontStart = 256 - fc.tiles;
+        const fontLocked = isTileLocked(base+fontStart);
+        sheetCtx.textAlign = 'right';
+        for(let i=0;i<codes.length;i++){
+          const local = fontStart+i, tx=local%16, ty=Math.floor(local/16);
+          const code = codes[i];
+          const ch = code >= 0 ? String.fromCharCode(code).trim() || '␣' : '';
+          if(!ch) continue;
+          const bx = tx*32+31, by = ty*32+1;
+          sheetCtx.fillStyle = '#000'; sheetCtx.fillText(ch, bx+1, by+1);
+          sheetCtx.fillStyle = fontLocked ? '#ff8888' : '#88ff88';
+          sheetCtx.fillText(ch, bx, by);
         }
+        sheetCtx.textAlign = 'left';
       }
+      sheetCtx.restore();
     }
-    sheetCtx.restore();
     if(document.getElementById('chkShowGrid')?.checked){
       sheetCtx.save(); sheetCtx.strokeStyle="#888"; sheetCtx.setLineDash([2,2]);
       for(let x=32;x<512;x+=32){ sheetCtx.beginPath(); sheetCtx.moveTo(x+.5,0); sheetCtx.lineTo(x+.5,512); sheetCtx.stroke(); }
@@ -1775,7 +1835,7 @@ const CHR = (() => {
     const tiles = currentTiles();
     for(let i = 0; i < tiles.length; i++){
       const ti = tiles[i];
-      if(ti == null || ti < 0 || seen.has(ti)) continue;
+      if(ti == null || ti < 0 || seen.has(ti) || isTileLocked(ti)) continue;
       seen.add(ti);
       const off = ti * 16;
       if(off + 16 > chrBuffer.length) continue;
@@ -1843,8 +1903,8 @@ function paintZoomPixel(px, py, colorSlot){
       importInput.onchange = handleCHRImport;
     }
     document.getElementById('chkShowGrid')?.addEventListener('change', ()=> renderSheet());
-    document.getElementById('chkUnlockEmpty')?.addEventListener('change', e=>{ setEmptyUnlocked(currentBank, e.target.checked); e.target.checked = !!chrPages[currentBank]?.emptyUnlocked; });
-    document.getElementById('chkUnlockFont')?.addEventListener('change', e=>{ setFontUnlocked(currentBank, e.target.checked); e.target.checked = !!chrPages[currentBank]?.fontUnlocked; });
+    document.getElementById('chkLockEmpty')?.addEventListener('change', e=>{ setEmptyUnlocked(currentBank, !e.target.checked); e.target.checked = !chrPages[currentBank]?.emptyUnlocked; });
+    document.getElementById('chkLockFont')?.addEventListener('change', e=>{ setFontUnlocked(currentBank, !e.target.checked); e.target.checked = !chrPages[currentBank]?.fontUnlocked; });
     sheetCanvas?.addEventListener('click', e=>{
       const r=sheetCanvas.getBoundingClientRect();
       const x=Math.floor((e.clientX-r.left)/32), y=Math.floor((e.clientY-r.top)/32);

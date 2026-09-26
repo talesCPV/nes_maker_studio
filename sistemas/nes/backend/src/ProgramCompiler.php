@@ -237,15 +237,20 @@ final class ProgramCompiler
             if (is_array($pb) && isset($pb['id'])) $paletteBankById[(string)$pb['id']] = (int)$i;
         }
         // Fase 6.1: pra ação Carregar Fase - acha a tela de entrada de cada
-        // fase (a splash dela, senão o primeiro background). Splash sempre
-        // tem prioridade sobre background, independente da ordem em que
-        // aparecem em screenData.
+        // fase. Item cutscene (bug real achado pelo usuário testando): esse
+        // código é de antes do tipo virar propriedade da FASE inteira -
+        // "splash sempre tem prioridade" fazia sentido quando dava pra
+        // misturar splash+background na MESMA fase. Hoje uma fase é 100%
+        // Cutscene (tudo splash) ou 100% Gameplay (tudo background), nunca
+        // misto - mas o código continuava sobrescrevendo a cada tela splash
+        // encontrada, então uma cutscene com várias páginas sempre entrava
+        // pela ÚLTIMA página, não a primeira. Agora é sempre a PRIMEIRA
+        // tela da fase na ordem do grid (que já é a ordem de screenData).
         $phaseEntryScreen = [];
         foreach ($screenData as $gi => $sc) {
             if (!is_array($sc) || empty($sc['phaseId'])) continue;
             $pid = (string)$sc['phaseId'];
-            if (($sc['type'] ?? '') === 'splash') { $phaseEntryScreen[$pid] = (int)$gi; }
-            elseif (!isset($phaseEntryScreen[$pid])) { $phaseEntryScreen[$pid] = (int)$gi; }
+            if (!isset($phaseEntryScreen[$pid])) { $phaseEntryScreen[$pid] = (int)$gi; }
         }
 
         $hbCtx = [

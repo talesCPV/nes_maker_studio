@@ -1362,6 +1362,9 @@ up_done:
 ; dentro da tela ou, se a fase for Hard-Cut e houver vizinho na grade, troca
 ; de tela pela borda de cima/baixo (try_screen_up/down).
 mv_hero_up:
+  LDX play_idx
+  LDA PlayScreenAutoV,X
+  BNE mvhu_try         ; tela em auto-scroll vertical: jogador sempre livre - quem rola o mundo e' auto_scroll_update_v, nao esta acao
   LDA player_y
   CMP #8
   BCS mvhu_try
@@ -1372,6 +1375,15 @@ mv_hero_up:
   JSR try_screen_up
   RTS
 mvhu_try:
+  ; Item auto-scroll vertical (fix real, mesmo motivo do horizontal): sem a
+  ; checagem de borda acima, nada mais impedia player_y<0 estourar (vira
+  ; 255 - "atravessar" pro fundo da tela). Trata a borda absoluta como
+  ; parede, mesmo esquema que ja existe pra colisao normal.
+  LDA player_y
+  CMP pv_move_speed
+  BCS mvhu_edge_ok
+  JMP mvhu_done          ; bloqueado - borda superior absoluta (y-velocidade < 0)
+mvhu_edge_ok:
   LDA player_y
   SEC
   SBC pv_move_speed
@@ -1396,6 +1408,9 @@ mvhu_done:
   RTS
 
 mv_hero_down:
+  LDX play_idx
+  LDA PlayScreenAutoV,X
+  BNE mvhd_try         ; tela em auto-scroll vertical: jogador sempre livre - quem rola o mundo e' auto_scroll_update_v, nao esta acao
   LDA player_y
   CLC
   ADC player_hb_bottom
@@ -1408,6 +1423,17 @@ mv_hero_down:
   JSR try_screen_down
   RTS
 mvhd_try:
+  ; Item auto-scroll vertical (fix real, mesmo motivo do horizontal): mesma
+  ; borda absoluta do lado de baixo - sem isso y>255 estourava (virava 0).
+  LDA player_y
+  CLC
+  ADC pv_move_speed
+  BCS mvhd_edge_blocked   ; overflow de verdade (soma >= 256) - sempre bloqueado
+  CMP #248
+  BCC mvhd_edge_ok         ; soma < 248 - ok
+mvhd_edge_blocked:
+  JMP mvhd_done
+mvhd_edge_ok:
   LDA player_y
   CLC
   ADC pv_move_speed
@@ -1804,6 +1830,73 @@ asu_noplayer_drift:
   JSR advance_screen_right
 asu_no_cross:
 asu_end:
+  RTS
+ASM;
+        }
+        // Item auto-scroll VERTICAL: espelha auto_scroll_update linha por
+        // linha, eixo Y (player_y/scroll_y/PlayScreenAutoV/advance_screen_
+        // down) - reaproveita as MESMAS variáveis reservadas
+        // (auto_scroll_speed/drift/acc/step), já que orientação é global
+        // por ROM e as duas famílias nunca coexistem de verdade.
+        if (!empty($ctx['autoScrollVEnabled'])) {
+            $asm .= <<<'ASM'
+
+auto_scroll_update_v:
+  LDA player_on
+  BEQ asuv_end
+  LDX play_idx
+  LDA PlayScreenAutoV,X
+  BEQ asuv_end
+  LDA auto_scroll_speed
+  BEQ asuv_end            ; byte=0 -> parado de vez (nao arrasta o jogador tambem)
+  LDA PlayScreenLastInPhase,X
+  BNE asuv_end            ; ultima tela DESTA FASE - nao ha mais scroll
+  LDA auto_scroll_speed
+  SEC
+  SBC #128
+  STA mv_calc            ; n com sinal (-127..127, 0 ja' tratado acima)
+  BMI asuv_slow
+  ; modo rapido: anda (n+1) px/frame direto
+  LDA mv_calc
+  CLC
+  ADC #1
+  STA auto_scroll_step
+  JMP asuv_advance
+asuv_slow:
+  ; modo lento: anda 1px so' quando o contador bate o limiar (1-n frames)
+  LDA #1
+  SEC
+  SBC mv_calc
+  STA auto_scroll_step
+  INC auto_scroll_acc
+  LDA auto_scroll_acc
+  CMP auto_scroll_step
+  BCC asuv_end
+  LDA #0
+  STA auto_scroll_acc
+  LDA #1
+  STA auto_scroll_step
+asuv_advance:
+  ; mesma logica de "modo plataforma/nave" da versao horizontal, so' que em
+  ; player_y/scroll_y em vez de player_x/scroll_x.
+  LDA auto_scroll_drift
+  BEQ asuv_noplayer_drift
+  LDA player_y
+  SEC
+  SBC auto_scroll_step
+  BCS asuv_py_ok
+  LDA #0
+asuv_py_ok:
+  STA player_y
+asuv_noplayer_drift:
+  LDA scroll_y
+  CLC
+  ADC auto_scroll_step
+  STA scroll_y
+  BCC asuv_no_cross
+  JSR advance_screen_down
+asuv_no_cross:
+asuv_end:
   RTS
 ASM;
         }
